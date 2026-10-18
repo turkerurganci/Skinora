@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.10** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-18 (**T156 — ağ seçimi arayüzü uygulandı:** C11 ağ başına (TRON base58 / EVM `0x` + 40 hex, sağlamasız Ethereum adresinde ek onay kutusu, onay adımında ağ etiketi); S06 adım 2 kabul edilen ağlar (yalnız `supportedNetworks`; ödeme adresi olmayan açık ağ görünür ama seçilemez), adım 4 ağlar + ağ başına ödeme adresi, form öncesi engellere "açık ağda ödeme adresi yok" / "açık ağ yok" satırları; S07 kabul formunda ağ seçimi ve ağ başına tutar, işlem bilgilerinde ağ etiketi ve TRON ağ ücreti satırı, ödeme bilgilerinde ağ etiketi + kırılım + ağ uyarısı (borsa uyarısı kalktı), gezgin bağlantısı ağa göre; S08 ağ başına adres satırları ve yeni ağdaki ilk adreste Steam yeniden doğrulaması. Yapımcı kararları 11 §F8 "T156 kararları" (öneriyle kaydedildi — ⚠).) · 2026-10-18 (**T145 doğrulama bulgusu** — admin ayarları tablosunda yaptırımlı adres listesi etiketi ağ başına (TRON / ETHEREUM); Ethereum girişi F8 ekranlarıyla (T156).) · 2026-10-17 (**T141 — çok ağlı ödeme**, yalnız F8 hedef notları (ekran tasarımı T156'da): S06 adım 2 USDT/USDC seçimi yerine ağ seçimi (yalnız USDT, K2–K3); S07 ödeme bilgilerinde ağ etiketi, TRON ağ ücreti satırı ve borsa uyarısı yerine ağ uyarısı (K8, K9); C11 adres girişi ağ başına (TRON base58check / EVM EIP-55); terimler listesine ERC-20, Ethereum.) · 2026-10-02 (**S06 adım 1** — envanter gizli ve CS2 envanteri yok (`INVENTORY_NOT_FOUND`, Steam 401) durumları ayrı mesajla, tekrar dene butonu olmadan (`P2P-InventoryUnauthorizedMapping`)) · 2026-09-15 (**§7.2 form öncesi engeller — üç Steam satırı** — tablo #319'un eklediği üç kodu hiç tanımıyordu: kısıtlı hesap, 15 günden yeni hesap ("kalan süre: N gün", sunucudan gelir) ve "Steam'e sorulamadı" satırları eklendi. Adım 4 hata panelinde gün sayısının neden taşınmadığı da yazıldı: kapı geçildikten sonra bir hesap "15 günden yeni" durumuna geri düşemez.) · 2026-08-19 (**T133a** — custodial kalıntı turu: §2.1 ekran sayımı S18 çıkarılarak 23'e indi; §3.1/§3.2/§3.3 izlenebilirlik satırlarındaki `ITEM_ESCROWED`, "trade offer timeout'u", "çift iade" ve S18/AD10 referansları v3.0 karşılıklarıyla değiştirildi ya da silindi; §4.3 admin navigasyonundan S18 girişi kaldırıldı; C05 zaman çizelgesi 8 → **6 adım** ("Item Emanet" kaldırıldı, doğrulama adımları geçişin koşulu olarak yazıldı) ve §9.3 responsive notu hizalandı; C06 iptal modal'ı, S01 "Nasıl Çalışır" akışı, §7.3'ün üç "Item'ınız iade edildi" satırı ve §8.5'in "item ve/veya para" kalemi P2P para-iadesi diline çekildi; §8.1 S12 layout'undan Steam hesapları menüsü + sağlık paneli, §8.7'den S18 tarihsel tasarımı (50 satır) silindi — §9.10 AD10 / 03 §8.5 deseniyle yalnız kaldırma notu kaldı; admin iptal aralığı iki yerde `CREATED → PAYMENT_RECEIVED`'a çekildi. **§8.8 yetki matrisi 10 → 12 satır** (`VIEW_DISPUTES` + `MANAGE_DISPUTES` WP5'ten beri eksikti) ve tabloya `Anahtar` kolonu eklendi — parity artık makinece doğrulanabilir; `EMERGENCY_HOLD` etiketi kod kataloğuna hizalandı. §8.6 Timeout Süreleri tablosu T119/T123'te kapandığı hâliyle korundu. Davranış değişikliği yok.) · 2026-08-19 (**T132** — §8.8 Yetki Matrisi'nden "Steam hesaplarını görüntüle" ve "Steam recovery yönet" satırları kaldırıldı (kod kataloğuyla hizalama, 07 §9.11). Tablonun `VIEW_DISPUTES`/`MANAGE_DISPUTES` eksiği T132 öncesinden gelen ayrı bir açıktır ve **T133a** kapsamında adıyla kayda geçirildi.) · 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
+**Versiyon: v4.11** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-19 (**T157 — admin ekranları ağ başına:** yeni **S22 Cüzdanlar** (§8.11: ağ başına bölüm — sıcak/soğuk/yakıt cüzdanı, bakiyeler, giden satırlar ve soğuk aktarımlar, sıcak→soğuk aktarım formu, Ethereum giden satırı kapatma aracı — iki aşamalı, ⚠ PARA); S15'e **Ağ** kolonu ve süzgeci; S16'da tx hash bağlantıları işlemin ağına göre Tronscan/Etherscan. Öneriyle kaydedildi — ⚠.) · 2026-10-18 (**T156 — ağ seçimi arayüzü uygulandı:** C11 ağ başına (TRON base58 / EVM `0x` + 40 hex, sağlamasız Ethereum adresinde ek onay kutusu, onay adımında ağ etiketi); S06 adım 2 kabul edilen ağlar (yalnız `supportedNetworks`; ödeme adresi olmayan açık ağ görünür ama seçilemez), adım 4 ağlar + ağ başına ödeme adresi, form öncesi engellere "açık ağda ödeme adresi yok" / "açık ağ yok" satırları; S07 kabul formunda ağ seçimi ve ağ başına tutar, işlem bilgilerinde ağ etiketi ve TRON ağ ücreti satırı, ödeme bilgilerinde ağ etiketi + kırılım + ağ uyarısı (borsa uyarısı kalktı), gezgin bağlantısı ağa göre; S08 ağ başına adres satırları ve yeni ağdaki ilk adreste Steam yeniden doğrulaması. Yapımcı kararları 11 §F8 "T156 kararları" (öneriyle kaydedildi — ⚠).) · 2026-10-18 (**T145 doğrulama bulgusu** — admin ayarları tablosunda yaptırımlı adres listesi etiketi ağ başına (TRON / ETHEREUM); Ethereum girişi F8 ekranlarıyla (T156).) · 2026-10-17 (**T141 — çok ağlı ödeme**, yalnız F8 hedef notları (ekran tasarımı T156'da): S06 adım 2 USDT/USDC seçimi yerine ağ seçimi (yalnız USDT, K2–K3); S07 ödeme bilgilerinde ağ etiketi, TRON ağ ücreti satırı ve borsa uyarısı yerine ağ uyarısı (K8, K9); C11 adres girişi ağ başına (TRON base58check / EVM EIP-55); terimler listesine ERC-20, Ethereum.) · 2026-10-02 (**S06 adım 1** — envanter gizli ve CS2 envanteri yok (`INVENTORY_NOT_FOUND`, Steam 401) durumları ayrı mesajla, tekrar dene butonu olmadan (`P2P-InventoryUnauthorizedMapping`)) · 2026-09-15 (**§7.2 form öncesi engeller — üç Steam satırı** — tablo #319'un eklediği üç kodu hiç tanımıyordu: kısıtlı hesap, 15 günden yeni hesap ("kalan süre: N gün", sunucudan gelir) ve "Steam'e sorulamadı" satırları eklendi. Adım 4 hata panelinde gün sayısının neden taşınmadığı da yazıldı: kapı geçildikten sonra bir hesap "15 günden yeni" durumuna geri düşemez.) · 2026-08-19 (**T133a** — custodial kalıntı turu: §2.1 ekran sayımı S18 çıkarılarak 23'e indi; §3.1/§3.2/§3.3 izlenebilirlik satırlarındaki `ITEM_ESCROWED`, "trade offer timeout'u", "çift iade" ve S18/AD10 referansları v3.0 karşılıklarıyla değiştirildi ya da silindi; §4.3 admin navigasyonundan S18 girişi kaldırıldı; C05 zaman çizelgesi 8 → **6 adım** ("Item Emanet" kaldırıldı, doğrulama adımları geçişin koşulu olarak yazıldı) ve §9.3 responsive notu hizalandı; C06 iptal modal'ı, S01 "Nasıl Çalışır" akışı, §7.3'ün üç "Item'ınız iade edildi" satırı ve §8.5'in "item ve/veya para" kalemi P2P para-iadesi diline çekildi; §8.1 S12 layout'undan Steam hesapları menüsü + sağlık paneli, §8.7'den S18 tarihsel tasarımı (50 satır) silindi — §9.10 AD10 / 03 §8.5 deseniyle yalnız kaldırma notu kaldı; admin iptal aralığı iki yerde `CREATED → PAYMENT_RECEIVED`'a çekildi. **§8.8 yetki matrisi 10 → 12 satır** (`VIEW_DISPUTES` + `MANAGE_DISPUTES` WP5'ten beri eksikti) ve tabloya `Anahtar` kolonu eklendi — parity artık makinece doğrulanabilir; `EMERGENCY_HOLD` etiketi kod kataloğuna hizalandı. §8.6 Timeout Süreleri tablosu T119/T123'te kapandığı hâliyle korundu. Davranış değişikliği yok.) · 2026-08-19 (**T132** — §8.8 Yetki Matrisi'nden "Steam hesaplarını görüntüle" ve "Steam recovery yönet" satırları kaldırıldı (kod kataloğuyla hizalama, 07 §9.11). Tablonun `VIEW_DISPUTES`/`MANAGE_DISPUTES` eksiği T132 öncesinden gelen ayrı bir açıktır ve **T133a** kapsamında adıyla kayda geçirildi.) · 2026-08-14 (T125 — §8.6'ya "Teslimat Doğrulama" parametre grubu eklendi: envanter kanıtıyla otomatik teslimat onayı toggle'ı, seed default kapalı; açma prosedürü DEPLOY_RUNBOOK §H.) · 2026-08-13 (T123 — §16 Timeout Süreleri notundaki açık kapandı: iki kutuyu besleyen SystemSetting anahtarları da custodial adından v3.0 adına çekildi (`seller_confirm_timeout_minutes` / `delivery_timeout_minutes`); etiketler zaten uyumluydu, artık anahtar da öyle.) · 2026-08-10 (T119 doğrulaması — §16 Timeout Süreleri tablosunda iki satırın sorumluluğu v3.0'a çekildi: teslimat kutusu alıcı → **satıcı**, adım 3 "satıcı trade offer" → hazırlık onayı. Dokümanın geri kalanındaki custodial kalıntı **T133a** kapsamındadır.)
 
 ---
 
@@ -70,6 +70,7 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | S19 | Rol & Yetki Yönetimi | Admin | `/admin/roles` |
 | S20 | Kullanıcı Detay (Admin) | Admin | `/admin/users/:steamId` |
 | S21 | Audit Log | Admin | `/admin/audit-logs` |
+| S22 | Cüzdanlar | Admin | `/admin/wallets` |
 
 > **Not:** S04 numarası atlanmıştır. ToS kabul adımı S02 içinde modal olarak yer alır (ayrı ekran gerektirmez).
 
@@ -286,6 +287,7 @@ S12 Admin Dashboard
  ├── İşlem sayısı kartı ──→ S15 İşlem Listesi
  ├── Ayarlar ──────────────→ S17 Parametre Yönetimi
  ├── Roller ───────────────→ S19 Rol & Yetki
+ ├── Cüzdanlar ────────────→ S22 Cüzdanlar
  └── Audit Log ────────────→ S21 Audit Log
 
 S13 Flag Kuyruğu
@@ -1517,7 +1519,8 @@ S13'te hesap flag'i seçildiğinde S14 farklı bir layout gösterir:
 - Tarih aralığı: Başlangıç — Bitiş
 - Kullanıcı: Steam ID veya kullanıcı adı (arama)
 - Tutar aralığı: Min — Max
-- Stablecoin: USDT / USDC / Tümü (F8 hedefi: yerine Ağ: TRON / Ethereum / Tümü — T157)
+- Stablecoin: USDT / USDC / Tümü
+- Ağ: TRON / Ethereum / Tümü *(T157 — uygulandı; kabulden önceki ilan ağsızdır, bu süzgeçle gelmez. Stablecoin süzgeci kalktı sayılmadı: K2 sonrası yeni işlem yalnız USDT'dir ama eski USDC işlemleri veritabanında durur — öneriyle kaydedildi, ⚠)*
 
 **Tablo Kolonları:**
 
@@ -1526,6 +1529,7 @@ S13'te hesap flag'i seçildiğinde S14 farklı bir layout gösterir:
 | İşlem ID | Tıklanabilir → S16 |
 | Item | Görsel (küçük) + ad |
 | Fiyat | Tutar + stablecoin |
+| Ağ *(T157)* | `TRON (TRC-20)` / `Ethereum (ERC-20)`; kabulden önce "—" |
 | Satıcı | Ad + avatar, tıklanabilir → S20 |
 | Alıcı | Ad + avatar (varsa), tıklanabilir → S20 |
 | Durum | Status badge (C01) |
@@ -1561,7 +1565,7 @@ S07'deki tüm bilgiler + admin'e özel ek bilgiler:
 
 4. **Ödeme Detayları** (ödeme yapıldıysa)
    - Alıcının gönderdiği tutar
-   - Blockchain tx hash (tıklanabilir → explorer)
+   - Blockchain tx hash (tıklanabilir → explorer; **T157:** işlemin ağına göre Etherscan ya da Tronscan — ağ etiketi detayda gösterilir, ağı olmayan kayıt TRON sayılır)
    - Doğrulama zamanı
 
 5. **Satıcıya Ödeme Detayları** (tamamlandıysa)
@@ -1846,6 +1850,22 @@ Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sa
 | Filtre sonucu boş | "Filtrelere uygun kayıt bulunamadı" |
 | Yükleniyor | Skeleton (C14) |
 
+### 8.11 S22 — Cüzdanlar *(T157)*
+
+**Amaç:** Platformun cüzdanlarını, bakiyelerini ve giden transferlerini **ağ başına** görmek (TRON ve Ethereum ayrı bölümlerde — bir ağın bakiyesi ötekinin yerine geçmez); sıcak→soğuk aktarım başlatmak; Ethereum servisi günlüğünü kaybettiğinde takılı kalan giden satırları zincirdeki hash'le kapatmak (07 §9.32–§9.34).
+
+**Erişim:** Admin (`MANAGE_SETTINGS` — ayarlar ekranındaki salt okunur cüzdan adresleriyle aynı izin; ayrı bir cüzdan izni katalog değişikliği olur, öneriyle kaydedildi — ⚠).
+
+**Bölümler (her ağ için ayrı kart, ağ etiketiyle: "TRON (TRC-20)" / "Ethereum (ERC-20)"):**
+
+1. **Durum:** servis yapılandırılmamış / sağlık yoklaması kesinti görüyor uyarısı.
+2. **Cüzdanlar tablosu:** sıcak, soğuk ve (yalnız Ethereum) **yakıt** cüzdanı — adres (kopyalama düğmesiyle; Ethereum EIP-55), yerel varlık (TRX / ETH), USDT ve USDC bakiyesi, sıcak ve yakıt cüzdanı için yerel varlık alarm tabanı ve tabanın altındaysa uyarı. **Okunamayan bakiye "0" olarak gösterilmez:** "Okunamadı" ya da "Yapılandırılmadı" yazılır. Yakıt cüzdanının adresi yalnız Ethereum servisinden gelir; servis cevap vermezse "bilinmiyor" yazılır. Backend'deki sıcak cüzdan adresi servisin imzaladığı adresten farklıysa belirgin uyarı.
+3. **Giden satırlar:** bekleyen sayısı ve en eskinin yaşı, kesinleşmeyi bekleyen sayısı, son 20 satır (tür, durum, tutar, alıcı, tx hash — ağın gezgini), son 10 soğuk aktarım.
+4. **Sıcak→soğuk aktarım formu:** tutar, token (Ethereum'da yalnız USDT); gönderen ve hedef adres salt okunur (hedef dağıtım ayarıdır); **onay penceresi** ağı, token'ı, tutarı ve hedef adresi açıkça yazar. "Servis şimdilik imzalamadı" (503 `TRANSFER_DEFERRED`) hata değil bekleme olarak anlatılır.
+5. **Giden satırı kapatma aracı (yalnız Ethereum, ⚠ PARA):** (a) aday satırlar (PENDING, hash'siz) ve "Kapatma öner" eylemi — hash (`0x` + 64 hane) ve gerekçe (en az 20 karakter) ister; pencere açıkça "bu araç para göndermez; satır zincirde zaten gitmiş sayılır" der; (b) öneriler listesi (varsayılan: bekleyenler) — satırın alıcısı ve tutarı, önerilen hash'in gezgin bağlantısı, öneren ve gerekçeyle birlikte; **Onayla** yalnız öneren olmayan admin'e sunulur ve **hash'in yeniden yazılmasını** ister (öneriden doldurulmaz); **Reddet / Geri çek** not ister; karar verilmiş kayıtlar salt okunurdur.
+
+**Responsive:** tablolar kart görünümüne geçer (§9.4); form ve pencereler tek kolon.
+
 ---
 
 ## 9. Responsive Tasarım Notları
@@ -1865,7 +1885,7 @@ Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sa
 | S05 Dashboard | İşlem listesi + sağ panel (istatistikler) | Tek kolon, istatistikler üstte | Tek kolon, kompakt kart |
 | S06 İşlem Oluşturma | Merkezi form (max 600px) | Aynı | Tam genişlik |
 | S07 İşlem Detay | Item sol, bilgiler sağ | Tek kolon | Tek kolon, kompakt |
-| S12-S21 Admin | Sol menü + içerik | Hamburger menü + içerik | Hamburger menü + tam genişlik |
+| S12-S22 Admin | Sol menü + içerik | Hamburger menü + içerik | Hamburger menü + tam genişlik |
 | Tablolar (S13, S15) | Tam tablo | Yatay scroll | Kart görünümüne geçiş |
 
 ### 9.3 C05 Transaction Timeline

@@ -36,6 +36,10 @@ public class AuditLogCategoryMapTests
     [InlineData(AuditAction.MAINTENANCE_MODE_CHANGED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.TIMEOUT_AUTO_EXTENDED, AuditLogCategoryMap.Categories.AdminAction)]
     [InlineData(AuditAction.PLATFORM_OUTAGE_DETECTED, AuditLogCategoryMap.Categories.SecurityEvent)]
+    [InlineData(AuditAction.OUTBOUND_ROW_CLOSURE_PROPOSED, AuditLogCategoryMap.Categories.FundMovement)]
+    [InlineData(AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED, AuditLogCategoryMap.Categories.FundMovement)]
+    [InlineData(AuditAction.OUTBOUND_ROW_CLOSURE_REJECTED, AuditLogCategoryMap.Categories.FundMovement)]
+    [InlineData(AuditAction.OUTBOUND_ROW_CLOSURE_REFUSED, AuditLogCategoryMap.Categories.SecurityEvent)]
     public void CategoryFor_Maps_06_2_19_Groups_To_API_Categories(
         AuditAction action, string expectedCategory)
     {
@@ -60,8 +64,12 @@ public class AuditLogCategoryMapTests
         var actions = AuditLogCategoryMap.ActionsInCategory(
             AuditLogCategoryMap.Categories.FundMovement);
 
-        // 5 wallet base + 1 T77 hot→cold consolidation = 6.
-        Assert.Equal(6, actions.Count);
+        // 5 wallet base + 1 T77 hot→cold consolidation + 3 T157 outbound-row
+        // closure steps (proposed / approved / rejected) = 9.
+        Assert.Equal(9, actions.Count);
+        Assert.Contains(AuditAction.OUTBOUND_ROW_CLOSURE_PROPOSED, actions);
+        Assert.Contains(AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED, actions);
+        Assert.Contains(AuditAction.OUTBOUND_ROW_CLOSURE_REJECTED, actions);
         Assert.Contains(AuditAction.WALLET_DEPOSIT, actions);
         Assert.Contains(AuditAction.WALLET_WITHDRAW, actions);
         Assert.Contains(AuditAction.WALLET_ESCROW_LOCK, actions);
@@ -117,6 +125,7 @@ public class AuditLogCategoryMapTests
                 AuditAction.SANCTIONS_LIST_ADDRESS_ADDED,
                 AuditAction.SANCTIONS_LIST_ADDRESS_REMOVED,
                 AuditAction.PLATFORM_OUTAGE_DETECTED,
+                AuditAction.OUTBOUND_ROW_CLOSURE_REFUSED, // T157, inserted last
             },
             actions);
     }

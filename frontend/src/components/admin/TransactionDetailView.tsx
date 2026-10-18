@@ -6,8 +6,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { StatusBadge } from "@/components/common";
 import type { ExtendedStatus } from "@/components/common";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
-import { tronscanTxUrl } from "@/lib/utils/blockchain";
-import { EmergencyHoldReleaseAction, TransactionStatus } from "@/types/enums";
+import { explorerTxUrl, networkLabel, networkMeta, parseNetwork } from "@/lib/utils/blockchain";
+import { BlockchainNetwork, EmergencyHoldReleaseAction, TransactionStatus } from "@/types/enums";
 import type { AdminTransactionDetail, AdminTransactionParty } from "@/lib/api/admin";
 import { useApproveFlag, useRejectFlag } from "@/lib/hooks/useAdminFlagMutations";
 import {
@@ -67,12 +67,18 @@ function DescRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function TxHashLink({ hash }: { hash: string }) {
+/**
+ * Hash link to the explorer of the transaction's own network (T157). A null
+ * network is read as TRON — every pre-F8 row is TRON (06 §1.4).
+ */
+function TxHashLink({ hash, network }: { hash: string; network: BlockchainNetwork }) {
+  const td = useTranslations("adminTransactions.detail");
   return (
     <a
-      href={tronscanTxUrl(hash)}
+      href={explorerTxUrl(network, hash)}
       target="_blank"
       rel="noopener noreferrer"
+      title={td("viewOnExplorer", { explorer: networkMeta(network).explorerName })}
       className="break-all font-mono text-xs text-blue-600 hover:text-blue-700"
     >
       {hash}
@@ -109,6 +115,8 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
   const [resultMessage, setResultMessage] = useState<string | null>(null);
 
   const sym = tx.stablecoin;
+  const network = parseNetwork(tx.network);
+  const explorerNetwork = network ?? BlockchainNetwork.TRON;
   const isTerminal = TERMINAL_STATES.has(tx.status);
   const isFlagged = tx.status === TransactionStatus.FLAGGED;
   const isDelivered = tx.status === TransactionStatus.ITEM_DELIVERED;
@@ -300,6 +308,7 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                 />
                 <DescRow label={td("total")} value={formatStablecoin(tx.totalAmount, sym)} />
                 <DescRow label={td("stablecoin")} value={sym} />
+                <DescRow label={td("network")} value={network ? networkLabel(network) : "—"} />
                 <DescRow
                   label={td("paymentTimeout")}
                   value={td("paymentTimeoutMinutes", { count: tx.paymentTimeoutMinutes })}
@@ -372,7 +381,12 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                 {tx.paymentDetail.receivedTxHash && (
                   <DescRow
                     label={td("txHash")}
-                    value={<TxHashLink hash={tx.paymentDetail.receivedTxHash} />}
+                    value={
+                      <TxHashLink
+                        hash={tx.paymentDetail.receivedTxHash}
+                        network={explorerNetwork}
+                      />
+                    }
                   />
                 )}
                 <DescRow label={td("confirmations")} value={tx.paymentDetail.blockConfirmations} />
@@ -411,7 +425,9 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                 {tx.sellerPayoutDetail.txHash && (
                   <DescRow
                     label={td("txHash")}
-                    value={<TxHashLink hash={tx.sellerPayoutDetail.txHash} />}
+                    value={
+                      <TxHashLink hash={tx.sellerPayoutDetail.txHash} network={explorerNetwork} />
+                    }
                   />
                 )}
                 {tx.sellerPayoutDetail.sentAt && (
@@ -455,7 +471,7 @@ export function TransactionDetailView({ transaction: tx, onRefetch }: Transactio
                 {tx.refundDetail.txHash && (
                   <DescRow
                     label={td("txHash")}
-                    value={<TxHashLink hash={tx.refundDetail.txHash} />}
+                    value={<TxHashLink hash={tx.refundDetail.txHash} network={explorerNetwork} />}
                   />
                 )}
                 {tx.refundDetail.refundedAt && (

@@ -104,6 +104,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
                 CreatedAt = t.CreatedAt,
                 CompletedAt = t.CompletedAt,
                 CancelledAt = t.CancelledAt,
+                Network = t.Network,
             })
             .ToListAsync(cancellationToken);
 
@@ -157,6 +158,7 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
                 CreatedAt = t.CreatedAt,
                 CompletedAt = t.CompletedAt,
                 CancelledAt = t.CancelledAt,
+                Network = t.Network,
             })
             .ToListAsync(cancellationToken);
 
@@ -286,7 +288,8 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             AdminActions: new AdminTxAdminActionsDto(
                 CanApproveFlag: hasPendingFlag,
                 CanRejectFlag: hasPendingFlag,
-                CanCancel: canCancel));
+                CanCancel: canCancel),
+            Network: tx.Network);
     }
 
     // ---------- helpers ----------
@@ -314,6 +317,10 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
         }
         if (q.Stablecoin.HasValue)
             query = query.Where(t => t.StablecoinType == q.Stablecoin.Value);
+        // T157 — a listing that has not been accepted yet has no network (06 §1.4),
+        // so a network filter only ever matches accepted transactions.
+        if (q.Network.HasValue)
+            query = query.Where(t => t.Network == q.Network.Value);
         if (q.DateFrom.HasValue)
             query = query.Where(t => t.CreatedAt >= q.DateFrom.Value);
         if (q.DateTo.HasValue)
@@ -443,7 +450,8 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
             Buyer: buyer,
             CreatedAt: row.CreatedAt,
             CompletedAt: row.CompletedAt,
-            CancelledAt: row.CancelledAt);
+            CancelledAt: row.CancelledAt,
+            Network: row.Network);
     }
 
     /// <summary>
@@ -636,5 +644,6 @@ public sealed class AdminTransactionQueryService : IAdminTransactionQueryService
         public DateTime CreatedAt { get; init; }
         public DateTime? CompletedAt { get; init; }
         public DateTime? CancelledAt { get; init; }
+        public BlockchainNetwork? Network { get; init; }
     }
 }

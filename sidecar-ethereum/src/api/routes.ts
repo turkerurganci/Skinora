@@ -10,6 +10,9 @@ import type { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import type { TransferService } from '../transfer/TransferService.js';
 import { correlationMiddleware, internalKeyAuth, networkGuard } from './middleware.js';
 import { deriveAddressHandler } from './walletHandlers.js';
+import { platformWalletsHandler, type PlatformWallets } from './platformWalletsHandler.js';
+import { verifyHandler } from './verifyHandler.js';
+import type { TransferVerifier } from '../transfer/TransferVerifier.js';
 import {
   coldWalletTransferHandler,
   payoutHandler,
@@ -48,6 +51,10 @@ export interface AppDeps {
   payments?: PaymentDeps;
   /** T154 — `POST /api/transfer/estimate-fee`. */
   feeEstimator: EthFeeEstimationService;
+  /** T157 — `POST /api/wallet/platform`; absent = the endpoint answers 501. */
+  platformWallets?: () => PlatformWallets;
+  /** T157 — `POST /api/transfer/verify`; absent = the endpoint answers 501. */
+  verifier?: TransferVerifier;
 }
 
 /** The endpoints T151 brings (05 §3.3a "Uçlar"). */
@@ -84,12 +91,24 @@ export function createApp(deps: AppDeps): Express {
   api.use(internalKeyAuth(deps.internalKey));
   api.use(networkGuard);
   api.post('/wallet/derive', deriveAddressHandler(deps.wallet));
+  // T157 — the service's own wallets (the fuel wallet's address is nowhere else).
+  api.post(
+    '/wallet/platform',
+    deps.platformWallets
+      ? platformWalletsHandler(deps.platformWallets)
+      : notImplementedHandler('T157'),
+  );
   // T152 — sends (08 §3.7.6). Bodies and answers: transferHandlers.ts.
   api.post('/transfer/payout', payoutHandler(deps.transfers));
   api.post('/transfer/refund', refundHandler(deps.transfers));
   api.post('/transfer/sweep', sweepHandler(deps.transfers));
   api.post('/transfer/cold-wallet', coldWalletTransferHandler(deps.transfers));
   api.get('/transfer/status/:txHash', transferStatusHandler(deps.transfers));
+  // T157 — read-only check that a chain hash carries a given token transfer.
+  api.post(
+    '/transfer/verify',
+    deps.verifier ? verifyHandler(deps.verifier) : notImplementedHandler('T157'),
+  );
   const payments = deps.payments;
   if (payments) {
     api.post(

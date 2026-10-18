@@ -96,6 +96,37 @@ public interface IBlockchainSidecarClient
     Task<BlockchainSidecarTransferResult> SendHotToColdTransferAsync(
         HotToColdTransferRequest request,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T157 — the service's own wallets as the service sees them (hot, fuel,
+    /// cold). Only the Ethereum service answers: its fuel wallet's address is
+    /// derived from its key and exists nowhere in the configuration, so the
+    /// admin wallet screen has to ask. TRON has no fuel wallet and keeps the
+    /// default (<see cref="BlockchainSidecarStatus.NotConfigured"/> = "not
+    /// asked"), which also keeps every other implementation of this port
+    /// untouched.
+    /// </summary>
+    Task<BlockchainSidecarPlatformWalletsResult> GetPlatformWalletsAsync(
+        CancellationToken cancellationToken) =>
+        Task.FromResult(BlockchainSidecarPlatformWalletsResult.NotAsked);
+}
+
+/// <summary>
+/// Outcome of <see cref="IBlockchainSidecarClient.GetPlatformWalletsAsync"/>
+/// (T157). Addresses are in the service's display form (Ethereum: EIP-55).
+/// </summary>
+public sealed record BlockchainSidecarPlatformWalletsResult(
+    BlockchainSidecarStatus Status,
+    string? HotWalletAddress,
+    string? FuelWalletAddress,
+    string? ColdWalletAddress)
+{
+    /// <summary>The network's service has no such call (TRON) or is not configured.</summary>
+    public static readonly BlockchainSidecarPlatformWalletsResult NotAsked =
+        new(BlockchainSidecarStatus.NotConfigured, null, null, null);
+
+    public static readonly BlockchainSidecarPlatformWalletsResult Unavailable =
+        new(BlockchainSidecarStatus.Unavailable, null, null, null);
 }
 
 /// <summary>
@@ -104,19 +135,32 @@ public interface IBlockchainSidecarClient
 /// backend's pre-allocated <c>ColdWalletTransfer</c> row id, surfaced in
 /// sidecar logs for correlation; the sidecar does not persist it.
 /// </summary>
+/// <param name="FeeCapUsd">
+/// T157 — Ethereum: the platform's per-transfer fee cap in USD
+/// (<c>blockchain.ethereum.fee_cap_usd_per_transfer</c>); the Ethereum service
+/// refuses a cold-wallet transfer without one (08 §3.7.7) and waits when the
+/// fee is above it. Null for TRON (not sent).
+/// </param>
 public sealed record HotToColdTransferRequest(
     Guid ColdTransferId,
     string ToColdAddress,
     string Amount,
-    string Token);
+    string Token,
+    string? FeeCapUsd = null);
 
 /// <summary>
 /// Discriminated outcome of <see cref="IBlockchainSidecarClient.SendHotToColdTransferAsync"/>.
 /// <c>TxHash</c> is populated only when <c>Status = Success</c>.
 /// </summary>
+/// <param name="Reason">
+/// T157 — for <see cref="BlockchainSidecarStatus.Deferred"/>: the service's
+/// reason code (<c>FEE_ABOVE_CAP</c>, <c>ETH_PRICE_UNAVAILABLE</c>,
+/// <c>HOT_WALLET_GAS_LOW</c>, <c>JOURNAL_BEHIND_CHAIN</c> …).
+/// </param>
 public sealed record BlockchainSidecarTransferResult(
     BlockchainSidecarStatus Status,
-    string? TxHash);
+    string? TxHash,
+    string? Reason = null);
 
 /// <summary>
 /// Input payload for the sidecar <c>POST /api/monitor/start</c> endpoint
@@ -192,6 +236,13 @@ public enum BlockchainSidecarStatus
 
     /// <summary>Sidecar 5xx, transport failure, or timeout — caller retries.</summary>
     Unavailable,
+
+    /// <summary>
+    /// T157 — the Ethereum service did not sign <i>for now</i> (503 with
+    /// <c>deferred</c>, or <c>JOURNAL_BEHIND_CHAIN</c>): nothing was signed and
+    /// the caller may ask again later.
+    /// </summary>
+    Deferred,
 }
 
 /// <summary>

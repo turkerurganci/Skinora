@@ -6,9 +6,11 @@ using Skinora.API.Tests.Common;
 using Skinora.API.Services.HotWallet;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Payments.Domain.Entities;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Wallets;
 using Skinora.Users.Domain.Entities;
@@ -67,6 +69,7 @@ public sealed class HotWalletServiceTests : IDisposable
             _db,
             FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar),
             _walletAddresses,
+            new BlockchainNetworkSettingsProvider(_db),
             _clock,
             NullLogger<HotWalletService>.Instance);
     }
@@ -80,11 +83,11 @@ public sealed class HotWalletServiceTests : IDisposable
     [Fact]
     public async Task InitiateColdTransferAsync_ZeroOrNegativeAmount_ReturnsInvalidAmount()
     {
-        var outcome = await _sut.InitiateColdTransferAsync(
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
             0m, StablecoinType.USDT, AdminId, CancellationToken.None);
         Assert.IsType<HotWalletColdTransferOutcome.InvalidAmount>(outcome);
 
-        outcome = await _sut.InitiateColdTransferAsync(
+        outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
             -1m, StablecoinType.USDT, AdminId, CancellationToken.None);
         Assert.IsType<HotWalletColdTransferOutcome.InvalidAmount>(outcome);
 
@@ -97,7 +100,7 @@ public sealed class HotWalletServiceTests : IDisposable
     public async Task InitiateColdTransferAsync_OutOfScaleAmount_ReturnsInvalidAmount()
     {
         // 7 fractional digits — exceeds scale 6
-        var outcome = await _sut.InitiateColdTransferAsync(
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
             1.0000001m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.InvalidAmount>(outcome);
@@ -110,7 +113,7 @@ public sealed class HotWalletServiceTests : IDisposable
     {
         _walletAddresses.ColdWalletAddress = ColdWalletAddress;
 
-        var outcome = await _sut.InitiateColdTransferAsync(
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.HotWalletNotConfigured>(outcome);
@@ -123,7 +126,7 @@ public sealed class HotWalletServiceTests : IDisposable
     {
         _walletAddresses.HotWalletAddress = HotWalletAddress;
 
-        var outcome = await _sut.InitiateColdTransferAsync(
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.ColdWalletNotConfigured>(outcome);
@@ -138,7 +141,7 @@ public sealed class HotWalletServiceTests : IDisposable
         await ConfigureBothWalletsAsync();
         _sidecar.QueueUnavailable();
 
-        var outcome = await _sut.InitiateColdTransferAsync(
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
             100m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         Assert.IsType<HotWalletColdTransferOutcome.SidecarUnavailable>(outcome);
@@ -152,7 +155,7 @@ public sealed class HotWalletServiceTests : IDisposable
         await ConfigureBothWalletsAsync();
         _sidecar.QueueSuccess("0xtxhash-cold-001");
 
-        var outcome = await _sut.InitiateColdTransferAsync(
+        var outcome = await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 
             250.5m, StablecoinType.USDC, AdminId, CancellationToken.None);
 
         var success = Assert.IsType<HotWalletColdTransferOutcome.Success>(outcome);
@@ -193,14 +196,118 @@ public sealed class HotWalletServiceTests : IDisposable
         _sidecar.QueueSuccess("0xfirst");
         _sidecar.QueueSuccess("0xsecond");
 
-        await _sut.InitiateColdTransferAsync(100m, StablecoinType.USDT, AdminId, CancellationToken.None);
-        await _sut.InitiateColdTransferAsync(200m, StablecoinType.USDT, AdminId, CancellationToken.None);
+        await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 100m, StablecoinType.USDT, AdminId, CancellationToken.None);
+        await _sut.InitiateColdTransferAsync(BlockchainNetwork.TRON, 200m, StablecoinType.USDT, AdminId, CancellationToken.None);
 
         var ledger = await LoadLedgerAsync();
         Assert.Equal(2, ledger.Count);
         Assert.Contains(ledger, r => r.TxHash == "0xfirst");
         Assert.Contains(ledger, r => r.TxHash == "0xsecond");
         Assert.Equal(2, (await LoadAuditAsync()).Count);
+    }
+
+    // ─── T157 — Ethereum consolidation ─────────────────────────────────
+
+    private const string EthHot = "0xdac17f958d2ee523a2206206994597c13d831ec7";
+    private const string EthCold = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+
+    private HotWalletService EthereumSut(StubSidecarClient ethereum)
+    {
+        _walletAddresses.Pairs[BlockchainNetwork.ETHEREUM] =
+            new PlatformWalletAddresses(BlockchainNetwork.ETHEREUM, EthHot, EthCold);
+        return new HotWalletService(
+            _db,
+            new FakeBlockchainServiceRegistry()
+                .With(BlockchainNetwork.TRON, sidecar: _sidecar)
+                .With(BlockchainNetwork.ETHEREUM, sidecar: ethereum),
+            _walletAddresses,
+            new BlockchainNetworkSettingsProvider(_db),
+            _clock,
+            NullLogger<HotWalletService>.Instance);
+    }
+
+    [Fact]
+    public async Task Ethereum_Success_UsesTheEthereumService_CarriesTheFeeCap_AndRecordsTheNetwork()
+    {
+        var ethereum = new StubSidecarClient();
+        ethereum.QueueSuccess("0xeth-cold-001");
+        var sut = EthereumSut(ethereum);
+
+        var outcome = await sut.InitiateColdTransferAsync(
+            BlockchainNetwork.ETHEREUM, 1000m, StablecoinType.USDT, AdminId, CancellationToken.None);
+
+        var success = Assert.IsType<HotWalletColdTransferOutcome.Success>(outcome);
+        Assert.Equal(BlockchainNetwork.ETHEREUM, success.Network);
+        Assert.Equal(EthHot, success.FromAddress);
+        Assert.Equal(EthCold, success.ToAddress);
+
+        // The Ethereum service signed it — TRON's was not asked — and the fee cap rode along.
+        Assert.Empty(_sidecar.Calls);
+        var call = Assert.Single(ethereum.Calls);
+        Assert.Equal(EthCold, call.ToColdAddress);
+        Assert.Equal("0.5", call.FeeCapUsd);
+
+        var ledger = Assert.Single(await LoadLedgerAsync());
+        Assert.Equal(BlockchainNetwork.ETHEREUM, ledger.Network);
+        var audit = Assert.Single(await LoadAuditAsync());
+        Assert.Contains("ETHEREUM", audit.NewValue);
+    }
+
+    [Fact]
+    public async Task Tron_Success_SendsNoFeeCap()
+    {
+        await ConfigureBothWalletsAsync();
+        _sidecar.QueueSuccess("0xtron");
+
+        await _sut.InitiateColdTransferAsync(
+            BlockchainNetwork.TRON, 10m, StablecoinType.USDT, AdminId, CancellationToken.None);
+
+        Assert.Null(Assert.Single(_sidecar.Calls).FeeCapUsd);
+    }
+
+    [Fact]
+    public async Task Ethereum_Usdc_IsRefused_BeforeAnyService()
+    {
+        var ethereum = new StubSidecarClient();
+        var sut = EthereumSut(ethereum);
+
+        var outcome = await sut.InitiateColdTransferAsync(
+            BlockchainNetwork.ETHEREUM, 10m, StablecoinType.USDC, AdminId, CancellationToken.None);
+
+        Assert.IsType<HotWalletColdTransferOutcome.TokenNotSupported>(outcome);
+        Assert.Empty(ethereum.Calls);
+        Assert.Empty(await LoadLedgerAsync());
+    }
+
+    [Fact]
+    public async Task Ethereum_WithoutAConfiguredService_IsRefused_AndTronIsNotUsedInstead()
+    {
+        await ConfigureBothWalletsAsync();
+
+        // The default fixture registry only knows TRON.
+        var outcome = await _sut.InitiateColdTransferAsync(
+            BlockchainNetwork.ETHEREUM, 10m, StablecoinType.USDT, AdminId, CancellationToken.None);
+
+        Assert.IsType<HotWalletColdTransferOutcome.NetworkNotConfigured>(outcome);
+        Assert.Empty(_sidecar.Calls);
+        Assert.Empty(await LoadLedgerAsync());
+    }
+
+    [Fact]
+    public async Task Ethereum_WhenTheServiceWaits_NothingIsWritten()
+    {
+        var ethereum = new StubSidecarClient();
+        ethereum.Responses.Enqueue(new BlockchainSidecarTransferResult(
+            BlockchainSidecarStatus.Deferred, null, "FEE_ABOVE_CAP"));
+        var sut = EthereumSut(ethereum);
+
+        var outcome = await sut.InitiateColdTransferAsync(
+            BlockchainNetwork.ETHEREUM, 10m, StablecoinType.USDT, AdminId, CancellationToken.None);
+
+        var deferred = Assert.IsType<HotWalletColdTransferOutcome.Deferred>(outcome);
+        Assert.Equal("FEE_ABOVE_CAP", deferred.Reason);
+        Assert.Empty(await LoadLedgerAsync());
+        Assert.Empty(await LoadAuditAsync());
     }
 
     // ─── Helpers ────────────────────────────────────────────────────────

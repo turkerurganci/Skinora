@@ -195,6 +195,7 @@
     "disputes": "争议",
     "transactions": "交易",
     "settings": "设置",
+    "wallets": "钱包",
     "roles": "角色",
     "users": "用户",
     "auditLog": "审计日志"
@@ -494,7 +495,11 @@
       "SANCTIONS_LIST_ADDRESS_REMOVED": "已移除制裁名单地址",
       "MAINTENANCE_MODE_CHANGED": "维护模式已更改",
       "TIMEOUT_AUTO_EXTENDED": "超时已自动延长",
-      "PLATFORM_OUTAGE_DETECTED": "检测到平台中断"
+      "PLATFORM_OUTAGE_DETECTED": "检测到平台中断",
+      "OUTBOUND_ROW_CLOSURE_PROPOSED": "已提议关闭出款记录",
+      "OUTBOUND_ROW_CLOSURE_APPROVED": "已批准关闭出款记录",
+      "OUTBOUND_ROW_CLOSURE_REJECTED": "已拒绝关闭出款记录",
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "已驳回关闭出款记录"
     }
   },
   "adminTransactions": {
@@ -511,7 +516,8 @@
       "buyer": "买家",
       "status": "状态",
       "createdAt": "创建时间",
-      "completedAt": "完成 / 取消"
+      "completedAt": "完成 / 取消",
+      "network": "网络"
     },
     "filters": {
       "status": "状态",
@@ -523,7 +529,9 @@
       "minAmount": "最小金额",
       "maxAmount": "最大金额",
       "dateFrom": "从",
-      "dateTo": "至"
+      "dateTo": "至",
+      "network": "网络",
+      "allNetworks": "全部"
     },
     "statusGroup": {
       "ACTIVE": "进行中",
@@ -577,7 +585,9 @@
       "heldAt": "冻结时间",
       "autoHoldSanctions": "Auto-Hold — Sanctions Match",
       "readOnly": "此交易处于终态，只读。",
-      "loadError": "无法加载交易详情。"
+      "loadError": "无法加载交易详情。",
+      "network": "网络",
+      "viewOnExplorer": "在 {explorer} 上查看"
     },
     "actions": {
       "cancelTx": "取消交易",
@@ -2014,6 +2024,233 @@
       "title": "未找到用户",
       "browseDescription": "尚无用户被分配管理员角色。按 Steam ID 或用户名搜索以查找任意用户。",
       "searchDescription": "没有用户符合这些筛选条件。"
+    }
+  },
+  "adminWallets": {
+    "title": "钱包",
+    "intro": "平台钱包、余额、转账和出款队列，按网络分别显示。",
+    "loadError": "无法加载钱包概览。",
+    "sectionLabel": "{network} 钱包",
+    "state": {
+      "notConfigured": "此网络的签名服务未配置。余额和转账不可用。",
+      "degraded": "此网络状态降级。余额可能已过期，转账可能被推迟。"
+    },
+    "walletsHeading": "钱包",
+    "tableAriaLabel": "{network} 钱包",
+    "columns": {
+      "role": "角色",
+      "address": "地址",
+      "balances": "余额",
+      "nativeFloor": "最低 {asset}"
+    },
+    "roles": {
+      "HOT": "热钱包",
+      "COLD": "冷钱包",
+      "FUEL": "燃料钱包"
+    },
+    "addressNotConfigured": "未配置",
+    "balanceUnavailable": "不可用",
+    "balanceNotConfigured": "未配置",
+    "balancesStatus": {
+      "UNAVAILABLE": "余额不可用：无法连接签名服务。这并不表示余额为零。",
+      "NOT_CONFIGURED": "此网络未配置余额。这并不表示余额为零。"
+    },
+    "balancesAtBlock": "余额截至区块 {block}",
+    "floor": {
+      "value": "{amount} {asset}",
+      "none": "—",
+      "below": "{asset} 余额低于最低值。请补充。"
+    },
+    "addressMismatch": "地址不一致：已配置的热钱包地址（{configured}）与签名服务使用的地址（{actual}）不同。在解决之前请勿转账。",
+    "outbound": {
+      "heading": "出款队列",
+      "pending": "待处理：{count}",
+      "oldestPending": "最早待处理：{date}",
+      "noneOldest": "最早待处理：—",
+      "inFlight": "处理中：{count}"
+    },
+    "coldHistory": {
+      "heading": "最近的冷钱包转账",
+      "empty": "暂无冷钱包转账。",
+      "ariaLabel": "{network} 冷钱包转账",
+      "columns": {
+        "date": "日期",
+        "amount": "金额",
+        "from": "转出",
+        "to": "转入",
+        "tx": "交易",
+        "by": "发起人"
+      }
+    },
+    "outboundRows": {
+      "heading": "最近的出款转账",
+      "empty": "暂无出款转账。",
+      "ariaLabel": "{network} 出款转账",
+      "columns": {
+        "type": "类型",
+        "status": "状态",
+        "amount": "金额",
+        "to": "收款方",
+        "tx": "交易",
+        "retries": "重试次数",
+        "created": "创建时间"
+      }
+    },
+    "outboundType": {
+      "SELLER_PAYOUT": "卖家付款",
+      "BUYER_REFUND": "买家退款",
+      "EXCESS_REFUND": "超额退款",
+      "WRONG_TOKEN_REFUND": "错误代币退款",
+      "INCORRECT_AMOUNT_REFUND": "金额错误退款",
+      "LATE_PAYMENT_REFUND": "逾期付款退款",
+      "SWEEP": "归集（sweep）"
+    },
+    "outboundStatus": {
+      "DETECTED": "已检测",
+      "PENDING": "待处理",
+      "CONFIRMED": "已确认",
+      "FAILED": "失败"
+    },
+    "noHash": "—",
+    "transfer": {
+      "heading": "热钱包 → 冷钱包转账",
+      "description": "在 {network} 上将资金从热钱包转到冷钱包。目的地由部署配置固定。",
+      "from": "转出（热钱包）",
+      "to": "转入（冷钱包，固定）",
+      "token": "代币",
+      "amount": "金额",
+      "amountInvalid": "请输入大于零的金额（最多 6 位小数）。",
+      "review": "检查转账",
+      "unavailable": "转账不可用：热钱包或冷钱包未配置。",
+      "confirmTitle": "确认热钱包 → 冷钱包转账",
+      "confirmWarning": "这将在链上发送真实资金，且无法撤销。请核对下方每一项。",
+      "confirmNetwork": "网络",
+      "confirmToken": "代币",
+      "confirmAmount": "金额",
+      "confirmFrom": "转出",
+      "confirmTo": "转入",
+      "confirmSubmit": "发送 {amount} {token}",
+      "cancel": "取消",
+      "sending": "发送中…",
+      "success": "转账已提交：{amount} {token} 转入冷钱包。",
+      "successTx": "交易"
+    },
+    "closures": {
+      "heading": "关闭出款记录（双人操作）",
+      "intro": "仅在Ethereum签名服务丢失其日志、且某笔付款已在链上发出但其记录仍显示待处理时使用。一名管理员提议链上交易哈希；另一名不同的管理员通过再次输入该哈希来批准。此工具绝不会发送资金。",
+      "noMoney": "此工具不会发送资金。",
+      "candidates": {
+        "heading": "未关闭的Ethereum出款记录",
+        "empty": "没有未关闭的Ethereum出款记录。",
+        "ariaLabel": "未关闭的Ethereum出款记录",
+        "columns": {
+          "type": "类型",
+          "amount": "金额",
+          "to": "收款方",
+          "created": "创建时间",
+          "retries": "重试次数",
+          "action": "操作"
+        },
+        "live": "关闭进行中",
+        "propose": "提议关闭"
+      },
+      "list": {
+        "heading": "关闭申请",
+        "statusFilter": "状态",
+        "all": "全部",
+        "empty": "没有此状态的关闭申请。",
+        "ariaLabel": "关闭申请"
+      },
+      "status": {
+        "PROPOSED": "已提议",
+        "APPROVED": "已批准",
+        "REJECTED": "已拒绝"
+      },
+      "row": {
+        "transaction": "交易",
+        "row": "记录",
+        "recipient": "收款方",
+        "amount": "金额",
+        "proposedHash": "提议的哈希",
+        "reason": "原因",
+        "proposedBy": "{name} 于 {date} 提议",
+        "decidedBy": "{name} 于 {date} 决定",
+        "decisionNote": "决定备注",
+        "ownProposal": "此关闭申请由您提议，必须由另一名管理员批准。",
+        "rowStatus": "记录状态"
+      },
+      "actions": {
+        "approve": "批准",
+        "reject": "拒绝",
+        "withdraw": "撤回"
+      },
+      "propose": {
+        "title": "提议关闭",
+        "warning": "此工具不会发送资金。另一名管理员批准后，该记录将被视为已使用您输入的哈希在链上付款，平台将不再重试。",
+        "row": "记录：{type}，{amount} {token}，收款方 {to}",
+        "hash": "链上交易哈希",
+        "hashHelp": "0x 后接 64 位十六进制字符。",
+        "hashInvalid": "请输入有效的交易哈希（0x + 64 位十六进制字符）。",
+        "explorer": "在 {explorer} 上打开此哈希",
+        "reason": "原因",
+        "reasonHelp": "是哪个 nonce/账户，以及您在链上匹配了什么（至少 20 个字符）。",
+        "reasonTooShort": "原因至少需要 20 个字符。",
+        "submit": "提议关闭",
+        "cancel": "取消"
+      },
+      "approve": {
+        "title": "批准关闭",
+        "warning": "此工具不会发送资金，但批准的效果不可逆：该记录将被视为已在链上付款，且不会再重试。",
+        "systemCheck": "系统会根据该记录的收款方和金额检查此交易，但您仍须在区块浏览器上自行核对。",
+        "compare": "批准前，请将以下信息与 {explorer} 上的交易进行核对。",
+        "proposedBy": "提议人：{name}",
+        "hashProposed": "提议的哈希",
+        "explorer": "在 {explorer} 上打开提议的哈希",
+        "typeHash": "再次输入交易哈希",
+        "typeHashHelp": "请从区块浏览器读取后输入。出于安全考虑不会预先填写。",
+        "mismatch": "您输入的哈希与提议不一致。",
+        "submit": "批准关闭",
+        "cancel": "取消"
+      },
+      "reject": {
+        "titleReject": "拒绝关闭",
+        "titleWithdraw": "撤回关闭",
+        "note": "备注",
+        "noteHelp": "必填。请说明原因。",
+        "noteRequired": "备注为必填项。",
+        "submitReject": "拒绝关闭",
+        "submitWithdraw": "撤回关闭",
+        "cancel": "取消"
+      }
+    },
+    "errors": {
+      "GENERIC": "无法完成操作，请重试。",
+      "VALIDATION_ERROR": "请求无效。请检查各字段后重试。",
+      "INVALID_TX_HASH": "交易哈希无效。",
+      "HASH_CONFIRMATION_MISMATCH": "输入的哈希与提议的哈希不一致。",
+      "SELF_APPROVAL_FORBIDDEN": "您不能批准自己的提议，必须由另一名管理员操作。",
+      "ROW_NOT_FOUND": "未找到该出款记录。",
+      "CLOSURE_NOT_FOUND": "未找到该关闭申请。",
+      "ROW_NOT_ETHEREUM": "该记录不在Ethereum上。",
+      "ROW_NOT_OUTBOUND": "该记录不是出款转账。",
+      "HASH_NOT_SUCCESSFUL": "该交易在链上未成功。",
+      "HASH_NOT_FOUND": "在链上未找到该交易哈希。",
+      "HASH_DOES_NOT_MATCH_ROW": "此交易并未支付该记录（收款方、金额或代币错误，或在链上失败）。它无法关闭该记录。请在区块浏览器上检查哈希，或拒绝该提议。",
+      "ROW_NOT_OPEN": "该记录已不再处于未关闭状态。",
+      "CLOSURE_NOT_OPEN": "该关闭申请已被决定。",
+      "HASH_ALREADY_BOUND": "该哈希已绑定到另一条记录。",
+      "CLOSURE_ALREADY_PROPOSED": "此记录已有待处理的关闭提议。",
+      "HASH_NOT_FINAL": "该交易尚未最终确认，请稍后再试。",
+      "CLOSURE_CONFLICT": "关闭申请在此期间已发生变化。请刷新后重试。",
+      "CHAIN_SERVICE_UNAVAILABLE": "链服务不可用，请稍后再试。",
+      "INVALID_AMOUNT": "金额无效。",
+      "INVALID_TOKEN": "此网络不支持该代币。",
+      "INVALID_NETWORK": "网络无效。",
+      "HOT_WALLET_NOT_CONFIGURED": "热钱包未配置。",
+      "COLD_WALLET_NOT_CONFIGURED": "冷钱包未配置。",
+      "SIDECAR_UNAVAILABLE": "签名服务不可用。未发送任何资金。",
+      "NETWORK_UNAVAILABLE": "网络不可用。未发送任何资金。",
+      "TRANSFER_DEFERRED": "转账已被推迟（例如手续费高于上限）。未发送任何资金。请稍后再试。"
     }
   }
 }

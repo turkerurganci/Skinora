@@ -20,6 +20,8 @@ using Skinora.API.BackgroundJobs;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
+using Skinora.API.Services.AdminWallets;
+using Skinora.API.Services.WalletClosures;
 using Skinora.API.Tests.Common;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.BackgroundJobs;
@@ -221,12 +223,65 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         public void SetSidecarUnavailable(string status)
             => _outcome = new HotWalletColdTransferOutcome.SidecarUnavailable(status);
 
+        public BlockchainNetwork? LastNetwork { get; private set; }
+
         public Task<HotWalletColdTransferOutcome> InitiateColdTransferAsync(
-            decimal amount, StablecoinType token, Guid initiatingAdminId, CancellationToken cancellationToken)
+            BlockchainNetwork network, decimal amount, StablecoinType token, Guid initiatingAdminId,
+            CancellationToken cancellationToken)
         {
+            LastNetwork = network;
             LastToken = token;
             LastAdminId = initiatingAdminId;
             return Task.FromResult(_outcome);
+        }
+    }
+
+    public sealed class FakeOverviewService : IAdminWalletOverviewService
+    {
+        public Task<WalletOverviewDto> GetAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new WalletOverviewDto([]));
+    }
+
+    public sealed class FakeClosureService : IOutboundRowClosureService
+    {
+        public ClosureResult Result { get; set; } = ClosureResult.Fail(ClosureError.Validation, "unset");
+        public List<(string Call, Guid Admin, object?[] Args)> Calls { get; } = [];
+
+        public Task<IReadOnlyList<ClosureCandidateDto>> ListCandidatesAsync(CancellationToken cancellationToken)
+        {
+            Calls.Add(("candidates", Guid.Empty, []));
+            return Task.FromResult<IReadOnlyList<ClosureCandidateDto>>([]);
+        }
+
+        public Task<IReadOnlyList<ClosureDto>> ListAsync(
+            OutboundRowClosureStatus? status, CancellationToken cancellationToken)
+        {
+            Calls.Add(("list", Guid.Empty, [status]));
+            return Task.FromResult<IReadOnlyList<ClosureDto>>([]);
+        }
+
+        public Task<ClosureResult> ProposeAsync(
+            Guid adminId, Guid blockchainTransactionId, string? txHash, string? reason,
+            string? ipAddress, CancellationToken cancellationToken)
+        {
+            Calls.Add(("propose", adminId, [blockchainTransactionId, txHash, reason]));
+            return Task.FromResult(Result);
+        }
+
+        public Task<ClosureResult> ApproveAsync(
+            Guid adminId, Guid closureId, string? confirmTxHash,
+            string? ipAddress, CancellationToken cancellationToken)
+        {
+            Calls.Add(("approve", adminId, [closureId, confirmTxHash]));
+            return Task.FromResult(Result);
+        }
+
+        public Task<ClosureResult> RejectAsync(
+            Guid adminId, Guid closureId, string? note,
+            string? ipAddress, CancellationToken cancellationToken)
+        {
+            Calls.Add(("reject", adminId, [closureId, note]));
+            return Task.FromResult(Result);
         }
     }
 
@@ -237,6 +292,10 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         private const string SteamIdPrefix = "76561198555042";
 
         public FakeHotWalletService HotWalletFake { get; } = new();
+
+        /// <summary>T157 — the closure tool and the overview are stubbed at the HTTP boundary too.</summary>
+        public FakeClosureService ClosureFake { get; } = new();
+        public FakeOverviewService OverviewFake { get; } = new();
 
         public Factory()
         {
@@ -264,6 +323,7 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
 
         public void Reset()
         {
+            ClosureFake.Calls.Clear();
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -355,6 +415,10 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
                 // ledger write (HotWalletServiceTests owns that).
                 services.RemoveAll<IHotWalletService>();
                 services.AddSingleton<IHotWalletService>(_ => HotWalletFake);
+                services.RemoveAll<IOutboundRowClosureService>();
+                services.AddSingleton<IOutboundRowClosureService>(_ => ClosureFake);
+                services.RemoveAll<IAdminWalletOverviewService>();
+                services.AddSingleton<IAdminWalletOverviewService>(_ => OverviewFake);
             });
         }
 

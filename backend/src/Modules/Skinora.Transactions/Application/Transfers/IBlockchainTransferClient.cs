@@ -31,6 +31,59 @@ public interface IBlockchainTransferClient
     Task<TransferStatusResult> GetStatusAsync(
         string txHash,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T157 — does the transaction <paramref name="request"/>.TxHash, already on
+    /// the chain, carry exactly the stablecoin transfer an outbound row stands
+    /// for (successful receipt, a Transfer log of the token's contract to the
+    /// recipient for exactly the amount, from the sender when known)? Read-only.
+    /// Used by the two-person closure tool (07 §9.32): the status call alone
+    /// cannot tell a payout from someone's unrelated transaction for a hash the
+    /// signing journal does not know. Only a network whose service offers the
+    /// check answers; every other implementation keeps the default
+    /// (<see cref="TransferVerifyOutcome.NotSupported"/>), which the tool treats
+    /// as a refusal.
+    /// </summary>
+    Task<TransferVerifyResult> VerifyTransferAsync(
+        TransferVerifyRequest request,
+        CancellationToken cancellationToken) =>
+        Task.FromResult(new TransferVerifyResult(TransferVerifyOutcome.NotSupported, null, "Not supported by this network's service."));
+}
+
+/// <param name="From">The account the tokens must leave; null = not checked.</param>
+/// <param name="Amount">Exact amount (at most six decimals, never rounded).</param>
+public sealed record TransferVerifyRequest(
+    string TxHash,
+    StablecoinType Token,
+    string? From,
+    string To,
+    decimal Amount);
+
+/// <param name="BlockNumber">The block the transaction is in, when the service found it.</param>
+public sealed record TransferVerifyResult(
+    TransferVerifyOutcome Outcome,
+    long? BlockNumber,
+    string? Message = null);
+
+public enum TransferVerifyOutcome
+{
+    /// <summary>Successful transaction with exactly the expected Transfer log.</summary>
+    Match,
+
+    /// <summary>Succeeded, but no log moves the expected amount of the token to the recipient (from the sender).</summary>
+    NoMatchingTransfer,
+
+    /// <summary>The transaction reverted on chain.</summary>
+    Reverted,
+
+    /// <summary>The service's node does not know the hash.</summary>
+    NotFound,
+
+    /// <summary>The service could not answer (transport, 5xx, node down): not verified.</summary>
+    Unavailable,
+
+    /// <summary>The network's service has no such check; not verified.</summary>
+    NotSupported,
 }
 
 /// <param name="FeeCapUsd">

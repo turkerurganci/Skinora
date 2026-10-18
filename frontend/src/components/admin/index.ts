@@ -73,5 +73,25 @@ export type { AuditLogTableProps } from "./AuditLogTable";
 export { AuditCategoryBadge } from "./AuditCategoryBadge";
 export type { AuditCategoryBadgeProps } from "./AuditCategoryBadge";
 
+export { AdminDialog } from "./AdminDialog";
+export type { AdminDialogProps } from "./AdminDialog";
+
+export { WalletsOverview } from "./WalletsOverview";
+
+export { NetworkWalletsCard } from "./NetworkWalletsCard";
+export type { NetworkWalletsCardProps } from "./NetworkWalletsCard";
+
+export { ColdTransferForm } from "./ColdTransferForm";
+export type { ColdTransferFormProps } from "./ColdTransferForm";
+
+export { OutboundClosurePanel } from "./OutboundClosurePanel";
+
+export { ProposeClosureModal, ApproveClosureModal, RejectClosureModal } from "./ClosureModals";
+export type {
+  ProposeClosureModalProps,
+  ApproveClosureModalProps,
+  RejectClosureModalProps,
+} from "./ClosureModals";
+
 export { AdminUserTable } from "./AdminUserTable";
 export type { AdminUserTableProps } from "./AdminUserTable";

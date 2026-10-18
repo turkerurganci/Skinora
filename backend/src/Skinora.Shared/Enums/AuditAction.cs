@@ -108,5 +108,31 @@ public enum AuditAction
     // {component, status, consecutiveFailures}. ActorType = SYSTEM. SECURITY_EVENT
     // category — sits beside the reconciliation operational alarms;
     // pairs 1:1 with the ADMIN_PLATFORM_OUTAGE admin notification.
-    PLATFORM_OUTAGE_DETECTED
+    PLATFORM_OUTAGE_DETECTED,
+
+    // Outbound row closure (T157 — 07 §9.32, DEPLOY_RUNBOOK §D adım 7.4). The
+    // two-person tool that binds an on-chain hash to a Skinora Ethereum
+    // outbound row after the signing service lost its journal. ⚠ PARA.
+    // EntityType = "OutboundRowClosure"; EntityId = OutboundRowClosure.Id;
+    // NewValue is a JSON envelope {blockchainTransactionId, transactionId,
+    // type, toAddress, amount, token, txHash, reason}. ActorType = ADMIN.
+    // FUND_MOVEMENT category: the step decides whether a payout/refund is
+    // ever signed again.
+    OUTBOUND_ROW_CLOSURE_PROPOSED,
+
+    // T157 — a second admin approved the proposal and the row now carries the
+    // chain's hash (DETECTED; the confirmation job takes over). Same envelope
+    // plus {proposedByAdminId, chainContractRet}. ActorId = the approver.
+    OUTBOUND_ROW_CLOSURE_APPROVED,
+
+    // T157 — a proposal was rejected or withdrawn; the row is untouched.
+    // NewValue = {txHash, note}. ActorId = whoever decided (may be the
+    // proposer withdrawing it).
+    OUTBOUND_ROW_CLOSURE_REJECTED,
+
+    // T157 — an approval the service refused for a reason a reviewer should
+    // see: the same admin, a hash that differs from the proposal, a hash the
+    // chain does not show as final and successful. NewValue = {code, txHash}.
+    // SECURITY_EVENT category.
+    OUTBOUND_ROW_CLOSURE_REFUSED
 }

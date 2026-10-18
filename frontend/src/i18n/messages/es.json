@@ -195,6 +195,7 @@
     "disputes": "Disputas",
     "transactions": "Transacciones",
     "settings": "Configuración",
+    "wallets": "Carteras",
     "roles": "Roles",
     "users": "Usuarios",
     "auditLog": "Registro de auditoría"
@@ -494,7 +495,11 @@
       "SANCTIONS_LIST_ADDRESS_REMOVED": "Dirección eliminada de la lista de sanciones",
       "MAINTENANCE_MODE_CHANGED": "Modo de mantenimiento cambiado",
       "TIMEOUT_AUTO_EXTENDED": "Tiempo límite ampliado automáticamente",
-      "PLATFORM_OUTAGE_DETECTED": "Interrupción de la plataforma detectada"
+      "PLATFORM_OUTAGE_DETECTED": "Interrupción de la plataforma detectada",
+      "OUTBOUND_ROW_CLOSURE_PROPOSED": "Cierre de fila saliente propuesto",
+      "OUTBOUND_ROW_CLOSURE_APPROVED": "Cierre de fila saliente aprobado",
+      "OUTBOUND_ROW_CLOSURE_REJECTED": "Cierre de fila saliente rechazado",
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "Cierre de fila saliente denegado"
     }
   },
   "adminTransactions": {
@@ -511,7 +516,8 @@
       "buyer": "Comprador",
       "status": "Estado",
       "createdAt": "Creado",
-      "completedAt": "Completado / Cancelado"
+      "completedAt": "Completado / Cancelado",
+      "network": "Red"
     },
     "filters": {
       "status": "Estado",
@@ -523,7 +529,9 @@
       "minAmount": "Importe mín.",
       "maxAmount": "Importe máx.",
       "dateFrom": "Desde",
-      "dateTo": "Hasta"
+      "dateTo": "Hasta",
+      "network": "Red",
+      "allNetworks": "Todas"
     },
     "statusGroup": {
       "ACTIVE": "Activas",
@@ -577,7 +585,9 @@
       "heldAt": "Retenido",
       "autoHoldSanctions": "Auto-Hold — Sanctions Match",
       "readOnly": "Esta transacción está en un estado terminal y es de solo lectura.",
-      "loadError": "No se pudo cargar el detalle de la transacción."
+      "loadError": "No se pudo cargar el detalle de la transacción.",
+      "network": "Red",
+      "viewOnExplorer": "Ver en {explorer}"
     },
     "actions": {
       "cancelTx": "Cancelar transacción",
@@ -2014,6 +2024,233 @@
       "title": "No se encontraron usuarios",
       "browseDescription": "Todavía no hay ningún usuario con un rol de administrador asignado. Busca por Steam ID o nombre de usuario para encontrar a cualquier usuario.",
       "searchDescription": "Ningún usuario coincide con estos filtros."
+    }
+  },
+  "adminWallets": {
+    "title": "Carteras",
+    "intro": "Carteras de la plataforma, saldos, transferencias y cola de salida, mostrados por separado para cada red.",
+    "loadError": "No se pudo cargar el resumen de carteras.",
+    "sectionLabel": "Carteras de {network}",
+    "state": {
+      "notConfigured": "El servicio de firma de esta red no está configurado. Los saldos y las transferencias no están disponibles.",
+      "degraded": "Esta red está degradada. Los saldos pueden estar desactualizados y las transferencias pueden aplazarse."
+    },
+    "walletsHeading": "Carteras",
+    "tableAriaLabel": "Carteras de {network}",
+    "columns": {
+      "role": "Rol",
+      "address": "Dirección",
+      "balances": "Saldos",
+      "nativeFloor": "Mínimo de {asset}"
+    },
+    "roles": {
+      "HOT": "Cartera caliente",
+      "COLD": "Cartera fría",
+      "FUEL": "Cartera de combustible"
+    },
+    "addressNotConfigured": "No configurada",
+    "balanceUnavailable": "No disponible",
+    "balanceNotConfigured": "No configurado",
+    "balancesStatus": {
+      "UNAVAILABLE": "Los saldos no están disponibles: no se pudo contactar con el servicio de firma. Esto no es un saldo cero.",
+      "NOT_CONFIGURED": "Los saldos no están configurados para esta red. Esto no es un saldo cero."
+    },
+    "balancesAtBlock": "Saldos al bloque {block}",
+    "floor": {
+      "value": "{amount} {asset}",
+      "none": "—",
+      "below": "Por debajo del saldo mínimo de {asset}. Recárguela."
+    },
+    "addressMismatch": "Dirección no coincide: la dirección caliente configurada ({configured}) es distinta de la que usa el servicio de firma ({actual}). No transfiera hasta resolverlo.",
+    "outbound": {
+      "heading": "Cola de salida",
+      "pending": "Pendientes: {count}",
+      "oldestPending": "Pendiente más antigua: {date}",
+      "noneOldest": "Pendiente más antigua: —",
+      "inFlight": "En curso: {count}"
+    },
+    "coldHistory": {
+      "heading": "Transferencias frías recientes",
+      "empty": "Aún no hay transferencias frías.",
+      "ariaLabel": "Transferencias frías de {network}",
+      "columns": {
+        "date": "Fecha",
+        "amount": "Importe",
+        "from": "Origen",
+        "to": "Destino",
+        "tx": "Transacción",
+        "by": "Iniciada por"
+      }
+    },
+    "outboundRows": {
+      "heading": "Transferencias salientes recientes",
+      "empty": "Aún no hay transferencias salientes.",
+      "ariaLabel": "Transferencias salientes de {network}",
+      "columns": {
+        "type": "Tipo",
+        "status": "Estado",
+        "amount": "Importe",
+        "to": "Destinatario",
+        "tx": "Transacción",
+        "retries": "Reintentos",
+        "created": "Creada"
+      }
+    },
+    "outboundType": {
+      "SELLER_PAYOUT": "Pago al vendedor",
+      "BUYER_REFUND": "Reembolso al comprador",
+      "EXCESS_REFUND": "Reembolso de exceso",
+      "WRONG_TOKEN_REFUND": "Reembolso por token equivocado",
+      "INCORRECT_AMOUNT_REFUND": "Reembolso por importe incorrecto",
+      "LATE_PAYMENT_REFUND": "Reembolso por pago tardío",
+      "SWEEP": "Barrido (sweep)"
+    },
+    "outboundStatus": {
+      "DETECTED": "Detectada",
+      "PENDING": "Pendiente",
+      "CONFIRMED": "Confirmada",
+      "FAILED": "Fallida"
+    },
+    "noHash": "—",
+    "transfer": {
+      "heading": "Transferencia caliente → fría",
+      "description": "Mueve fondos de la cartera caliente a la cartera fría en {network}. El destino está fijado por la configuración del despliegue.",
+      "from": "Origen (cartera caliente)",
+      "to": "Destino (cartera fría, fijo)",
+      "token": "Token",
+      "amount": "Importe",
+      "amountInvalid": "Introduzca un importe mayor que cero (hasta 6 decimales).",
+      "review": "Revisar transferencia",
+      "unavailable": "Las transferencias no están disponibles: la cartera caliente o la fría no está configurada.",
+      "confirmTitle": "Confirmar transferencia caliente → fría",
+      "confirmWarning": "Esto envía fondos reales en la cadena y no se puede deshacer. Revise cada detalle.",
+      "confirmNetwork": "Red",
+      "confirmToken": "Token",
+      "confirmAmount": "Importe",
+      "confirmFrom": "Origen",
+      "confirmTo": "Destino",
+      "confirmSubmit": "Enviar {amount} {token}",
+      "cancel": "Cancelar",
+      "sending": "Enviando…",
+      "success": "Transferencia enviada: {amount} {token} a la cartera fría.",
+      "successTx": "Transacción"
+    },
+    "closures": {
+      "heading": "Cierre de fila saliente (dos personas)",
+      "intro": "Úselo solo cuando el servicio de firma de Ethereum perdió su registro y un pago ya salió en la cadena mientras su fila sigue pendiente. Un administrador propone el hash de la transacción; otro distinto lo aprueba volviendo a escribirlo. Esta herramienta nunca envía dinero.",
+      "noMoney": "Esta herramienta no envía dinero.",
+      "candidates": {
+        "heading": "Filas salientes abiertas de Ethereum",
+        "empty": "No hay filas salientes abiertas de Ethereum.",
+        "ariaLabel": "Filas salientes abiertas de Ethereum",
+        "columns": {
+          "type": "Tipo",
+          "amount": "Importe",
+          "to": "Destinatario",
+          "created": "Creada",
+          "retries": "Reintentos",
+          "action": "Acción"
+        },
+        "live": "Cierre en curso",
+        "propose": "Proponer cierre"
+      },
+      "list": {
+        "heading": "Cierres",
+        "statusFilter": "Estado",
+        "all": "Todos",
+        "empty": "No hay cierres con este estado.",
+        "ariaLabel": "Cierres"
+      },
+      "status": {
+        "PROPOSED": "Propuesto",
+        "APPROVED": "Aprobado",
+        "REJECTED": "Rechazado"
+      },
+      "row": {
+        "transaction": "Transacción",
+        "row": "Fila",
+        "recipient": "Destinatario",
+        "amount": "Importe",
+        "proposedHash": "Hash propuesto",
+        "reason": "Motivo",
+        "proposedBy": "Propuesto por {name} el {date}",
+        "decidedBy": "Decidido por {name} el {date}",
+        "decisionNote": "Nota de decisión",
+        "ownProposal": "Usted propuso este cierre. Debe aprobarlo otro administrador.",
+        "rowStatus": "Estado de la fila"
+      },
+      "actions": {
+        "approve": "Aprobar",
+        "reject": "Rechazar",
+        "withdraw": "Retirar"
+      },
+      "propose": {
+        "title": "Proponer cierre",
+        "warning": "Esta herramienta no envía dinero. Cuando otro administrador apruebe, la fila se tratará como ya pagada en la cadena con el hash que introduzca y la plataforma dejará de reintentarla.",
+        "row": "Fila: {type}, {amount} {token} a {to}",
+        "hash": "Hash de la transacción en la cadena",
+        "hashHelp": "0x seguido de 64 caracteres hexadecimales.",
+        "hashInvalid": "Introduzca un hash válido (0x + 64 caracteres hexadecimales).",
+        "explorer": "Abrir este hash en {explorer}",
+        "reason": "Motivo",
+        "reasonHelp": "Qué nonce/cuenta y con qué lo hizo coincidir en la cadena (mínimo 20 caracteres).",
+        "reasonTooShort": "El motivo debe tener al menos 20 caracteres.",
+        "submit": "Proponer cierre",
+        "cancel": "Cancelar"
+      },
+      "approve": {
+        "title": "Aprobar cierre",
+        "warning": "Esta herramienta no envía dinero, pero aprobar es irreversible en sus efectos: la fila se tratará como ya pagada en la cadena y no se reintentará nunca.",
+        "systemCheck": "El sistema comprueba la transacción con el destinatario y el importe de la fila, pero usted debe compararla igualmente en el explorador.",
+        "compare": "Compare esto con la transacción en {explorer} antes de aprobar.",
+        "proposedBy": "Propuesto por {name}",
+        "hashProposed": "Hash propuesto",
+        "explorer": "Abrir el hash propuesto en {explorer}",
+        "typeHash": "Vuelva a escribir el hash de la transacción",
+        "typeHashHelp": "Léalo en el explorador y escríbalo. No se rellena a propósito.",
+        "mismatch": "El hash escrito no coincide con la propuesta.",
+        "submit": "Aprobar cierre",
+        "cancel": "Cancelar"
+      },
+      "reject": {
+        "titleReject": "Rechazar cierre",
+        "titleWithdraw": "Retirar cierre",
+        "note": "Nota",
+        "noteHelp": "Obligatoria. Indique el motivo.",
+        "noteRequired": "La nota es obligatoria.",
+        "submitReject": "Rechazar cierre",
+        "submitWithdraw": "Retirar cierre",
+        "cancel": "Cancelar"
+      }
+    },
+    "errors": {
+      "GENERIC": "No se pudo completar la acción. Inténtelo de nuevo.",
+      "VALIDATION_ERROR": "La solicitud no es válida. Revise los campos e inténtelo de nuevo.",
+      "INVALID_TX_HASH": "El hash de la transacción no es válido.",
+      "HASH_CONFIRMATION_MISMATCH": "El hash escrito no coincide con el hash propuesto.",
+      "SELF_APPROVAL_FORBIDDEN": "No puede aprobar su propia propuesta. Debe hacerlo otro administrador.",
+      "ROW_NOT_FOUND": "No se encontró la fila saliente.",
+      "CLOSURE_NOT_FOUND": "No se encontró el cierre.",
+      "ROW_NOT_ETHEREUM": "La fila no está en Ethereum.",
+      "ROW_NOT_OUTBOUND": "La fila no es una transferencia saliente.",
+      "HASH_NOT_SUCCESSFUL": "Esa transacción no tuvo éxito en la cadena.",
+      "HASH_NOT_FOUND": "No se encontró ese hash de transacción en la cadena.",
+      "HASH_DOES_NOT_MATCH_ROW": "Esta transacción no paga esta fila (destinatario, importe o token incorrectos, o falló en la cadena). No puede cerrar esta fila. Compruebe el hash en el explorador o rechace la propuesta.",
+      "ROW_NOT_OPEN": "La fila ya no está abierta.",
+      "CLOSURE_NOT_OPEN": "El cierre ya fue decidido.",
+      "HASH_ALREADY_BOUND": "Ese hash ya está vinculado a otra fila.",
+      "CLOSURE_ALREADY_PROPOSED": "Ya hay un cierre propuesto para esta fila.",
+      "HASH_NOT_FINAL": "La transacción aún no es definitiva. Inténtelo más tarde.",
+      "CLOSURE_CONFLICT": "El cierre cambió mientras tanto. Actualice e inténtelo de nuevo.",
+      "CHAIN_SERVICE_UNAVAILABLE": "El servicio de la cadena no está disponible. Inténtelo más tarde.",
+      "INVALID_AMOUNT": "El importe no es válido.",
+      "INVALID_TOKEN": "Este token no es compatible con esta red.",
+      "INVALID_NETWORK": "La red no es válida.",
+      "HOT_WALLET_NOT_CONFIGURED": "La cartera caliente no está configurada.",
+      "COLD_WALLET_NOT_CONFIGURED": "La cartera fría no está configurada.",
+      "SIDECAR_UNAVAILABLE": "El servicio de firma no está disponible. No se envió nada.",
+      "NETWORK_UNAVAILABLE": "La red no está disponible. No se envió nada.",
+      "TRANSFER_DEFERRED": "La transferencia se aplazó (por ejemplo, la comisión supera el límite). No se envió nada. Inténtelo más tarde."
     }
   }
 }

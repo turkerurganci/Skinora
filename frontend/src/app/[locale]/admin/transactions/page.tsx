@@ -10,7 +10,8 @@ import { useAdminTransactionList } from "@/lib/hooks/useAdminTransactionList";
 import type { AdminTransactionListQuery, AdminTransactionStatusGroup } from "@/lib/api/admin";
 import { parseTableSort, nextTableSort } from "@/lib/admin/tableSort";
 import { toEndOfDay } from "@/lib/utils/date";
-import { StablecoinType } from "@/types/enums";
+import { networkLabel } from "@/lib/utils/blockchain";
+import { BlockchainNetwork, StablecoinType } from "@/types/enums";
 
 const PAGE_SIZE = 20;
 
@@ -19,6 +20,7 @@ const SORT_KEYS = ["createdAt", "price", "status"] as const;
 
 const STATUS_GROUP_VALUES = ["ACTIVE", "COMPLETED", "CANCELLED", "FLAGGED"] as const;
 const STABLECOIN_VALUES = [StablecoinType.USDT, StablecoinType.USDC] as const;
+const NETWORK_VALUES = [BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM] as const;
 
 function parseEnum<T extends string>(value: string | null, allowed: readonly T[]): T | undefined {
   return value && (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
@@ -60,6 +62,7 @@ export default function AdminTransactionsPage() {
 
   const statusGroup = resolveStatusGroup(searchParams);
   const stablecoin = parseEnum(searchParams.get("stablecoin"), STABLECOIN_VALUES);
+  const network = parseEnum(searchParams.get("network"), NETWORK_VALUES);
   const dateFrom = searchParams.get("dateFrom") ?? undefined;
   const dateTo = searchParams.get("dateTo") ?? undefined;
   const minAmount = parseAmount(searchParams.get("minAmount"));
@@ -73,6 +76,7 @@ export default function AdminTransactionsPage() {
     () => ({
       statusGroup,
       stablecoin,
+      network,
       dateFrom,
       dateTo: toEndOfDay(dateTo),
       minAmount,
@@ -86,6 +90,7 @@ export default function AdminTransactionsPage() {
     [
       statusGroup,
       stablecoin,
+      network,
       dateFrom,
       dateTo,
       minAmount,
@@ -131,6 +136,13 @@ export default function AdminTransactionsPage() {
       options: STABLECOIN_VALUES.map((v) => ({ value: v, label: v })),
     },
     {
+      key: "network",
+      label: t("filters.network"),
+      kind: "select",
+      placeholder: t("filters.allNetworks"),
+      options: NETWORK_VALUES.map((v) => ({ value: v, label: networkLabel(v) })),
+    },
+    {
       key: "search",
       label: t("filters.user"),
       kind: "text",
@@ -145,6 +157,7 @@ export default function AdminTransactionsPage() {
   const initialValues: Record<string, string> = {};
   if (statusGroup) initialValues.statusGroup = statusGroup;
   if (stablecoin) initialValues.stablecoin = stablecoin;
+  if (network) initialValues.network = network;
   if (search) initialValues.search = search;
   if (minAmount !== undefined) initialValues.minAmount = String(minAmount);
   if (maxAmount !== undefined) initialValues.maxAmount = String(maxAmount);
@@ -156,6 +169,7 @@ export default function AdminTransactionsPage() {
     pushParams({
       statusGroup: values.statusGroup,
       stablecoin: values.stablecoin,
+      network: values.network,
       search: values.search,
       minAmount: values.minAmount,
       maxAmount: values.maxAmount,
