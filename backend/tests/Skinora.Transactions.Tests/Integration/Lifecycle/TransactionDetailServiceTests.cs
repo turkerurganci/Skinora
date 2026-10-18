@@ -651,6 +651,31 @@ public class TransactionDetailServiceTests : IntegrationTestBase
         Assert.Null(payment.TxHash);
     }
 
+    [Theory]
+    // T144 — a whole-cent payable is shown in its 2-decimal form.
+    [InlineData("10.76", "10.76")]
+    [InlineData("10.760000", "10.76")]
+    [InlineData("10.50", "10.50")]
+    // A pre-T144 row (6-digit commission) is shown in full: the old "0.00"
+    // display turned 10.761 into "10.76", an amount validation rejects.
+    [InlineData("10.761", "10.761")]
+    public async Task Payment_ExpectedAmount_Is_Shown_Exactly_As_Validation_Expects(
+        string stored, string shown)
+    {
+        var transaction = await CreateTransactionAsync(
+            TransactionStatus.SELLER_CONFIRMED, buyerId: _buyer.Id, sellerConfirmed: true);
+        var expected = decimal.Parse(stored, System.Globalization.CultureInfo.InvariantCulture);
+        await AddPaymentAddressAsync(transaction.Id, expected);
+
+        var outcome = await BuildSut().GetAsync(
+            transaction.Id, _buyer.Id, BuyerSteamId, CancellationToken.None);
+
+        var payment = outcome.Body!.Payment;
+        Assert.NotNull(payment);
+        Assert.Equal(shown, payment!.ExpectedAmount);
+        Assert.Equal(expected, decimal.Parse(payment.ExpectedAmount, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     [Fact]
     public async Task Payment_Block_Survives_A_Cancellation_That_Happened_After_The_Window_Opened()
     {
@@ -714,7 +739,7 @@ public class TransactionDetailServiceTests : IntegrationTestBase
 
     private const string PaymentDepositAddress = "TPaymentAddr1234567890abcdef1234";
 
-    private async Task AddPaymentAddressAsync(Guid transactionId)
+    private async Task AddPaymentAddressAsync(Guid transactionId, decimal expectedAmount = 102m)
     {
         Context.Set<PaymentAddress>().Add(new PaymentAddress
         {
@@ -722,7 +747,7 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             TransactionId = transactionId,
             Address = PaymentDepositAddress,
             HdWalletIndex = 1,
-            ExpectedAmount = 102m,
+            ExpectedAmount = expectedAmount,
             ExpectedToken = StablecoinType.USDT,
             MonitoringStatus = MonitoringStatus.ACTIVE,
         });

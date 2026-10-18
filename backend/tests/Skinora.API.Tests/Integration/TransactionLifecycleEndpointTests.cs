@@ -239,6 +239,49 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     }
 
     /// <summary>
+    /// T144 — through the real create + detail endpoints: price 10.55 at the
+    /// default 2% shows a 2-decimal total, and that text is the persisted
+    /// payable exactly (before T144: shown "10.76", persisted 10.761).
+    /// </summary>
+    [Fact]
+    public async Task Create_Then_Detail_Shows_The_Persisted_Two_Decimal_Total()
+    {
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.MobileAuthenticatorVerified = true;
+            u.DefaultPayoutAddress = ValidWallet;
+        });
+        _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
+
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var create = await client.PostAsJsonAsync("/api/v1/transactions", new
+        {
+            itemAssetId = "27348562891",
+            stablecoin = "USDT",
+            price = "10.55",
+            paymentTimeoutHours = 24,
+            buyerIdentificationMethod = "STEAM_ID",
+            buyerSteamId = "76561198000000999",
+        });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var id = (await create.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("id").GetString();
+
+        var detail = await client.GetAsync($"/api/v1/transactions/{id}");
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        var data = (await detail.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal("0.21", data.GetProperty("commissionAmount").GetString());
+        Assert.Equal("10.76", data.GetProperty("totalAmount").GetString());
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var persisted = db.Set<Transaction>().AsNoTracking().Single(t => t.Id == Guid.Parse(id!));
+        Assert.Equal(10.76m, persisted.TotalAmount);
+        Assert.Equal(persisted.TotalAmount, decimal.Parse(
+            data.GetProperty("totalAmount").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
     /// The wire-level half of the payout-address fix, and the ONLY test that can
     /// catch its regression. `System.Text.Json` silently drops unknown members,
     /// so an old client that still sends `sellerWalletAddress` gets a 201 either

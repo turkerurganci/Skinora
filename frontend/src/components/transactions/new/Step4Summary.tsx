@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { Spinner } from "@/components/common/LoadingState";
 import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
 import { formatStablecoin } from "@/lib/utils/format";
+import { calculateCommission } from "@/lib/utils/money";
 import type { SteamInventoryItem } from "@/lib/api/steam";
 
 export interface Step4SummaryProps {
@@ -41,10 +42,11 @@ export function Step4Summary({
   onSubmit,
 }: Step4SummaryProps) {
   const t = useTranslations("newTransaction.step4");
-  const priceNumber = Number(price);
-  const commissionDisplay = Number.isFinite(priceNumber)
-    ? formatStablecoin(priceNumber * commissionRate, stablecoin)
-    : `— ${stablecoin}`;
+  // T144 — same rule as the backend (truncated to the cent), so the preview
+  // is the commission the transaction will actually carry.
+  const commission = calculateCommission(price, commissionRate);
+  const commissionDisplay =
+    commission !== null ? formatStablecoin(commission, stablecoin) : `— ${stablecoin}`;
 
   return (
     <div className="space-y-5">

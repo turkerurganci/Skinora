@@ -1,6 +1,6 @@
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Skinora.Notifications.Application.Notifications;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
@@ -37,9 +37,9 @@ public sealed class BuyerPaymentExcessRefundedNotificationConsumer
             TransactionId = domainEvent.TransactionId,
             Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["ExpectedAmount"] = domainEvent.ExpectedAmount.ToString("0.######", CultureInfo.InvariantCulture),
-                ["ReceivedAmount"] = domainEvent.ReceivedAmount.ToString("0.######", CultureInfo.InvariantCulture),
-                ["ExcessAmount"] = domainEvent.ExcessAmount.ToString("0.######", CultureInfo.InvariantCulture),
+                ["ExpectedAmount"] = MoneyFormat.Display(domainEvent.ExpectedAmount),
+                ["ReceivedAmount"] = MoneyFormat.Display(domainEvent.ReceivedAmount),
+                ["ExcessAmount"] = MoneyFormat.Display(domainEvent.ExcessAmount),
                 ["Stablecoin"] = domainEvent.Stablecoin.ToString(),
                 ["SourceAddress"] = domainEvent.SourceAddress,
             },

@@ -1,7 +1,7 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Notifications.Application.Notifications;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
@@ -62,7 +62,7 @@ public sealed class PaymentReceivedNotificationConsumer
                 TransactionId = domainEvent.TransactionId,
                 Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["Amount"] = domainEvent.Amount.ToString("0.######", CultureInfo.InvariantCulture),
+                    ["Amount"] = MoneyFormat.Display(domainEvent.Amount),
                 },
             },
         ];

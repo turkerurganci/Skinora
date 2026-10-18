@@ -22,6 +22,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
 using Skinora.Shared.Persistence.Webhooks;
+using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
 
@@ -401,6 +402,76 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         Assert.Contains("BuyerPaymentExcessRefundedEvent", outbox);
     }
 
+    // ---------- T144: 2-decimal payable (02 §5, 06 §8.3) ----------
+
+    [Fact]
+    public async Task T144_TwoDecimalPayment_Of_The_Shown_Total_Is_Accepted_Exactly()
+    {
+        // The reported case: price 10.55 at 2%. Before T144 ExpectedAmount was
+        // 10.761 and a 2-decimal exchange payment of the shown 10.76 fell into
+        // the underpayment branch. Now ExpectedAmount is 10.76 and matches.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(listingPrice: 10.55m);
+        var client = _factory.CreateClient();
+
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "10.760000");
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+        var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tx = await _factory.GetTransactionAsync(ids.TransactionId);
+        Assert.Equal(10.76m, tx!.TotalAmount);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, tx.Status);
+        Assert.Equal(0, await _factory.CountRefundIntentsAsync(ids.TransactionId));
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("PaymentReceivedEvent", outbox);
+        Assert.DoesNotContain("RefundBlockedAdminAlertEvent", outbox);
+    }
+
+    [Fact]
+    public async Task T144_ThirdDecimalOverpayment_IsAccepted_And_SubCentExcess_GoesToAdmin()
+    {
+        // An on-chain amount with a third decimal is an overpayment under the
+        // existing branch: the payable is accepted, the 0.001 excess is below
+        // the 2 × gas floor so it is not refunded — admin alert instead.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(listingPrice: 10.55m);
+        var client = _factory.CreateClient();
+
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "10.761000");
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+        var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tx = await _factory.GetTransactionAsync(ids.TransactionId);
+        Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, tx!.Status);
+        Assert.Equal(0, await _factory.CountRefundIntentsAsync(ids.TransactionId));
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("PaymentReceivedEvent", outbox);
+        Assert.Contains("RefundBlockedAdminAlertEvent", outbox);
+    }
+
+    [Fact]
+    public async Task T144_ThirdDecimalUnderpayment_IsRefunded_And_Window_Stays_Open()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(listingPrice: 10.55m);
+        var client = _factory.CreateClient();
+
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId, amount: "10.759000");
+        await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+        var confirmed = MakeConfirmedEnvelope(ids.PaymentAddressId, ids.TransactionId, detected.data.txHash);
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-confirmed", confirmed);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tx = await _factory.GetTransactionAsync(ids.TransactionId);
+        Assert.Equal(TransactionStatus.SELLER_CONFIRMED, tx!.Status);
+        var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
+        Assert.Equal(10.759m, refund.Amount);
+        var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
+        Assert.Contains("BuyerPaymentInsufficientEvent", outbox);
+        Assert.DoesNotContain("PaymentReceivedEvent", outbox);
+    }
+
     [Fact]
     public async Task WrongTokenIncoming_AboveThreshold_QueuesWrongTokenRefundAndBuyerEvent()
     {
@@ -618,10 +689,26 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             _connection.Open();
         }
 
-        public async Task<(Guid TransactionId, Guid PaymentAddressId, string PaymentAddress)> SeedTransactionWithPaymentAddressAsync()
+        /// <param name="listingPrice">
+        /// T144 — when given, the money columns are computed by the production
+        /// <see cref="FinancialCalculator"/> at the 2% default rate, the way
+        /// <c>TransactionCreationService</c> and <c>PaymentAddressAllocator</c>
+        /// persist them. When omitted the legacy literal 100-USDT seed is used.
+        /// </param>
+        public async Task<(Guid TransactionId, Guid PaymentAddressId, string PaymentAddress)> SeedTransactionWithPaymentAddressAsync(
+            decimal? listingPrice = null)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            decimal price = 97m, rate = 0.03m, commission = 3m, total = 100m;
+            if (listingPrice is { } p)
+            {
+                price = p;
+                rate = 0.02m;
+                commission = FinancialCalculator.CalculateCommission(price, rate);
+                total = FinancialCalculator.CalculateTotal(price, commission);
+            }
 
             var seller = new User { Id = Guid.NewGuid(), SteamId = "76561198000000301", SteamDisplayName = "Seller" };
             var buyer = new User { Id = Guid.NewGuid(), SteamId = "76561198000000302", SteamDisplayName = "Buyer" };
@@ -644,10 +731,10 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
                 ItemName = "M4A1-S",
                 ItemIconUrl = "https://cdn.test/m4.png",
                 StablecoinType = StablecoinType.USDT,
-                Price = 97m,
-                CommissionRate = 0.03m,
-                CommissionAmount = 3m,
-                TotalAmount = 100m,
+                Price = price,
+                CommissionRate = rate,
+                CommissionAmount = commission,
+                TotalAmount = total,
                 SellerPayoutAddress = "TKnEzG4qX5n6ZRSeller8B9C2D3E4F5G6H8",
             };
 
@@ -657,7 +744,8 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
                 TransactionId = tx.Id,
                 Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
                 HdWalletIndex = 42,
-                ExpectedAmount = 100m,
+                // PaymentAddressAllocator: ExpectedAmount = transaction.TotalAmount.
+                ExpectedAmount = total,
                 ExpectedToken = StablecoinType.USDT,
                 MonitoringStatus = MonitoringStatus.ACTIVE,
                 CreatedAt = DateTime.UtcNow,
