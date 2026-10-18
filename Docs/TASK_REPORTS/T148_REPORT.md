@@ -1,13 +1,13 @@
 # T148 — Ağ başına sidecar sözleşmesi ve ayarlar
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ⏳ Devam ediyor (doğrulama tur 1 ✗ FAIL → düzeltme turu 1 yapıldı, yeniden doğrulama bekliyor) | **Tarih:** 2026-10-18
 
 ---
 
 ## Yapılan İşler
 
 - **Ağ başına servis istemcisi (05 §3.3a "Servisler"):** `Skinora.Transactions.Application.Networks.IBlockchainServiceRegistry` — `Sidecar(network)`, `Transfers(network)`, `GasFee(network)`, `IsConfigured`, `ConfiguredNetworks`. Varsayılan uygulama `BlockchainServiceRegistry` her ağın `BlockchainSidecarOptions` örneğinden (TRON = varsayılan örnek, `BlockchainSidecar` bölümü — **değişmedi**; Ethereum = adlı örnek `"ETHEREUM"`, `EthereumSidecar` bölümü) ve her ağın üç adlandırılmış HTTP istemcisinden (`BlockchainHttpClientNames`; TRON eski adlarıyla, Ethereum `….ETHEREUM`; zaman bütçeleri ayrı) istemci kurar. HTTP istemcileri (`HttpBlockchainSidecarClient`, `HttpBlockchainTransferClient`, `HttpSidecarGasFeeEstimator`) ağı kurucuda alır.
-- **Servisi olmayan ağ fail-closed:** `BaseUrl` boşsa (Ethereum, T150'ye kadar) registry `UnconfiguredBlockchainService` verir: hiçbir istek gönderilmez, her çağrı kendi portunun "yapılamadı" cevabını alır (`NotConfigured` / geçici hata `NETWORK_SERVICE_NOT_CONFIGURED` / `Unavailable` / tahmin yok) ve hata log'u düşer. `OutgoingTransferDispatchJob` servisi olmayan ağın `PENDING` satırına hiç dokunmaz (yeniden deneme hakkı harcanmaz, `FAILED` olmaz); servis gelince gider. TRON etkilenmez.
+- **Servisi olmayan ağ fail-closed:** `BaseUrl` boşsa (Ethereum, T150'ye kadar) registry `UnconfiguredBlockchainService` verir: hiçbir istek gönderilmez, her çağrı kendi portunun "yapılamadı" cevabını alır (`NotConfigured` / geçici hata `NETWORK_SERVICE_NOT_CONFIGURED` / `Unavailable` / tahmin yok) ve hata log'u düşer. `OutgoingTransferDispatchJob` servisi olmayan ağın `PENDING` satırına hiç dokunmaz (yeniden deneme hakkı harcanmaz, `FAILED` olmaz); servis gelince gider. TRON etkilenmez — ilk turda bu iddia tutmuyordu (bekleyen satırlar en-eski-20 partisini dolduruyordu); düzeltme turu 1'de aday sorguları ağa göre süzüldü ve testle sabitlendi (aşağıda).
 - **Çağıranlar ağı kayıttan alır:** `PaymentAddressAllocator` (türetme), `EnsurePaymentMonitorJob`, `PaymentMonitorStartDispatcher`, `PostCancelMonitorStartDispatcher`, `PostCancelMonitorRecoveryHook`, `PostCancelMonitorStarter`, `TransactionReadinessService` (`PaymentAddress.Network`; olaylar `PaymentMonitorStartRequestedEvent` / `PostCancelMonitorStartRequestedEvent` artık `Network` taşır — eski outbox satırı için varsayılan TRON); `OutgoingTransferDispatchJob`, `OutgoingTransferConfirmationJob`, `BlockchainPayoutVerifier` (`BlockchainTransaction.Network`); `ChargedGasFeeResolver` (ağ parametresi; tahmin ağın servisinden, yedek ve üst sınır ağın ayarından); `ReconciliationService` (yapılandırılmış her ağ için ayrı tur: o ağın depozitleri, sıcak/soğuk cüzdanı, servisi). `HotWalletService` (AD20) ve `HotWalletMonitorService` açıkça TRON (`ConsolidationNetwork` / `MonitoredNetwork`) — admin API ağ seçmeyi T157'de, Ethereum ETH alarmları T153/T158'de alır.
 - **Aynı ağ kuralı satırlarda:** `SweepQueueJob` (depozitin ağı + o ağın sıcak cüzdanı; Ethereum sıcak cüzdanı yoksa Ethereum depoziti kuyruğa girmez, TRON'unkine asla gitmez), `SellerPayoutQueueJob` (işlemin ağı), `PaymentRefundToBuyerConsumer` (depozitin ağı), `AmountValidationService` (iade satırları depozitin ağı) satırın `Network`'ünü yazar. (Ağ seçimi T147; bugün bütün satırlar TRON.)
 - **Token kontratları ağ başına:** `IStablecoinContractRegistry` (`StablecoinContracts` TRON — değişmedi, `EthereumStablecoinContracts` Ethereum; boş = o ağın mainnet USDT/USDC'si, Ethereum'unkiler kanonik küçük harf). `KnownStablecoinContracts` Ethereum mainnet sabitlerini kazandı.
@@ -20,6 +20,38 @@
 - **Kontrat örnekleri:** `sidecar-blockchain/contracts/webhook/*.json` (6 olay, yeni) — sidecar `WebhookPayloads.test.ts` bunları `buildWebhookEnvelope` ile üretip birebir karşılaştırır, backend `BlockchainWebhookContractTests` denetleyicinin JSON ayarıyla bağlar. `monitor-start/*.json` ve `estimate-fee/*.json` gövdeleri `network` kazandı (iki tarafın mevcut kontrat testleri aynı dosyaya bağlı).
 - **Yapılandırma:** `appsettings.json` (`EthereumSidecar` boş, `Webhook:EthereumSharedSecret` boş), `docker-compose.yml` backend env'i ve `.env.example` Ethereum yer tutucuları (hepsi boş).
 - **Doküman:** 02 v4.8 (§16.2), 05 v3.15 (§3.3 Ethereum kabul satırı, §3.3a "Uygulandı" notu), 06 v6.24 (§1.4 "Onay alanları" / "Ayarlar", §3.17 8 satır + 72 anahtar + Ethereum cüzdan girdileri), 07 v4.9 (§1.3, §7.4 `supportedNetworks`), 08 v3.21 (§3.0 "Ağ başına servis" / "Ödeme kabulü", §3.7.4 "Dondurma"), 11 §F8 (T148 karar maddesi, §7.6 izlenebilirlik satırı), DEPLOY_RUNBOOK §B (Ethereum env'leri). Sürüm başlık ve altbilgide aynı.
+
+## Düzeltme turu 1 (2026-10-18)
+
+Doğrulama tur 1 ✗ FAIL (PR #343 yorumu; head `f6cca76`): 1 bloke eden (F1) + 4 bloke etmeyen (F2–F5). Hepsi bu turda kapatıldı.
+
+| # | Bulgu | Düzeltme | Test (eski kodda kırmızı mı) |
+|---|---|---|---|
+| F1 (bloke eden) | `OutgoingTransferDispatchJob` en eski 20 `PENDING` satırı ağ filtresiz alıyordu; servisi olmayan ağın satırları her turda yeniden seçilip partiyi dolduruyordu → 20+ bekleyen Ethereum satırı TRON payout/iade/sweep'ini durduruyordu | Aday sorgusu `configured.Contains(b.Network)` (`IBlockchainServiceRegistry.ConfiguredNetworks`); sıralama/parti aynı. Bekleyen satırlar her turda ağ başına tek hata satırıyla log'lanır (eski satır başı log'un görünürlüğü). Döngü içindeki `IsConfigured` kontrolü ikinci katman olarak kaldı | `OutgoingTransferDispatchJobTests.Parked_Rows_On_An_Unconfigured_Network_Do_Not_Starve_Tron` (20 ve 25 bekleyen satır: daha yeni TRON satırı ilk turda gider, bekleyenlere dokunulmaz) · `A_Full_Tron_Batch_Is_Still_Taken_Oldest_First_Behind_Parked_Rows` (20 bekleyen + 21 TRON → en eski 20 TRON, sırayla) — üçü de filtresiz kodda kırmızı (20'lik vaka doğrulamanın probunu birebir tekrarlıyor) |
+| F1 — aynı kalıp | `EnsurePaymentAddressJob` en eski 50 adressiz işlemi ağ filtresiz alıyordu; servisi olmayan ağda türetme her turda başarısız → aynı açlık | Aday sorgusu servisi olan ağlarla sınırlı; ağı boş (F8 öncesi) işlem TRON sayılır (`(Network == null ∧ TRON yapılandırılmış) ∨ Network ∈ yapılandırılmış`) — ayırıcının okuduğu kuralla aynı. İş `IBlockchainServiceRegistry` alır | `EnsurePaymentAddressJobTests.Transactions_On_An_Unconfigured_Network_Do_Not_Starve_Tron` (SQL Server; 50 ve 55 Ethereum işlemi + daha yeni bir TRON ve bir ağsız işlem → ikisi ilk turda adres alır) — filtresiz kodda iki vaka kırmızı · `Legacy_Transactions_Wait_When_Tron_Itself_Is_Unconfigured` |
+| F1 — tarama | En-eski-ilk toplu işlerin hepsi tarandı (`grep -rn "\.Take(" backend/src`) | **Düzeltildi:** `OutgoingTransferConfirmationJob` (en eski 30 `DETECTED`; servisi kalkan ağın satırı `Unavailable` alıp sonsuza dek başta kalırdı → aynı filtre), `SweepQueueJob` (en eski 20 teslim edilmiş işlem; sıcak cüzdanı olmayan ağın depoziti her turda atlanıp başta kalırdı → aday sorgusu sıcak cüzdanı olan ağlarla sınırlı, bekleyenler ağ başına tek uyarı satırı; depozit satırı olmayan işlem savunma log'u için aday kalır), `PaymentMonitorStartDispatcher` / `PostCancelMonitorStartDispatcher` (outbox tüketicileri — servisi olmayan ağda `throw` ediyorlardı; outbox `FAILED` satırını en-eski-50 partisinde her yoklamada yeniden okur, kalıcı hata olayları bütün outbox'ı tıkayabilirdi → servisi olmayan ağda hata log'u ve dönüş; geri dönüş yolları: `EnsurePaymentMonitorJob` her dakika yeniden kurar, `PostCancelMonitorRecoveryHook` servisi yapılandıran açılışta kaydeder. TRON'un 503 `NotConfigured` cevabı (açılan servis) hâlâ `throw` eder). **Belgelendi, değişmedi:** `EnsurePaymentMonitorJob` (en-eski-ilk ama bütün kümeyi sayfalar, 5.000 tavanı; servisi olmayan ağa istek gitmez), `SellerPayoutQueueJob` (bir işlem için satırı bir kez yazar, bir sonraki turda aday değildir — park etmez), `SettlementVerificationJob` (`SettlementCheckedAt` ile döner, ağ bağımsız), `DeadlineScannerJob` / `DeliveryPollingJob` (blockchain çağrısı yok), `ReconciliationService` (zaten ağ başına tur) | `OutgoingTransferConfirmationJobTests.Detected_Rows_On_An_Unconfigured_Network_Do_Not_Starve_Tron` (30 ve 35) · `SweepQueueJobTests.Waiting_Ethereum_Deposits_Do_Not_Starve_Tron_Sweeps` (20 ve 25) · `PaymentMonitorStartDispatcherTests` / `PostCancelMonitorStartDispatcherTests.Event_For_An_Unconfigured_Network_Is_Dropped_Without_Throwing_Or_Calling` — hepsi düzeltmesiz kodda kırmızı (9/9) |
+| F2 | `network`'süz webhook 400 alıyordu; servis 4xx'i kalıcı saydığı için backend servisten önce deploy edilirse gerçek TRON ödeme olayı kaybolabilirdi | Alan **hiç yoksa** (ya da `null`) ve istek **TRON'un sırrıyla** imzalanmışsa TRON sayılır (servisin istek gövdesi kuralının eşi); uyarı log'u. Açıkça yazılmış yanlış/bilinmeyen değer (`""`, `tron`, `BITCOIN`) 400 kalır; Ethereum sırrıyla `network`'süz → 400; TRON sayılan gövde Ethereum depozitine → 409. DEPLOY_RUNBOOK §B'ye "servis backend'le birlikte ya da önce deploy edilir" notu (öneriyle kaydedildi — ⚠) | `BlockchainWebhookEndpointTests.Tron_Signed_Webhook_Without_Network_Is_Taken_As_Tron_And_Recorded` (eski kodda 400 → kırmızı), `Ethereum_Signed_Webhook_Without_Network_Is_Rejected_400_And_Nothing_Is_Written` ("imzalayan fark etmez" mutasyonunda kırmızı), `Tron_Signed_Webhook_Without_Network_Against_An_Ethereum_Deposit_Is_Rejected_409`, `Tron_Signed_Webhook_With_An_Explicit_Unknown_Network_Is_Still_Rejected_400` ×3 |
+| F3 | İki ağa aynı sır verilirse sessizce yalnız TRON'unki geçiyordu (Ethereum webhook'ları açıklamasız 401) | **Fail-fast (öneriyle kaydedildi — ⚠):** `WebhookSettings.AddWebhookSettings` (`Program.cs` bunu çağırır) `Validate(...).ValidateOnStart()` — aynı boş olmayan sır → host açılmaz, `OptionsValidationException` mesajı iki ayarı adlandırır. Ara katmandaki `DistinctBy` ikinci katman olarak kaldı | `WebhookSettingsValidationTests` (aynı sır → hata; farklı / biri boş / ikisi boş → açılır) · `BlockchainWebhookEndpointTests.Host_Refuses_To_Start_When_Tron_And_Ethereum_Share_A_Webhook_Secret` (`Program.cs`'in kendi kaydıyla host) — doğrulama kapatılınca ikisi kırmızı |
+| F4 (süreç) | İlk turda kırmızı CI run'ı yeniden kuyruğa alınıp koruma geçildi (BYPASS_LOG kaydı yok) | `DEFERRED_BACKLOG` §7'ye ⚪ `PrePushGuardBlocksFixForward` (öneri: kırmızı run'ın head SHA'sı push edilen commit'in atasıysa otomatik geçiş + `BYPASS_LOG` satırı); sayaç 38/155 → **39/155** (dosyanın kendi `awk`'iyle), başlığa tarihli satır. Aşağıdaki "Notlar"a süreç cümlesi | — |
+| F5 | 06 §2.19 `PLATFORM_OUTAGE_DETECTED` satırı eski `BLOCKCHAIN` bileşen adını yazıyordu | `STEAM` / `BLOCKCHAIN_TRON` / `BLOCKCHAIN_ETHEREUM`; aynı satırın "işlemleri dondurmaz" ifadesi de eskiydi — kaydın kendisi dondurmaz, sağlık yoklaması aynı geçişte dondurmayı ayrıca uygular (ağ başına) diye düzeltildi | — |
+
+**Doküman:** 05 §3.3a (fail-closed maddesi: bekleyen kayıtlar diğer ağın sırasını tutmaz; webhook istisnası; aynı sır → açılmaz), 06 §2.19, 08 §3.0 "Ağ başına servis", 11 §F8 T148 karar maddesi (i)–(iii), DEPLOY_RUNBOOK §B (Ethereum satırları + deploy sırası notu), DEFERRED_BACKLOG; başlık satırlarına tarihli "düzeltme turu 1" girdisi (aynı PR, sürüm numarası değişmedi). "TRON bundan etkilenmez" cümlesi (05 §3.3a, runbook §B) artık doğru ve testli; koşulunu söyleyecek şekilde genişletildi.
+
+**Kanıt komutları:**
+
+```bash
+cd backend
+dotnet build Skinora.sln                                                           # 0 hata
+dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"   # 1907/1907
+dotnet test tests/Skinora.Transactions.Tests --filter "FullyQualifiedName~.Integration"            # 680/680 (SQL Server, Testcontainers)
+dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName~.Integration"                     # 589/589
+dotnet test Skinora.sln --filter "FullyQualifiedName~.Contract"                                    # 26/26
+dotnet format Skinora.sln --verify-no-changes                                                       # exit 0
+# Eski davranışta kırmızı: aday filtresi `|| true`, dispatcher kontrolü `&& false`, imzalayan koşulu
+# `authenticated is not null`, doğrulama `|| true` yapılarak yeni testler koşuldu → 9 + 2 + 3 kırmızı; geri alındı.
+```
+
+Sidecar koduna dokunulmadı (sidecar testleri yeniden koşulmadı).
 
 ## Etkilenen Modüller / Dosyalar
 
@@ -50,6 +82,7 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
+| Düzeltme turu 1 | ✓ | Unit 1907/1907 (Transactions 726, API 84, Notifications 133, …) · Integration Transactions 680/680, API 589/589 · Contract 26/26 · `dotnet format --verify-no-changes` temiz. Ayrıntı ve komutlar "Düzeltme turu 1" bölümünde |
 | Unit (backend, bütün `*.Tests`) | ✓ 1894/1894 | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — origin/main (T146, #342) birleştirildikten sonra: Transactions 717, Shared 528, Platform 148, Notifications 133, Auth 92, API 80, Steam 59, Users 49, Realtime 44, Disputes 25, Fraud 19. Birleştirme öncesi 1834/1834 |
 | Integration (gerçek SQL Server, Testcontainers) | ✓ 1620/1620 | Birleştirme sonrası, assembly başına ayrı koşu (`dotnet test tests/Skinora.<X>.Tests --filter "FullyQualifiedName~.Integration"`): Transactions 677, API 583, Fraud 84, Platform 74, Notifications 60, Disputes 58, Auth 40, Admin 22, Shared 16, Payments 6 — T146'nın migration provası (`UserWalletAddressMigrationRehearsalTests`) T148 migration'ı üstündeyken de yeşil. Birleştirme öncesi tam koşu 1577/1577 (Transactions 668, API 555, Fraud 81, Platform 74, Notifications 60, Disputes 58, Auth 37, Admin 22, Shared 16, Payments 6). İlk tam koşuda (11 assembly paralel) 5 test SQL zaman aşımıyla (1–2 ms, konteyner yükü) ve 3 test bayat ikiliyle (seed sayısı 64 / ayar listesi — sonradan güncellendi) düştü; üç assembly tek tek yeniden koşuldu: API 555/555, Platform 74/74, Notifications 60/60 |
 | Contract | ✓ 26/26 | `--filter "FullyQualifiedName~.Contract"`: API 17, Shared 5, Transactions 4 |
@@ -61,9 +94,9 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı doğrulama alt ajanı, F8 yönetici düzeni) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | Tur 1 ✗ FAIL (head `f6cca76`) → düzeltme turu 1 yapıldı; yeniden doğrulama bekliyor |
+| Bulgu sayısı | Tur 1: 5 (F1 bloke eden; F2–F5 bloke etmeyen) — hepsi düzeltme turu 1'de kapatıldı |
+| Düzeltme gerekli mi | Yapıldı (yukarıda "Düzeltme turu 1") |
 
 ## Altyapı Değişiklikleri
 
@@ -76,7 +109,7 @@
 - Branch: `task/T148-ag-basina-sidecar-sozlesmesi`
 - Commit: `b64e0ba` — T148: ağ başına sidecar sözleşmesi ve ayarlar · `1fdd2d7` ayar listesi/seed testleri · `1ce6401` rapor, status, memory, §7.6 · `b8a1ec5` dotnet format (NetworkContractTests boşlukları) · `883cfd7` rapor CI satırı · `b340ea2` origin/main (T146) birleştirmesi + T148 migration'ı T146 üstünde yeniden üretildi
 - PR: #343
-- CI: ✓ PASS — origin/main (T146) birleştirmesinden sonra run [`39097068818`](https://github.com/turkerurganci/Skinora/actions/runs/39097068818) (`b340ea2`) success (bütün bloke eden işler + 10 advisory E2E). Birleştirme öncesi run [`39093771009`](https://github.com/turkerurganci/Skinora/actions/runs/39093771009) (`b8a1ec5`): Lint, Build, Unit, Integration, Contract, Migration dry-run, Docker build (backend, sidecar-blockchain), JS test ve 10 advisory E2E işinin hepsi success. Önceki run `39092446780` (`1ce6401`) yalnız `dotnet format` adımında düştü (`NetworkContractTests.cs` nesne başlatıcı boşlukları); aynı run'daki 10 E2E işi o hâliyle de success idi (sidecar-fake'in `network`'lü zarfları backend'den geçti). Düzeltme push'unu pre-push CI koruması (Layer 2) son run `failure` olduğu için durdurdu; bypass kullanılmadı — eski run yeniden kuyruğa alındı (koruma tamamlanmamış run'ı engellemez), düzeltme push'lanınca eski run iptal edildi.
+- CI: ✓ PASS — origin/main (T146) birleştirmesinden sonra run [`39097068818`](https://github.com/turkerurganci/Skinora/actions/runs/39097068818) (`b340ea2`) success (bütün bloke eden işler + 10 advisory E2E). Birleştirme öncesi run [`39093771009`](https://github.com/turkerurganci/Skinora/actions/runs/39093771009) (`b8a1ec5`): Lint, Build, Unit, Integration, Contract, Migration dry-run, Docker build (backend, sidecar-blockchain), JS test ve 10 advisory E2E işinin hepsi success. Önceki run `39092446780` (`1ce6401`) yalnız `dotnet format` adımında düştü (`NetworkContractTests.cs` nesne başlatıcı boşlukları); aynı run'daki 10 E2E işi o hâliyle de success idi (sidecar-fake'in `network`'lü zarfları backend'den geçti). Düzeltme push'unu pre-push CI koruması (Layer 2) son run `failure` olduğu için durdurdu; bypass kullanılmadı — eski run yeniden kuyruğa alındı (koruma tamamlanmamış run'ı engellemez), düzeltme push'lanınca eski run iptal edildi. **Süreç notu (doğrulama tur 1, F4):** bu yeniden kuyruğa alma koruma niyetine aykırıydı (`BYPASS_LOG` kaydı düşmedi); kural artık şu — kırmızı run yeniden kuyruğa alınmaz/iptal edilmez, düzeltme kayıtlı bypass'la (`SKINORA_ALLOW_DIRECT_PUSH=1 SKINORA_BYPASS_REASON="ci-failure fix-forward: …"`) push'lanır; korumanın kendisi `PrePushGuardBlocksFixForward` (⚪) satırında.
 
 ## Known Limitations / Follow-up
 
@@ -97,7 +130,7 @@
 - **(öneriyle kaydedildi — ⚠) — yönetici listesine gidecek seçimler** (ayrıntı 11 §F8 "T148 servis sözleşmesi kararları"):
   1. Servisi olmayan ağ fail-closed; gönderim işi o ağın `PENDING` satırına dokunmaz (yeniden deneme hakkı harcanmaz, `FAILED` olmaz).
   2. Webhook ret kodları: 400 `WEBHOOK_NETWORK_INVALID` (eksik/bilinmeyen), 409 `WEBHOOK_NETWORK_MISMATCH` (imzalayan sırrın ya da depozitin ağıyla uyuşmuyor); servis 4xx'i kalıcı sayar.
-  3. Ağ başına webhook sırrı + ayrı nonce ad alanı; iki ağa aynı sır verilirse yalnız TRON'unki geçerli.
+  3. Ağ başına webhook sırrı + ayrı nonce ad alanı; iki ağa aynı sır verilirse ~~yalnız TRON'unki geçerli~~ **backend açılmaz** (düzeltme turu 1, F3).
   4. Sidecar istek gövdesinde `network` yoksa kabul (runbook'taki elle çağrılar); başka ağ adı 400 `NETWORK_MISMATCH`.
   5. TRON ayar anahtarları adlarıyla kaldı; Ethereum `blockchain.ethereum.*`. Ethereum değerleri: iade/payout ücret yedeği 0,50, kesilebilir üst sınır 10,0 (T149 gözden geçirir), tavan 0,50 $, "bekle" 180 dk, `finalized` durma 30 dk, ETH tabanları 0,06 (T142).
   6. Sağlık bileşen adı `BLOCKCHAIN` → `BLOCKCHAIN_TRON` / `BLOCKCHAIN_ETHEREUM` (admin uyarısında ve denetim kaydında görünen ad değişti); ağ filtreli dondurmada ağı boş işlem TRON sayılır.
@@ -107,5 +140,7 @@
   10. Payout/iade/sweep satırları ağını depozitten/işlemden alır (aynı ağ kuralı; T147'nin ağ seçimiyle anlam kazanır).
   11. `/health` gövdesindeki `network` backend'de denetlenir; alan yoksa sağlıklı sayılır.
   12. Gerçek zamanlı `PaymentConfirmed` onay sayısı ödeme satırından (eski olayda politika).
+  13. (Düzeltme turu 1, F2) `network` alanı hiç olmayan webhook, TRON'un sırrıyla imzalanmışsa TRON sayılır; Ethereum'un sırrıyla ya da açık yanlış değerle 400 kalır. Servis backend'le birlikte ya da önce deploy edilir (runbook §B).
+  14. (Düzeltme turu 1, F1) Servisi olmayan ağın izleme başlatma olayı outbox'ta `throw` etmez, log'lanıp düşer (geri dönüş: `EnsurePaymentMonitorJob`, `PostCancelMonitorRecoveryHook`); sweep kuyruğu sıcak cüzdanı olmayan ağın depozitini aday almaz.
 - **11 §7.6 izlenebilirlik:** "Ağ başına servis sözleşmesi" satırının Implemented kolonu "✓ T148 (PR #343) — Ethereum servisinin kendisi T150" yazıldı (T145'in uygulamasıyla aynı).
 - **Docker:** test sonunda Docker Desktop durduruldu (yerel Skinora yığını `unless-stopped` ile kendiliğinden kalkmıştı — beklenen).
