@@ -11,7 +11,13 @@ import {
   setFees,
   type FeeKnobs,
 } from '../blockchainState.js';
-import { isNetwork, profileFor, type Network, type NetworkProfile } from '../networks.js';
+import {
+  isNetwork,
+  profileFor,
+  signingKeyFor,
+  type Network,
+  type NetworkProfile,
+} from '../networks.js';
 import {
   lateDetectedEnvelope,
   paymentConfirmedEnvelope,
@@ -93,8 +99,8 @@ async function resolve(body: PaymentBody): Promise<Resolved> {
     throw new ControlRequestError(404, `no PaymentAddress for transaction ${transactionId}`);
   const profile = profileFor(dep.network);
   const claim = (body.claimNetwork as Network | undefined) ?? dep.network;
-  const signer = profileFor((body.signAs as Network | undefined) ?? dep.network);
-  return { dep, profile, claim, signingKey: signer.webhookSecret() };
+  const signingKey = signingKeyFor(dep.network, body.signAs as Network | undefined);
+  return { dep, profile, claim, signingKey };
 }
 
 /** Deterministic txHash for a buyer-payment leg. eventIndex 0 keeps the

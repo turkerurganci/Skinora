@@ -208,13 +208,13 @@ describe('monitor start/stop', () => {
       expectedContract: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
     });
     expect(r.status).toBe(400);
-    expect(r.body.error).toBe('UNEXPECTED_CONTRACT');
+    expect(r.body.error).toBe('EXPECTED_CONTRACT_MISMATCH');
   });
 
   it('refuses USDC armed with the USDT contract (symbol and contract must agree)', async () => {
     const r = await post('ETHEREUM', '/api/monitor/start', { ...start, expectedSymbol: 'USDC' });
     expect(r.status).toBe(400);
-    expect(r.body.error).toBe('UNEXPECTED_CONTRACT');
+    expect(r.body.error).toBe('EXPECTED_CONTRACT_MISMATCH');
   });
 });
 

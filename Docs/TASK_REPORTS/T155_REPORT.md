@@ -1,6 +1,6 @@
 # T155 — sidecar-fake Ethereum desteği + E2E
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ✓ Tamamlandı (bağımsız doğrulama ✓ PASS) | **Tarih:** 2026-10-18
 
 ---
 
@@ -61,13 +61,27 @@
   - **F1 — sahte servis Ethereum webhook'unu TRON sırrıyla imzalıyor:** yanlış ağ testi kırmızı — geçerli ödeme 409 `WEBHOOK_NETWORK_MISMATCH` aldı (sahte servisin sır seçimi E2E'de ölçülüyor).
 - Bozmalar yalnız yerel imajlarda; kaynak her seferinde geri alındı, dalda bozma yok.
 
-## Doğrulama
+## Doğrulama sonucu
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (F8 yönetici düzeni — bağımsız doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız temiz bağlam (Sonnet); doğrulanan HEAD `b09067a`, CI [`39137404205`](https://github.com/turkerurganci/Skinora/actions/runs/39137404205) ✓ |
+| E2E | "T155 multi-network" bacağı yeşil, 14,9 dk |
+| Bozma | 18 geçerli bozma / 14 yakalandı. Yakalanmayanlar: 6 ve 14 (webhook sırrı) → bu kapanışta birim testle (`networks.test.ts`); 13 E2E'de yakalanır; 17 (spam kontratı) → bu kapanışta testle |
+| Payout elle hesabı | TRON satıcı ödemesi 98,20 = 100 − (2,00 − 0,20); `multi-network.spec.ts:285-286` sabitliyor; 11 §F8 "T155 kararları" (xii)'ye yazıldı |
+| Bulgu sayısı | 5 küçük (2 🟡, 3 🟢) — hepsi bu kapanışta kapandı |
+
+**Bulgular ve nasıl kapandıkları**
+
+1. 🟡 Sahte Ethereum adres kontrolü `0x`+40 hex her şeyi kabul ediyordu; gerçek servis karışık harfte geçersiz EIP-55'i reddeder. `networks.ts` `isEvmAddress` artık aynı kuralı sahte servisin Keccak'ıyla uyguluyor (tümü küçük/büyük kabul, karışık harfte sağlama zorunlu). Test: `networks.test.ts`; bozma ("her şeyi kabul et") kırdı.
+2. 🟡 Webhook imzasının depozitin ağının sırrıyla atıldığı birim düzeyinde sabit değildi. `signingKeyFor` ayrıldı; `networks.test.ts` Ethereum→Ethereum, TRON→TRON sırrını ve `signAs` geçersiz kılmasını sınar (iki ağa ayrı anahtarlar verilerek). Bozma (varsayılan `'TRON'`) kırdı.
+3. 🟢 Kontrat uyuşmazlığı hata kodu `UNEXPECTED_CONTRACT` → `EXPECTED_CONTRACT_MISMATCH` (gerçek `monitorHandlers.ts`); `blockchain.test.ts` güncellendi, eski koda dönüş iki testi kırdı.
+4. 🟢 Ethereum yüzeyi USDC'yi varsayılan kabul ediyordu; profile `allowlist()` eklendi: USDC yalnız `ETHEREUM_USDC_CONTRACT` verilirse kabul. `contracts()` USDC'yi yanlış-token kolu için adlandırmaya devam eder. Mevcut testler/E2E etkilenmedi (E2E yığınında USDC ayarlı değil, K2 yalnız USDT). Bozma (hepsini kabul et) kırdı.
+5. 🟢 Spam kontratının allowlist dışı olduğu test edilmiyordu; `networks.test.ts` iki ağda `unsupportedContract`'ın allowlist dışı olduğunu ve spam zarfının onu taşıdığını sınar. Bozma (`unsupportedContract` = USDT) iki testi kırdı.
+
+**Main bütünleştirmesi:** `origin/main` (T151 `0fdc3b1` girdi) merge commit'le dala alındı; MEMORY, 08 ve 11'de çakışmalar iki tarafı koruyarak çözüldü (08 v3.30, 11 v1.9 → bu kapanışta v1.10). Birleşince T151'in Ethereum webhook sözleşme örnekleri sahte servis testinde koşuyor ve geçiyor.
+
+**Testler (kapanış):** `sidecar-fake` `npm test` 118/118, `tsc --noEmit` ve `eslint` temiz. E2E CI'da.
 
 ## Altyapı Değişiklikleri
 
@@ -84,7 +98,7 @@
 
 ## Known Limitations / Follow-up
 
-- **Ethereum webhook örnekleri henüz main'de değil** (T151 #347 doğrulamada; T154 örnekleri birleşti ve bağlı). Webhook bağlaması T151 birleşince kendiliğinden devreye girer; birleşme sonrası main CI'da `sidecar-fake` testinin koştuğu ve yeşil kaldığı görülmeli (süzgeç `sidecar-ethereum/contracts/**`'ı izliyor). O dallardaki dosyalar değişirse sahte servisin ilgili cevabı da değişmeli.
+- ~~**Ethereum webhook örnekleri henüz main'de değil**~~ (kapandı: T151 main'e girdi, doğrulama kapanışında birleştirildi ve sahte servis testinde koşuyor) — (T151 #347 doğrulamada; T154 örnekleri birleşti ve bağlı). Webhook bağlaması T151 birleşince kendiliğinden devreye girer; birleşme sonrası main CI'da `sidecar-fake` testinin koştuğu ve yeşil kaldığı görülmeli (süzgeç `sidecar-ethereum/contracts/**`'ı izliyor). O dallardaki dosyalar değişirse sahte servisin ilgili cevabı da değişmeli.
 - **T151 `acceptsPayments` kapısı:** sahte servis bugünden `acceptsPayments: true` yayınlıyor; T151 birleşmeden önce backend bu alanı okumuyor, sonra okuyacak — e2e iki durumda da açık.
 - **TRON payout ücreti e2e'de değişti:** sahte servis artık TRON `estimate-fee`'yi 2,00 ile cevaplıyor (yedek 0,50 yerine); e2e TRON satıcı payı 99,70 → 98,20. İade aritmetiği (2,00) aynı. Önceki hiçbir süit payout tutarını doğrulamıyordu.
 - **Ödeme kolları izleyiciyi şart koşmuyor:** gerçek dünyada izlenmeyen depozite gelen ödeme görülmez; sahte serviste kol, izleyici kurulmamış olsa da webhook gönderir (outbox zamanlaması eski süitleri kırmasın diye). Yeni süit izleyiciyi ayrıca bekleyip ağını ve kontratını doğruluyor.

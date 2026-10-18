@@ -1,5 +1,11 @@
 import { config } from './config.js';
-import { fakeEthereumAddress, fakeEthereumTxHash, fakeTronAddress, fakeTxHash } from './ids.js';
+import {
+  fakeEthereumAddress,
+  fakeEthereumTxHash,
+  fakeTronAddress,
+  fakeTxHash,
+  toChecksumAddress,
+} from './ids.js';
 
 /**
  * T155 — the two payment networks the fake stands in for (11 §F8 K1). Every
@@ -37,12 +43,23 @@ export interface NetworkProfile {
   /** Deterministic transaction hash in this network's format. */
   txHash(seed: string): string;
   isTxHash(value: string): boolean;
-  /** Shape check only — the fake's own addresses carry no checksum. */
+  /**
+   * Address check as the real service makes it. TRON: shape only (the e2e
+   * platform wallets are placeholders). Ethereum: `0x` + 40 hex, and a
+   * mixed-case value must carry a valid EIP-55 checksum.
+   */
   isAddress(value: string): boolean;
   /** Address equality as the network defines it (EVM: case-insensitive). */
   sameAddress(a: string, b: string): boolean;
   /** Allowlisted token contracts, as the service reports them in webhooks. */
   contracts(): Record<StablecoinSymbol, string>;
+  /**
+   * The subset of {@link contracts} the service is configured to ACCEPT in
+   * `monitor/start`. The real Ethereum service rejects an unconfigured token
+   * (K2: USDT only); `contracts()` still names USDC so a wrong-token payment
+   * lever can send one.
+   */
+  allowlist(): Partial<Record<StablecoinSymbol, string>>;
   /** A token contract that is NOT allowlisted (spam-token lever, 03 §5.3a). */
   readonly unsupportedContract: string;
   /** The wallet a simulated buyer pays FROM — never a refund target (K9). */
@@ -80,6 +97,14 @@ const TRON_TX_HASH = /^[0-9a-f]{64}$/;
 const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const EVM_TX_HASH = /^0x[0-9a-f]{64}$/;
 
+/** Mirror of sidecar-ethereum `checksummedEvmAddress`: mixed case must be EIP-55 valid. */
+export function isEvmAddress(value: string): boolean {
+  if (!EVM_ADDRESS.test(value)) return false;
+  const hex = value.slice(2);
+  const mixedCase = hex !== hex.toLowerCase() && hex !== hex.toUpperCase();
+  return !mixedCase || toChecksumAddress(value) === value;
+}
+
 export const TRON: NetworkProfile = {
   network: 'TRON',
   webhookSecret: () => config.blockchainWebhookSecret,
@@ -94,6 +119,7 @@ export const TRON: NetworkProfile = {
   isAddress: (value) => TRON_ADDRESS.test(value),
   sameAddress: (a, b) => a === b,
   contracts: () => TRON_CONTRACTS,
+  allowlist: () => TRON_CONTRACTS,
   unsupportedContract: fakeTronAddress(666_001),
   buyerWallet: fakeTronAddress(999_001),
   // 20 = the TRON finality threshold the backend's CONFIRMED CHECK requires.
@@ -117,12 +143,17 @@ export const ETHEREUM: NetworkProfile = {
   derivationPath: (index) => `m/44'/60'/0'/0/${index}`,
   txHash: (seed) => fakeEthereumTxHash(seed),
   isTxHash: (value) => EVM_TX_HASH.test(value),
-  isAddress: (value) => EVM_ADDRESS.test(value),
+  isAddress: isEvmAddress,
   sameAddress: (a, b) => a.toLowerCase() === b.toLowerCase(),
   contracts: () => ({
     USDT: (config.ethereumUsdtContract || ETHEREUM_MAINNET_CONTRACTS.USDT).toLowerCase(),
     USDC: (config.ethereumUsdcContract || ETHEREUM_MAINNET_CONTRACTS.USDC).toLowerCase(),
   }),
+  allowlist: () => {
+    const all = ETHEREUM.contracts();
+    // USDC is accepted only when explicitly configured (K2 — USDT only).
+    return config.ethereumUsdcContract ? all : { USDT: all.USDT };
+  },
   unsupportedContract: fakeEthereumAddress(666_001).toLowerCase(),
   buyerWallet: fakeEthereumAddress(999_001).toLowerCase(),
   // Informational on a finalized network (the backend stores what is
@@ -152,9 +183,19 @@ export function symbolForContract(
   profile: NetworkProfile,
   contract: string,
 ): StablecoinSymbol | null {
-  const contracts = profile.contracts();
+  const contracts = profile.allowlist();
   for (const symbol of Object.keys(contracts) as StablecoinSymbol[]) {
-    if (profile.sameAddress(contracts[symbol], contract)) return symbol;
+    const configured = contracts[symbol];
+    if (configured && profile.sameAddress(configured, contract)) return symbol;
   }
   return null;
+}
+
+/**
+ * The key that signs a webhook about a deposit on `depositNetwork`: that
+ * network's own (T148 - the key that verifies decides which network the caller
+ * IS). `signAs` overrides it for the wrong-network negative levers.
+ */
+export function signingKeyFor(depositNetwork: Network, signAs?: Network): string {
+  return profileFor(signAs ?? depositNetwork).webhookSecret();
 }

@@ -96,7 +96,7 @@ export function createBlockchainRouter(profile: NetworkProfile): Router {
     }
     if (symbolForContract(profile, expectedContract) !== (expectedSymbol as StablecoinSymbol)) {
       res.status(400).json({
-        error: 'UNEXPECTED_CONTRACT',
+        error: 'EXPECTED_CONTRACT_MISMATCH',
         message: `${expectedContract} is not the ${profile.network} ${expectedSymbol} contract.`,
       });
       return;

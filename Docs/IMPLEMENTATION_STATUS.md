@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-18 — **T151 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum ödeme izleyicisi; rapor [`T151_REPORT.md`](TASK_REPORTS/T151_REPORT.md), PR [#347](https://github.com/turkerurganci/Skinora/pull/347), doğrulanan HEAD `b2e4757`, CI [`39129005912`](https://github.com/turkerurganci/Skinora/actions/runs/39129005912) ✓). Bulgular kapandı (açılışta USDT durumu, `finalized` etiketi testi, test boşlukları); main ile bütünleştirildi; yeni T158 kriterleri 11 §F8'de. Merge yönetici tarafından yapılır. · **Önceki:** 2026-10-18 — **T154 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum ücret tahmini + ETH fiyatı; rapor [`T154_REPORT.md`](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348), doğrulanan HEAD `5d83c21`, CI [`39128179211`](https://github.com/turkerurganci/Skinora/actions/runs/39128179211) ✓). Arada main'e birleşen T149 dala merge commit'le bütünleştirildi (çakışan beş dosyada iki tarafın içeriği korundu; migration sırası T149 → T150 → T154, model değişikliği bekleyen yok). **Yönetici kararları (⚠):** açılışta iki kaynak şart; Ethereum depozit iadesinde alıcıdan yakıtın tamamı + yakıt gönderim ücreti kesilir (~0,05 $, F8 gate'te gösterilecek); ETH referans fiyatını yalnız iki kaynağın uyuşması ilerletir (zincirleme kayma kapandı). Küçük bulgular kapatıldı: zincirleme kayma (kod + test), iki test boşluğu (Binance `closeTime` ms birimi, sıfır gas), sözleşme örneğinin iç tutarlılığı, Binance 451 riski (05/08/DEPLOY_RUNBOOK + T158 (e) erişim probu). Merge yönetici tarafından yapılır.
+**Son güncelleme:** 2026-10-18 — **T155 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (sidecar-fake Ethereum desteği + E2E; rapor [`T155_REPORT.md`](TASK_REPORTS/T155_REPORT.md), PR [#351](https://github.com/turkerurganci/Skinora/pull/351), doğrulanan HEAD `b09067a`, CI [`39137404205`](https://github.com/turkerurganci/Skinora/actions/runs/39137404205) ✓, multi-network bacağı 14,9 dk). Beş küçük bulgu kapandı (EIP-55 adres kuralı, webhook imza sırrı birim testi, `EXPECTED_CONTRACT_MISMATCH`, USDC yalnız yapılandırılırsa, spam kontratı testi); e2e TRON satıcı ödemesi 98,20 elle doğrulandı; main (T151) bütünleştirildi. Merge yönetici tarafından yapılır.
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -341,7 +341,7 @@
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T149 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
-| T155 | sidecar-fake Ethereum desteği + E2E | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T155_REPORT.md)) |
+| T155 | sidecar-fake Ethereum desteği + E2E | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T155_REPORT.md)) |
 | T156 | Kullanıcı arayüzü — ağ seçimi | ⬚ Bekliyor |
 | T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ⬚ Bekliyor |
