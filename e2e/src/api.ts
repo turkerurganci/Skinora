@@ -43,6 +43,8 @@ export interface CreateTransactionBody {
   paymentTimeoutHours: number;
   buyerIdentificationMethod: string;
   buyerSteamId: string;
+  /** T147 — networks the listing accepts; omitted = `["TRON"]` (07 §1.3, ⚠ default). */
+  acceptedNetworks?: string[];
 }
 
 export function createTransaction(token: string, body: CreateTransactionBody): Promise<ApiResult> {
@@ -60,10 +62,15 @@ export function acceptTransaction(
   id: string,
   refundWalletAddress: string,
   steamTradeUrl: string = seed.buyerTradeUrl,
+  // T147 — the network the buyer pays on; omitted = TRON (07 §1.3, ⚠
+  // default). `refundWalletAddress` must be an address on that network: it is
+  // where every rejected payment goes back to (11 §F8 K9).
+  network?: string,
 ): Promise<ApiResult> {
   return call('POST', `/api/v1/transactions/${id}/accept`, token, {
     refundWalletAddress,
     steamTradeUrl,
+    ...(network === undefined ? {} : { network }),
   });
 }
 
@@ -410,7 +417,16 @@ async function fakeGet(path: string): Promise<ApiResult> {
  *  picks the multi-payment branch on STATE, not on amount). */
 export function payViaFake(
   transactionId: string,
-  opts?: { amount?: string; eventIndex?: number },
+  opts?: {
+    amount?: string;
+    eventIndex?: number;
+    // T155 negative levers — the fake otherwise speaks for the deposit's own
+    // network (its formats, its secret). `claimNetwork` = the envelope's
+    // `network`; `signAs` = whose secret signs. A refusal comes back as 502
+    // with the backend's `backendStatus` / `backendBody`.
+    claimNetwork?: string;
+    signAs?: string;
+  },
 ): Promise<ApiResult> {
   return fakePost('/__e2e/payment/pay', { transactionId, ...opts });
 }
@@ -443,6 +459,83 @@ export function payLateViaFake(
   opts?: { amount?: string; monitorState?: string },
 ): Promise<ApiResult> {
   return fakePost('/__e2e/payment/late-detected', { transactionId, ...opts });
+}
+
+// ---------------------------------------------------------------------------
+// T155 — the fake's blockchain read-back. The backend's database records what
+// the backend DECIDED (a payout row on network X to address Y); only the fake
+// saw which network's SERVICE the backend actually asked to move the money.
+// ---------------------------------------------------------------------------
+
+export interface FakeBlockchainCall {
+  seq: number;
+  network: 'TRON' | 'ETHEREUM';
+  method: string;
+  path: string;
+  body: Record<string, unknown> | null;
+  status: number;
+  at: string;
+}
+
+/** Every backend → blockchain-service call the fake answered, oldest first.
+ *  `path` is a prefix (`/api/transfer/payout`, `/api/transfer/status`). */
+export async function getFakeBlockchainCalls(query?: {
+  network?: 'TRON' | 'ETHEREUM';
+  path?: string;
+}): Promise<FakeBlockchainCall[]> {
+  const params = new URLSearchParams();
+  if (query?.network) params.set('network', query.network);
+  if (query?.path) params.set('path', query.path);
+  const r = await fakeGet(`/__e2e/blockchain/calls?${params.toString()}`);
+  if (!r.ok) throw new Error(`fake calls read failed (${r.status}): ${JSON.stringify(r.body)}`);
+  return (r.body as { calls: FakeBlockchainCall[] }).calls;
+}
+
+export interface FakeMonitor {
+  network: 'TRON' | 'ETHEREUM';
+  address: string;
+  transactionId: string;
+  expectedContract: string;
+  expectedSymbol: string;
+  cadence: string;
+}
+
+/** Deposits the fake is currently watching (monitor/start minus monitor/stop). */
+export async function getFakeMonitors(network?: 'TRON' | 'ETHEREUM'): Promise<FakeMonitor[]> {
+  const r = await fakeGet(`/__e2e/blockchain/monitors${network ? `?network=${network}` : ''}`);
+  if (!r.ok) throw new Error(`fake monitors read failed (${r.status}): ${JSON.stringify(r.body)}`);
+  return (r.body as { monitors: FakeMonitor[] }).monitors;
+}
+
+/** Drive one network's fee-estimate answers on the fake (`available: false`
+ *  makes them fail, so the backend writes its fallback). */
+export function setFakeFees(
+  network: 'TRON' | 'ETHEREUM',
+  knobs: Record<string, string | number | boolean>,
+): Promise<ApiResult> {
+  return fakePost('/__e2e/blockchain/fees', { network, ...knobs });
+}
+
+/** Call journal + monitor registry + fee knobs back to their defaults. */
+export function resetFakeBlockchain(): Promise<ApiResult> {
+  return fakePost('/__e2e/blockchain/reset', {});
+}
+
+/** The fake Ethereum service's own `derive` answer for an HD index — called on
+ *  the Ethereum surface exactly as the backend calls it. Used to compare the
+ *  EIP-55 form the backend DISPLAYS (its own Keccak) with the one the service
+ *  answered (the fake's, an independent implementation). */
+export async function fakeEthereumDerive(index: number): Promise<string> {
+  const res = await fetch(`${e2eConfig.fakeEthereumUrl}/api/wallet/derive`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ network: 'ETHEREUM', index }),
+  });
+  const body = (await res.json()) as { address?: string };
+  if (!res.ok || !body.address) {
+    throw new Error(`fake Ethereum derive failed (${res.status}): ${JSON.stringify(body)}`);
+  }
+  return body.address;
 }
 
 /** One item a test seeds into a fake inventory: a `catalog` template name

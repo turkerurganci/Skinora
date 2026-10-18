@@ -68,6 +68,17 @@ export const seed = {
   // rises — the exact pair of readings that raises MisdeliverySignature. Nothing
   // seeds it in the DB; it only ever has to exist on the fake.
   outsiderSteamId: '76561198000000077',
+  // T155 — the parties' Ethereum addresses (11 §F8 K3/K9). Two of the EIP-55
+  // specification's own examples (eips.ethereum.org/EIPS/eip-55), so the
+  // checksum is valid by an independent source and the backend accepts them
+  // without the lower-case confirmation step (T146 ii). Stored lower-case
+  // (06 §1.4), which is what the DB-side assertions compare against.
+  sellerEthereumPayoutAddress: '0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359',
+  buyerEthereumRefundAddress: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed',
+  // The e2e stack's Ethereum hot wallet (docker-compose.e2e.yml
+  // ETHEREUM_HOT_WALLET_ADDRESS) — where an Ethereum deposit is swept to.
+  ethereumHotWallet: '0xe2e0000000000000000000000000000000000002',
+  tronHotWallet: 'TE2eHotWa11etFakeAddress2222222222',
 };
 
 // The buyer's on-chain wallet the fake sidecar pays FROM = fakeTronAddress(999_001)
@@ -77,6 +88,11 @@ export const seed = {
 // address fixed at acceptance. Kept so the specs can assert the refund is NOT
 // sent to the payment source.
 export const fakeBuyerWallet = 'TGDcTRVZVvKBUE7h5fRCVUjRGj6K52AFWg';
+
+// T155 — the Ethereum wallet the fake pays FROM on an Ethereum deposit
+// (sidecar-fake networks.ts ETHEREUM.buyerWallet = fakeEthereumAddress(999_001),
+// lower-cased). Same role as fakeBuyerWallet: K9 says no refund may go here.
+export const fakeEthereumBuyerWallet = '0xa5dfaa6e093408af19263350166f2a30ccda6d48';
 
 /** Seed seller, buyer, and a matching price-cache row (0% deviation → CREATED,
  *  not FLAGGED). Idempotent: clears prior e2e rows first.
@@ -232,6 +248,134 @@ export async function seedHappyPath(): Promise<typeof seed> {
   }
 
   return seed;
+}
+
+/** T155 — give the seeded SELLER an Ethereum payout address next to the TRON
+ *  one, so a listing may accept both networks (07 §7.2: only networks with a
+ *  registered payout address). Call after seedHappyPath, which clears the
+ *  parties' UserWalletAddresses rows. Lower-case, as the backend stores EVM
+ *  addresses (06 §1.4); ChangedAt NULL = no payout cooldown, like the TRON row. */
+export async function seedEthereumPayoutAddress(): Promise<void> {
+  const p = await getPool();
+  await p
+    .request()
+    .input('id', sql.UniqueIdentifier, seed.sellerId)
+    .input('payout', sql.NVarChar(50), seed.sellerEthereumPayoutAddress.toLowerCase())
+    .query(
+      `INSERT INTO UserWalletAddresses (Id, UserId, Network, Type, Address, ChangedAt, CreatedAt, UpdatedAt)
+       VALUES (NEWID(), @id, 'ETHEREUM', 'PAYOUT', @payout, NULL, SYSUTCDATETIME(), SYSUTCDATETIME());`,
+    );
+}
+
+export interface DepositRow {
+  address: string;
+  network: string;
+  expectedAmount: number;
+  hdWalletIndex: number;
+}
+
+/** The transaction's deposit PaymentAddress (06 §3.7), or null before one is allocated. */
+export async function getDeposit(transactionId: string): Promise<DepositRow | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT TOP 1 Address, Network, ExpectedAmount, HdWalletIndex FROM PaymentAddresses
+       WHERE TransactionId = @tx AND IsDeleted = 0 ORDER BY CreatedAt DESC`,
+    );
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    address: String(row.Address),
+    network: String(row.Network),
+    expectedAmount: Number(row.ExpectedAmount),
+    hdWalletIndex: Number(row.HdWalletIndex),
+  };
+}
+
+export interface ChainRow {
+  id: string;
+  type: string;
+  status: string;
+  network: string;
+  toAddress: string;
+  amount: number;
+  gasFee: number | null;
+  txHash: string | null;
+}
+
+/** Every BlockchainTransactions row of `transactionId`, oldest first (06 §3.8). */
+export async function getChainRows(transactionId: string): Promise<ChainRow[]> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT Id, Type, Status, Network, ToAddress, Amount, GasFee, TxHash
+       FROM BlockchainTransactions WHERE TransactionId = @tx ORDER BY CreatedAt`,
+    );
+  return result.recordset.map((row) => ({
+    id: String(row.Id).toLowerCase(),
+    type: String(row.Type),
+    status: String(row.Status),
+    network: String(row.Network),
+    toAddress: String(row.ToAddress),
+    amount: Number(row.Amount),
+    gasFee: row.GasFee === null ? null : Number(row.GasFee),
+    txHash: row.TxHash === null ? null : String(row.TxHash),
+  }));
+}
+
+/** Poll until a `type` row of `transactionId` is CONFIRMED; returns it (or the
+ *  last-seen row / null on timeout). Network-agnostic sibling of
+ *  pollBlockchainTxConfirmed that returns the whole row, network included. */
+export async function pollChainRowConfirmed(
+  transactionId: string,
+  type: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<ChainRow | null> {
+  const deadline = Date.now() + (opts?.timeoutMs ?? 180_000);
+  const interval = opts?.intervalMs ?? 3_000;
+  let last: ChainRow | null = null;
+  while (Date.now() < deadline) {
+    const rows = (await getChainRows(transactionId)).filter((r) => r.type === type);
+    last = rows.length ? rows[rows.length - 1] : null;
+    if (last?.status === 'CONFIRMED') return last;
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return last;
+}
+
+export interface TransactionNetworkRow {
+  status: string;
+  network: string | null;
+  networkFeeAmount: number | null;
+  buyerRefundAddress: string | null;
+  sellerPayoutAddress: string | null;
+}
+
+/** The network columns of a transaction (06 §3.5, T147/T149). */
+export async function getTransactionNetwork(
+  transactionId: string,
+): Promise<TransactionNetworkRow | null> {
+  const p = await getPool();
+  const result = await p
+    .request()
+    .input('tx', sql.UniqueIdentifier, transactionId)
+    .query(
+      `SELECT Status, Network, NetworkFeeAmount, BuyerRefundAddress, SellerPayoutAddress
+       FROM Transactions WHERE Id = @tx`,
+    );
+  if (!result.recordset.length) return null;
+  const row = result.recordset[0];
+  return {
+    status: String(row.Status),
+    network: row.Network === null ? null : String(row.Network),
+    networkFeeAmount: row.NetworkFeeAmount === null ? null : Number(row.NetworkFeeAmount),
+    buyerRefundAddress: row.BuyerRefundAddress === null ? null : String(row.BuyerRefundAddress),
+    sellerPayoutAddress: row.SellerPayoutAddress === null ? null : String(row.SellerPayoutAddress),
+  };
 }
 
 /** One ItemPriceCaches row pinned at the listing price (0% deviation). Both
