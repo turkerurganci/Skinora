@@ -42,8 +42,11 @@ public class WeiAmountTests
     }
 
     [Theory]
-    // The contract example: 2^53 + 1 wei at 2414.579991 → 21.748… → 21.75.
+    // 2^53 + 1 wei at 2414.579991 → 21.748… → 21.75.
     [InlineData("9007199254740993", "2414.579991", "21.75")]
+    // The contract example (sidecar-ethereum/contracts/estimate-fee/response.json):
+    // 9,139,361,000,067,201 wei at 2414.579991 → 22.067… → 22.07.
+    [InlineData("9139361000067201", "2414.579991", "22.07")]
     // T142: 125,482 gas × 0.217 gwei at 2,364.48 $ = 0.0643… → 0.07.
     [InlineData("27229594000000", "2364.48", "0.07")]
     // Exactly one cent stays one cent; one wei more is two.

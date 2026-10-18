@@ -1,6 +1,6 @@
 # T154 — Ethereum ücret tahmini + ETH fiyatı
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ✓ Tamamlandı (bağımsız doğrulama ✓ PASS — aşağıda "Doğrulama sonucu") | **Tarih:** 2026-10-18
 
 ---
 
@@ -72,9 +72,16 @@
 - PR: #348
 - CI: rapor commit'inden sonraki run — yöneticiye dönüşte bildirildi.
 
+## Doğrulama
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS (bağımsız temiz bağlam doğrulayıcı, F8 yönetici düzeni) — ayrıntı aşağıda "Doğrulama sonucu" |
+| Bulgu sayısı | 4 küçük (1 fiyat kuralı boşluğu, 2 test boşluğu, 1 sözleşme örneği tutarsızlığı) + 1 risk notu |
+| Düzeltme gerekli mi | Hayır (küçük bulgular kapanış commit'inde kapatıldı) |
+
 ## Known Limitations / Açık sorular
 
-**Yöneticiye bırakılan (PARA):**
+**Yöneticiye bırakılan (PARA):** — 1 ve 2 doğrulamada yönetici kararıyla kapandı, 3 T149 bütünleştirmesiyle cevaplandı (aşağıda "Doğrulama sonucu").
 1. **Depozitten iadede kesilen ücret.** Alıcının iadesinden kesilen = yakıtın tamamı (gas × (2 × base + tip); artık depozitte kalır, 08 §3.7.5 "ücret tahminine dahildir") + yakıt gönderiminin 21.000 gas'ı. İkinci kalem TRON'daki depozit açılış ücretinin alıcıya kesilmesinin (2026-10-02 sahip kararı) eşi sayılarak eklendi. Bugünkü medyan fiyatla toplam ~0,05 $; çöküş gününde tavan (10 USDT) aşılır ve yedek (0,50) kesilir. Alternatif: yalnız beklenen fiyat (base + tip) — alıcıya daha az, platforma ~2× daha fazla kalır.
 2. **Açılışta tek kaynak.** Servis yeni açılmışken (ya da 24 saattir kabul edilmiş fiyat yokken) tek kaynağın fiyatı kullanılmıyor; iki kaynak şart (en temkinli). Bedeli: o sırada CoinGecko'ya ulaşılamazsa iade yedeği kesilir, sweep/payout (tavan kur istediği için) bekler. Gevşetmek (bant içindeyse tek kaynak) yönetici kararı.
 3. **Payout tahmini Ethereum'da.** T149 Ethereum'da satıcıdan payout ücreti düşmüyor (`SellerBearsPayoutFeeOverage = false`); payout tahmininin Ethereum'da hâlâ çağrılıp çağrılmayacağı T149'un merge'üne bağlı — T154 iki yolu da fiyatlar, kesintiye karar vermez.
@@ -97,3 +104,26 @@
 - **Enum değişikliği:** yok.
 - **Docker:** açılmadı.
 - **Paralel görevler:** T149 (#345) `HttpSidecarGasFeeEstimator`'a ayrı bir metot ve kayıt ekliyor — T154'ün değişiklikleri aynı dosyanın başka yerlerinde (yöntemin içi ve dosya sonu), çakışma çıkarsa elle birleştirilir; migration snapshot'ı da iki dalda değişiyor. T151/T152 `RpcClient.ts`, `routes.ts`, `notImplemented.ts`, `index.ts`'e dokunacak.
+
+## Doğrulama sonucu
+
+**Sonuç: ✓ PASS** (2026-10-18) — bağımsız, temiz bağlamlı doğrulayıcı (F8 yönetici düzeni: yapım ve doğrulama ayrı alt ajanlarda).
+
+- **Doğrulanan HEAD:** `5d83c21`; PR CI [`39128179211`](https://github.com/turkerurganci/Skinora/actions/runs/39128179211) ✓.
+- **Elle hesap tuttu:** depozit iadesi (46.201 gas × 0,384 gwei + 21.000 × 0,217 gwei, ETH 2.364,48 $) 0,0527 $ → **0,06**; payout (64.031 gas × 0,217 gwei) 0,0329 $ → **0,04**; tavan 0,50 $ ÷ (67.201 gas × 2.364,48 $) → **3,15 gwei** (3.146.723.791 wei, aşağı); satış başı (125.482 gas × 0,217 gwei) **0,0644 $**.
+- **Fiyat kuralları probla doğrulandı:** bant, kaynak yaşı, %2 uyuşma, tek kaynak ±%20, açılışta iki kaynak, 60 dk bayat tolerans.
+- **Bozma ölçümü:** servis 49 bozma / 46 yakalandı — kaçan üçü: Binance `closeTime` biriminin saniye sayılması, sıfır gas (`gas <= 0`) kontrolünün kaldırılması, HTTP durum kontrolünün kaldırılması (etkisiz — hata gövdesi zaten fiyat olarak geçmiyor, eşdeğer). Backend 11 / 11.
+
+**Bulgular ve kapanışları (hepsi küçük; kapanış commit'inde):**
+
+1. **🟡 Fiyatın zincirleme kayması** (`EthPriceService.choose()`): tek kaynaktan kabul edilen fiyat bir sonraki ±%20 kontrolünün tabanı oluyordu; öteki kaynak kapalıyken her 5 dk'lık yenilemede %20 kayarak 1 saatte 2.000 → 16.128'e çıkılabiliyordu. **Yönetici kararı (⚠):** referans fiyatı (±%20 karşılaştırmasının tabanı ve 24 sa penceresi) yalnız iki kaynağın %2 içinde uyuştuğu fiyat ilerletir; tek kaynaktan kabul edilen fiyat kullanılır ve önbelleğe girer ama referansı değiştirmez. Kod: `accepted` (önbellek + bayat tolerans) ile `reference` (yalnız iki kaynak uyuşunca yazılır) ayrıldı. Testler: `no chained drift: a single source rising 19% per step is refused at the second step` (2.000 referans → 2.380 kabul → 2.832,20 reddedilir, önbellekteki 2.380 döner; iki kaynak doğrulayınca 2.832,20 kabul) ve `a single-source price does not restart the 24 h reference window`. Bozma: tek kaynağın referansı ilerletmesi (M1) ve çapanın son kabul edilen fiyat olması (M2, eski kod) — ikisinde de iki test kırıldı.
+2. **🟡 Test boşluğu — Binance `closeTime` ms birimi / 10 dk eskime:** iki test eklendi — `Binance closeTime is milliseconds: 10 min + 1 ms old is rejected, CoinGecko answers alone` ve `a Binance closeTime in seconds reads as 1970 and is rejected` (ikisi de referans kurulduktan sonra; Binance taze sayılsaydı iki kaynak uyuşur ve Binance cevap verirdi). Bozma (`assertFresh(body.closeTime, 1)` → `1000`): ikisi kırıldı.
+3. **🟡 Test boşluğu — sıfır gas:** `zero gas from eth_estimateGas is refused as a failed simulation — never a 0-fee estimate` eklendi. Bozma (kontrol kaldırıldı / `<= 0n` → `< 0n`): ikisinde de kırıldı.
+4. **🟢 Sözleşme örneği iç tutarsızlığı** (`contracts/estimate-fee/response.json`): `feeWei` (2^53 + 1) `gasLimit` × fiyat alanlarından çıkmıyordu. Değerler tutarlı seçildi: base 80 gwei, tip 1.000.000.001 wei, üst fiyat 161.000.000.001 wei → `feeWei` = 46.201 × 161.000.000.001 + 21.000 × 81.000.000.001 = **9.139.361.000.067.201** (2^53'ün üstünde ve tek — double'a sığmaz), 2.414,579991 $ ile **22,07**. Servis testine iç tutarlılık sınaması eklendi (`feeWei` = gas × üst fiyat + yakıt × beklenen fiyat, üst = 2 × base + tip); backend `EthereumFeeWeiContractTests` yeni değerlere, `WeiAmountTests`'e örneğin satırı eklendi (eski 2^53 + 1 satırı ayrı vaka olarak kaldı).
+5. **🟡 Risk notu — Binance bölge engeli (HTTP 451) + açılışta iki kaynak şartı = kalıcı fiyat yokluğu:** üretim sunucusu Binance'ın engellediği bir yerdeyse servis hiç fiyat kabul edemez (Ethereum iadesi yedeğe düşer, sweep/payout bekler). 05 §3.3a "ETH kuru", 08 §3.7.7 md. 5 ve §3.7.8 kur satırı, DEPLOY_RUNBOOK §B'ye not yazıldı; 11 T158'e kriter (e) eklendi: üretim sunucusundan Binance ve CoinGecko'ya erişim probu (451 dahil başarısızlık biçimi).
+
+**Yönetici kararları (⚠, 11 §F8 "T154 kararları"):** (ii) açılışta iki kaynak şart; (iii) Ethereum depozit iadesinde alıcıdan yakıtın tamamı + yakıt gönderim ücreti kesilir (~0,05 $; TRON açılış ücreti emsali) — F8 gate'te gösterilecek; (ix) zincirleme kayma yok (yukarıda 1). Kod yorumları (`EthPriceService.ts`, `FeeEstimationService.ts`) karar olarak güncellendi.
+
+**Main bütünleştirmesi (T149):** doğrulama sırasında T149 (ağ ücreti politikası, #345) main'e birleşti (`dc902b3`). Dal `git merge origin/main` ile bütünleştirildi (merge commit `9b2ba2a`). Çakışan beş dosya iki tarafın içeriği korunarak çözüldü: `.claude/memory/MEMORY.md` (iki giriş), 05 v3.20, 06 v6.30, 08 v3.27 (§3.7.7'de T149'un iade eşiği ve "Uygulanan kısım" satırları + T154'ün numaralı maddeleri), 11 v1.6 — sürüm iki taraftan büyüğünün bir fazlası, "Son güncelleme"de iki görev de; altbilgi sürümleri başlıkla hizalandı. Anlamca kontrol: `HttpSidecarGasFeeEstimator` T149'un TRON sweep ücret ucunu (`EstimateSweepCostAsync`, `estimate-sweep-fee`) ve T154'ün wei yeniden türetme kontrolünü birlikte taşıyor, ikisi ayrı yöntemlerde; Ethereum'da ağ ücreti satırı 0 olduğu için sweep ucu yalnız TRON'da çağrılır. Ethereum payout'unda T149 satıcıdan kesmez ama payout satırına tahmini yine yazar — o tahmin T154'ün wei tabanlı ucundan gelir (açık soru 3 cevaplandı). Snapshot `Transaction.NetworkFeeAmount`, `OutboxMessage.NextAttemptAt` ve `BlockchainTransaction.RealizedFeeWei`'yi içeriyor; migration sırası `T149_NetworkFeePolicy (093233) → T150_OutboxRetryBackoff (094011) → T154_RealizedFeeWei (120510)`, üçü ayrı tablolara dokunuyor; `dotnet ef migrations has-pending-model-changes` → "No changes". (`T154_RealizedFeeWei.Designer.cs` T149 öncesi modelden üretildi ve `NetworkFeeAmount`'u taşımıyor — T150'nin Designer'ı gibi; uygulamayı etkilemez, güncel model snapshot'tadır.)
+
+**Kapanış testleri:** sidecar-ethereum ✓ 244/244 (15 dosya) (`npm test`), `tsc --noEmit` temiz, `eslint src/` temiz, değişen dosyalar prettier temiz (`--end-of-line auto`; repo genelindeki uyarılar CRLF artifaktı); sidecar-blockchain ✓ 585/585 (`npm test`, 30 dosya); backend birim + kontrat ✓ 2093/2093 (Transactions 846, Shared 568, Platform 157, Notifications 133, API 101, Auth 92, Steam 59, Users 49, Realtime 44, Disputes 25, Fraud 19) (`--filter "FullyQualifiedName!~.Integration"`). Entegrasyon setleri (ücret tahmini, kabul/detay, migration provası, InitialMigration) yerelde Docker açılmadan CI'a bırakıldı.

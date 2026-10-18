@@ -142,16 +142,62 @@ describe('EthPriceService — one source down', () => {
     expect(q).toMatchObject({ source: 'cache', priceUsdt: '2414.579991', ageSeconds: 360 });
   });
 
-  it('an accepted price older than 24 h is no anchor — a single quote is not trusted', async () => {
+  it('a two-source price older than 24 h is no reference — a single quote is not trusted', async () => {
     const s = sources();
     await s.service.getPrice();
     s.advance(24 * 60 * 60_000 - 1);
     s.setCoingecko(down());
     s.setBinance(binanceQuote('2500.00', s.now()));
-    expect((await s.service.getPrice()).priceUsdt).toBe('2500.000000'); // anchor still valid
+    expect((await s.service.getPrice()).priceUsdt).toBe('2500.000000'); // reference still valid
     s.advance(24 * 60 * 60_000);
     s.setBinance(binanceQuote('2500.00', s.now()));
     await unavailable(s.service.getPrice());
+  });
+
+  // Manager decision (T154 validation): only a two-source agreement moves the
+  // reference. Were a single-source price to become the next base, one source
+  // could walk the price 20% per refresh — 2,000 → 16,128 in an hour.
+  it('no chained drift: a single source rising 19% per step is refused at the second step', async () => {
+    const s = sources();
+    s.setBinance(binanceQuote('2000.00', T0));
+    s.setCoingecko(coingeckoQuote(2000, T0));
+    expect((await s.service.getPrice()).priceUsdt).toBe('2000.000000'); // reference
+    s.setCoingecko(down());
+    s.advance(6 * 60_000);
+    s.setBinance(binanceQuote('2380.00', s.now())); // +19% of the reference
+    expect(await s.service.getPrice()).toMatchObject({
+      source: 'binance',
+      priceUsdt: '2380.000000',
+    });
+    s.advance(6 * 60_000);
+    s.setBinance(binanceQuote('2832.20', s.now())); // +19% of 2380, +41.6% of the reference
+    expect(await s.service.getPrice()).toMatchObject({
+      source: 'cache',
+      priceUsdt: '2380.000000',
+    });
+    // Both sources confirming the move do move it.
+    s.advance(6 * 60_000);
+    s.setCoingecko(coingeckoQuote(2830, s.now()));
+    expect(await s.service.getPrice()).toMatchObject({
+      source: 'binance',
+      priceUsdt: '2832.200000',
+    });
+  });
+
+  it('a single-source price does not restart the 24 h reference window', async () => {
+    const s = sources();
+    await s.service.getPrice(); // reference 2414.58 at T0
+    s.setCoingecko(down());
+    s.advance(23 * 60 * 60_000 + 30 * 60_000);
+    s.setBinance(binanceQuote('2500.00', s.now()));
+    expect((await s.service.getPrice()).source).toBe('binance'); // reference 23.5 h old
+    s.advance(31 * 60_000); // reference 24 h 1 min old; the single-source price 31 min old
+    s.setBinance(binanceQuote('2500.00', s.now()));
+    expect(await s.service.getPrice()).toMatchObject({
+      source: 'cache',
+      priceUsdt: '2500.000000',
+      ageSeconds: 31 * 60,
+    });
   });
 });
 
@@ -213,6 +259,30 @@ describe('EthPriceService — wrong prices', () => {
     s.setBinance(binanceQuote('2414.58', T0 - 10 * 60_000 - 1));
     s.setCoingecko(coingeckoQuote(2411.96, T0 - 11 * 60_000));
     await unavailable(s.service.getPrice());
+  });
+
+  // Binance's closeTime is milliseconds, CoinGecko's last_updated_at seconds.
+  // With a reference in place the valid CoinGecko quote answers alone; had the
+  // Binance quote been read as fresh, the two would agree and Binance would.
+  it('Binance closeTime is milliseconds: 10 min + 1 ms old is rejected, CoinGecko answers alone', async () => {
+    const s = sources();
+    await s.service.getPrice(); // reference
+    s.advance(6 * 60_000);
+    s.setBinance(binanceQuote('2414.58', s.now() - 10 * 60_000 - 1));
+    s.setCoingecko(coingeckoQuote(2411.96, s.now()));
+    expect(await s.service.getPrice()).toMatchObject({
+      source: 'coingecko',
+      priceUsdt: '2411.960000',
+    });
+  });
+
+  it('a Binance closeTime in seconds reads as 1970 and is rejected', async () => {
+    const s = sources();
+    await s.service.getPrice(); // reference
+    s.advance(6 * 60_000);
+    s.setBinance(binanceQuote('2414.58', Math.floor(s.now() / 1000)));
+    s.setCoingecko(coingeckoQuote(2411.96, s.now()));
+    expect((await s.service.getPrice()).source).toBe('coingecko');
   });
 
   it('a quote at exactly 10 minutes old is still accepted', async () => {

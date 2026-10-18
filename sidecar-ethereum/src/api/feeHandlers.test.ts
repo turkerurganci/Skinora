@@ -122,9 +122,20 @@ describe('POST /api/transfer/estimate-fee — the backend bodies (contracts/esti
     const priceMicro = parseScaled(String(r.ethPriceUsdt), 6);
     expect(priceMicro).not.toBeNull();
     const wei = BigInt(String(r.feeWei));
-    // The example's wei is 2^53 + 1 on purpose: a double cannot hold it.
+    // The example's wei is odd and above 2^53 on purpose: a double cannot hold it.
+    expect(wei > 2n ** 53n).toBe(true);
     expect(Number(r.feeWei).toString()).not.toBe(r.feeWei);
     expect(formatCents(weiToUsdtCentsCeil(wei, priceMicro!))).toBe(r.feeUsdt);
+  });
+
+  it('the example response is internally consistent: feeWei follows from its gas and per-gas prices (deposit sender)', () => {
+    const r = example('estimate-fee/response.json');
+    const n = (k: string) => BigInt(String(r[k]));
+    expect(r.sender).toBe('DEPOSIT');
+    const expected = n('baseFeePerGasWei') + n('maxPriorityFeePerGasWei');
+    expect(n('maxFeePerGasWei')).toBe(2n * n('baseFeePerGasWei') + n('maxPriorityFeePerGasWei'));
+    expect(n('fuelGasLimit')).toBe(21_000n);
+    expect(n('feeWei')).toBe(n('gasLimit') * n('maxFeePerGasWei') + n('fuelGasLimit') * expected);
   });
 
   it("transfer-status example: realizedFeeWei is this service's receipt arithmetic, as a string (T152 serves it)", () => {

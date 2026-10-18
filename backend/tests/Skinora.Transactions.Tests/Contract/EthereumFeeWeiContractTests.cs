@@ -20,8 +20,9 @@ namespace Skinora.Transactions.Tests.Contract;
 /// <list type="bullet">
 ///   <item>the estimate request bodies the backend sends for an Ethereum payout
 ///     and refund are byte-for-byte the examples the service accepts;</item>
-///   <item>the example answer — <c>feeWei</c> 2^53 + 1, a value no double
-///     holds — is charged only because <c>feeUsdt</c> follows exactly from it
+///   <item>the example answer — <c>feeWei</c> 9,139,361,000,067,201, odd and
+///     above 2^53 so no double holds it, and consistent with its own gas and
+///     per-gas prices (T154 validation) — is charged only because <c>feeUsdt</c> follows exactly from it
 ///     and <c>ethPriceUsdt</c>; one cent off either way and the fallback is
 ///     charged instead;</item>
 ///   <item>the transfer-status example's <c>realizedFeeWei</c> (also beyond
@@ -79,14 +80,14 @@ public sealed class EthereumFeeWeiContractTests
 
         var fee = await estimator.EstimateFeeUsdtAsync(Request, CancellationToken.None);
 
-        Assert.Equal(21.75m, fee);
-        // The wei figure is logged as the integer the service sent, not 9.007199254740992E+15.
-        Assert.Contains(logger.Messages, m => m.Contains("9007199254740993 wei", StringComparison.Ordinal));
+        Assert.Equal(22.07m, fee);
+        // The wei figure is logged as the integer the service sent, not 9.1393610000672E+15.
+        Assert.Contains(logger.Messages, m => m.Contains("9139361000067201 wei", StringComparison.Ordinal));
     }
 
     [Theory]
-    [InlineData("21.74")] // a cent low
-    [InlineData("21.76")] // a cent high
+    [InlineData("22.06")] // a cent low
+    [InlineData("22.08")] // a cent high
     [InlineData("0.02")]  // gwei mistaken for wei or similar unit slip
     public async Task An_Answer_Whose_FeeUsdt_Does_Not_Follow_From_Its_Wei_Is_Not_Charged(string feeUsdt)
     {
@@ -100,7 +101,7 @@ public sealed class EthereumFeeWeiContractTests
     [Theory]
     [InlineData("feeWei", null)]
     [InlineData("ethPriceUsdt", null)]
-    [InlineData("feeWei", "9.007199254740993e15")]
+    [InlineData("feeWei", "9.139361000067201e15")]
     [InlineData("ethPriceUsdt", "2414.5799910")] // 7 decimals — not the contract
     public async Task An_Ethereum_Answer_Without_A_Usable_Wei_Or_Price_Is_Not_Charged(string field, string? value)
     {
@@ -117,8 +118,8 @@ public sealed class EthereumFeeWeiContractTests
     {
         // A number may already have lost digits on the way; the contract is a string.
         var json = LoadExample("estimate-fee", "response.json").ToJsonString()
-            .Replace("\"feeWei\":\"9007199254740993\"", "\"feeWei\":9007199254740993", StringComparison.Ordinal);
-        Assert.Contains("\"feeWei\":9007199254740993", json, StringComparison.Ordinal);
+            .Replace("\"feeWei\":\"9139361000067201\"", "\"feeWei\":9139361000067201", StringComparison.Ordinal);
+        Assert.Contains("\"feeWei\":9139361000067201", json, StringComparison.Ordinal);
         var estimator = BuildEstimator((_, _) => Task.FromResult(Json(json)));
 
         Assert.Null(await estimator.EstimateFeeUsdtAsync(Request, CancellationToken.None));

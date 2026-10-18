@@ -25,7 +25,9 @@ import { SERVICE_NETWORK } from '../network.js';
  *     before sweep) the fuel wallet first sends `gas × (2 × base + tip)` ETH
  *     to the deposit (08 §3.7.5); the leftover stays there and is not
  *     collected, so the whole fuel amount is the cost, plus the fuel send's own
- *     21,000 gas at the expected price.</item>
+ *     21,000 gas at the expected price (manager decision, T154 validation ⚠ —
+ *     the buyer bears both, ~0.05 $ today, as on TRON the deposit activation
+ *     fee is deducted from the buyer's refund; shown at the F8 gate).</item>
  *   <item><b>USDT</b> — wei × live ETH/USDT price (`EthPriceService`), rounded
  *     UP to cents, all in integers.</item>
  * </list>

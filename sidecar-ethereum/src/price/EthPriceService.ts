@@ -22,12 +22,17 @@ import { USDT_SCALE, formatScaled, parseScaled } from '../fee/feeMath.js';
  *     (2%); the primary's value is used. If they disagree, neither is
  *     trusted.</item>
  *   <item><b>One valid quote</b> (the other source down) is used only if it is
- *     within `maxUncorroboratedJumpBp` (20%) of the last accepted price
- *     (younger than `anchorMaxAgeMs`, 24 h). A bigger move must be confirmed
- *     by both sources. With no recent accepted price (cold start, or the last
- *     one older than 24 h) a single quote is NOT used — nothing to check it
- *     against, so both sources must agree (the most cautious reading; T154
- *     leaves relaxing it to the manager).</item>
+ *     within `maxUncorroboratedJumpBp` (20%) of the <b>reference price</b> —
+ *     the last price both sources agreed on (younger than `anchorMaxAgeMs`,
+ *     24 h). A bigger move must be confirmed by both sources. With no recent
+ *     reference (cold start, or the last agreement older than 24 h) a single
+ *     quote is NOT used — nothing to check it against, so both sources must
+ *     agree (manager decision, T154 validation ⚠).</item>
+ *   <item><b>Only an agreement moves the reference</b> (manager decision, T154
+ *     validation ⚠). A single-source price is served and cached, but it does
+ *     not become the base of the next ±20% check and does not restart the
+ *     24 h window — otherwise one source could walk the price 20% per
+ *     refresh (2,000 → 16,128 in an hour at a 5-minute cache).</item>
  *   <item><b>Nothing trusted</b> → the last accepted price is served while it
  *     is younger than `staleGraceMs` (60 min, as on TRON); after that
  *     `ETH_PRICE_UNAVAILABLE` (retryable). The backend answers any estimate
@@ -75,6 +80,11 @@ interface Accepted {
   readonly acceptedAt: number;
 }
 
+interface Chosen extends SourceQuote {
+  /** Both sources agreed on it — only such a price moves the reference. */
+  readonly corroborated: boolean;
+}
+
 interface SourceQuote {
   readonly source: 'binance' | 'coingecko';
   readonly priceMicroUsdt: bigint;
@@ -92,7 +102,10 @@ export class EthPriceService {
   private readonly requestTimeoutMs: number;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
+  /** The last price served from a fresh quote (cache TTL and stale grace). */
   private accepted: Accepted | null = null;
+  /** The last price both sources agreed on — the single-source check's base. */
+  private reference: Accepted | null = null;
   private inflight: Promise<EthPriceQuote> | null = null;
 
   constructor(options: EthPriceServiceOptions = {}) {
@@ -132,6 +145,7 @@ export class EthPriceService {
     const chosen = this.choose(binance, coingecko, at, correlationId);
     if (chosen) {
       this.accepted = { priceMicroUsdt: chosen.priceMicroUsdt, acceptedAt: at };
+      if (chosen.corroborated) this.reference = this.accepted;
       return {
         priceMicroUsdt: chosen.priceMicroUsdt,
         priceUsdt: formatScaled(chosen.priceMicroUsdt, USDT_SCALE),
@@ -160,10 +174,10 @@ export class EthPriceService {
     coingecko: SourceQuote | null,
     at: number,
     correlationId?: string,
-  ): SourceQuote | null {
+  ): Chosen | null {
     if (binance && coingecko) {
       if (withinBp(binance.priceMicroUsdt, coingecko.priceMicroUsdt, this.maxSourceDivergenceBp)) {
-        return binance;
+        return { ...binance, corroborated: true };
       }
       logger.error(
         {
@@ -180,7 +194,9 @@ export class EthPriceService {
     const single = binance ?? coingecko;
     if (!single) return null;
     const anchor =
-      this.accepted && at - this.accepted.acceptedAt < this.anchorMaxAgeMs ? this.accepted : null;
+      this.reference && at - this.reference.acceptedAt < this.anchorMaxAgeMs
+        ? this.reference
+        : null;
     if (!anchor) {
       logger.warn(
         {
@@ -188,7 +204,7 @@ export class EthPriceService {
           quote: formatScaled(single.priceMicroUsdt, USDT_SCALE),
           correlationId,
         },
-        'ETH price: only one source answered and there is no recent accepted price to check it against — quote not trusted',
+        'ETH price: only one source answered and there is no recent two-source price to check it against — quote not trusted',
       );
       return null;
     }
@@ -197,15 +213,15 @@ export class EthPriceService {
         {
           source: single.source,
           quote: formatScaled(single.priceMicroUsdt, USDT_SCALE),
-          lastAccepted: formatScaled(anchor.priceMicroUsdt, USDT_SCALE),
+          reference: formatScaled(anchor.priceMicroUsdt, USDT_SCALE),
           maxJumpBp: Number(this.maxUncorroboratedJumpBp),
           correlationId,
         },
-        'ETH price moved beyond the uncorroborated limit and the other source is unavailable — quote not trusted',
+        'ETH price moved beyond the uncorroborated limit from the last two-source price and the other source is unavailable — quote not trusted',
       );
       return null;
     }
-    return single;
+    return { ...single, corroborated: false };
   }
 
   private fromAccepted(accepted: Accepted, at: number): EthPriceQuote {

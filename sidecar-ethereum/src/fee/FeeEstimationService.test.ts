@@ -223,6 +223,14 @@ describe('EthFeeEstimationService — failures', () => {
     );
   });
 
+  it('zero gas from eth_estimateGas is refused as a failed simulation — never a 0-fee estimate', async () => {
+    await failsWith(
+      service(rpc({ gas: 0n })).estimate({ toAddress: BUYER, amount: '1', token: 'USDT' }),
+      'FEE_ESTIMATE_SIMULATION_FAILED',
+      true,
+    );
+  });
+
   it('both providers down propagates as RPC_ALL_PROVIDERS_FAILED (retryable)', async () => {
     const r = rpc({ history: new AllProvidersFailedError('eth_feeHistory', []) });
     await failsWith(
