@@ -950,17 +950,19 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
         public decimal RefundFee { get; set; } = 2m;
         public decimal PayoutFee { get; set; } = 0.50m;
         public GasFeeSource Source { get; set; } = GasFeeSource.RuntimeEstimate;
+        public List<BlockchainNetwork> Networks { get; } = [];
         public List<(string To, decimal Amount, StablecoinType Token)> PayoutCalls { get; } = [];
 
         public Task<ResolvedGasFee> ResolveRefundFeeAsync(
-            string? fromDepositAddress, string toAddress, decimal amount,
+            BlockchainNetwork network, string? fromDepositAddress, string toAddress, decimal amount,
             StablecoinType token, CancellationToken cancellationToken) =>
             Task.FromResult(new ResolvedGasFee(RefundFee, Source));
 
         public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
-            string toAddress, decimal amount, StablecoinType token,
+            BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
             CancellationToken cancellationToken)
         {
+            Networks.Add(network);
             PayoutCalls.Add((toAddress, amount, token));
             return Task.FromResult(new ResolvedGasFee(PayoutFee, Source));
         }

@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Events;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 
 #pragma warning disable IDE0005 // MediatR is added explicitly to keep the
@@ -25,14 +26,14 @@ namespace Skinora.Transactions.Application.PostCancel;
 public sealed class PostCancelMonitorStartDispatcher
     : INotificationHandler<PostCancelMonitorStartRequestedEvent>
 {
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<PostCancelMonitorStartDispatcher> _logger;
 
     public PostCancelMonitorStartDispatcher(
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         ILogger<PostCancelMonitorStartDispatcher> logger)
     {
-        _sidecar = sidecar;
+        _services = services;
         _logger = logger;
     }
 
@@ -40,6 +41,21 @@ public sealed class PostCancelMonitorStartDispatcher
         PostCancelMonitorStartRequestedEvent notification,
         CancellationToken cancellationToken)
     {
+        // T148 düzeltme turu 1 (F1) — a network with no service configured
+        // cannot answer, and a configuration change needs a restart. Throwing
+        // here would leave the outbox row FAILED and re-read at the head of the
+        // oldest-first outbox batch on every poll, for good — enough of them
+        // would stall every other event. Log and stop instead: the address is
+        // already in a POST_CANCEL_* status, so PostCancelMonitorRecoveryHook
+        // registers it on the restart that configures the service.
+        if (!_services.IsConfigured(notification.Network))
+        {
+            _logger.LogError(
+                "Post-cancel monitor start not sent: {Network} has no blockchain service configured — address={Address} transactionId={TransactionId}; the startup recovery hook registers it once the service is configured.",
+                notification.Network, notification.Address, notification.TransactionId);
+            return;
+        }
+
         // T139 — hand the address over, do not double-register it. Until T139
         // nothing ever armed the active monitor, so there was nothing to stop.
         // Now the cancel path must drop the 3-second monitor before the
@@ -56,7 +72,10 @@ public sealed class PostCancelMonitorStartDispatcher
         // skipped for it. Transport failures are covered anyway — the same
         // sidecar is about to be asked to start post-cancel monitoring, and
         // that call throws, so the outbox retries the pair together.
-        var stopStatus = await _sidecar.StopMonitoringAsync(
+        // T148 — both halves of the handover go to the address's own
+        // network's service (05 §3.3a).
+        var sidecar = _services.Sidecar(notification.Network);
+        var stopStatus = await sidecar.StopMonitoringAsync(
             notification.Address, cancellationToken);
         if (stopStatus != BlockchainSidecarStatus.Success)
         {
@@ -74,7 +93,7 @@ public sealed class PostCancelMonitorStartDispatcher
             ExpectedSymbol: notification.ExpectedToken.ToString(),
             CancelledAt: notification.CancelledAt);
 
-        var status = await _sidecar.StartPostCancelMonitoringAsync(request, cancellationToken);
+        var status = await sidecar.StartPostCancelMonitoringAsync(request, cancellationToken);
         switch (status)
         {
             case BlockchainSidecarStatus.Success:

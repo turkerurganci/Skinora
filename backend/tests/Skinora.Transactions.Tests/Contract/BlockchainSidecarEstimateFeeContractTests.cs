@@ -1,3 +1,5 @@
+using Skinora.Transactions.Tests.Helpers;
+using Skinora.Transactions.Application.Networks;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
@@ -53,6 +55,7 @@ public sealed class BlockchainSidecarEstimateFeeContractTests
         var (resolver, sent) = BuildResolver();
 
         await resolver.ResolvePayoutFeeAsync(
+            Network(expected),
             Text(expected, "toAddress"),
             Amount(expected),
             Token(expected),
@@ -68,6 +71,7 @@ public sealed class BlockchainSidecarEstimateFeeContractTests
         var (resolver, sent) = BuildResolver();
 
         await resolver.ResolveRefundFeeAsync(
+            Network(expected),
             Text(expected, "fromAddress"),
             Text(expected, "toAddress"),
             Amount(expected),
@@ -101,11 +105,14 @@ public sealed class BlockchainSidecarEstimateFeeContractTests
 
         const string baseUrl = "http://blockchain-sidecar.test/";
         var estimator = new HttpSidecarGasFeeEstimator(
+            BlockchainNetwork.TRON,
             new HttpClient(handler) { BaseAddress = new Uri(baseUrl) },
-            Options.Create(new BlockchainSidecarOptions { BaseUrl = baseUrl }),
+            new BlockchainSidecarOptions { BaseUrl = baseUrl },
             NullLogger<HttpSidecarGasFeeEstimator>.Instance);
         var resolver = new ChargedGasFeeResolver(
-            estimator, new StubSettings(), NullLogger<ChargedGasFeeResolver>.Instance);
+            FakeBlockchainServiceRegistry.ForTron(gasFee: estimator),
+            new StubSettings(),
+            NullLogger<ChargedGasFeeResolver>.Instance);
         return (resolver, sent);
     }
 
@@ -144,16 +151,16 @@ public sealed class BlockchainSidecarEstimateFeeContractTests
             + "(looked for docker-compose.yml).");
     }
 
-    private sealed class StubSettings : IGasFeeSettingsProvider
+    private sealed class StubSettings : IBlockchainNetworkSettingsProvider
     {
-        public Task<GasFeeSettings> GetAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(new GasFeeSettings(
-                ProtectionRatio: 0.10m,
-                MinRefundThresholdRatio: 2m,
-                RefundGasFeeEstimateUsdt: 2m,
-                PayoutGasFeeEstimateUsdt: 0.50m,
-                MaxChargedGasFeeUsdt: 10m));
+        public Task<BlockchainNetworkSettings> GetAsync(
+            BlockchainNetwork network, CancellationToken cancellationToken) =>
+            Task.FromResult(BlockchainNetworkSettingsProvider.DefaultsFor(network));
     }
+
+    // T148 — the example body names its network; the request is priced on it.
+    private static BlockchainNetwork Network(JsonNode body) =>
+        Enum.Parse<BlockchainNetwork>(Text(body, "network"));
 
     private sealed class RecordingHandler : HttpMessageHandler
     {

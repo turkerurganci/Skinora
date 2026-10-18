@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.PaymentAddresses;
@@ -193,19 +193,19 @@ public sealed class EnsurePaymentMonitorJob
         [.. ArmedStates, .. WindowClosedStates];
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainSidecarClient _sidecar;
-    private readonly StablecoinContractOptions _contracts;
+    private readonly IBlockchainServiceRegistry _services;
+    private readonly IStablecoinContractRegistry _contracts;
     private readonly ILogger<EnsurePaymentMonitorJob> _logger;
 
     public EnsurePaymentMonitorJob(
         AppDbContext db,
-        IBlockchainSidecarClient sidecar,
-        IOptions<StablecoinContractOptions> contracts,
+        IBlockchainServiceRegistry services,
+        IStablecoinContractRegistry contracts,
         ILogger<EnsurePaymentMonitorJob> logger)
     {
         _db = db;
-        _sidecar = sidecar;
-        _contracts = contracts.Value;
+        _services = services;
+        _contracts = contracts;
         _logger = logger;
     }
 
@@ -250,7 +250,7 @@ public sealed class EnsurePaymentMonitorJob
         var ceilingHit = false;
         // Addresses this run actually armed, kept so the handover check below
         // can undo an arm that raced a cancel (T139 düzeltme turu — N2).
-        var armedAddresses = new List<(Guid Id, string Address)>();
+        var armedAddresses = new List<(Guid Id, string Address, BlockchainNetwork Network)>();
 
         // Offset paging: the ordering is stable within a run because the disarm
         // stamps are not saved until the loop ends. A row a concurrent writer
@@ -306,11 +306,15 @@ public sealed class EnsurePaymentMonitorJob
                 var action = Classify(candidate.Status, candidate.DepositSwept);
                 if (action == PaymentMonitorAction.Idle) continue;
 
+                // T148 — each address is armed / disarmed on its own network's
+                // service, with that network's token contract (05 §3.3a).
+                var network = candidate.Address.Network;
+
                 if (action == PaymentMonitorAction.Arm)
                 {
                     var contract = _contracts.ResolveContractAddress(
-                        candidate.Address.ExpectedToken);
-                    var startStatus = await _sidecar.StartMonitoringAsync(
+                        network, candidate.Address.ExpectedToken);
+                    var startStatus = await _services.Sidecar(network).StartMonitoringAsync(
                         new PaymentMonitorStartRequest(
                             Address: candidate.Address.Address,
                             PaymentAddressId: candidate.Address.Id,
@@ -323,7 +327,7 @@ public sealed class EnsurePaymentMonitorJob
                     if (startStatus == BlockchainSidecarStatus.Success)
                     {
                         armed++;
-                        armedAddresses.Add((candidate.Address.Id, candidate.Address.Address));
+                        armedAddresses.Add((candidate.Address.Id, candidate.Address.Address, network));
                     }
                     else
                     {
@@ -336,7 +340,7 @@ public sealed class EnsurePaymentMonitorJob
                     continue;
                 }
 
-                var stopStatus = await _sidecar.StopMonitoringAsync(
+                var stopStatus = await _services.Sidecar(network).StopMonitoringAsync(
                     candidate.Address.Address, cancellationToken);
 
                 if (stopStatus == BlockchainSidecarStatus.Success)
@@ -419,7 +423,7 @@ public sealed class EnsurePaymentMonitorJob
         // One extra query per run undoes it.
         if (armedAddresses.Count > 0)
         {
-            var armedById = armedAddresses.ToDictionary(a => a.Id, a => a.Address);
+            var armedById = armedAddresses.ToDictionary(a => a.Id, a => (a.Address, a.Network));
 
             // Chunked because a run may now arm the whole set rather than one
             // page of it, and an IN list is not something to hand an arbitrary
@@ -438,8 +442,8 @@ public sealed class EnsurePaymentMonitorJob
 
             foreach (var id in handedOver)
             {
-                var address = armedById[id];
-                var undoStatus = await _sidecar.StopMonitoringAsync(address, cancellationToken);
+                var (address, network) = armedById[id];
+                var undoStatus = await _services.Sidecar(network).StopMonitoringAsync(address, cancellationToken);
 
                 armed--;
                 _logger.LogWarning(

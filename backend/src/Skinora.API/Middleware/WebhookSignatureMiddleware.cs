@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Webhooks;
@@ -37,6 +38,18 @@ namespace Skinora.API.Middleware;
 /// Any failure responds 401 with an <c>ApiResponse</c>; downstream controller
 /// is not reached. On success the request body is rewound so the controller
 /// can deserialize it normally.
+///
+/// <para>
+/// <b>One secret per network (T148 — 05 §3.3a "Kimlik doğrulama").</b> The
+/// blockchain path accepts a signature made with any configured network's
+/// secret (TRON: <see cref="WebhookSettings.BlockchainSharedSecret"/>,
+/// Ethereum: <see cref="WebhookSettings.EthereumSharedSecret"/>); the secret
+/// that verified decides which network the caller IS, and that network is
+/// handed to the controller in <see cref="AuthenticatedNetworkItemKey"/>. The
+/// controller rejects a body that claims another network, so a service whose
+/// secret leaks can only ever speak for its own network. Each network keeps
+/// its own nonce namespace.
+/// </para>
 /// </summary>
 public sealed class WebhookSignatureMiddleware
 {
@@ -47,8 +60,17 @@ public sealed class WebhookSignatureMiddleware
 
     // Source discriminator persisted with each accepted nonce. Distinct value
     // per sidecar prevents nonce collisions if blockchain/notification sidecars
-    // share the table (see ProcessedNonce.Source).
+    // share the table (see ProcessedNonce.Source). TRON keeps the pre-F8 value.
     public const string BlockchainNonceSource = "blockchain-sidecar";
+
+    /// <summary>Nonce namespace of the Ethereum service (T148).</summary>
+    public const string EthereumBlockchainNonceSource = "blockchain-sidecar-ethereum";
+
+    /// <summary>
+    /// <see cref="HttpContext.Items"/> key under which a verified blockchain
+    /// webhook carries the <see cref="BlockchainNetwork"/> whose secret signed it.
+    /// </summary>
+    public const string AuthenticatedNetworkItemKey = "Skinora.Webhook.AuthenticatedNetwork";
 
     /// <summary>
     /// Per-prefix routing for the sidecar webhook bus. Adding a new sidecar
@@ -56,9 +78,9 @@ public sealed class WebhookSignatureMiddleware
     /// pipeline itself is shape-agnostic. Ordering matters only when one
     /// prefix is a proper prefix of another; for now they are disjoint.
     /// </summary>
-    private static readonly (string PathPrefix, string SecretSelector, string NonceSource)[] WebhookRoutes =
+    private static readonly (string PathPrefix, string SecretSelector)[] WebhookRoutes =
     {
-        (BlockchainWebhookPathPrefix, "blockchain", BlockchainNonceSource),
+        (BlockchainWebhookPathPrefix, "blockchain"),
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -87,12 +109,12 @@ public sealed class WebhookSignatureMiddleware
         }
 
         var settings = options.Value;
-        var sharedSecret = SelectSecret(route.Value.SecretSelector, settings);
-        if (string.IsNullOrWhiteSpace(sharedSecret))
+        var credentials = SelectCredentials(route.Value.SecretSelector, settings);
+        if (credentials.Count == 0)
         {
             logger.LogError(
-                "{Source} webhook secret is not configured — refusing inbound callback.",
-                route.Value.NonceSource);
+                "{Selector} webhook secret is not configured — refusing inbound callback.",
+                route.Value.SecretSelector);
             await WriteUnauthorizedAsync(context, "WEBHOOK_UNAUTHORIZED", "Webhook secret is not configured.");
             return;
         }
@@ -147,8 +169,20 @@ public sealed class WebhookSignatureMiddleware
         }
         context.Request.Body.Position = 0;
 
-        var expected = ComputeSignature(sharedSecret, timestamp, nonce, body);
-        if (!FixedTimeEquals(expected, signature))
+        // The secret that verifies names the caller (T148). Every configured
+        // secret is tried, in constant time each, so the answer does not leak
+        // which one came close.
+        WebhookCredential? matched = null;
+        foreach (var credential in credentials)
+        {
+            var expected = ComputeSignature(credential.Secret, timestamp, nonce, body);
+            if (FixedTimeEquals(expected, signature) && matched is null)
+            {
+                matched = credential;
+            }
+        }
+
+        if (matched is null)
         {
             logger.LogWarning("Webhook rejected: signature mismatch.");
             await WriteUnauthorizedAsync(context, "WEBHOOK_SIGNATURE_INVALID", "Signature did not match.");
@@ -164,7 +198,7 @@ public sealed class WebhookSignatureMiddleware
             db.ProcessedNonces.Add(new ProcessedNonce
             {
                 Id = Guid.NewGuid(),
-                Source = route.Value.NonceSource,
+                Source = matched.NonceSource,
                 Nonce = nonce!,
                 ProcessedAt = DateTime.UtcNow,
                 ExpiresAt = expiresAt,
@@ -178,10 +212,15 @@ public sealed class WebhookSignatureMiddleware
             return;
         }
 
+        if (matched.Network is { } network)
+        {
+            context.Items[AuthenticatedNetworkItemKey] = network;
+        }
+
         await _next(context);
     }
 
-    private static (string PathPrefix, string SecretSelector, string NonceSource)? ResolveRoute(PathString path)
+    private static (string PathPrefix, string SecretSelector)? ResolveRoute(PathString path)
     {
         foreach (var route in WebhookRoutes)
         {
@@ -193,11 +232,36 @@ public sealed class WebhookSignatureMiddleware
         return null;
     }
 
-    private static string SelectSecret(string selector, WebhookSettings settings) => selector switch
+    /// <summary>
+    /// The secrets a route accepts, each with the identity it proves. Blank
+    /// secrets are skipped — an unconfigured network cannot be impersonated
+    /// with an empty key.
+    /// </summary>
+    private static IReadOnlyList<WebhookCredential> SelectCredentials(string selector, WebhookSettings settings)
     {
-        "blockchain" => settings.BlockchainSharedSecret,
-        _ => string.Empty,
-    };
+        var candidates = selector switch
+        {
+            "blockchain" => new[]
+            {
+                new WebhookCredential(settings.BlockchainSharedSecret, BlockchainNonceSource, BlockchainNetwork.TRON),
+                new WebhookCredential(settings.EthereumSharedSecret, EthereumBlockchainNonceSource, BlockchainNetwork.ETHEREUM),
+            },
+            _ => Array.Empty<WebhookCredential>(),
+        };
+
+        // A secret shared by two networks would let either service speak for
+        // the other — exactly what per-network secrets exist to prevent. The
+        // host refuses to start with one (WebhookSettings.AddWebhookSettings,
+        // T148 düzeltme turu 1 — F3); this is the second layer for a settings
+        // instance that skipped that validation: the first (TRON) keeps it,
+        // the duplicate cannot authenticate anything.
+        return candidates
+            .Where(c => !string.IsNullOrWhiteSpace(c.Secret))
+            .DistinctBy(c => c.Secret, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private sealed record WebhookCredential(string Secret, string NonceSource, BlockchainNetwork? Network);
 
     private static string ComputeSignature(string secret, string timestamp, string nonce, string body)
     {

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.PaymentAddresses;
@@ -37,27 +38,43 @@ public sealed class EnsurePaymentAddressJob
 
     private readonly AppDbContext _db;
     private readonly IPaymentAddressAllocator _allocator;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<EnsurePaymentAddressJob> _logger;
 
     public EnsurePaymentAddressJob(
         AppDbContext db,
         IPaymentAddressAllocator allocator,
+        IBlockchainServiceRegistry services,
         ILogger<EnsurePaymentAddressJob> logger)
     {
         _db = db;
         _allocator = allocator;
+        _services = services;
         _logger = logger;
     }
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        // T148 düzeltme turu 1 (F1) — only transactions on a network whose
+        // service is configured are candidates. Derivation on an unconfigured
+        // network fails closed every time and leaves the transaction without an
+        // address, so selecting it would keep it at the head of the
+        // oldest-first batch forever: BatchSize of them would starve every
+        // other network's allocations. T147 — only an accepted transaction
+        // with a chosen network is a candidate: the allocator never invents a
+        // default network (11 §F8 T147 kararı xiii), and every accepted row
+        // carries one (CK_Transactions_Network_Accepted).
+        var configured = _services.ConfiguredNetworks.ToList();
+        if (configured.Count == 0) return;
+
         var pending = await _db.Set<Transaction>()
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(t => !t.IsDeleted
                 && EligibleStates.Contains(t.Status)
+                && t.PaymentAddress == null
                 && t.Network != null
-                && t.PaymentAddress == null)
+                && configured.Contains(t.Network.Value))
             .OrderBy(t => t.CreatedAt)
             .Take(BatchSize)
             .Select(t => t.Id)

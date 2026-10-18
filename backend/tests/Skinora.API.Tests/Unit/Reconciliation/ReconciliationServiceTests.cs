@@ -53,7 +53,7 @@ public sealed class ReconciliationServiceTests : IDisposable
 
         _sut = new ReconciliationService(
             _db,
-            _sidecar,
+            FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar),
             _publisher,
             _walletAddresses,
             _clock,

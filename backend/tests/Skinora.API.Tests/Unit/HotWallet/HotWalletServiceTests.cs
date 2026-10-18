@@ -65,7 +65,7 @@ public sealed class HotWalletServiceTests : IDisposable
         // 2026-09-16), so the fixture sets a provider instead of SystemSetting rows.
         _sut = new HotWalletService(
             _db,
-            _sidecar,
+            FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar),
             _walletAddresses,
             _clock,
             NullLogger<HotWalletService>.Instance);

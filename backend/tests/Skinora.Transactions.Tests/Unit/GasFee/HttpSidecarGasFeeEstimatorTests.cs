@@ -253,16 +253,17 @@ public class HttpSidecarGasFeeEstimatorTests
     private static HttpSidecarGasFeeEstimator BuildEstimator(
         HttpMessageHandler handler,
         string internalKey = "",
-        ILogger<HttpSidecarGasFeeEstimator>? logger = null)
+        ILogger<HttpSidecarGasFeeEstimator>? logger = null,
+        BlockchainNetwork network = BlockchainNetwork.TRON)
     {
         var http = new HttpClient(handler) { BaseAddress = new Uri(SidecarBaseUrl) };
-        var options = Options.Create(new BlockchainSidecarOptions
+        var options = new BlockchainSidecarOptions
         {
             BaseUrl = SidecarBaseUrl,
             InternalKey = internalKey,
-        });
+        };
         return new HttpSidecarGasFeeEstimator(
-            http, options, logger ?? NullLogger<HttpSidecarGasFeeEstimator>.Instance);
+            network, http, options, logger ?? NullLogger<HttpSidecarGasFeeEstimator>.Instance);
     }
 
     private sealed class ListLogger<T> : ILogger<T>

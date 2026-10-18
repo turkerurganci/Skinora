@@ -1,7 +1,9 @@
+import { SERVICE_NETWORK, type BlockchainNetworkName } from '../network.js';
+
 /**
  * Webhook envelopes sent from the blockchain sidecar to the .NET backend
- * (05 §3.3, 08 §3.4). Each payload carries `event`, `timestamp`, and a
- * `data` block whose shape is event-specific. The outer signature
+ * (05 §3.3, 08 §3.4). Each payload carries `event`, `network`, `timestamp`,
+ * and a `data` block whose shape is event-specific. The outer signature
  * (X-Signature / X-Timestamp / X-Nonce) is added by `WebhookClient` at
  * send time and verified by `WebhookSignatureMiddleware` on the backend
  * (05 §3.4, 09 §11.3).
@@ -31,8 +33,34 @@ export type BlockchainWebhookEvent =
 
 export interface BlockchainWebhookEnvelope<TData> {
   event: BlockchainWebhookEvent;
+  /**
+   * The network this service watches (T148 — 05 §3.3a "Webhook yükü"). The
+   * backend rejects a callback whose network is missing, differs from the
+   * network whose secret signed it, or differs from the referenced deposit's
+   * `PaymentAddress.Network`.
+   */
+  network: BlockchainNetworkName;
   timestamp: string;
   data: TData;
+}
+
+/**
+ * The one place an envelope is built (both registries call it), so the wire
+ * shape — including `network` — is pinned by a single test against
+ * `contracts/webhook/*.json`, the same files the backend's contract test
+ * deserializes.
+ */
+export function buildWebhookEnvelope<TData>(
+  event: BlockchainWebhookEvent,
+  data: TData,
+  now: Date,
+): BlockchainWebhookEnvelope<TData> {
+  return {
+    event,
+    network: SERVICE_NETWORK,
+    timestamp: now.toISOString(),
+    data,
+  };
 }
 
 /**

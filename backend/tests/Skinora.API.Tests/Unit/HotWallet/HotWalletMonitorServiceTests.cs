@@ -48,7 +48,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
 
         _sut = new HotWalletMonitorService(
             _db,
-            _sidecar,
+            FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar),
             _publisher,
             _walletAddresses,
             _clock,

@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Skinora.API.Middleware;
 
 /// <summary>
@@ -27,6 +30,15 @@ public sealed class WebhookSettings
     public string BlockchainSharedSecret { get; set; } = string.Empty;
 
     /// <summary>
+    /// HMAC-SHA256 shared secret of the Ethereum service (T148 — 05 §3.3a
+    /// "Kimlik doğrulama": every network's service has its own webhook secret,
+    /// so one service's leaked secret cannot forge the other's callbacks).
+    /// <see cref="BlockchainSharedSecret"/> is TRON's. Blank = no Ethereum
+    /// service yet: no callback can authenticate as Ethereum.
+    /// </summary>
+    public string EthereumSharedSecret { get; set; } = string.Empty;
+
+    /// <summary>
     /// Maximum allowed clock skew between sidecar and backend (05 §3.4).
     /// Default ±5 minutes per 09 §11.3.
     /// </summary>
@@ -39,4 +51,35 @@ public sealed class WebhookSettings
     /// the replay window. Default 1 hour.
     /// </summary>
     public int NonceRetentionSeconds { get; set; } = 3600;
+
+    /// <summary>
+    /// Binds the section and refuses to start the host when two networks share
+    /// one webhook secret (T148 düzeltme turu 1 — F3). A shared secret would
+    /// let either service speak for the other, which is exactly what
+    /// per-network secrets exist to prevent; silently keeping only TRON's (the
+    /// pre-fix behaviour) left every Ethereum callback failing with 401 and
+    /// nothing at startup saying why. Blank secrets are not compared — an
+    /// unconfigured network has none.
+    /// </summary>
+    public static IServiceCollection AddWebhookSettings(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<WebhookSettings>()
+            .Bind(configuration.GetSection(SectionName))
+            .Validate(s => !NetworksShareASecret(s), SharedSecretConflictMessage)
+            .ValidateOnStart();
+        return services;
+    }
+
+    /// <summary>The startup error when two networks share one webhook secret.</summary>
+    public const string SharedSecretConflictMessage =
+        "Webhook:BlockchainSharedSecret (TRON) and Webhook:EthereumSharedSecret (ETHEREUM) are the same value. "
+        + "Every network's service needs its own webhook secret (05 §3.3a, DEPLOY_RUNBOOK §B) — "
+        + "set a different EthereumSharedSecret, or leave it empty until the Ethereum service exists.";
+
+    /// <summary>True when TRON's and Ethereum's secrets are the same non-blank value.</summary>
+    public static bool NetworksShareASecret(WebhookSettings settings) =>
+        !string.IsNullOrWhiteSpace(settings.BlockchainSharedSecret)
+        && string.Equals(settings.BlockchainSharedSecret, settings.EthereumSharedSecret, StringComparison.Ordinal);
 }

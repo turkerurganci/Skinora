@@ -12,6 +12,7 @@ using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 
 namespace Skinora.API.Services.HotWallet;
@@ -44,8 +45,19 @@ public sealed record HotWalletMonitorOutcome(
     int BreachCount,
     long? BlockNumber);
 
+/// <remarks>
+/// T148 — this monitor watches TRON's hot wallet (<see cref="MonitoredNetwork"/>):
+/// its service answers the balance, its hot address is the subject and its gas
+/// asset (TRX, in SUN — <see cref="BlockchainNetworkPolicy"/>) is the floor
+/// checked. Ethereum's hot and fuel wallet ETH floors are their own settings
+/// (<c>blockchain.ethereum.*_eth_balance_minimum</c>); the alarm that reads them
+/// arrives with the Ethereum service (T153, T158).
+/// </remarks>
 public sealed class HotWalletMonitorService : IHotWalletMonitorService
 {
+    /// <summary>The network whose hot wallet this monitor watches.</summary>
+    public const BlockchainNetwork MonitoredNetwork = BlockchainNetwork.TRON;
+
     public const string HotWalletLimitKey = "hot_wallet_limit";
     public const string TrxBalanceMinimumKey = "hot_wallet.trx_balance_minimum";
 
@@ -54,7 +66,8 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
 
     public const string TokenTrx = "TRX";
     private const int StablecoinDecimals = 6;
-    private const int TrxDecimals = 6;
+    // SUN → TRX: the network policy's gas-asset scale (T148), not a literal.
+    private static readonly int TrxDecimals = BlockchainNetworkPolicy.For(MonitoredNetwork).NativeAssetDecimals;
     private static readonly decimal StablecoinScale = (decimal)Math.Pow(10, StablecoinDecimals);
     private static readonly decimal TrxScale = (decimal)Math.Pow(10, TrxDecimals);
 
@@ -65,7 +78,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
     ];
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly INotificationRealtimePublisher _realtime;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
@@ -73,14 +86,14 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
 
     public HotWalletMonitorService(
         AppDbContext db,
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         INotificationRealtimePublisher realtime,
         IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<HotWalletMonitorService> logger)
     {
         _db = db;
-        _sidecar = sidecar;
+        _services = services;
         _realtime = realtime;
         _walletAddresses = walletAddresses;
         _clock = clock;
@@ -98,7 +111,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
             return new HotWalletMonitorOutcome(false, 0, null);
         }
 
-        var snapshot = await _sidecar.GetWalletBalancesAsync(
+        var snapshot = await _services.Sidecar(MonitoredNetwork).GetWalletBalancesAsync(
             new[] { settings.HotWalletAddress }, cancellationToken);
         if (snapshot.Status != BlockchainSidecarStatus.Success || snapshot.Balances is null)
         {
@@ -234,7 +247,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
 
         // The address is configuration, the two thresholds stay admin-tunable
         // (05 §3.3, owner decision 2026-09-16).
-        var hotWalletAddress = _walletAddresses.HotWalletAddress;
+        var hotWalletAddress = _walletAddresses.For(MonitoredNetwork).HotWalletAddress;
         decimal? hotWalletLimit = null;
         decimal? trxMinimum = null;
         foreach (var row in rows)

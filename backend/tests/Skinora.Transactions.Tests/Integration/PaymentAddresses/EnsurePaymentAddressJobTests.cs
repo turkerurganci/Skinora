@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
@@ -161,15 +162,72 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
         Assert.Equal(EnsurePaymentAddressJob.BatchSize, _sidecar.Calls.Count);
     }
 
-    private EnsurePaymentAddressJob BuildJob()
+    // T148 düzeltme turu 1 (F1) — derivation on a network without a service
+    // fails closed every run and the transaction stays address-less. Picked
+    // oldest-first it would hold the whole batch forever; the TRON transaction
+    // behind BatchSize (and more) of them must get its address on the first run.
+    [Theory]
+    [InlineData(EnsurePaymentAddressJob.BatchSize)]
+    [InlineData(EnsurePaymentAddressJob.BatchSize + 5)]
+    public async Task Transactions_On_An_Unconfigured_Network_Do_Not_Starve_Tron(int parked)
     {
-        var allocator = new PaymentAddressAllocator(
-            Context, _sidecar, NullLogger<PaymentAddressAllocator>.Instance);
-        return new EnsurePaymentAddressJob(
-            Context, allocator, NullLogger<EnsurePaymentAddressJob>.Instance);
+        // CreatedAt is stamped by AppDbContext on each save, so seeding one by
+        // one makes the Ethereum transactions strictly the oldest.
+        for (var i = 0; i < parked; i++)
+        {
+            await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.ETHEREUM);
+        }
+
+        // Newest of all: one TRON transaction, and one accepted row without a
+        // network — T147 (11 §F8 kararı xiii): no default network is invented
+        // for it, so it is not a candidate either.
+        var tron = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.TRON);
+        var networkless = await SeedTransactionAsync(TransactionStatus.ACCEPTED, withoutNetwork: true);
+
+        var registry = FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar);
+        await BuildJob(registry).ExecuteAsync();
+
+        var call = Assert.Single(_sidecar.Calls);
+        Assert.Equal(tron.Id, call.TransactionId);
+        Assert.DoesNotContain(registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        await using var verify = CreateContext();
+        Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == tron.Id));
+        Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == networkless.Id));
+        Assert.Equal(1, await verify.Set<PaymentAddress>().CountAsync());
     }
 
-    private async Task<Transaction> SeedTransactionAsync(TransactionStatus status)
+    [Fact]
+    public async Task Only_Transactions_On_A_Configured_Network_Are_Candidates()
+    {
+        // With only Ethereum configured, the TRON transaction waits and the
+        // Ethereum one is derived on Ethereum's service.
+        var tron = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.TRON);
+        var eth = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.ETHEREUM);
+
+        var registry = new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, sidecar: _sidecar);
+        await BuildJob(registry).ExecuteAsync();
+
+        var call = Assert.Single(_sidecar.Calls);
+        Assert.Equal(eth.Id, call.TransactionId);
+        Assert.DoesNotContain(registry.Requests, r => r.Network == BlockchainNetwork.TRON);
+        await using var verify = CreateContext();
+        Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == eth.Id));
+        Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == tron.Id));
+    }
+
+    private EnsurePaymentAddressJob BuildJob(FakeBlockchainServiceRegistry? registry = null)
+    {
+        registry ??= FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar);
+        var allocator = new PaymentAddressAllocator(
+            Context, registry, NullLogger<PaymentAddressAllocator>.Instance);
+        return new EnsurePaymentAddressJob(
+            Context, allocator, registry, NullLogger<EnsurePaymentAddressJob>.Instance);
+    }
+
+    private async Task<Transaction> SeedTransactionAsync(
+        TransactionStatus status,
+        BlockchainNetwork? network = null,
+        bool withoutNetwork = false)
     {
         var nowUtc = DateTime.UtcNow;
         var tx = new Transaction
@@ -190,9 +248,9 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
             TotalAmount = 100.00m,
             SellerPayoutAddress = SellerWallet,
             // T147 — the network is chosen at acceptance; a listing has none.
-            Network = status is TransactionStatus.CREATED or TransactionStatus.FLAGGED
+            Network = withoutNetwork || status is TransactionStatus.CREATED or TransactionStatus.FLAGGED
                 ? null
-                : BlockchainNetwork.TRON,
+                : network ?? BlockchainNetwork.TRON,
             PaymentTimeoutMinutes = 24 * 60,
             AcceptDeadline = status == TransactionStatus.CREATED ? nowUtc.AddHours(1) : null,
         };

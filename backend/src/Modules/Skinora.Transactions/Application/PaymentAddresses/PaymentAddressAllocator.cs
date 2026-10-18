@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Transactions.Infrastructure.Persistence;
 
@@ -38,16 +39,16 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
     ];
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<PaymentAddressAllocator> _logger;
 
     public PaymentAddressAllocator(
         AppDbContext db,
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         ILogger<PaymentAddressAllocator> logger)
     {
         _db = db;
-        _sidecar = sidecar;
+        _services = services;
         _logger = logger;
     }
 
@@ -126,7 +127,8 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
                 .MaxAsync(p => (int?)p.HdWalletIndex, cancellationToken);
             var nextIndex = (maxIndex ?? -1) + 1;
 
-            var deriveResult = await _sidecar.DeriveAddressAsync(
+            // T148 — derive on the network's own service (its own seed, K7).
+            var deriveResult = await _services.Sidecar(network).DeriveAddressAsync(
                 nextIndex, transactionId, cancellationToken);
 
             switch (deriveResult.Status)

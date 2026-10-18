@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Skinora.Shared.Blockchain;
+using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.PaymentAddresses;
 
 namespace Skinora.Transactions.Application.GasFee;
@@ -18,32 +19,47 @@ namespace Skinora.Transactions.Application.GasFee;
 /// down. Auth mirrors <see cref="Transfers.HttpBlockchainTransferClient"/>
 /// (<c>X-Internal-Key</c>, 05 §3.4).
 /// </summary>
+/// <remarks>
+/// One instance per network (T148 — 05 §3.3a), built by
+/// <c>BlockchainServiceRegistry</c>; the body names the network. The
+/// breakdown fields of the answer (Energy, SUN burned, TRX price) are TRON's
+/// and are only logged for a network that reports them — Ethereum's estimate
+/// is wei (T154).
+/// </remarks>
 public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
 {
+    /// <summary>TRON's named HTTP client (pre-F8 name, kept); see <see cref="Networks.BlockchainHttpClientNames"/>.</summary>
     public const string HttpClientName = "BlockchainGasFeeEstimate";
 
     private const string InternalKeyHeader = "X-Internal-Key";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    private readonly BlockchainNetworkPolicy _policy;
     private readonly HttpClient _http;
     private readonly BlockchainSidecarOptions _options;
     private readonly ILogger<HttpSidecarGasFeeEstimator> _logger;
 
     public HttpSidecarGasFeeEstimator(
+        BlockchainNetwork network,
         HttpClient http,
-        IOptions<BlockchainSidecarOptions> options,
+        BlockchainSidecarOptions options,
         ILogger<HttpSidecarGasFeeEstimator> logger)
     {
+        _policy = BlockchainNetworkPolicy.For(network);
         _http = http;
-        _options = options.Value;
+        _options = options;
         _logger = logger;
     }
+
+    /// <summary>The network whose service this estimator asks.</summary>
+    public BlockchainNetwork Network => _policy.Network;
 
     public async Task<decimal?> EstimateFeeUsdtAsync(
         GasFeeEstimateRequest request, CancellationToken cancellationToken)
     {
         var body = new EstimateFeeBody(
+            _policy.Network.ToString(),
             request.FromAddress,
             request.ToAddress,
             request.Amount.ToString("0.######", CultureInfo.InvariantCulture),
@@ -84,10 +100,19 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
                 return null;
             }
 
-            _logger.LogInformation(
-                "Gas fee estimate {FeeUsdt} USDT for {To} ({Token}): energy {EnergyShortfall}/{EnergyRequired} short, burn {BurnSun} sun, TRX price {TrxPrice} ({PriceSource}).",
-                fee, request.ToAddress, request.Token, payload.EnergyShortfall,
-                payload.EnergyRequired, payload.BurnSun, payload.TrxPriceUsdt, payload.PriceSource);
+            if (_policy.ReportsTronResourceUsage)
+            {
+                _logger.LogInformation(
+                    "Gas fee estimate {FeeUsdt} USDT for {To} ({Token}): energy {EnergyShortfall}/{EnergyRequired} short, burn {BurnSun} sun, TRX price {TrxPrice} ({PriceSource}).",
+                    fee, request.ToAddress, request.Token, payload.EnergyShortfall,
+                    payload.EnergyRequired, payload.BurnSun, payload.TrxPriceUsdt, payload.PriceSource);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Gas fee estimate {FeeUsdt} USDT for {To} ({Token}) on {Network}.",
+                    fee, request.ToAddress, request.Token, _policy.Network);
+            }
             return fee;
         }
         catch (Exception ex) when (
@@ -129,6 +154,7 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
     // sidecar-blockchain/contracts/estimate-fee/ and are replayed by
     // BlockchainSidecarEstimateFeeContractTests and the sidecar handler test.
     private sealed record EstimateFeeBody(
+        string Network,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FromAddress,
         string ToAddress,
         string Amount,
@@ -136,12 +162,14 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
 
     private sealed record ErrorEnvelope(string? Error, string? Message);
 
+    // Everything but FeeUsdt is TRON's breakdown (Energy, SUN, TRX price) —
+    // nullable so a network whose answer does not carry it still parses.
     private sealed record EstimateFeeResponse(
         string? FeeUsdt,
-        long EnergyRequired,
-        long EnergyAvailable,
-        long EnergyShortfall,
-        long BurnSun,
-        decimal TrxPriceUsdt,
+        long? EnergyRequired,
+        long? EnergyAvailable,
+        long? EnergyShortfall,
+        long? BurnSun,
+        decimal? TrxPriceUsdt,
         string? PriceSource);
 }

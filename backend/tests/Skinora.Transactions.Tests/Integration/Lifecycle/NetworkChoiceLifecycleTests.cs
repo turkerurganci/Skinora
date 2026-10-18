@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Interfaces;
@@ -9,6 +9,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
@@ -30,9 +31,10 @@ namespace Skinora.Transactions.Tests.Integration.Lifecycle;
 /// T147 — the state machine end to end on each network (11 §F8 K3, K9), on
 /// real SQL Server: a listing that accepts both networks is created, the buyer
 /// picks one, and every leg after that — deposit, payment, a rejected extra
-/// transfer, payout — runs on the network the buyer chose. The Ethereum
-/// service is a stub (T150 builds the real one): availability reports it open
-/// and the sidecar stub derives an Ethereum-shaped deposit.
+/// transfer, sweep, payout — runs on the network the buyer chose. The Ethereum
+/// service is a stub (T150 builds the real one): the T148 service registry has
+/// both networks configured (the sidecar stub derives an Ethereum-shaped
+/// deposit), and availability is T148's own implementation over it.
 /// </summary>
 /// <remarks>
 /// The steps that do not depend on the network (seller readiness, delivery,
@@ -69,12 +71,18 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
     private const string TronDeposit = "TDepositT147Tron00000000000000000";
     private const string EthereumDeposit = "0xd1220a0cf47c7b9be7a2e6ba89f429762e7b9adb";
 
+    // Each network's own hot wallet — the sweep never crosses networks (K3).
+    private const string TronHotWallet = "TXqH2JBkDgGWyCFg4GZzg8eUjG5JMZ7hPL";
+    private const string EthereumHotWallet = "0x52908400098527886e0f7030069857d2e4169ee7";
+
     private User _seller = null!;
     private User _buyer = null!;
     private FakeTimeProvider _clock = null!;
     private FakeSteamInventoryReader _inventory = null!;
     private NullOutbox _outbox = null!;
     private StubBlockchainSidecarClient _sidecar = null!;
+    private FakeBlockchainServiceRegistry _services = null!;
+    private RecordingGasFee _gasFee = null!;
 
     protected override async Task SeedAsync(AppDbContext context)
     {
@@ -124,6 +132,10 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
             IsTradeable: true));
         _outbox = new NullOutbox();
         _sidecar = new StubBlockchainSidecarClient();
+        _services = new FakeBlockchainServiceRegistry()
+            .With(BlockchainNetwork.TRON, sidecar: _sidecar)
+            .With(BlockchainNetwork.ETHEREUM, sidecar: _sidecar);
+        _gasFee = new RecordingGasFee();
     }
 
     public static TheoryData<BlockchainNetwork> Networks => new()
@@ -137,7 +149,10 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
     public async Task Two_Network_Listing_Runs_From_Creation_To_Payout_On_The_Network_The_Buyer_Chose(
         BlockchainNetwork chosen)
     {
-        var networks = FakeNetworkAvailability.All();
+        // T148's availability over a registry with both networks configured.
+        IBlockchainNetworkAvailability networks =
+            new BlockchainNetworkAvailability(_services, AlwaysHealthyBlockchainNetworks.Instance);
+        Assert.Equal([BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM], networks.OpenForNewTransactions());
         var isEthereum = chosen == BlockchainNetwork.ETHEREUM;
         var sellerPayout = isEthereum ? SellerEthereumPayout : SellerTronPayout;
         var refundInput = isEthereum ? BuyerEthereumRefund : BuyerTronRefund;
@@ -177,6 +192,8 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         Assert.Equal(deposit, depositRow.Address);
         Assert.Equal(0, depositRow.HdWalletIndex);   // the chosen network's own counter
         Assert.Equal(102m, depositRow.ExpectedAmount);
+        Assert.Contains(("Sidecar", chosen), _services.Requests);
+        Assert.DoesNotContain(_services.Requests, r => r.Network != chosen);
 
         // ---- SELLER_CONFIRMED (readiness service covered by its own suite) ----
         tx = await TrackedAsync(id);
@@ -202,6 +219,8 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
             .SingleAsync(b => b.TransactionId == id && b.Type == BlockchainTransactionType.EXCESS_REFUND);
         Assert.Equal(refundStored, refund.ToAddress);
         Assert.NotEqual(sender, refund.ToAddress);
+        Assert.Equal(chosen, refund.Network);
+        Assert.Equal([chosen], _gasFee.RefundNetworks);
 
         // ---- ITEM_DELIVERED + settlement (their services have their own suites) ----
         tx = await TrackedAsync(id);
@@ -214,13 +233,24 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         tx.SettlementVerifiedAt = now;
         await Context.SaveChangesAsync();
 
-        // ---- The deposit is swept on its network; then the seller is paid there ----
-        await AddConfirmedSweepAsync(id, depositRow);
+        // ---- The deposit is swept on its network to that network's hot wallet ----
+        await new SweepQueueJob(Context, new BothHotWallets(), _clock, NullLogger<SweepQueueJob>.Instance)
+            .ExecuteAsync();
+        var sweep = await Context.Set<BlockchainTransaction>()
+            .SingleAsync(b => b.TransactionId == id && b.Type == BlockchainTransactionType.SWEEP);
+        Assert.Equal(chosen, sweep.Network);
+        Assert.Equal(deposit, sweep.FromAddress);
+        Assert.Equal(isEthereum ? EthereumHotWallet : TronHotWallet, sweep.ToAddress);
+        await ConfirmAsync(sweep);
+
+        // ---- Then the seller is paid on the same network ----
         await BuildPayoutQueue().ExecuteAsync();
         var payout = await Context.Set<BlockchainTransaction>().AsNoTracking()
             .SingleAsync(b => b.TransactionId == id && b.Type == BlockchainTransactionType.SELLER_PAYOUT);
         Assert.Equal(sellerPayout, payout.ToAddress);
+        Assert.Equal(chosen, payout.Network);
         Assert.Equal(BlockchainTransactionStatus.PENDING, payout.Status);
+        Assert.Equal([chosen], _gasFee.PayoutNetworks);
     }
 
     // ---------------- helpers ----------------
@@ -263,33 +293,20 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         return row;
     }
 
-    private async Task AddConfirmedSweepAsync(Guid transactionId, PaymentAddress deposit)
+    /// <summary>The sweep's dispatch and confirmation jobs have their own suites.</summary>
+    private async Task ConfirmAsync(BlockchainTransaction sweep)
     {
-        var isEthereum = deposit.Network == BlockchainNetwork.ETHEREUM;
-        Context.Set<BlockchainTransaction>().Add(new BlockchainTransaction
-        {
-            Id = Guid.NewGuid(),
-            TransactionId = transactionId,
-            PaymentAddressId = deposit.Id,
-            Network = deposit.Network,
-            Type = BlockchainTransactionType.SWEEP,
-            TxHash = isEthereum
-                ? "0x" + Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")
-                : Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
-            FromAddress = deposit.Address,
-            ToAddress = isEthereum ? "0x52908400098527886e0f7030069857d2e4169ee7" : "TXqH2JBkDgGWyCFg4GZzg8eUjG5JMZ7hPL",
-            Amount = 102m,
-            Token = StablecoinType.USDT,
-            Status = BlockchainTransactionStatus.CONFIRMED,
-            BlockNumber = 1_000_100L,
-            ConfirmationCount = 20,
-            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
-            CreatedAt = _clock.GetUtcNow().UtcDateTime,
-        });
+        sweep.TxHash = sweep.Network == BlockchainNetwork.ETHEREUM
+            ? "0x" + Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N")
+            : Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+        sweep.Status = BlockchainTransactionStatus.CONFIRMED;
+        sweep.BlockNumber = 1_000_100L;
+        sweep.ConfirmationCount = 20;
+        sweep.ConfirmedAt = _clock.GetUtcNow().UtcDateTime;
         await Context.SaveChangesAsync();
     }
 
-    private TransactionCreationService BuildCreation(FakeNetworkAvailability networks)
+    private TransactionCreationService BuildCreation(IBlockchainNetworkAvailability networks)
     {
         var limits = new TransactionLimitsProvider(Context);
         var eligibility = new TransactionEligibilityService(
@@ -311,7 +328,7 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
             _clock);
     }
 
-    private TransactionAcceptanceService BuildAcceptance(FakeNetworkAvailability networks) => new(
+    private TransactionAcceptanceService BuildAcceptance(IBlockchainNetworkAvailability networks) => new(
         Context,
         new WalletAddressValidator(),
         new NoMatchWalletSanctionsCheck(),
@@ -321,24 +338,24 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
         new FakeSteamTradeEligibilityChecker(),
         _outbox,
         networks,
-        new PaymentAddressAllocator(Context, _sidecar, NullLogger<PaymentAddressAllocator>.Instance),
+        new PaymentAddressAllocator(Context, _services, NullLogger<PaymentAddressAllocator>.Instance),
         _clock);
 
     private AmountValidationService BuildAmountValidation() => new(
         Context,
-        new FixedGasFee(),
+        _gasFee,
         new RefundDecisionService(new FixedGasFeeSettings()),
         new NoRefundBlockedAlerts(),
         _outbox,
         new NoTimeoutScheduling(),
         _clock,
-        Options.Create(new StablecoinContractOptions()),
+        StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
         NullLogger<AmountValidationService>.Instance);
 
     private SellerPayoutQueueJob BuildPayoutQueue() => new(
         Context,
         new RefundDecisionService(new FixedGasFeeSettings()),
-        new FixedGasFee(),
+        _gasFee,
         _outbox,
         _clock,
         NullLogger<SellerPayoutQueueJob>.Instance);
@@ -371,14 +388,40 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
             => Task.FromResult(new TradeHoldResult(true, true, null));
     }
 
-    private sealed class FixedGasFee : IChargedGasFeeResolver
+    /// <summary>A fixed fee; records which network each transfer was priced on.</summary>
+    private sealed class RecordingGasFee : IChargedGasFeeResolver
     {
+        public List<BlockchainNetwork> RefundNetworks { get; } = [];
+        public List<BlockchainNetwork> PayoutNetworks { get; } = [];
+
         public Task<ResolvedGasFee> ResolveRefundFeeAsync(
-            string? fromDepositAddress, string toAddress, decimal amount, StablecoinType token, CancellationToken cancellationToken)
-            => Task.FromResult(new ResolvedGasFee(0.50m, GasFeeSource.RuntimeEstimate));
+            BlockchainNetwork network, string? fromDepositAddress, string toAddress, decimal amount,
+            StablecoinType token, CancellationToken cancellationToken)
+        {
+            RefundNetworks.Add(network);
+            return Task.FromResult(new ResolvedGasFee(0.50m, GasFeeSource.RuntimeEstimate));
+        }
+
         public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
-            string toAddress, decimal amount, StablecoinType token, CancellationToken cancellationToken)
-            => Task.FromResult(new ResolvedGasFee(0.50m, GasFeeSource.RuntimeEstimate));
+            BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken)
+        {
+            PayoutNetworks.Add(network);
+            return Task.FromResult(new ResolvedGasFee(0.50m, GasFeeSource.RuntimeEstimate));
+        }
+    }
+
+    /// <summary>Each network has its own hot wallet.</summary>
+    private sealed class BothHotWallets : IPlatformWalletAddressProvider
+    {
+        public string? HotWalletAddress => TronHotWallet;
+        public string? ColdWalletAddress => null;
+
+        public PlatformWalletAddresses For(BlockchainNetwork network) => network switch
+        {
+            BlockchainNetwork.TRON => new(network, TronHotWallet, null),
+            _ => new(network, EthereumHotWallet, null),
+        };
     }
 
     private sealed class FixedGasFeeSettings : IGasFeeSettingsProvider

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Skinora.Realtime.Application.Contracts;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Events;
 using Skinora.Shared.Outbox;
 
@@ -36,8 +37,6 @@ namespace Skinora.Realtime.Application.EventHandlers;
 public sealed class PaymentReceivedRealtimeConsumer
     : RealtimeConsumerBase<PaymentReceivedEvent>
 {
-    private const int FinalConfirmationCount = 20;
-
     private readonly ITransactionRealtimePublisher _publisher;
 
     public PaymentReceivedRealtimeConsumer(
@@ -51,6 +50,17 @@ public sealed class PaymentReceivedRealtimeConsumer
 
     protected override string ConsumerName => "realtime.payment-received";
 
+    /// <summary>
+    /// T148 — the count recorded on the payment row, carried by the event; an
+    /// event written before T148 has none and falls back to the network
+    /// policy's threshold (TRON 20), never to a TRON literal. A finalized
+    /// network with no reported count shows 0.
+    /// </summary>
+    internal static int ConfirmationsFor(PaymentReceivedEvent domainEvent) =>
+        domainEvent.ConfirmationCount
+        ?? BlockchainNetworkPolicy.For(domainEvent.Network).RequiredConfirmations
+        ?? 0;
+
     protected override Task PublishAsync(
         PaymentReceivedEvent domainEvent,
         CancellationToken cancellationToken) =>
@@ -59,6 +69,6 @@ public sealed class PaymentReceivedRealtimeConsumer
                 TransactionId: domainEvent.TransactionId,
                 Amount: domainEvent.Amount,
                 TxHash: domainEvent.TxHash,
-                Confirmations: FinalConfirmationCount),
+                Confirmations: ConfirmationsFor(domainEvent)),
             cancellationToken);
 }

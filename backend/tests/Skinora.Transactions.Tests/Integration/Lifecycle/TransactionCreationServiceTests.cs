@@ -7,6 +7,7 @@ using Skinora.Shared.Persistence;
 using Skinora.Shared.Persistence.Outbox;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Transactions.Application.Lifecycle;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Application.Pricing;
 using Skinora.Transactions.Application.Steam;
@@ -45,7 +46,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     private FakeSteamInventoryReader _inventory = null!;
     private FakeMarketPriceProvider _marketPrice = null!;
     private RecordingOutboxService _outbox = null!;
-    private FakeNetworkAvailability _networks = null!;
+    private IBlockchainNetworkAvailability _networks = null!;
 
     /// <summary>
     /// T128 — swappable so one test can force an <c>InviteToken</c> collision
@@ -82,7 +83,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         _inventory = new FakeSteamInventoryReader();
         _marketPrice = new FakeMarketPriceProvider();
         _outbox = new RecordingOutboxService();
-        _networks = new FakeNetworkAvailability();
+        _networks = TestNetworkAvailability.TronOnly();
 
         _inventory.Register(SellerSteamId, new InventoryItemSnapshot(
             AssetId: ItemAssetId,
@@ -885,7 +886,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     [Fact]
     public async Task Listing_On_Both_Networks_Snapshots_Each_Networks_Payout_Address()
     {
-        _networks = FakeNetworkAvailability.All();
+        _networks = TestNetworkAvailability.All();
         await AddEthereumPayoutAsync();
 
         // Client order does not matter; rows are per network.
@@ -903,7 +904,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     [Fact]
     public async Task Listing_On_Ethereum_Only_Writes_Just_That_Option()
     {
-        _networks = FakeNetworkAvailability.All();
+        _networks = TestNetworkAvailability.All();
         await AddEthereumPayoutAsync();
 
         var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("ETHEREUM"), CancellationToken.None);
@@ -918,7 +919,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     public async Task Listing_On_A_Network_Without_A_Payout_Address_Is_Refused_Naming_It()
     {
         // 11 §F8 K3: only networks with a registered payout address.
-        _networks = FakeNetworkAvailability.All();
+        _networks = TestNetworkAvailability.All();
 
         var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
 
@@ -932,6 +933,23 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     public async Task Listing_On_A_Network_Without_A_Service_Fails_Closed_With_Network_Unavailable()
     {
         // Ethereum has no service until T150 — production answer today.
+        await AddEthereumPayoutAsync();
+
+        var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.NetworkUnavailable, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.NetworkUnavailable, outcome.ErrorCode);
+        Assert.Equal("ETHEREUM", NetworkOf(outcome.ErrorDetails));
+        Assert.False(await Context.Set<Transaction>().AnyAsync(t => t.SellerId == _seller.Id));
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task Listing_On_A_Frozen_Network_Fails_Closed_With_Network_Unavailable()
+    {
+        // T148 health freeze (11 §6.2 FK8-6): a configured network in a
+        // detected outage is closed for new listings like one without a service.
+        _networks = TestNetworkAvailability.AllWithFrozen(BlockchainNetwork.ETHEREUM);
         await AddEthereumPayoutAsync();
 
         var outcome = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
@@ -969,7 +987,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         // a listing that accepts Ethereum and names it; a TRON-only listing of
         // the same seller still goes through.
         await Context.ConfigureSettingAsync(TransactionLimitsProvider.PayoutCooldownKey, "24");
-        _networks = FakeNetworkAvailability.All();
+        _networks = TestNetworkAvailability.All();
         await AddEthereumPayoutAsync(changedAt: _clock.GetUtcNow().UtcDateTime.AddHours(-1));
 
         var both = await BuildSut().CreateAsync(_seller.Id, RequestFor("TRON", "ETHEREUM"), CancellationToken.None);
@@ -984,7 +1002,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     [Fact]
     public async Task Sanctions_Are_Screened_On_Each_Accepted_Networks_Payout_Address()
     {
-        _networks = FakeNetworkAvailability.All();
+        _networks = TestNetworkAvailability.All();
         await AddEthereumPayoutAsync();
         var sanctions = new NetworkMatchingSanctionsCheck(BlockchainNetwork.ETHEREUM);
 

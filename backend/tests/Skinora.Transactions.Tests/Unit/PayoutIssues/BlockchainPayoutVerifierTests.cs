@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -53,7 +54,7 @@ public sealed class BlockchainPayoutVerifierTests : IDisposable
         _db.Database.EnsureCreated();
 
         _sut = new BlockchainPayoutVerifier(
-            _db, _client, NullLogger<BlockchainPayoutVerifier>.Instance);
+            _db, FakeBlockchainServiceRegistry.ForTron(transfers: _client), NullLogger<BlockchainPayoutVerifier>.Instance);
     }
 
     [Fact]

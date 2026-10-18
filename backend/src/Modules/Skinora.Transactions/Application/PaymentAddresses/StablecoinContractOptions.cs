@@ -34,7 +34,16 @@ namespace Skinora.Transactions.Application.PaymentAddresses;
 /// </remarks>
 public sealed class StablecoinContractOptions
 {
+    /// <summary>TRON's section (pre-F8 name, kept).</summary>
     public const string SectionName = "StablecoinContracts";
+
+    /// <summary>
+    /// Ethereum's section (T148), bound as the named options instance
+    /// <c>"ETHEREUM"</c>. Empty values fall back to the Ethereum mainnet
+    /// contracts (<see cref="KnownStablecoinContracts.EthereumUsdt"/>); a
+    /// Sepolia deployment sets its own copy of the token (08 §3.7.1, T159).
+    /// </summary>
+    public const string EthereumSectionName = "EthereumStablecoinContracts";
 
     /// <summary>
     /// TRC-20 contract address for USDT on the target network. Empty means
@@ -55,19 +64,37 @@ public sealed class StablecoinContractOptions
     /// contract as <see cref="KnownStablecoinContracts.ResolveContractAddress"/>,
     /// but network-aware.
     /// </summary>
-    public string ResolveContractAddress(StablecoinType token) => token switch
+    public string ResolveContractAddress(StablecoinType token) =>
+        ResolveContractAddress(token, BlockchainNetwork.TRON);
+
+    /// <summary>
+    /// Contract address of <paramref name="token"/> when this options instance
+    /// describes <paramref name="network"/> (T148): a configured value wins,
+    /// otherwise that network's mainnet constant. Ethereum values come back in
+    /// the canonical lowercase form (06 §1.4).
+    /// </summary>
+    public string ResolveContractAddress(StablecoinType token, BlockchainNetwork network)
     {
-        StablecoinType.USDT => Fallback(Usdt, KnownStablecoinContracts.Usdt),
-        StablecoinType.USDC => Fallback(Usdc, KnownStablecoinContracts.Usdc),
-        _ => throw new ArgumentOutOfRangeException(nameof(token), token, "Unsupported stablecoin."),
-    };
+        var configured = token switch
+        {
+            StablecoinType.USDT => Usdt,
+            StablecoinType.USDC => Usdc,
+            _ => throw new ArgumentOutOfRangeException(nameof(token), token, "Unsupported stablecoin."),
+        };
+        return BlockchainAddress.Canonicalize(
+            Fallback(configured, KnownStablecoinContracts.ResolveContractAddress(network, token)));
+    }
 
     /// <summary>
     /// Reverse lookup used by the webhook validator to name the token a
     /// deposit arrived in. Returns <c>null</c> for anything outside the
     /// allowlist (spam token, 08 §3.4).
     /// </summary>
-    public StablecoinType? ResolveByContract(string? contractAddress)
+    public StablecoinType? ResolveByContract(string? contractAddress) =>
+        ResolveByContract(contractAddress, BlockchainNetwork.TRON);
+
+    /// <summary>Network-aware <see cref="ResolveByContract(string?)"/> (T148).</summary>
+    public StablecoinType? ResolveByContract(string? contractAddress, BlockchainNetwork network)
     {
         if (string.IsNullOrWhiteSpace(contractAddress)) return null;
 
@@ -75,9 +102,9 @@ public sealed class StablecoinContractOptions
         // exactly — base58 is case-significant — while an EVM contract matches
         // in any letter case (EIP-55 checksum case vs. the lowercase stored
         // form).
-        if (BlockchainAddress.AreEqual(contractAddress, ResolveContractAddress(StablecoinType.USDT)))
+        if (BlockchainAddress.AreEqual(contractAddress, ResolveContractAddress(StablecoinType.USDT, network)))
             return StablecoinType.USDT;
-        if (BlockchainAddress.AreEqual(contractAddress, ResolveContractAddress(StablecoinType.USDC)))
+        if (BlockchainAddress.AreEqual(contractAddress, ResolveContractAddress(StablecoinType.USDC, network)))
             return StablecoinType.USDC;
 
         return null;

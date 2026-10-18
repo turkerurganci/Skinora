@@ -9,6 +9,7 @@ using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Timeouts;
 using Skinora.Transactions.Domain.Entities;
@@ -26,7 +27,7 @@ public sealed class AmountValidationService : IAmountValidationService
     private readonly IOutboxService _outbox;
     private readonly ITimeoutSchedulingService _timeoutScheduling;
     private readonly TimeProvider _clock;
-    private readonly StablecoinContractOptions _contracts;
+    private readonly IStablecoinContractRegistry _contracts;
     private readonly ILogger<AmountValidationService> _logger;
 
     public AmountValidationService(
@@ -37,7 +38,7 @@ public sealed class AmountValidationService : IAmountValidationService
         IOutboxService outbox,
         ITimeoutSchedulingService timeoutScheduling,
         TimeProvider clock,
-        IOptions<StablecoinContractOptions> contracts,
+        IStablecoinContractRegistry contracts,
         ILogger<AmountValidationService> logger)
     {
         _db = db;
@@ -47,7 +48,7 @@ public sealed class AmountValidationService : IAmountValidationService
         _outbox = outbox;
         _timeoutScheduling = timeoutScheduling;
         _clock = clock;
-        _contracts = contracts.Value;
+        _contracts = contracts;
         _logger = logger;
     }
 
@@ -165,7 +166,8 @@ public sealed class AmountValidationService : IAmountValidationService
         // allowlists diverge; the dispatcher then fails the refund terminally
         // without broadcasting, so there is no real transfer to price and the
         // expected token keeps this path's pre-round charge.
-        var resolvedActualToken = ResolveStablecoinByContract(wrongTokenIncoming.ActualTokenAddress);
+        var resolvedActualToken = ResolveStablecoinByContract(
+            paymentAddress.Network, wrongTokenIncoming.ActualTokenAddress);
         var received = wrongTokenIncoming.Amount;
 
         var refundTo = await RequireRefundTargetAsync(transaction, wrongTokenIncoming, received, correlationId, cancellationToken);
@@ -193,6 +195,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
         var refundRow = QueueRefundIntent(
             transaction.Id,
+            paymentAddress.Network,
             BlockchainTransactionType.WRONG_TOKEN_REFUND,
             refundTo,
             received,
@@ -276,6 +279,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
         var refundRow = QueueRefundIntent(
             transaction.Id,
+            paymentAddress.Network,
             BlockchainTransactionType.LATE_PAYMENT_REFUND,
             refundTo,
             received,
@@ -337,6 +341,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
         var refundRow = QueueRefundIntent(
             transaction.Id,
+            paymentAddress.Network,
             BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
             refundTo,
             received,
@@ -403,6 +408,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
         var refundRow = QueueRefundIntent(
             transaction.Id,
+            paymentAddress.Network,
             BlockchainTransactionType.EXCESS_REFUND,
             refundTo,
             excess,
@@ -468,6 +474,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
         var refundRow = QueueRefundIntent(
             transaction.Id,
+            paymentAddress.Network,
             BlockchainTransactionType.EXCESS_REFUND,
             refundTo,
             received,
@@ -569,7 +576,9 @@ public sealed class AmountValidationService : IAmountValidationService
                 Amount: confirmedPayment.Amount,
                 Stablecoin: confirmedPayment.Token,
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
-                OccurredAt: _clock.GetUtcNow().UtcDateTime),
+                OccurredAt: _clock.GetUtcNow().UtcDateTime,
+                Network: confirmedPayment.Network,
+                ConfirmationCount: confirmedPayment.ConfirmationCount),
             cancellationToken);
 
         // T140 — the generic status-changed event. This is the producer
@@ -615,6 +624,7 @@ public sealed class AmountValidationService : IAmountValidationService
 
     private BlockchainTransaction QueueRefundIntent(
         Guid transactionId,
+        BlockchainNetwork network,
         BlockchainTransactionType type,
         string refundAddress,
         decimal amount,
@@ -639,6 +649,9 @@ public sealed class AmountValidationService : IAmountValidationService
         {
             Id = Guid.NewGuid(),
             TransactionId = transactionId,
+            // Same-network rule (11 §F8 K3, T148): the refund leaves on the
+            // network the money arrived on — the deposit's network.
+            Network = network,
             PaymentAddressId = null,
             Type = type,
             TxHash = null,
@@ -676,6 +689,7 @@ public sealed class AmountValidationService : IAmountValidationService
         StablecoinType broadcastToken,
         CancellationToken cancellationToken) =>
         (await _chargedGasFee.ResolveRefundFeeAsync(
+            paymentAddress.Network,
             paymentAddress.Address,
             refundAddress,
             incoming.Amount,
@@ -731,8 +745,8 @@ public sealed class AmountValidationService : IAmountValidationService
     // including the network the deployment actually watches: resolving against
     // the mainnet constants on a testnet made every real deposit look like an
     // unknown token. See StablecoinContractOptions.
-    private StablecoinType? ResolveStablecoinByContract(string? contractAddress) =>
-        _contracts.ResolveByContract(contractAddress);
+    private StablecoinType? ResolveStablecoinByContract(BlockchainNetwork network, string? contractAddress) =>
+        _contracts.ResolveByContract(network, contractAddress);
 }
 
 /// <summary>
@@ -775,4 +789,30 @@ public static class KnownStablecoinContracts
         StablecoinType.USDC => Usdc,
         _ => throw new ArgumentOutOfRangeException(nameof(token), token, "Unsupported stablecoin."),
     };
+
+    /// <summary>
+    /// Ethereum mainnet USDT (Tether, 6 decimals — 08 §3.7.1), canonical
+    /// lowercase form (06 §1.4).
+    /// </summary>
+    public const string EthereumUsdt = "0xdac17f958d2ee523a2206206994597c13d831ec7";
+
+    /// <summary>
+    /// Ethereum mainnet USDC (Circle, 6 decimals) — the only other token on the
+    /// Ethereum wrong-token refund allowlist (08 §3.7.4), canonical lowercase.
+    /// </summary>
+    public const string EthereumUsdc = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+
+    /// <summary>
+    /// Mainnet contract of <paramref name="token"/> on <paramref name="network"/>
+    /// (T148). TRON's answer is <see cref="ResolveContractAddress(StablecoinType)"/>.
+    /// </summary>
+    public static string ResolveContractAddress(BlockchainNetwork network, StablecoinType token) =>
+        (network, token) switch
+        {
+            (BlockchainNetwork.TRON, _) => ResolveContractAddress(token),
+            (BlockchainNetwork.ETHEREUM, StablecoinType.USDT) => EthereumUsdt,
+            (BlockchainNetwork.ETHEREUM, StablecoinType.USDC) => EthereumUsdc,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(token), token, $"Unsupported stablecoin on {network}."),
+        };
 }

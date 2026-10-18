@@ -4,6 +4,8 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
+using Skinora.Shared.Blockchain;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Transfers;
@@ -47,20 +49,20 @@ public sealed class OutgoingTransferConfirmationJob
     ];
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainTransferClient _client;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferConfirmationJob> _logger;
 
     public OutgoingTransferConfirmationJob(
         AppDbContext db,
-        IBlockchainTransferClient client,
+        IBlockchainServiceRegistry services,
         IOutboxService outbox,
         TimeProvider clock,
         ILogger<OutgoingTransferConfirmationJob> logger)
     {
         _db = db;
-        _client = client;
+        _services = services;
         _outbox = outbox;
         _clock = clock;
         _logger = logger;
@@ -68,12 +70,21 @@ public sealed class OutgoingTransferConfirmationJob
 
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
+        // T148 düzeltme turu 1 (F1) — a DETECTED row whose network's service is
+        // no longer configured cannot be answered (the fail-closed client says
+        // Unavailable and the row stays DETECTED). Selecting it would keep it at
+        // the head of the oldest-first batch forever and starve every other
+        // network's confirmations, so only configured networks are candidates.
+        var configured = _services.ConfiguredNetworks.ToList();
+        if (configured.Count == 0) return;
+
         var candidateIds = await _db.Set<BlockchainTransaction>()
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(b => b.Status == BlockchainTransactionStatus.DETECTED
                 && b.TxHash != null
-                && OutboundTypes.Contains(b.Type))
+                && OutboundTypes.Contains(b.Type)
+                && configured.Contains(b.Network))
             .OrderBy(b => b.CreatedAt)
             .Take(BatchSize)
             .Select(b => b.Id)
@@ -94,13 +105,16 @@ public sealed class OutgoingTransferConfirmationJob
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (row is null || row.Status != BlockchainTransactionStatus.DETECTED || row.TxHash is null) return;
 
-        var status = await _client.GetStatusAsync(row.TxHash, cancellationToken);
+        // T148 — the row's own network's service answers, and the network's
+        // policy (not a TRON constant) fills in what the answer left out.
+        var policy = BlockchainNetworkPolicy.For(row.Network);
+        var status = await _services.Transfers(row.Network).GetStatusAsync(row.TxHash, cancellationToken);
         switch (status.Outcome)
         {
             case TransferStatusOutcome.Confirmed:
                 row.Status = BlockchainTransactionStatus.CONFIRMED;
                 row.BlockNumber = status.BlockNumber;
-                row.ConfirmationCount = status.Confirmations ?? 20;
+                row.ConfirmationCount = policy.RecordedConfirmationCount(status.Confirmations);
                 row.ConfirmedAt = _clock.GetUtcNow().UtcDateTime;
                 row.ErrorMessage = null;
                 // Realized cost, recorded for measurement only. The charge in
@@ -109,9 +123,14 @@ public sealed class OutgoingTransferConfirmationJob
                 // transfer costing more than the difference. What this enables
                 // is the question the estimate itself raises — how close does
                 // it land — which was previously assumed rather than measured.
-                row.RealizedFeeSun = status.RealizedFeeSun;
-                row.EnergyUsageTotal = status.EnergyUsageTotal;
-                row.OriginEnergyUsage = status.OriginEnergyUsage;
+                // TRON's SUN / Energy receipt fields — recorded only for a
+                // network that has them (Ethereum's realized fee is wei, T154).
+                if (policy.ReportsTronResourceUsage)
+                {
+                    row.RealizedFeeSun = status.RealizedFeeSun;
+                    row.EnergyUsageTotal = status.EnergyUsageTotal;
+                    row.OriginEnergyUsage = status.OriginEnergyUsage;
+                }
 
                 // WP1 — a confirmed SELLER_PAYOUT means the seller is paid on
                 // chain (03 §2.4 step 6). Publish PayoutCompletedEvent in the

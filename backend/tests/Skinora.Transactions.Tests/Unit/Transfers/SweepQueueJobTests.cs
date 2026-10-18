@@ -44,6 +44,7 @@ public sealed class SweepQueueJobTests : IDisposable
     private readonly FakeTimeProvider _clock;
     private readonly StubWalletAddresses _walletAddresses = new();
     private readonly SweepQueueJob _sut;
+    private int _seedSequence;
 
     public SweepQueueJobTests()
     {
@@ -87,6 +88,70 @@ public sealed class SweepQueueJobTests : IDisposable
         Assert.Null(sweep.ActualTokenAddress);             // CK_..._Type_Sweep: NULL
         Assert.Null(sweep.GasFee);                         // sweeper funds energy via delegation
         Assert.Null(sweep.NextAttemptAt);
+    }
+
+    // -------------------- T148 — each network sweeps into its own hot wallet --------------------
+
+    private const string EthereumHotWallet = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+
+    [Fact]
+    public async Task Ethereum_Deposit_Is_Never_Swept_To_Trons_Hot_Wallet()
+    {
+        // TRON's hot wallet is configured, Ethereum's is not: the Ethereum
+        // deposit waits rather than being queued towards the wrong network's
+        // wallet (11 §F8 K3).
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        var (_, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        deposit.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(b => b.Type == BlockchainTransactionType.SWEEP));
+    }
+
+    [Fact]
+    public async Task Ethereum_Deposit_Is_Swept_To_Ethereums_Hot_Wallet_On_Ethereum()
+    {
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        _walletAddresses.EthereumHotWalletAddress = EthereumHotWallet;
+        var (_, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        deposit.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var sweep = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .SingleAsync(b => b.Type == BlockchainTransactionType.SWEEP);
+        Assert.Equal(BlockchainNetwork.ETHEREUM, sweep.Network);
+        Assert.Equal(EthereumHotWallet, sweep.ToAddress);
+    }
+
+    // T148 düzeltme turu 1 (F1) — an Ethereum deposit with no Ethereum hot
+    // wallet never gets a sweep row; picked oldest-first it would hold every
+    // slot of the batch on every run. The newer TRON deposit must be queued on
+    // the first run behind BatchSize (and more) of them.
+    [Theory]
+    [InlineData(SweepQueueJob.BatchSize)]
+    [InlineData(SweepQueueJob.BatchSize + 5)]
+    public async Task Waiting_Ethereum_Deposits_Do_Not_Starve_Tron_Sweeps(int waiting)
+    {
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        for (var i = 0; i < waiting; i++)
+        {
+            await SeedDeliveredAsync(price: 10m, commission: 1m, depositNetwork: BlockchainNetwork.ETHEREUM);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+
+        var (tron, _) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+
+        await _sut.ExecuteAsync();
+
+        var sweep = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .SingleAsync(b => b.Type == BlockchainTransactionType.SWEEP);
+        Assert.Equal(tron.Id, sweep.TransactionId);
+        Assert.Equal(BlockchainNetwork.TRON, sweep.Network);
+        Assert.Equal(HotWalletAddress, sweep.ToAddress);
     }
 
     [Fact]
@@ -345,22 +410,35 @@ public sealed class SweepQueueJobTests : IDisposable
     {
         public string? HotWalletAddress { get; set; }
         public string? ColdWalletAddress { get; set; }
+
+        /// <summary>T148 — Ethereum's own hot wallet; null = unconfigured.</summary>
+        public string? EthereumHotWalletAddress { get; set; }
+
+        public PlatformWalletAddresses For(BlockchainNetwork network) => network switch
+        {
+            BlockchainNetwork.TRON => new(network, HotWalletAddress, ColdWalletAddress),
+            _ => new(network, EthereumHotWalletAddress, null),
+        };
     }
 
     private async Task<(Transaction Tx, PaymentAddress Deposit)> SeedDeliveredAsync(
-        decimal price, decimal commission, Action<Transaction>? configure = null, bool withDeposit = true)
+        decimal price, decimal commission, Action<Transaction>? configure = null, bool withDeposit = true,
+        BlockchainNetwork depositNetwork = BlockchainNetwork.TRON)
     {
+        // Unique per call (SteamId, (Network, Address) and (Network,
+        // HdWalletIndex) are unique) so a test can seed a whole batch.
+        var seq = ++_seedSequence;
         var seller = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000821",
+            SteamId = $"7656119800{seq * 2:D7}",
             SteamDisplayName = "Seller",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
         var buyer = new User
         {
             Id = Guid.NewGuid(),
-            SteamId = "76561198000000822",
+            SteamId = $"7656119800{(seq * 2) + 1:D7}",
             SteamDisplayName = "Buyer",
             CreatedAt = _clock.GetUtcNow().UtcDateTime,
         };
@@ -402,8 +480,9 @@ public sealed class SweepQueueJobTests : IDisposable
             {
                 Id = Guid.NewGuid(),
                 TransactionId = tx.Id,
-                Address = "TDepositSweepFixture000000000000000",
-                HdWalletIndex = 7,
+                Network = depositNetwork,
+                Address = seq == 1 ? "TDepositSweepFixture000000000000000" : $"TDepositSweepFixture{seq:D15}",
+                HdWalletIndex = 6 + seq,
                 ExpectedAmount = price + commission,
                 ExpectedToken = StablecoinType.USDT,
                 MonitoringStatus = MonitoringStatus.ACTIVE,

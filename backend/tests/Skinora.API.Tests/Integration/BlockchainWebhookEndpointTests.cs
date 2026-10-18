@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using Skinora.API.Middleware;
 using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
@@ -38,6 +40,9 @@ namespace Skinora.API.Tests.Integration;
 public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWebhookEndpointTests.Factory>
 {
     private const string BlockchainSecret = "skinora-test-blockchain-webhook-32!!!";
+
+    /// <summary>T148 — the Ethereum service's own webhook secret (05 §3.3a).</summary>
+    private const string EthereumSecret = "skinora-test-ethereum-webhook-32!!!!!";
     private const string ForeignSidecarSecret = "skinora-test-foreign-sidecar-32!!!!";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -225,6 +230,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         // Phase 2: confirm.
         var confirmed = new
         {
+            network = "TRON",
             @event = "payment.confirmed",
             timestamp = DateTime.UtcNow.ToString("O"),
             data = new
@@ -256,6 +262,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
 
         var envelope = new
         {
+            network = "TRON",
             @event = "payment.wrong_token",
             timestamp = DateTime.UtcNow.ToString("O"),
             data = new
@@ -521,6 +528,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
 
         var envelope = new
         {
+            network = "TRON",
             @event = "payment.spam_token",
             timestamp = DateTime.UtcNow.ToString("O"),
             data = new
@@ -548,13 +556,205 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         Assert.NotNull(row.ConfirmedAt);
     }
 
-    private static async Task<HttpResponseMessage> SendSignedAsync<T>(
+    // ─── T148 — the webhook names its network (05 §3.3a) ─────────
+
+    // T148 düzeltme turu 1 (F2) — the pre-T148 wire shape (no network field)
+    // signed with TRON's secret is TRON's: a backend deployed ahead of its
+    // sidecar must not 400 — and so lose, the sidecar treats 4xx as terminal —
+    // a real TRON payment event. Mirrors the sidecar's request-body rule.
+    [Fact]
+    public async Task Tron_Signed_Webhook_Without_Network_Is_Taken_As_Tron_And_Recorded()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+        var envelope = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        var legacy = new { @event = envelope.@event, timestamp = envelope.timestamp, data = envelope.data };
+
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", legacy);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var row = await _factory.GetBlockchainTransactionAsync(envelope.data.txHash);
+        Assert.NotNull(row);
+        Assert.Equal(BlockchainNetwork.TRON, row!.Network);
+    }
+
+    [Fact]
+    public async Task Ethereum_Signed_Webhook_Without_Network_Is_Rejected_400_And_Nothing_Is_Written()
+    {
+        // The default is TRON's alone: the Ethereum service postdates T148 and
+        // must always name its network.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(network: BlockchainNetwork.ETHEREUM);
+        var client = _factory.CreateClient();
+        var envelope = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        var legacy = new { @event = envelope.@event, timestamp = envelope.timestamp, data = envelope.data };
+
+        var response = await SendSignedWithAsync(
+            EthereumSecret, client, "/api/v1/webhooks/blockchain/payment-detected", legacy);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("WEBHOOK_NETWORK_INVALID", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, await _factory.CountBlockchainTransactionsAsync(envelope.data.txHash));
+    }
+
+    [Fact]
+    public async Task Tron_Signed_Webhook_Without_Network_Against_An_Ethereum_Deposit_Is_Rejected_409()
+    {
+        // Taken as TRON, it still meets the deposit check: an Ethereum deposit
+        // is never credited by the TRON service.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(network: BlockchainNetwork.ETHEREUM);
+        var client = _factory.CreateClient();
+        var envelope = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        var legacy = new { @event = envelope.@event, timestamp = envelope.timestamp, data = envelope.data };
+
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", legacy);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("WEBHOOK_NETWORK_MISMATCH", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, await _factory.CountBlockchainTransactionsAsync(envelope.data.txHash));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("tron")]
+    [InlineData("BITCOIN")]
+    public async Task Tron_Signed_Webhook_With_An_Explicit_Unknown_Network_Is_Still_Rejected_400(string network)
+    {
+        // Only absence is defaulted; a value that is there and wrong is not.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+        var envelope = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        envelope.network = network;
+
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", envelope);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("WEBHOOK_NETWORK_INVALID", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, await _factory.CountBlockchainTransactionsAsync(envelope.data.txHash));
+    }
+
+    [Fact]
+    public async Task Webhook_Claiming_Another_Network_Than_Its_Signer_Is_Rejected_409()
+    {
+        // Signed with TRON's secret but claims ETHEREUM: one service may only
+        // speak for itself — a leaked TRON secret cannot forge Ethereum callbacks.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(network: BlockchainNetwork.ETHEREUM);
+        var client = _factory.CreateClient();
+        var envelope = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        envelope.network = "ETHEREUM";
+
+        var response = await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", envelope);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("WEBHOOK_NETWORK_MISMATCH", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, await _factory.CountBlockchainTransactionsAsync(envelope.data.txHash));
+    }
+
+    [Fact]
+    public async Task Webhook_Whose_Network_Differs_From_The_Deposit_Is_Rejected_409_And_Nothing_Is_Written()
+    {
+        // 11 §F8 "Ethereum akış ayrıntıları" — the Ethereum service (its own
+        // secret, body says ETHEREUM: authenticated and self-consistent)
+        // reports a payment against a TRON deposit. The deposit's network wins.
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(network: BlockchainNetwork.TRON);
+        var client = _factory.CreateClient();
+        var detected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        detected.network = "ETHEREUM";
+
+        var response = await SendSignedWithAsync(
+            EthereumSecret, client, "/api/v1/webhooks/blockchain/payment-detected", detected);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("WEBHOOK_NETWORK_MISMATCH", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, await _factory.CountBlockchainTransactionsAsync(detected.data.txHash));
+
+        // The same check guards the confirmation: a real TRON detection, then an
+        // Ethereum-tagged confirmation of it, leaves the row DETECTED.
+        var tronDetected = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        Assert.Equal(HttpStatusCode.OK,
+            (await SendSignedAsync(client, "/api/v1/webhooks/blockchain/payment-detected", tronDetected)).StatusCode);
+        var foreignConfirm = new
+        {
+            network = "ETHEREUM",
+            @event = "payment.confirmed",
+            timestamp = DateTime.UtcNow.ToString("O"),
+            data = new
+            {
+                paymentAddressId = ids.PaymentAddressId,
+                transactionId = ids.TransactionId,
+                txHash = tronDetected.data.txHash,
+                eventIndex = 0,
+                blockNumber = 1_500_000L,
+                confirmationCount = 64,
+                confirmedAt = DateTime.UtcNow.ToString("O"),
+            },
+        };
+        var confirmResponse = await SendSignedWithAsync(
+            EthereumSecret, client, "/api/v1/webhooks/blockchain/payment-confirmed", foreignConfirm);
+        Assert.Equal(HttpStatusCode.Conflict, confirmResponse.StatusCode);
+        var row = await _factory.GetBlockchainTransactionAsync(tronDetected.data.txHash);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, row!.Status);
+    }
+
+    [Fact]
+    public async Task Ethereum_Webhook_Signed_By_The_Ethereum_Service_Is_Recorded_On_Ethereum()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync(network: BlockchainNetwork.ETHEREUM);
+        var client = _factory.CreateClient();
+        var envelope = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+        envelope.network = "ETHEREUM";
+        envelope.data.txHash = "0x" + string.Concat(Enumerable.Repeat("ab", 32));
+
+        var response = await SendSignedWithAsync(
+            EthereumSecret, client, "/api/v1/webhooks/blockchain/payment-detected", envelope);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var row = await _factory.GetBlockchainTransactionAsync(envelope.data.txHash);
+        Assert.NotNull(row);
+        Assert.Equal(BlockchainNetwork.ETHEREUM, row!.Network);
+    }
+
+    [Fact]
+    public async Task Tron_Body_Signed_With_The_Ethereum_Secret_Is_Rejected_409()
+    {
+        var ids = await _factory.SeedTransactionWithPaymentAddressAsync();
+        var client = _factory.CreateClient();
+        var envelope = MakeDetectedEnvelope(ids.PaymentAddressId, ids.TransactionId);
+
+        var response = await SendSignedWithAsync(
+            EthereumSecret, client, "/api/v1/webhooks/blockchain/payment-detected", envelope);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(0, await _factory.CountBlockchainTransactionsAsync(envelope.data.txHash));
+    }
+
+    // T148 düzeltme turu 1 (F3) — the same secret on both networks used to be
+    // dropped silently (TRON kept it, every Ethereum callback then 401'd with
+    // nothing at startup saying why). The host now refuses to start, through
+    // Program.cs's own registration.
+    [Fact]
+    public void Host_Refuses_To_Start_When_Tron_And_Ethereum_Share_A_Webhook_Secret()
+    {
+        using var shared = _factory.WithWebHostBuilder(b =>
+            b.UseSetting("Webhook:EthereumSharedSecret", BlockchainSecret));
+
+        var ex = Assert.ThrowsAny<Exception>(() => shared.CreateClient());
+
+        var validation = Assert.IsType<OptionsValidationException>(
+            ex as OptionsValidationException ?? ex.InnerException ?? ex);
+        Assert.Contains(WebhookSettings.SharedSecretConflictMessage, validation.Failures);
+    }
+
+    private static Task<HttpResponseMessage> SendSignedAsync<T>(
         HttpClient client, string path, T payload)
+        => SendSignedWithAsync(BlockchainSecret, client, path, payload);
+
+    private static async Task<HttpResponseMessage> SendSignedWithAsync<T>(
+        string secret, HttpClient client, string path, T payload)
     {
         var body = JsonSerializer.Serialize(payload, JsonOptions);
         var timestamp = DateTime.UtcNow.ToString("O");
         var nonce = Guid.NewGuid().ToString("N");
-        var signature = Sign(BlockchainSecret, timestamp, nonce, body);
+        var signature = Sign(secret, timestamp, nonce, body);
         using var request = BuildRequest(path, body, timestamp, nonce, signature);
         return await client.SendAsync(request);
     }
@@ -587,6 +787,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         int eventIndex = 0,
         string? txHash = null) => new()
         {
+            network = "TRON",
             @event = "payment.detected",
             timestamp = DateTime.UtcNow.ToString("O"),
             data = new DetectedDataShape
@@ -608,6 +809,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
     private static object MakeConfirmedEnvelope(
         Guid paymentAddressId, Guid transactionId, string txHash, int eventIndex = 0) => new
         {
+            network = "TRON",
             @event = "payment.confirmed",
             timestamp = DateTime.UtcNow.ToString("O"),
             data = new
@@ -628,6 +830,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         string paymentAddress,
         string amount) => new
         {
+            network = "TRON",
             @event = "payment.wrong_token",
             timestamp = DateTime.UtcNow.ToString("O"),
             data = new
@@ -649,6 +852,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
 #pragma warning disable IDE1006 // Naming style — JSON wire shape mirrors camelCase
     private sealed class DetectedEnvelopeShape
     {
+        public string network { get; set; } = "TRON";
         public string @event { get; set; } = string.Empty;
         public string timestamp { get; set; } = string.Empty;
         public DetectedDataShape data { get; set; } = new();
@@ -699,7 +903,8 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         /// persist them. When omitted the legacy literal 100-USDT seed is used.
         /// </param>
         public async Task<(Guid TransactionId, Guid PaymentAddressId, string PaymentAddress)> SeedTransactionWithPaymentAddressAsync(
-            decimal? listingPrice = null)
+            decimal? listingPrice = null,
+            BlockchainNetwork network = BlockchainNetwork.TRON)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -739,13 +944,17 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
                 CommissionAmount = commission,
                 TotalAmount = total,
                 SellerPayoutAddress = "TKnEzG4qX5n6ZRSeller8B9C2D3E4F5G6H8",
+                Network = network,
             };
 
             var paymentAddress = new PaymentAddress
             {
                 Id = Guid.NewGuid(),
                 TransactionId = tx.Id,
-                Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
+                Network = network,
+                Address = network == BlockchainNetwork.TRON
+                    ? "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26)
+                    : "0x" + Guid.NewGuid().ToString("N") + "00000000",
                 HdWalletIndex = 42,
                 // PaymentAddressAllocator: ExpectedAmount = transaction.TotalAmount.
                 ExpectedAmount = total,
@@ -933,6 +1142,7 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
             // bot custody layer in T132; ForeignSidecarSecret is never registered,
             // which is exactly what makes the isolation assertion meaningful.
             builder.UseSetting("Webhook:BlockchainSharedSecret", BlockchainSecret);
+            builder.UseSetting("Webhook:EthereumSharedSecret", EthereumSecret);
             builder.UseSetting("Webhook:ReplayWindowSeconds", "300");
             builder.UseSetting("Webhook:NonceRetentionSeconds", "3600");
 

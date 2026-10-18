@@ -1,3 +1,5 @@
+using Skinora.Transactions.Application.Networks;
+using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.Lifecycle;
 
 namespace Skinora.Transactions.Tests.Unit.Lifecycle;
@@ -27,7 +29,7 @@ public class TransactionParamsServiceTests
             MinTransactionAmount: 12m,
             MaxTransactionAmount: 60000m,
             OpenLinkEnabled: true));
-        var sut = new TransactionParamsService(provider);
+        var sut = new TransactionParamsService(provider, new FixedAvailability(BlockchainNetwork.TRON));
 
         var dto = await sut.GetAsync(CancellationToken.None);
 
@@ -57,7 +59,7 @@ public class TransactionParamsServiceTests
             MinTransactionAmount: null,
             MaxTransactionAmount: null,
             OpenLinkEnabled: false));
-        var sut = new TransactionParamsService(provider);
+        var sut = new TransactionParamsService(provider, new FixedAvailability(BlockchainNetwork.TRON));
 
         var dto = await sut.GetAsync(CancellationToken.None);
 
@@ -83,7 +85,7 @@ public class TransactionParamsServiceTests
             PaymentTimeoutMaxMinutes: 60,
             PaymentTimeoutDefaultMinutes: 30,
             null, null, null, false));
-        var sut = new TransactionParamsService(provider);
+        var sut = new TransactionParamsService(provider, new FixedAvailability(BlockchainNetwork.TRON));
 
         var dto = await sut.GetAsync(CancellationToken.None);
 
@@ -110,7 +112,7 @@ public class TransactionParamsServiceTests
             PaymentTimeoutMaxMinutes: maxMinutes,
             PaymentTimeoutDefaultMinutes: defaultMinutes,
             null, null, null, false));
-        var sut = new TransactionParamsService(provider);
+        var sut = new TransactionParamsService(provider, new FixedAvailability(BlockchainNetwork.TRON));
 
         var dto = await sut.GetAsync(CancellationToken.None);
         var window = dto.PaymentTimeout;
@@ -123,6 +125,36 @@ public class TransactionParamsServiceTests
         {
             Assert.InRange(hour * 60, minMinutes, maxMinutes);
         }
+    }
+
+    // -------------------- T148 — supportedNetworks (07 §1.3, §7.4) --------------------
+
+    [Fact]
+    public async Task SupportedNetworks_Lists_Only_The_Open_Networks()
+    {
+        var provider = new StubLimitsProvider(new TransactionLimits(
+            null, null, null, null, null, null, null, null, null, null, null, false));
+
+        var tronOnly = await new TransactionParamsService(
+            provider, new FixedAvailability(BlockchainNetwork.TRON)).GetAsync(CancellationToken.None);
+        Assert.Equal(["TRON"], tronOnly.SupportedNetworks);
+
+        var both = await new TransactionParamsService(
+            provider, new FixedAvailability(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM))
+            .GetAsync(CancellationToken.None);
+        Assert.Equal(["TRON", "ETHEREUM"], both.SupportedNetworks);
+
+        // A frozen (or unconfigured) TRON leaves only Ethereum open.
+        var ethereumOnly = await new TransactionParamsService(
+            provider, new FixedAvailability(BlockchainNetwork.ETHEREUM)).GetAsync(CancellationToken.None);
+        Assert.Equal(["ETHEREUM"], ethereumOnly.SupportedNetworks);
+    }
+
+    private sealed class FixedAvailability(params BlockchainNetwork[] open) : IBlockchainNetworkAvailability
+    {
+        public IReadOnlyList<BlockchainNetwork> OpenForNewTransactions() => open;
+
+        public bool IsOpenForNewTransactions(BlockchainNetwork network) => open.Contains(network);
     }
 
     private sealed class StubLimitsProvider : ITransactionLimitsProvider

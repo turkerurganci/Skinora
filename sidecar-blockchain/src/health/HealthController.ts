@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { SERVICE_NETWORK, type BlockchainNetworkName } from '../network.js';
 import { TronGridClient } from '../tron/TronGridClient.js';
 
 interface HealthCheck {
@@ -10,6 +11,12 @@ interface HealthCheck {
 interface HealthResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   service: string;
+  /**
+   * T148 — the network this service watches. The backend's health probe
+   * checks it against the network whose address it probed, so a service
+   * address pointing at the wrong network's service reads as unhealthy.
+   */
+  network: BlockchainNetworkName;
   uptime: number;
   checks: HealthCheck[];
 }
@@ -77,6 +84,7 @@ export function healthCheckFactory(deps: HealthDeps = {}) {
     const response: HealthResponse = {
       status: overallStatus,
       service: 'skinora-blockchain-sidecar',
+      network: SERVICE_NETWORK,
       uptime: process.uptime(),
       checks,
     };

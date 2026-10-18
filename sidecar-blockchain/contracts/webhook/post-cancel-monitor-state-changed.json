@@ -1,0 +1,15 @@
+{
+  "event": "monitor.post_cancel_state_changed",
+  "network": "TRON",
+  "timestamp": "2026-10-18T09:30:00.000Z",
+  "data": {
+    "paymentAddressId": "aaaaaaaa-1111-2222-3333-444444444444",
+    "transactionId": "bbbbbbbb-1111-2222-3333-444444444444",
+    "address": "TD5gsCwxykWsLN9aPrq2TAfNjByuZKYp4E",
+    "previousState": "POST_CANCEL_24H",
+    "newState": "POST_CANCEL_7D",
+    "newStateExpiresAt": "2026-10-25T09:30:00.000Z",
+    "cancelledAt": "2026-10-17T09:30:00.000Z",
+    "changedAt": "2026-10-18T09:30:00.000Z"
+  }
+}

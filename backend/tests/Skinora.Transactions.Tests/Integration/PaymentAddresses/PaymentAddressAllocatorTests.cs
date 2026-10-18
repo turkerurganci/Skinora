@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
@@ -332,7 +333,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     }
 
     private PaymentAddressAllocator BuildSut() =>
-        new(Context, _sidecar, NullLogger<PaymentAddressAllocator>.Instance);
+        new(Context, FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar), NullLogger<PaymentAddressAllocator>.Instance);
 
     private async Task<Transaction> SeedTransactionAsync(
         TransactionStatus status, decimal totalAmount = 100.00m,

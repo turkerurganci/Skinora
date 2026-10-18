@@ -4,6 +4,7 @@ using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Transfers;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.PayoutIssues;
@@ -60,16 +61,16 @@ namespace Skinora.Transactions.Application.PayoutIssues;
 public sealed class BlockchainPayoutVerifier : IPayoutVerifier
 {
     private readonly AppDbContext _db;
-    private readonly IBlockchainTransferClient _client;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<BlockchainPayoutVerifier> _logger;
 
     public BlockchainPayoutVerifier(
         AppDbContext db,
-        IBlockchainTransferClient client,
+        IBlockchainServiceRegistry services,
         ILogger<BlockchainPayoutVerifier> logger)
     {
         _db = db;
-        _client = client;
+        _services = services;
         _logger = logger;
     }
 
@@ -86,7 +87,7 @@ public sealed class BlockchainPayoutVerifier : IPayoutVerifier
             .Where(b => b.TransactionId == transactionId
                         && b.Type == BlockchainTransactionType.SELLER_PAYOUT)
             .OrderByDescending(b => b.CreatedAt)
-            .Select(b => new { b.TxHash, b.Status })
+            .Select(b => new { b.TxHash, b.Status, b.Network })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (payout is null)
@@ -142,7 +143,9 @@ public sealed class BlockchainPayoutVerifier : IPayoutVerifier
                 "Ödeme henüz zincire gönderilmedi — takip ediliyor.");
         }
 
-        var status = await _client.GetStatusAsync(payout.TxHash, cancellationToken);
+        // T148 — the payout's own network's service (05 §3.3a).
+        var status = await _services.Transfers(payout.Network)
+            .GetStatusAsync(payout.TxHash, cancellationToken);
 
         return status.Outcome switch
         {

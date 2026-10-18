@@ -7,6 +7,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.PaymentAddresses;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Transfers;
@@ -77,27 +78,27 @@ public sealed class OutgoingTransferDispatchJob
     ];
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainTransferClient _client;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ITransferRetryPolicy _retryPolicy;
     private readonly IOutboxService _outbox;
-    private readonly StablecoinContractOptions _contracts;
+    private readonly IStablecoinContractRegistry _contracts;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
     public OutgoingTransferDispatchJob(
         AppDbContext db,
-        IBlockchainTransferClient client,
+        IBlockchainServiceRegistry services,
         ITransferRetryPolicy retryPolicy,
         IOutboxService outbox,
-        IOptions<StablecoinContractOptions> contracts,
+        IStablecoinContractRegistry contracts,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
         _db = db;
-        _client = client;
+        _services = services;
         _retryPolicy = retryPolicy;
         _outbox = outbox;
-        _contracts = contracts.Value;
+        _contracts = contracts;
         _clock = clock;
         _logger = logger;
     }
@@ -105,11 +106,23 @@ public sealed class OutgoingTransferDispatchJob
     public async Task ExecuteAsync(CancellationToken cancellationToken = default)
     {
         var now = _clock.GetUtcNow().UtcDateTime;
+
+        // T148 düzeltme turu 1 (F1) — only rows of a network whose service is
+        // configured are candidates. A row on an unconfigured network is parked
+        // (never sent, NextAttemptAt stays null), so selecting it would put it
+        // back at the head of the oldest-first batch on every run: BatchSize
+        // parked rows would starve every other network's payouts, refunds and
+        // sweeps. Filtering in the query keeps the batch for rows that can move.
+        var configured = _services.ConfiguredNetworks.ToList();
+        await LogParkedRowsAsync(configured, cancellationToken);
+        if (configured.Count == 0) return;
+
         var candidateIds = await _db.Set<BlockchainTransaction>()
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(b => b.Status == BlockchainTransactionStatus.PENDING
                 && OutboundTypes.Contains(b.Type)
+                && configured.Contains(b.Network)
                 && (b.NextAttemptAt == null || b.NextAttemptAt <= now))
             .OrderBy(b => b.CreatedAt)
             .Take(BatchSize)
@@ -128,11 +141,57 @@ public sealed class OutgoingTransferDispatchJob
         }
     }
 
+    /// <summary>
+    /// One error line per run and unconfigured network that still holds
+    /// PENDING outbound rows — the visibility the per-row log gave before the
+    /// candidate query learned to skip them.
+    /// </summary>
+    private async Task LogParkedRowsAsync(
+        List<BlockchainNetwork> configured,
+        CancellationToken cancellationToken)
+    {
+        var unconfigured = Enum.GetValues<BlockchainNetwork>()
+            .Where(n => !configured.Contains(n))
+            .ToList();
+        if (unconfigured.Count == 0) return;
+
+        var parked = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(b => b.Status == BlockchainTransactionStatus.PENDING
+                && OutboundTypes.Contains(b.Type)
+                && unconfigured.Contains(b.Network))
+            .GroupBy(b => b.Network)
+            .Select(g => new { Network = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        foreach (var group in parked)
+        {
+            _logger.LogError(
+                "{Count} outbound row(s) on {Network} are waiting PENDING: that network has no blockchain service configured — nothing sent, other networks unaffected.",
+                group.Count, group.Network);
+        }
+    }
+
     private async Task DispatchOneAsync(Guid id, CancellationToken cancellationToken)
     {
         var row = await _db.Set<BlockchainTransaction>()
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (row is null || row.Status != BlockchainTransactionStatus.PENDING) return;
+
+        // T148 — fail closed per network (05 §3.3a). A row whose network has no
+        // service configured is left PENDING untouched: no broadcast, no retry
+        // budget spent, no FAILED flip. The candidate query already skips such
+        // rows, so they never take another network's batch slots; this
+        // re-check is the defensive second layer. The row goes out as soon as
+        // its service is configured. (Before T147 every row is TRON.)
+        if (!_services.IsConfigured(row.Network))
+        {
+            _logger.LogError(
+                "Outbound row {Id} ({Type}) is on {Network}, which has no blockchain service configured — left PENDING, nothing sent.",
+                row.Id, row.Type, row.Network);
+            return;
+        }
 
         // For refund/sweep flows the deposit address is the PaymentAddress
         // that owns the original BUYER_PAYMENT row. Resolve it via the
@@ -185,7 +244,7 @@ public sealed class OutgoingTransferDispatchJob
         var broadcastToken = row.Token;
         if (row.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND)
         {
-            var actualToken = _contracts.ResolveByContract(row.ActualTokenAddress);
+            var actualToken = _contracts.ResolveByContract(row.Network, row.ActualTokenAddress);
             if (actualToken is null)
             {
                 // Unresolvable contract cannot be broadcast under any symbol.
@@ -215,7 +274,8 @@ public sealed class OutgoingTransferDispatchJob
             DepositIndex: depositIndex,
             DepositAddress: depositAddress);
 
-        var result = await _client.BroadcastAsync(request, cancellationToken);
+        // Same-network rule (11 §F8 K3): the row's own network's service.
+        var result = await _services.Transfers(row.Network).BroadcastAsync(request, cancellationToken);
         switch (result.Status)
         {
             case TransferBroadcastStatus.Success:

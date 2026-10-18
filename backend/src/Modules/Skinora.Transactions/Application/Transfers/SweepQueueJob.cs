@@ -112,21 +112,29 @@ public sealed class SweepQueueJob
         // The sweep destination is deployment configuration, the same value the
         // signer pins itself to (05 §3.3, owner decision 2026-09-16): it is not
         // an admin-editable setting, so no panel action can redirect a settled
-        // sale's deposit. Unset means there is nowhere to sweep to — skip the
-        // run rather than queue rows with a bogus ToAddress.
-        var hotWallet = _walletAddresses.HotWalletAddress;
-        if (hotWallet is null)
-        {
-            _logger.LogWarning(
-                "SweepQueueJob skipped: {Key} is unconfigured — cannot queue sweeps.",
-                EnvPlatformWalletAddressProvider.HotWalletConfigurationKey);
-            return;
-        }
+        // sale's deposit. Since T148 it is resolved per transaction from the
+        // deposit's network — every network has its own hot wallet and a
+        // deposit is never swept to another network's (11 §F8 K3). Unset
+        // means there is nowhere to sweep to on that network — that
+        // transaction is skipped rather than queued with a bogus ToAddress.
+
+        // T148 düzeltme turu 1 (F1) — only deposits on a network that has a
+        // hot wallet are candidates. A deposit on a network without one is
+        // skipped below and never gets a sweep row, so selecting it would keep
+        // it at the head of the oldest-first batch forever: BatchSize of them
+        // would starve every other network's sweeps (and the payouts gated on
+        // them). The waiting ones are counted once per run instead.
+        var sweepable = Enum.GetValues<BlockchainNetwork>()
+            .Where(n => _walletAddresses.For(n).HotWalletAddress is not null)
+            .ToList();
+        var unsweepable = Enum.GetValues<BlockchainNetwork>()
+            .Where(n => !sweepable.Contains(n))
+            .ToList();
 
         // Soft-delete query filter excludes IsDeleted rows. Defer past the
         // buyer-refund window (ITEM_DELIVERED), skip held / disputed
         // transactions, and any that already have a sweep row queued.
-        var candidateIds = await _db.Set<Transaction>()
+        var eligible = _db.Set<Transaction>()
             .AsNoTracking()
             .Where(t => t.Status == TransactionStatus.ITEM_DELIVERED
                 && !t.IsOnHold
@@ -134,7 +142,27 @@ public sealed class SweepQueueJob
                 && t.SettlementVerifiedAt != null
                 && t.DeliveryReversedAt == null
                 && !t.BlockchainTransactions.Any(
-                    b => b.Type == BlockchainTransactionType.SWEEP))
+                    b => b.Type == BlockchainTransactionType.SWEEP));
+
+        if (unsweepable.Count > 0)
+        {
+            var waiting = await eligible
+                .Where(t => t.PaymentAddress != null && unsweepable.Contains(t.PaymentAddress.Network))
+                .GroupBy(t => t.PaymentAddress!.Network)
+                .Select(g => new { Network = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+            foreach (var group in waiting)
+            {
+                _logger.LogWarning(
+                    "Sweep: {Count} delivered transaction(s) on {Network} are waiting — the {Network} hot wallet address is unconfigured; other networks unaffected.",
+                    group.Count, group.Network, group.Network);
+            }
+        }
+
+        // A transaction without a deposit row stays a candidate so the
+        // defensive error below still reports it.
+        var candidateIds = await eligible
+            .Where(t => t.PaymentAddress == null || sweepable.Contains(t.PaymentAddress.Network))
             .OrderBy(t => t.ItemDeliveredAt)
             .Take(BatchSize)
             .Select(t => t.Id)
@@ -148,11 +176,11 @@ public sealed class SweepQueueJob
         foreach (var id in candidateIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await QueueSweepAsync(id, hotWallet, cancellationToken);
+            await QueueSweepAsync(id, cancellationToken);
         }
     }
 
-    private async Task QueueSweepAsync(Guid id, string hotWallet, CancellationToken cancellationToken)
+    private async Task QueueSweepAsync(Guid id, CancellationToken cancellationToken)
     {
         var transaction = await _db.Set<Transaction>()
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
@@ -186,7 +214,7 @@ public sealed class SweepQueueJob
         var deposit = await _db.Set<PaymentAddress>()
             .AsNoTracking()
             .Where(p => p.TransactionId == transaction.Id)
-            .Select(p => new { p.Id, p.Address })
+            .Select(p => new { p.Id, p.Address, p.Network })
             .FirstOrDefaultAsync(cancellationToken);
         if (deposit is null)
         {
@@ -196,11 +224,21 @@ public sealed class SweepQueueJob
             return;
         }
 
+        var hotWallet = _walletAddresses.For(deposit.Network).HotWalletAddress;
+        if (hotWallet is null)
+        {
+            _logger.LogWarning(
+                "Sweep skipped for transaction {TransactionId}: the {Network} hot wallet address is unconfigured — cannot queue the sweep.",
+                transaction.Id, deposit.Network);
+            return;
+        }
+
         var sweepRow = new BlockchainTransaction
         {
             Id = Guid.NewGuid(),
             TransactionId = transaction.Id,
             PaymentAddressId = deposit.Id,     // CK_..._Type_Sweep: NOT NULL (deposit-anchored source).
+            Network = deposit.Network,         // Same-network rule (11 §F8 K3) — the deposit's network.
             Type = BlockchainTransactionType.SWEEP,
             TxHash = null,
             FromAddress = deposit.Address,      // Source deposit; dispatcher re-resolves the same address.

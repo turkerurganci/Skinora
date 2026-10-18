@@ -14,6 +14,7 @@ using Skinora.Fraud.Application.Pricing;
 using Skinora.Transactions.Application.Admin;
 using Skinora.Transactions.Application.Delivery;
 using Skinora.Transactions.Application.GasFee;
+using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.Lifecycle;
 using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
@@ -206,26 +207,14 @@ public static class TransactionsModule
         services.AddScoped<IRefundBlockedAlertService, RefundBlockedAlertService>();
 
         // Prova-GasFeeChargedIsFixedGuess (2026-09-02) — runtime pre-send gas
-        // estimate via the sidecar; the static *_gas_fee_estimate_usdt
-        // settings above survive as the resolver's fallback so an estimator
-        // outage degrades to the pre-round constants instead of blocking
-        // refunds or payouts.
-        services.AddHttpClient<HttpSidecarGasFeeEstimator>(
-            HttpSidecarGasFeeEstimator.HttpClientName,
-            (sp, client) =>
-            {
-                var options = sp.GetRequiredService<IOptions<BlockchainSidecarOptions>>().Value;
-                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
-                {
-                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
-                }
-                // The estimate fans out into several chain reads plus a price
-                // fetch on the sidecar — a chain-read budget. It waits for no
-                // block, unlike a broadcast.
-                client.Timeout = options.ResolveChainReadTimeout();
-            });
-        services.AddScoped<IGasFeeEstimator>(sp =>
-            sp.GetRequiredService<HttpSidecarGasFeeEstimator>());
+        // estimate via the network's service; the static per-network fallback
+        // settings survive as the resolver's fallback so an estimator outage
+        // degrades to the pre-round constants instead of blocking refunds or
+        // payouts. T148 — estimator and fallbacks are per network
+        // (IBlockchainServiceRegistry.GasFee, IBlockchainNetworkSettingsProvider);
+        // the named HTTP clients are registered with the other per-network
+        // clients below.
+        services.AddScoped<IBlockchainNetworkSettingsProvider, BlockchainNetworkSettingsProvider>();
         services.AddScoped<IChargedGasFeeResolver, ChargedGasFeeResolver>();
 
         // T59 — admin transaction lifecycle orchestrator. Composes the T44
@@ -262,37 +251,39 @@ public static class TransactionsModule
         services.TryAddScoped<IPayoutVerifier, BlockchainPayoutVerifier>();
         services.AddScoped<IPayoutEscalationAdminResolver, PayoutEscalationAdminResolver>();
 
-        // T70 — blockchain sidecar HD wallet wiring (08 §3.2, 05 §3.3).
-        services.Configure<BlockchainSidecarOptions>(
-            configuration.GetSection(BlockchainSidecarOptions.SectionName));
+        // T70 / T148 — one blockchain service per network (05 §3.3a, 08 §3.0).
+        // TRON binds the pre-F8 sections as the DEFAULT options instances, so
+        // every existing deployment keeps working unchanged; Ethereum binds its
+        // own sections as the named "ETHEREUM" instances. An Ethereum section
+        // without a BaseUrl (the state until T150) makes every Ethereum call
+        // fail closed through UnconfiguredBlockchainService; TRON is untouched.
+        foreach (var network in Enum.GetValues<BlockchainNetwork>())
+        {
+            services.Configure<BlockchainSidecarOptions>(
+                BlockchainSidecarOptions.OptionsNameFor(network),
+                configuration.GetSection(BlockchainSidecarOptions.SectionNameFor(network)));
 
-        // TRC-20 contract addresses for the network this deployment watches
-        // (08 §3.3). Unset means mainnet; a testnet deployment must set these
-        // to the same addresses the sidecar reads from TRON_USDT_CONTRACT /
-        // TRON_USDC_CONTRACT, or the monitor is armed with an expectedContract
-        // the sidecar will classify as wrong_token.
-        services.Configure<StablecoinContractOptions>(
-            configuration.GetSection(StablecoinContractOptions.SectionName));
+            // Token contracts the network's deposits are watched for (08 §3.3,
+            // §3.7.1). Unset means that network's mainnet; a testnet deployment
+            // must set the same addresses its service watches
+            // (TRON_USDT_CONTRACT / TRON_USDC_CONTRACT for TRON), or the
+            // monitor is armed with an expectedContract the service will
+            // classify as wrong_token.
+            services.Configure<StablecoinContractOptions>(
+                StablecoinContractRegistry.OptionsNameFor(network),
+                configuration.GetSection(StablecoinContractRegistry.SectionNameFor(network)));
 
-        services.AddHttpClient<HttpBlockchainSidecarClient>(
-            HttpBlockchainSidecarClient.HttpClientName,
-            (sp, client) =>
-            {
-                var options = sp.GetRequiredService<IOptions<BlockchainSidecarOptions>>().Value;
-                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
-                {
-                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
-                }
-                client.Timeout = TimeSpan.FromSeconds(
-                    options.TimeoutSeconds <= 0 ? 10 : options.TimeoutSeconds);
-            });
-        services.AddScoped<IBlockchainSidecarClient>(sp =>
-            sp.GetRequiredService<HttpBlockchainSidecarClient>());
+            RegisterBlockchainHttpClients(services, network);
+        }
+
+        services.AddScoped<IBlockchainServiceRegistry, BlockchainServiceRegistry>();
+        services.AddSingleton<IStablecoinContractRegistry, StablecoinContractRegistry>();
+        services.AddScoped<IBlockchainNetworkAvailability, BlockchainNetworkAvailability>();
+        // The API host replaces this with the probe-backed implementation
+        // (Program.cs) — hosts without the probe read every network as healthy.
+        services.TryAddSingleton<IBlockchainNetworkHealth>(AlwaysHealthyBlockchainNetworks.Instance);
 
         services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
-        // T147 — interim network availability until the per-network service
-        // registry (T148) replaces it: only TRON has a service.
-        services.AddSingleton<IBlockchainNetworkAvailability, TronOnlyNetworkAvailability>();
         services.AddScoped<EnsurePaymentAddressJob>();
         services.AddHostedService<EnsurePaymentAddressJobRegistrar>();
 
@@ -327,29 +318,12 @@ public static class TransactionsModule
         services.AddScoped<IBlockchainWebhookHandler, BlockchainWebhookHandler>();
 
         // T73 — outbound transfer dispatcher (08 §3.1, §3.3, 05 §3.3). Two
-        // recurring Hangfire jobs (per-minute) plus the sidecar HTTP port
-        // and SystemSetting-backed retry policy. The dispatcher picks up
-        // PENDING BlockchainTransaction rows (refund/payout/sweep) and asks
-        // the sidecar to broadcast them; the confirmation job flips
-        // DETECTED → CONFIRMED / FAILED based on solidity-node finality.
-        services.AddHttpClient<HttpBlockchainTransferClient>(
-            HttpBlockchainTransferClient.HttpClientName,
-            (sp, client) =>
-            {
-                var options = sp.GetRequiredService<IOptions<BlockchainSidecarOptions>>().Value;
-                if (!string.IsNullOrWhiteSpace(options.BaseUrl))
-                {
-                    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
-                }
-                // A deposit-sourced broadcast waits on the sidecar for each
-                // resource step to land in a block (08 §3.3). The client
-                // timeout is that broadcast budget; the status read on the same
-                // client narrows itself to the chain-read budget.
-                client.Timeout = options.ResolveTransferTimeout();
-            });
-        services.AddScoped<IBlockchainTransferClient>(sp =>
-            sp.GetRequiredService<HttpBlockchainTransferClient>());
-
+        // recurring Hangfire jobs (per-minute) plus the per-network transfer
+        // clients (IBlockchainServiceRegistry.Transfers, registered above) and
+        // SystemSetting-backed retry policy. The dispatcher picks up PENDING
+        // BlockchainTransaction rows (refund/payout/sweep) and asks the row's
+        // network's service to broadcast them; the confirmation job flips
+        // DETECTED → CONFIRMED / FAILED by that network's finality rule.
         services.AddScoped<ITransferRetryPolicy, SystemSettingsTransferRetryPolicy>();
         services.AddScoped<OutgoingTransferDispatchJob>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
@@ -434,5 +408,58 @@ public static class TransactionsModule
         services.Replace(ServiceDescriptor.Singleton<ISettingChangePropagator, CronSettingChangePropagator>());
 
         return services;
+    }
+
+    /// <summary>
+    /// T148 — the three named HTTP clients of one network's service, each with
+    /// its own budget (05 §3.3, #323): wallet / monitor calls are quick, an
+    /// estimate or status read is a chain read, a broadcast waits for blocks.
+    /// TRON keeps the pre-F8 client names (<see cref="BlockchainHttpClientNames"/>).
+    /// A network without a BaseUrl gets clients with no base address; the
+    /// registry never hands them out (<see cref="UnconfiguredBlockchainService"/>).
+    /// </summary>
+    private static void RegisterBlockchainHttpClients(IServiceCollection services, BlockchainNetwork network)
+    {
+        var optionsName = BlockchainSidecarOptions.OptionsNameFor(network);
+
+        BlockchainSidecarOptions ResolveOptions(IServiceProvider provider) =>
+            provider.GetRequiredService<IOptionsMonitor<BlockchainSidecarOptions>>().Get(optionsName);
+
+        static void SetBaseAddress(HttpClient client, BlockchainSidecarOptions options)
+        {
+            if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+            {
+                client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+            }
+        }
+
+        services.AddHttpClient(BlockchainHttpClientNames.Sidecar(network), (provider, client) =>
+        {
+            var options = ResolveOptions(provider);
+            SetBaseAddress(client, options);
+            client.Timeout = TimeSpan.FromSeconds(
+                options.TimeoutSeconds <= 0 ? 10 : options.TimeoutSeconds);
+        });
+
+        services.AddHttpClient(BlockchainHttpClientNames.GasFee(network), (provider, client) =>
+        {
+            var options = ResolveOptions(provider);
+            SetBaseAddress(client, options);
+            // The estimate fans out into several chain reads plus a price
+            // fetch on the service — a chain-read budget. It waits for no
+            // block, unlike a broadcast.
+            client.Timeout = options.ResolveChainReadTimeout();
+        });
+
+        services.AddHttpClient(BlockchainHttpClientNames.Transfer(network), (provider, client) =>
+        {
+            var options = ResolveOptions(provider);
+            SetBaseAddress(client, options);
+            // A deposit-sourced broadcast waits on the service for each
+            // resource step to land in a block (08 §3.3). The client timeout
+            // is that broadcast budget; the status read on the same client
+            // narrows itself to the chain-read budget.
+            client.Timeout = options.ResolveTransferTimeout();
+        });
     }
 }

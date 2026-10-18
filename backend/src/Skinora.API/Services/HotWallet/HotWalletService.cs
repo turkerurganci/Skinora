@@ -9,6 +9,7 @@ using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Wallets;
 
@@ -22,26 +23,35 @@ namespace Skinora.API.Services.HotWallet;
 /// modules <c>Skinora.Transactions</c> does not reference — same cross-module
 /// composition rule used by <see cref="ReconciliationService"/>.
 /// </summary>
+/// <remarks>
+/// T148 — the consolidation runs on <see cref="ConsolidationNetwork"/> (TRON): its
+/// service signs, its hot/cold pair is the source and the pinned destination,
+/// and the ledger row carries it. The admin endpoint (AD20) does not name a
+/// network yet; choosing one there is T157's (07 §1.3 "Admin").
+/// </remarks>
 public sealed class HotWalletService : IHotWalletService
 {
+    /// <summary>The network AD20 consolidates on until the admin API names one (T157).</summary>
+    public const BlockchainNetwork ConsolidationNetwork = BlockchainNetwork.TRON;
+
     private const int AmountScale = 6;
     private static readonly decimal AmountScaleQuantum = 0.000001m;
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
     private readonly ILogger<HotWalletService> _logger;
 
     public HotWalletService(
         AppDbContext db,
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<HotWalletService> logger)
     {
         _db = db;
-        _sidecar = sidecar;
+        _services = services;
         _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
@@ -88,7 +98,7 @@ public sealed class HotWalletService : IHotWalletService
         // and is only known after the SaveChanges below.
         var correlationId = Guid.NewGuid();
 
-        var sidecarResult = await _sidecar.SendHotToColdTransferAsync(
+        var sidecarResult = await _services.Sidecar(ConsolidationNetwork).SendHotToColdTransferAsync(
             new HotToColdTransferRequest(
                 ColdTransferId: correlationId,
                 ToColdAddress: addresses.ColdWallet,
@@ -109,9 +119,9 @@ public sealed class HotWalletService : IHotWalletService
         var nowUtc = _clock.GetUtcNow().UtcDateTime;
         var transfer = new ColdWalletTransfer
         {
-            // 06 §1.4 (T145) — the configured hot/cold pair is TRON's; per-
-            // network wallets arrive with T148.
-            Network = BlockchainNetwork.TRON,
+            // 06 §1.4 (T145) / T148 — the ledger row carries the network the
+            // consolidation ran on.
+            Network = ConsolidationNetwork,
             Amount = amount,
             Token = token,
             FromAddress = addresses.HotWallet,
@@ -167,7 +177,10 @@ public sealed class HotWalletService : IHotWalletService
     /// <c>COLD_WALLET_ADDRESS</c>, so a drifted value fails there rather than
     /// sending platform funds to an address someone typed into the panel.
     /// </summary>
-    private (string? HotWallet, string? ColdWallet) ReadWalletAddresses() =>
-        (_walletAddresses.HotWalletAddress, _walletAddresses.ColdWalletAddress);
+    private (string? HotWallet, string? ColdWallet) ReadWalletAddresses()
+    {
+        var pair = _walletAddresses.For(ConsolidationNetwork);
+        return (pair.HotWalletAddress, pair.ColdWalletAddress);
+    }
 
 }

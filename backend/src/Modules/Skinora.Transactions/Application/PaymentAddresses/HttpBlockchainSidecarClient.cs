@@ -4,38 +4,53 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Skinora.Shared.Enums;
 
 namespace Skinora.Transactions.Application.PaymentAddresses;
 
 /// <summary>
 /// <see cref="HttpClient"/>-backed implementation of
-/// <see cref="IBlockchainSidecarClient"/>. Routes to the blockchain sidecar
-/// container; service-to-service auth uses the shared
-/// <c>X-Internal-Key</c> header (05 §3.4).
+/// <see cref="IBlockchainSidecarClient"/> for ONE network's blockchain service
+/// (T148 — 05 §3.3a). Service-to-service auth uses that service's own
+/// <c>X-Internal-Key</c> (05 §3.4), and every request body names the network
+/// (<c>"network": "TRON"</c>) so a service reached at the wrong address
+/// refuses the call instead of acting on it.
 /// </summary>
+/// <remarks>
+/// Instances are built by <c>BlockchainServiceRegistry</c> per network; callers
+/// never hold one directly — they ask the registry with the network of the
+/// record they act on (<c>PaymentAddress.Network</c>, <c>BlockchainTransaction.Network</c>).
+/// </remarks>
 public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
 {
-    /// <summary>HTTP client name used by <c>AddHttpClient</c>.</summary>
+    /// <summary>TRON's named HTTP client (pre-F8 name, kept); see <see cref="Networks.BlockchainHttpClientNames"/>.</summary>
     public const string HttpClientName = "BlockchainSidecar";
 
     private const string InternalKeyHeader = "X-Internal-Key";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    private readonly BlockchainNetwork _network;
+    private readonly string _networkWire;
     private readonly HttpClient _http;
     private readonly BlockchainSidecarOptions _options;
     private readonly ILogger<HttpBlockchainSidecarClient> _logger;
 
     public HttpBlockchainSidecarClient(
+        BlockchainNetwork network,
         HttpClient http,
-        IOptions<BlockchainSidecarOptions> options,
+        BlockchainSidecarOptions options,
         ILogger<HttpBlockchainSidecarClient> logger)
     {
+        _network = network;
+        _networkWire = network.ToString();
         _http = http;
-        _options = options.Value;
+        _options = options;
         _logger = logger;
     }
+
+    /// <summary>The network whose service this client talks to.</summary>
+    public BlockchainNetwork Network => _network;
 
     public async Task<BlockchainSidecarDeriveResult> DeriveAddressAsync(
         int index,
@@ -45,7 +60,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/wallet/derive")
         {
             Content = JsonContent.Create(
-                new DeriveRequest(index, transactionId.ToString("D")),
+                new DeriveRequest(_networkWire, index, transactionId.ToString("D")),
                 options: JsonOptions),
         };
         if (!string.IsNullOrEmpty(_options.InternalKey))
@@ -132,6 +147,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         CancellationToken cancellationToken)
     {
         var body = new MonitorStartRequestBody(
+            Network: _networkWire,
             Address: request.Address,
             PaymentAddressId: request.PaymentAddressId.ToString("D"),
             TransactionId: request.TransactionId.ToString("D"),
@@ -150,7 +166,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         string address,
         CancellationToken cancellationToken)
     {
-        var body = new MonitorStopRequestBody(Address: address);
+        var body = new MonitorStopRequestBody(Network: _networkWire, Address: address);
         return await SendCommandAsync(
             "api/monitor/stop",
             body,
@@ -163,6 +179,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         CancellationToken cancellationToken)
     {
         var body = new PostCancelStartRequestBody(
+            Network: _networkWire,
             Address: request.Address,
             PaymentAddressId: request.PaymentAddressId.ToString("D"),
             TransactionId: request.TransactionId.ToString("D"),
@@ -183,7 +200,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         string address,
         CancellationToken cancellationToken)
     {
-        var body = new PostCancelStopRequestBody(Address: address);
+        var body = new PostCancelStopRequestBody(Network: _networkWire, Address: address);
         return await SendCommandAsync(
             "api/monitor/post-cancel-stop",
             body,
@@ -206,7 +223,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         using var request = new HttpRequestMessage(HttpMethod.Post, "api/wallet/balances")
         {
             Content = JsonContent.Create(
-                new BalancesRequest(addresses),
+                new BalancesRequest(_networkWire, addresses),
                 options: JsonOptions),
         };
         if (!string.IsNullOrEmpty(_options.InternalKey))
@@ -287,6 +304,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         CancellationToken cancellationToken)
     {
         var body = new ColdTransferRequestBody(
+            Network: _networkWire,
             ColdTransferId: request.ColdTransferId.ToString("D"),
             ToColdAddress: request.ToColdAddress,
             Amount: request.Amount,
@@ -431,6 +449,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
     }
 
     private sealed record DeriveRequest(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("index")] int Index,
         [property: JsonPropertyName("transactionId")] string TransactionId);
 
@@ -440,6 +459,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("index")] int Index);
 
     private sealed record MonitorStartRequestBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("address")] string Address,
         [property: JsonPropertyName("paymentAddressId")] string PaymentAddressId,
         [property: JsonPropertyName("transactionId")] string TransactionId,
@@ -461,9 +481,11 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
     };
 
     private sealed record MonitorStopRequestBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("address")] string Address);
 
     private sealed record PostCancelStartRequestBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("address")] string Address,
         [property: JsonPropertyName("paymentAddressId")] string PaymentAddressId,
         [property: JsonPropertyName("transactionId")] string TransactionId,
@@ -474,9 +496,11 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("initialStateExpiresAt")] string? InitialStateExpiresAt);
 
     private sealed record PostCancelStopRequestBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("address")] string Address);
 
     private sealed record BalancesRequest(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("addresses")] IReadOnlyList<string> Addresses);
 
     private sealed record BalancesResponse(
@@ -488,6 +512,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("tokens")] Dictionary<string, string>? Tokens);
 
     private sealed record ColdTransferRequestBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("coldTransferId")] string ColdTransferId,
         [property: JsonPropertyName("toColdAddress")] string ToColdAddress,
         [property: JsonPropertyName("amount")] string Amount,

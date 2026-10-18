@@ -17,11 +17,12 @@ namespace Skinora.Shared.Events;
 /// so a recipient learns about an outage the platform has already reacted to.
 /// The admin's manual maintenance freeze (WP7) remains available.
 /// <see cref="Component"/> is a stable
-/// string identifier (<c>"STEAM"</c> / <c>"BLOCKCHAIN"</c>) rather than a shared
+/// string identifier (<c>"STEAM"</c>, or one blockchain component per network —
+/// <c>"BLOCKCHAIN_TRON"</c> / <c>"BLOCKCHAIN_ETHEREUM"</c> since T148) rather than a shared
 /// enum so the event carries no enum-parity surface.
 /// </remarks>
 /// <param name="EventId">Outbox-level event identifier.</param>
-/// <param name="Component">Health component: <c>"STEAM"</c> or <c>"BLOCKCHAIN"</c>.</param>
+/// <param name="Component">Health component: <c>"STEAM"</c>, <c>"BLOCKCHAIN_TRON"</c> or <c>"BLOCKCHAIN_ETHEREUM"</c>.</param>
 /// <param name="Status">Transition: <c>"DEGRADED"</c> or <c>"RECOVERED"</c>.</param>
 /// <param name="ConsecutiveFailures">Consecutive failed probes at the time of the alert (0 on recovery).</param>
 /// <param name="OccurredAt">UTC timestamp the transition was detected.</param>
