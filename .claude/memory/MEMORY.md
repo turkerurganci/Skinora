@@ -97,7 +97,7 @@
 - [wp5-validation-pass.md](wp5-validation-pass.md) — WP5 admin dispute resolution bagimsiz validator PASS (2026-06-17, 8/8 AC, 2384/2384 test)
 - [project_playbook_template.md](project_playbook_template.md) — Skinora metodunu uygulama-bagimsiz public GitHub template'ine donusturme projesi; yayinda, v1.1.0 (2026-08-01), isTemplate=false
 - [project_f8_yonetici_duzeni.md](project_f8_yonetici_duzeni.md) — F8 boyunca yonetici duzeni: gorev + dogrulama temiz alt ajanda, PASS + CI yesilse ben merge ederim, yalniz cok kritik sorular (2026-10-17)
-- [feedback_model_by_task_weight.md](feedback_model_by_task_weight.md) — Her isi Opus'a verme: kod/dogrulama/karar/olcum Opus; kucuk metin duzeltme ve kayit Sonnet; sayma/listeleme/temizlik Haiku; CI/merge dogrudan Bash
+- [feedback_model_by_task_weight.md](feedback_model_by_task_weight.md) — Model işin RİSKİNE göre: Opus yalnız para/güvenlik; diğer yapım+doğrulama Sonnet; tek satırlık iş doğrudan komut. Efor varsayılan medium, high+ yalnız çok gerekli yerde (maliyet düşürme, 2026-10-18)
 
 ## Reference
 - [reference_remote_control.md](reference_remote_control.md) — VS Code Claude Code /remote-control (/rc) komutu — mobil session izleme/kontrol

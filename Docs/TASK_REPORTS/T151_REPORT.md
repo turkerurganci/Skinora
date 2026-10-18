@@ -59,9 +59,23 @@
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | ⏳ Doğrulama bekliyor (ayrı alt ajan) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız temiz bağlam; HEAD `b2e4757`) |
+| Bulgu sayısı | 3 grup (açılışta USDT durumu, `finalized` etiketi testi, test boşlukları) |
+| Düzeltme gerekli mi | Evet — bu kapanışta yapıldı |
+
+## Doğrulama sonucu
+
+- **Verdict:** PASS. Doğrulayıcı: bağımsız temiz bağlam ajanı (F8 yönetici düzeni). HEAD `b2e4757`, CI run [`39129005912`](https://github.com/turkerurganci/Skinora/actions/runs/39129005912) ✓.
+- **Bozma ölçümü:** servis 54 bozma / 43 yakalandı + backend 6/6. Yakalanmayan gerçek boşluklar F1, L1, G5, R8, S7, S8 bu kapanışta testle kapandı; R6, R10, S3, S10, P3 eşdeğer.
+- **Sepolia ölçümü:** doğrulayıcı canlı Sepolia'da sağlayıcı davranışını (adressiz `eth_getLogs` reddi, `finalized` etiketi) ölçtü; tasarımla uyumlu.
+- **Bulgular ve kapanışı:**
+  1. *Açılışta USDT durumu okunmuyor* — `usdt.start()` ilk okumayı `finalized` baş okunmadan deniyor ve sessizce atlıyordu; sonraki deneme 10 dk sonra olduğundan her yeniden başlatmada ~10 dk `acceptsPayments=false` ve backend Ethereum kesintisi ilan ediyordu. Düzeltme: `UsdtStatusMonitor` durum `unknown` iken 15 sn aralıkla yeniden dener (`retryMs`). Başlatma sırası `src/wiring.ts`'e alındı (`index.ts` onu kullanıyor); test (`wiring.test.ts`) gerçek sırayla, açılıştan 16 sn sonra durum `ok` ve `eth_call` yapılmış olmalı.
+  2. *`getBlockHeader('finalized')` etiketi testle sabit değildi* (`'latest'` bozması geçti) — `wiring.test.ts`: sahte zincirde `latest` ≠ `finalized`, gerçek `FinalityTracker` ile; bildirim yalnız `finalized` blok için gider.
+  3. *Test boşlukları* — adres bölme sınırı tam 1.000 / 1.001 adreste; kapının (`readiness`) izleyiciye bağlanması; imleç gerideyken mutabakatın okuduğu blok (hem imleç hem geride kalan sağlayıcı başı); `removed: true` ve aralık dışı log süzgeçleri.
+  - Kapanış bozma kanıtı: USDT yeniden denemesi kaldırıldı → 3 test kırıldı; `finalized` → `latest` → 2; kapı `true` → 1; mutabakat bloğu (baş / imleç) → 1 + 1; `removed` süzgeci → 1; aralık süzgeci → 1; bölme sınırı `limit + 1` → 1, parça boyutu `-1` / adım `+1` → 1 + 1. `>=` bozması eşdeğer (tam sınırdaki liste tek parça kalır); adres-listesi bölmesi yalnız izin listesi geri düşüşünde ve en çok 2 adresle kullanıldığından ulaşılamaz.
+- **Para riski değerlendirmesi:** para kaybı yok; geç tespit var. Bulgu 1 yalnız yeni işlemlerin açılışını geciktiriyordu (fail-closed); `finalized` etiketi bulgusu yalnız test boşluğuydu, kod doğru.
+- **Yönetici kararları (11 §F8 T151 kararları):** 24 sa+ kesinti için T151'de runbook, kalıcı çözüm T158 (⚠ PARA); backend 10 sn zaman aşımı T158. T158'e dört yeni kriter eklendi (kalıcı "şu bloktan izle" bilgisi, bakiye isteği parçalama + mutabakat alarmı, webhook 401 yeniden deneme/alarm, `monitor_scan_failures_total` alarmı).
+- **Main bütünleştirmesi:** `origin/main` (T149, T150) dala merge commit'le alındı; çakışmalar yalnız belgelerde (MEMORY.md, 05, 07, 08, 11, DEPLOY_RUNBOOK, IMPLEMENTATION_STATUS), iki taraf korundu; başlık versiyonları iki tarafın büyüğü +1.
 
 ## Altyapı Değişiklikleri
 - Migration: Yok
