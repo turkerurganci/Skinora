@@ -53,6 +53,8 @@ dotnet format Skinora.sln --verify-no-changes                                   
 
 Sidecar koduna dokunulmadı (sidecar testleri yeniden koşulmadı).
 
+**Commit'ler:** `6589594` (kod + testler) · `23686d6` (rapor, dokümanlar, backlog). **CI:** run [`39102220763`](https://github.com/turkerurganci/Skinora/actions/runs/39102220763) (`23686d6`) success — 21 iş success, 2 skipped. Push normal yoldan geçti (dalın son run'ı yeşildi; bypass gerekmedi).
+
 ## Etkilenen Modüller / Dosyalar
 
 - **Shared:** `Blockchain/BlockchainNetworkPolicy.cs`, `Blockchain/BlockchainNetworkSettingKeys.cs` (yeni) · `Events/PaymentMonitorStartRequestedEvent.cs`, `PostCancelMonitorStartRequestedEvent.cs`, `PaymentReceivedEvent.cs`, `PlatformOutageAlertEvent.cs` (yorum) · `Enums/AuditAction.cs` (yorum) · `Persistence/Migrations/20261018040534_T148_NetworkSettings{,.Designer}.cs` (yeni), `AppDbContextModelSnapshot.cs`
