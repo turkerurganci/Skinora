@@ -35,7 +35,7 @@ public enum WalletAddressValidationStatus
     /// </summary>
     ValidWithoutChecksum,
 
-    /// <summary>Wrong shape for the network (length, prefix, alphabet, version byte).</summary>
+    /// <summary>Wrong shape for the network (length, prefix, alphabet). A TRON address of the right shape but a wrong version byte or checksum is <see cref="ChecksumMismatch"/>, not this.</summary>
     InvalidFormat,
 
     /// <summary>Right shape, wrong checksum: TRON base58check or EVM mixed-case EIP-55.</summary>

@@ -69,6 +69,19 @@
 | Bulgu sayısı | — |
 | Düzeltme gerekli mi | — |
 
+## Doğrulama sonucu (2026-10-18)
+
+**PASS** — `1c32340` üzerinde, bağımsız doğrulama alt ajanı.
+
+- Doğrulayıcının kendi migration provası: kenar durumlar dahil 6 tohumlanmış kullanıcı → TRON satırları, zaman damgaları korundu, Down birebir, koruma 50146, bekleyen model değişikliği yok.
+- Doğrulayıcının bağımsız vektörleri: USDT geçerli, çevrilmiş karakterler reddedildi, 0x40/0x42 sürüm baytı reddedildi, EIP-55 spesifikasyon örnekleri.
+- Onay isteyen yanıt re-auth token'ını tüketmiyor.
+- Birim 1840/1840, entegrasyon + sözleşme 1604/1604.
+- Mutasyon: 14 bozma / 12 yakalandı. F1 (giriş yaptırım kontrolü) ve F2 (işlem oluşturma ağ filtresi) testleri bu dalda eklendi.
+- F3 (yeni ağa ilk adres de re-auth ister) T147'ye ⚠ olarak taşındı.
+- F4 (`InvalidFormat` belge yorumu) düzeltildi.
+- F5 (boş adres Down'da geri taşınmıyor) kabul edildi.
+
 ## Altyapı Değişiklikleri
 
 - Migration: **Var** — `20261018015746_T146_UserWalletAddresses` (1 tablo, 1 unique + 1 performans index'i, FK; `Users`'tan 4 kolon + 2 index düşer; 2 veri kopyalama; Down korumalı, 50146).

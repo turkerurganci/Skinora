@@ -415,6 +415,47 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Assert.Equal(profileAddress, persisted.SellerPayoutAddress);
     }
 
+    private const string EthereumPayoutAddress = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+
+    /// <summary>
+    /// T146 — every transaction is TRON until T147, so a seller who only has an
+    /// ETHEREUM payout address has no usable payout address.
+    /// </summary>
+    [Fact]
+    public async Task EthereumOnlySeller_Gets_SellerWalletAddressMissing()
+    {
+        var tronRow = await Context.Set<UserWalletAddress>()
+            .SingleAsync(w => w.UserId == _seller.Id && w.Network == BlockchainNetwork.TRON);
+        Context.Set<UserWalletAddress>().Remove(tronRow);
+        var ethereumPayout = UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, EthereumPayoutAddress);
+        ethereumPayout.UserId = _seller.Id;
+        Context.Set<UserWalletAddress>().Add(ethereumPayout);
+        await Context.SaveChangesAsync();
+
+        var outcome = await BuildSut().CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.SellerWalletAddressMissing, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.SellerWalletAddressMissing, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task SellerWithTronAndEthereumPayout_Snapshots_The_Tron_Address()
+    {
+        var ethereumPayout = UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, EthereumPayoutAddress);
+        ethereumPayout.UserId = _seller.Id;
+        Context.Set<UserWalletAddress>().Add(ethereumPayout);
+        await Context.SaveChangesAsync();
+
+        var outcome = await BuildSut().CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+        var persisted = await Context.Set<Transaction>().AsNoTracking()
+            .SingleAsync(t => t.Id == outcome.Body!.Id);
+        Assert.Equal(ValidWallet, persisted.SellerPayoutAddress);
+    }
+
     [Fact]
     public async Task Rejects_When_Item_Not_In_Inventory()
     {
