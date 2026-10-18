@@ -69,9 +69,18 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (F8 yönetici düzeni — ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (F8 yönetici düzeni — bağımsız temiz bağlam ajanı) |
+| Bulgu sayısı | 4 küçük (bloke etmeyen) |
+| Düzeltme gerekli mi | Hayır — bulgu 2 belgelere yayıldı, 1/3/4 sonraki görev kriterine alındı |
+
+## Doğrulama sonucu
+
+- **Verdict:** PASS. Doğrulayıcı: bağımsız temiz bağlam ajanı (F8 yönetici düzeni).
+- **Kanıt:** HEAD `2f0ba0b`, CI run `39120152616` başarılı. Bozma ölçümü 38 bozma / 35 yakalandı; kaçanlar: E4 (tohumun env yedeği), B4b (outbox sırası), E18 (eşdeğer).
+- **Testler:** sidecar-ethereum 139/139, sidecar-blockchain 549/549, backend birim geçti, hedefli entegrasyon 46/46 + 36/36.
+- **Dört küçük bulgu:** (1) onay işi kesicisi satıra özgü 4xx'te de açılıyor -> T152 kriteri. (2) Kesinti istisnası (ağ kesintideyse giden satırlar `PENDING` bekler) 05 §3.3, 08 §3.3 ve 06 `blockchain.transfer_retry_intervals_minutes` metninde yoktu -> bu commit'te üç belgeye yayıldı. (3) Outbox sırası ve tohum env yedeği bozmaları yakalanmıyor, bekleyen satır metriği yok -> T158 kriteri (a)-(c). (4) `ethereum-finalized-stalled` alarmı servis kapalıyken `or vector(0)` yüzünden susuyor -> T158 kriteri (d).
+- **İki açık soru kararı:** (1) T151'e kod düzeyi kapı eklendi (`/health` yetenek bayrağı; yoksa ağ `supportedNetworks`'e giremez). (2) Kesintide `PENDING` bekleme para açısından güvenli: yeni gönderim yolu açmıyor, deneme hakkı artmıyor, çift gönderim riski önceden de vardı ve büyümüyor; görünürlük T158 metriğiyle sağlanacak.
+- **Doğrulanamayan iddialar:** canlı Sepolia denemesi, secret'lı yerel imaj çalıştırma, yerel tam entegrasyon sayıları (CI destekliyor), `dotnet format`.
 
 ## Altyapı Değişiklikleri
 
