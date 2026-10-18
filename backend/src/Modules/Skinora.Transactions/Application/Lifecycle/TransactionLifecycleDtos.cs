@@ -59,7 +59,7 @@ public sealed record PaymentTimeoutWindowDto(int MinHours, int MaxHours, int Def
 ///
 /// <para>
 /// Carries NO payout address. The seller's payout address is read from the
-/// profile (<c>User.DefaultPayoutAddress</c>, written only by U3
+/// profile (the seller's TRON <c>UserWalletAddress</c> PAYOUT row until T147, written only by U3
 /// <c>PUT /users/me/wallet/seller</c>) so that the two controls 02 §12.3
 /// assigns to it — Steam re-authentication and the
 /// <c>wallet.payout_address_cooldown_hours</c> window — actually guard the

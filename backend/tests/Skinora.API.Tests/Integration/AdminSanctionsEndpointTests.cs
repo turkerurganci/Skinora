@@ -41,11 +41,17 @@ public class AdminSanctionsEndpointTests
     private const string TestAudience = "skinora-client";
     private const string SteamIdPrefix = "76561198777666";
 
-    // 34-char, T-prefixed, Base58 (alphabet: 123456789ABCDEFGHJKLMNPQRSTUVWXYZ
-    // abcdefghijkmnopqrstuvwxyz — excludes 0/O/I/l).
-    private const string SanctionedAddress1 = "TtestSnc123456789abcdefghJKMNPQRSt";
-    private const string SanctionedAddress2 = "TtestSnc9876541abcdefghZYXWVUmnpqr";
-    private const string UnsanctionedAddress = "TtestCln123456789abcdefghJKMNPQRSt";
+    // Real base58check TRON addresses (T146 — the validator checks the
+    // checksum and the 0x41 version byte); generated with tronweb 5.3.5
+    // `TronWeb.address.fromHex("41" + sha256("skinora-t146-N")[0..40])`.
+    private const string SanctionedAddress1 = "TF5hehHaDaMzgAJVZeZg8AyjLKnVxmJ4Hu";
+    private const string SanctionedAddress2 = "TSF3rxEzXiHoHiFQqCgh51P26ovCUQHSFT";
+    private const string UnsanctionedAddress = "TUAyaiKWJZ3ZzoPyA6643oLPKCeibVSVTC";
+
+    // Same shape as a TRON address (34 chars, T, base58) but the last
+    // character of the USDT contract address is changed — checksum fails
+    // (tronweb isAddress = false).
+    private const string TronChecksumBroken = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6u";
     private const string InvalidShortAddress = "TShort";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -215,7 +221,8 @@ public class AdminSanctionsEndpointTests
         var admin = await _factory.CreateUserAsync();
         var holder = await _factory.CreateUserAsync(u =>
         {
-            u.DefaultPayoutAddress = SanctionedAddress1;
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, SanctionedAddress1));
         });
 
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
@@ -235,6 +242,54 @@ public class AdminSanctionsEndpointTests
         var fraudFlagged = await _factory.HasPendingSanctionsFlagAsync(holder.Id);
         Assert.True(fraudFlagged,
             "Retroactive scan should have staged a PENDING account-level SANCTIONS_MATCH flag.");
+    }
+
+    // ---------- T146 — real TRON checksum; retroactive scan per network ----------
+
+    [Fact]
+    public async Task AddAddress_TronShapeWithBrokenChecksum_Returns400InvalidWalletAddress()
+    {
+        // The pre-T146 validator (alphabet + length + 'T') accepted this.
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new { address = TronChecksumBroken, network = "TRON", source = "MANUAL" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVALID_WALLET_ADDRESS",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddAddress_EthereumRetroactiveScan_FlagsTheHolderOfThatEthereumAddress()
+    {
+        // Profile addresses are per network since T146, so an Ethereum list
+        // entry now reaches users: the holder saved the address lowercase as a
+        // refund address, the admin lists it in its EIP-55 spelling.
+        const string listed = "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359";
+        var admin = await _factory.CreateUserAsync();
+        var holder = await _factory.CreateUserAsync(u =>
+        {
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.ETHEREUM, WalletAddressType.REFUND, listed.ToLowerInvariant()));
+        });
+        var bystander = await _factory.CreateUserAsync(u =>
+        {
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TW9VmyXVPvXHxydTfaLizF2zFy6YiYECcm"));
+        });
+
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new { address = listed, network = "ETHEREUM", source = "MANUAL" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.True(await _factory.HasPendingSanctionsFlagAsync(holder.Id));
+        Assert.False(await _factory.HasPendingSanctionsFlagAsync(bystander.Id));
     }
 
     // ---------- T145 — per-network sanctions list (07 §9.23–§9.24, 06 §1.4) ----------

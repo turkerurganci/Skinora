@@ -48,6 +48,19 @@ public static class BlockchainAddress
         => value is null ? null : Canonicalize(value);
 
     /// <summary>
+    /// The form shown to a user (06 §1.4): an EVM address (<c>0x</c> + 40 hex,
+    /// any letter case) in its EIP-55 mixed-case spelling, so a copy taken from
+    /// the screen carries the typo checksum; anything else (a TRON address, a
+    /// transaction hash) unchanged. <c>null</c> passes through.
+    /// </summary>
+    public static string? ToDisplay(string? value)
+    {
+        if (value is null) return null;
+        var canonical = Canonicalize(value);
+        return EvmAddress.IsWellFormed(canonical) ? EvmAddress.ToChecksum(canonical) : value;
+    }
+
+    /// <summary>
     /// Canonical equality: EVM values compare case-insensitively, TRON values
     /// exactly. Two <c>null</c>s are not considered equal — an absent address
     /// never "matches" anything.

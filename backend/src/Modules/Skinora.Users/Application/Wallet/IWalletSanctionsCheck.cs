@@ -12,8 +12,9 @@ namespace Skinora.Users.Application.Wallet;
 /// </summary>
 /// <remarks>
 /// The match key is <c>(network, canonical address)</c> (06 §1.4, §3.25 — T145).
-/// Until T146 adds per-network user addresses every caller screens a TRON
-/// address and passes <see cref="BlockchainNetwork.TRON"/>.
+/// Callers pass the network the address belongs to: the profile write path
+/// the network of the saved address (T146); transaction creation and
+/// acceptance TRON until T147 lets the parties choose a network.
 /// </remarks>
 public interface IWalletSanctionsCheck
 {

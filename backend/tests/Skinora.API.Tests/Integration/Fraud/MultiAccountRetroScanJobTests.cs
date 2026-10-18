@@ -9,6 +9,7 @@ using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Application.MultiAccount;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
+using Skinora.Shared.Enums;
 
 namespace Skinora.API.Tests.Integration.Fraud;
 
@@ -40,6 +41,8 @@ public class MultiAccountRetroScanJobTests : IntegrationTestBase
     {
         var withPayout = await InsertUserAsync(payout: "TPayoutAddrAAA00000000000000000000A");
         var withRefund = await InsertUserAsync(refund: "TRefundAddrBBB00000000000000000000B");
+        // T146 — an address on another network makes a user wallet-bearing too.
+        var withEthereumOnly = await InsertUserAsync(ethereumPayout: "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
         var noWallet = await InsertUserAsync();
         var deactivated = await InsertUserAsync(payout: "TDeactivatedCCC0000000000000000000C", deactivated: true);
         var deleted = await InsertUserAsync(payout: "TDeletedDDD00000000000000000000000D", deleted: true);
@@ -47,20 +50,21 @@ public class MultiAccountRetroScanJobTests : IntegrationTestBase
         var detector = new FakeMultiAccountDetector();
         detector.Results[withPayout] = MultiAccountEvaluationStatus.Flagged;
         detector.Results[withRefund] = MultiAccountEvaluationStatus.NoSignal;
+        detector.Results[withEthereumOnly] = MultiAccountEvaluationStatus.NoSignal;
 
         var outcome = await NewJob(detector).ExecuteAsync(CancellationToken.None);
 
-        // Only the two active, wallet-bearing users are evaluated.
+        // Only the three active, wallet-bearing users are evaluated.
         Assert.Equal(
-            new HashSet<Guid> { withPayout, withRefund },
+            new HashSet<Guid> { withPayout, withRefund, withEthereumOnly },
             detector.Evaluated.ToHashSet());
         Assert.DoesNotContain(noWallet, detector.Evaluated);
         Assert.DoesNotContain(deactivated, detector.Evaluated);
         Assert.DoesNotContain(deleted, detector.Evaluated);
 
-        Assert.Equal(2, outcome.Scanned);
+        Assert.Equal(3, outcome.Scanned);
         Assert.Equal(1, outcome.Flagged);
-        Assert.Equal(1, outcome.NoSignal);
+        Assert.Equal(2, outcome.NoSignal);
         Assert.Equal(0, outcome.Failed);
     }
 
@@ -94,20 +98,27 @@ public class MultiAccountRetroScanJobTests : IntegrationTestBase
         string? payout = null,
         string? refund = null,
         bool deactivated = false,
-        bool deleted = false)
+        bool deleted = false,
+        string? ethereumPayout = null)
     {
         var user = new User
         {
             Id = Guid.NewGuid(),
             SteamId = $"765611985400{_steamCounter++:D5}",
             SteamDisplayName = "RetroScanUser",
-            DefaultPayoutAddress = payout,
-            DefaultRefundAddress = refund,
             IsDeactivated = deactivated,
             DeactivatedAt = deactivated ? DateTime.UtcNow : null,
             IsDeleted = deleted,
             DeletedAt = deleted ? DateTime.UtcNow : null,
         };
+        // T146 — one row per (network, type) that has an address (06 §1.4).
+        if (payout is not null)
+            user.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, payout));
+        if (refund is not null)
+            user.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.REFUND, refund));
+        if (ethereumPayout is not null)
+            user.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, ethereumPayout));
+
         Context.Set<User>().Add(user);
         await Context.SaveChangesAsync();
         return user.Id;

@@ -33,7 +33,9 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         Skinora.Platform.Infrastructure.Persistence.PlatformModuleDbRegistration.RegisterPlatformModule();
     }
 
-    private const string ValidWallet = "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567";
+    // A real base58check TRON address (T146 — creation re-validates the
+    // profile address with the checksum); tronweb 5.3.5 fromHex.
+    private const string ValidWallet = "THfUtCxb8h8unh2SMVPjokNfNuVAZT16Ja";
     private const string SellerSteamId = "76561198000000060";
     private const string BuyerSteamId = "76561198000000061";
     private const string ItemAssetId = "27348562891";
@@ -59,7 +61,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = SellerSteamId,
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = ValidWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet) },
             MobileAuthenticatorVerified = true,
         };
         context.Set<User>().Add(_seller);
@@ -358,17 +360,19 @@ public class TransactionCreationServiceTests : IntegrationTestBase
 
     /// <summary>
     /// The format check survives the move to the profile because rows can reach
-    /// <c>DefaultPayoutAddress</c> without passing <c>WalletAddressService</c>
+    /// the TRON <c>UserWalletAddress</c> PAYOUT row without passing <c>WalletAddressService</c>
     /// (migrations, seeds, the e2e harness writes it in raw SQL). The request
     /// body can no longer carry an address at all, so the malformed value is
     /// planted on the profile — which is the only way it can now occur.
     /// </summary>
-    [Fact]
-    public async Task Rejects_Invalid_Wallet_Format_On_Seller_Profile()
+    [Theory]
+    [InlineData("NOT_A_TRC20_ADDRESS")]
+    // T146 — right shape, broken base58check checksum (last character of
+    // the USDT contract address changed; tronweb isAddress = false).
+    [InlineData("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6u")]
+    public async Task Rejects_Invalid_Wallet_Format_On_Seller_Profile(string plantedAddress)
     {
-        _seller.DefaultPayoutAddress = "NOT_A_TRC20_ADDRESS";
-        Context.Set<User>().Update(_seller);
-        await Context.SaveChangesAsync();
+        await SetTronPayoutAsync(plantedAddress);
 
         var sut = BuildSut();
         var outcome = await sut.CreateAsync(_seller.Id, ValidRequest(), CancellationToken.None);
@@ -388,12 +392,17 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     [Fact]
     public async Task Snapshots_Payout_Address_From_Seller_Profile()
     {
-        // 34 chars, Base58, 'T' prefix — and deliberately NOT ValidWallet, so the
+        // A valid TRON address — and deliberately NOT ValidWallet, so the
         // assertion fails if the column is fed from anywhere but this profile.
-        const string profileAddress = "TSnapshotSourceABCDEFGH23456789zyx";
+        const string profileAddress = "TGepRwJFoonb8B1Cfq66dUo6ZQFiBZES5L";
         Assert.NotEqual(ValidWallet, profileAddress);
-        _seller.DefaultPayoutAddress = profileAddress;
-        Context.Set<User>().Update(_seller);
+        await SetTronPayoutAsync(profileAddress);
+        // T146 — another network's payout address is not the one snapshotted
+        // while every transaction is TRON (until T147).
+        var ethereumPayout = UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed");
+        ethereumPayout.UserId = _seller.Id;
+        Context.Set<UserWalletAddress>().Add(ethereumPayout);
         await Context.SaveChangesAsync();
 
         var sut = BuildSut();
@@ -700,7 +709,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000099",
             SteamDisplayName = "Other Seller",
-            DefaultPayoutAddress = ValidWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet) },
             MobileAuthenticatorVerified = true,
         };
         Context.Set<User>().Add(otherSeller);
@@ -856,7 +865,7 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             _inventory,
             fraud,
             new RecordingFraudFlagWriter(),
-            new Trc20AddressValidator(),
+            new WalletAddressValidator(),
             new NoMatchWalletSanctionsCheck(),
             _inviteCodes,
             _outbox,
@@ -864,6 +873,16 @@ public class TransactionCreationServiceTests : IntegrationTestBase
             _allocator,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<TransactionCreationService>.Instance,
             _clock);
+    }
+
+    private async Task SetTronPayoutAsync(string address)
+    {
+        var row = await Context.Set<UserWalletAddress>()
+            .SingleAsync(w => w.UserId == _seller.Id
+                              && w.Network == BlockchainNetwork.TRON
+                              && w.Type == WalletAddressType.PAYOUT);
+        row.Address = address;
+        await Context.SaveChangesAsync();
     }
 
     private CreateTransactionRequest ValidRequest() => new(

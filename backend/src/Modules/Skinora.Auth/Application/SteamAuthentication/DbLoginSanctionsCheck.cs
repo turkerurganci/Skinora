@@ -12,9 +12,9 @@ namespace Skinora.Auth.Application.SteamAuthentication;
 /// <see cref="NoMatchSanctionsCheck"/> stub'unun yerine geçer.
 /// </summary>
 /// <remarks>
-/// Mevcut kullanıcı için (Steam ID ile lookup) <c>DefaultPayoutAddress</c> ve
-/// <c>DefaultRefundAddress</c> alanları aktif sanctions listesine karşı
-/// kontrol edilir. İlk eşleşme döner — admin'in hangi adresi listelediği
+/// Mevcut kullanıcı için (Steam ID ile lookup) kayıtlı bütün ödeme ve iade
+/// adresleri (UserWalletAddress — her ağ için ayrı, T146) kendi ağlarının
+/// aktif sanctions listesine karşı kontrol edilir. İlk eşleşme döner — admin'in hangi adresi listelediği
 /// genelde önemsiz, sonuç account-level fraud flag tetikler.
 /// <para>
 /// Yeni kullanıcı (henüz provisioning olmamış) durumunda User satırı yok
@@ -47,38 +47,30 @@ public sealed class DbLoginSanctionsCheck : ISanctionsCheck
         if (string.IsNullOrWhiteSpace(steamId64))
             return SanctionsDecision.NoMatch();
 
-        var wallets = await _db.Set<User>()
+        var userId = await _db.Set<User>()
             .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(u => u.SteamId == steamId64)
-            .Select(u => new
-            {
-                u.DefaultPayoutAddress,
-                u.DefaultRefundAddress,
-            })
+            .Select(u => (Guid?)u.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (wallets is null)
+        if (userId is null)
             return SanctionsDecision.NoMatch();
 
-        // The profile addresses are TRON addresses until T146 moves them to
-        // per-network rows (06 §1.4); the match key includes the network.
-        if (!string.IsNullOrEmpty(wallets.DefaultPayoutAddress))
-        {
-            var payoutMatch = await _lookup.FindActiveAsync(
-                BlockchainNetwork.TRON,
-                wallets.DefaultPayoutAddress, cancellationToken);
-            if (payoutMatch is not null)
-                return SanctionsDecision.Match(payoutMatch.Source);
-        }
+        // T146 — every saved address, each screened on its own network
+        // (06 §1.4: the match key is (network, canonical address)). Payout
+        // before refund, then by network, so the first match is deterministic.
+        var wallets = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == userId.Value)
+            .Select(w => new { w.Network, w.Type, w.Address })
+            .ToListAsync(cancellationToken);
 
-        if (!string.IsNullOrEmpty(wallets.DefaultRefundAddress))
+        foreach (var wallet in wallets.OrderBy(w => w.Type).ThenBy(w => w.Network))
         {
-            var refundMatch = await _lookup.FindActiveAsync(
-                BlockchainNetwork.TRON,
-                wallets.DefaultRefundAddress, cancellationToken);
-            if (refundMatch is not null)
-                return SanctionsDecision.Match(refundMatch.Source);
+            var match = await _lookup.FindActiveAsync(wallet.Network, wallet.Address, cancellationToken);
+            if (match is not null)
+                return SanctionsDecision.Match(match.Source);
         }
 
         return SanctionsDecision.NoMatch();

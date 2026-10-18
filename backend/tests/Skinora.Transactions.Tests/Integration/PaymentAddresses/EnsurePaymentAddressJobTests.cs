@@ -39,7 +39,7 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000500",
             SteamDisplayName = "EnsureJob Seller",
-            DefaultPayoutAddress = SellerWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, SellerWallet) },
             MobileAuthenticatorVerified = true,
         };
         context.Set<User>().Add(_seller);

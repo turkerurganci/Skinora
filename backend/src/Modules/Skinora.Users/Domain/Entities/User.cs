@@ -13,12 +13,6 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
     public string SteamDisplayName { get; set; } = string.Empty;
     public string? SteamAvatarUrl { get; set; }
 
-    // --- Wallet addresses (TRC-20) ---
-    public string? DefaultPayoutAddress { get; set; }
-    public string? DefaultRefundAddress { get; set; }
-    public DateTime? PayoutAddressChangedAt { get; set; }
-    public DateTime? RefundAddressChangedAt { get; set; }
-
     // --- Profile ---
     public string? Email { get; set; }
     public DateTime? EmailVerifiedAt { get; set; }
@@ -88,6 +82,11 @@ public class User : BaseEntity, ISoftDeletable, IAuditableEntity
 
     // --- Navigation properties ---
     public ICollection<UserLoginLog> LoginLogs { get; set; } = [];
+
+    // T146 — saved payout/refund addresses, one row per (network, type)
+    // (06 §1.4, §3.1a). Replaces the pre-F8 DefaultPayoutAddress /
+    // DefaultRefundAddress / *AddressChangedAt columns.
+    public ICollection<UserWalletAddress> WalletAddresses { get; set; } = [];
 
     // T105b — append-only trail of superseded payout/refund addresses (06 §3.1).
     public ICollection<WalletAddressHistory> WalletAddressHistory { get; set; } = [];

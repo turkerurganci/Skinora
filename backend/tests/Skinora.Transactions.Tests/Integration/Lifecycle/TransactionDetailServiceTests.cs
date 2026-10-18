@@ -44,7 +44,7 @@ public class TransactionDetailServiceTests : IntegrationTestBase
             SteamId = SellerSteamId,
             SteamDisplayName = "SellerPlayer",
             SteamAvatarUrl = "https://steamcdn.example/seller.jpg",
-            DefaultPayoutAddress = ValidWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet) },
             MobileAuthenticatorVerified = true,
             CompletedTransactionCount = 24,
             SuccessfulTransactionRate = 0.96m,

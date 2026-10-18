@@ -22,6 +22,7 @@ using Skinora.API.Tests.Common;
 using Skinora.Auth.Application.Session;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Steam;
 using Skinora.Shared.Persistence.Outbox;
@@ -44,7 +45,9 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     private const string TestIssuer = "skinora";
     private const string TestAudience = "skinora-client";
     private const string SteamId = "76561198777999001";
-    private const string ValidWallet = "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567";
+    // A real base58check TRON address (T146 — the validators check the
+    // checksum); tronweb 5.3.5 fromHex.
+    private const string ValidWallet = "TYfZrbLzzdvQ22b6W2J8VynzaBqu1SJm3h";
 
     /// <summary>T119a — SteamID64 → SteamID32 offset (07 §7.6 ownership check).</summary>
     private const ulong SteamId64ToId32Offset = 76561197960265728UL;
@@ -172,7 +175,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);
 
@@ -209,7 +212,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
 
@@ -249,7 +252,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
 
@@ -292,11 +295,11 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
     [Fact]
     public async Task Create_Ignores_SellerWalletAddress_In_Request_Body()
     {
-        const string attackerAddress = "TAttackerAddressABCDEFGH23456789zy";
+        const string attackerAddress = "TKKWZwkqeuq1bFCexN3TQmoycTxUUYjGYt";
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562893", "AWP | Asiimov");
 
@@ -336,7 +339,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = null;
+            // No saved payout address on any network (T146).
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562894", "Glock-18 | Fade");
 
@@ -365,7 +368,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
         _factory.InventoryMissingOverride = true;
@@ -395,7 +398,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
         _factory.InventoryVisibilityOverride = InventoryVisibility.Private;
@@ -424,7 +427,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
         _factory.InventoryVisibilityOverride = InventoryVisibility.Unavailable;
@@ -454,7 +457,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
 
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);
@@ -475,7 +478,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
         await _factory.ConfigureSettingAsync("max_concurrent_transactions", "5");
@@ -509,7 +512,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = true;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
         _factory.SeedInventoryItem(user.SteamId, "27348562891", "AK-47 | Redline");
 
@@ -1341,7 +1344,7 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
         var user = await _factory.CreateUserAsync(u =>
         {
             u.MobileAuthenticatorVerified = false;
-            u.DefaultPayoutAddress = ValidWallet;
+            u.WalletAddresses.Add(UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet));
         });
 
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);
@@ -1760,6 +1763,8 @@ public class TransactionLifecycleEndpointTests : IClassFixture<TransactionLifecy
             db.Set<Skinora.Transactions.Domain.Entities.Transaction>()
                 .RemoveRange(db.Set<Skinora.Transactions.Domain.Entities.Transaction>());
             var seedIds = new[] { Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId };
+            // T146 — saved addresses reference Users (FK); remove them first.
+            db.Set<UserWalletAddress>().RemoveRange(db.Set<UserWalletAddress>());
             db.Set<User>().RemoveRange(db.Set<User>().Where(u => !seedIds.Contains(u.Id)));
             db.Set<Skinora.Platform.Domain.Entities.SystemSetting>()
                 .RemoveRange(db.Set<Skinora.Platform.Domain.Entities.SystemSetting>());

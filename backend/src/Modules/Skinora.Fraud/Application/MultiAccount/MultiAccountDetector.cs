@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Skinora.Fraud.Application.Flags;
 using Skinora.Fraud.Domain.Entities;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -17,8 +18,8 @@ namespace Skinora.Fraud.Application.MultiAccount;
 /// 03 §7.4). Cross-checks the supplied user against every other active account
 /// for the documented signal set:
 /// <list type="bullet">
-///   <item><b>Strong:</b> identical <c>DefaultPayoutAddress</c> /
-///         <c>DefaultRefundAddress</c> on another user → flag.</item>
+///   <item><b>Strong:</b> identical payout / refund address on the same
+///         network (<see cref="UserWalletAddress"/>, T146) on another user → flag.</item>
 ///   <item><b>Supporting:</b> identical IP / device fingerprint
 ///         (<see cref="UserLoginLog"/>) → evidence only.</item>
 ///   <item><b>Supporting:</b> identical payment <c>FromAddress</c>
@@ -92,35 +93,41 @@ public sealed class MultiAccountDetector : IMultiAccountDetector
             return MultiAccountEvaluationResult.NoSignal();
 
         // ---------- Strong signal — wallet address match ----------
-        // Payout has priority over refund: if both addresses match different
-        // accounts the payout collision is the more actionable evidence
-        // (it's where funds settle). Either match is sufficient to flag.
-        var payoutMatches = await FindWalletMatchesAsync(
-            userId, user.DefaultPayoutAddress, refund: false, cancellationToken);
-        var refundMatches = await FindWalletMatchesAsync(
-            userId, user.DefaultRefundAddress, refund: true, cancellationToken);
+        // T146 — addresses are per network (06 §1.4): a user has up to one
+        // payout and one refund address on each network, and a match is the
+        // same address of the same type on the same network on another
+        // account. Payout has priority over refund: if both addresses match
+        // different accounts the payout collision is the more actionable
+        // evidence (it's where funds settle). Either match is sufficient to flag.
+        var ownWallets = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == userId)
+            .Select(w => new { w.Network, w.Type, w.Address })
+            .ToListAsync(cancellationToken);
 
-        MultiAccountMatchType? primaryType = null;
-        string? primaryValue = null;
-        IReadOnlyList<LinkedAccountDto> primaryLinked = [];
+        var payoutMatch = await FindFirstWalletMatchAsync(
+            userId,
+            ownWallets.Where(w => w.Type == WalletAddressType.PAYOUT)
+                .Select(w => (w.Network, w.Address)),
+            WalletAddressType.PAYOUT,
+            cancellationToken);
+        var refundMatch = await FindFirstWalletMatchAsync(
+            userId,
+            ownWallets.Where(w => w.Type == WalletAddressType.REFUND)
+                .Select(w => (w.Network, w.Address)),
+            WalletAddressType.REFUND,
+            cancellationToken);
 
-        primaryType = MultiAccountSignalEvaluator.PickStrongMatchType(
-            hasPayoutMatch: payoutMatches.Count > 0,
-            hasRefundMatch: refundMatches.Count > 0);
+        var primaryType = MultiAccountSignalEvaluator.PickStrongMatchType(
+            hasPayoutMatch: payoutMatch is not null,
+            hasRefundMatch: refundMatch is not null);
 
         if (primaryType is null)
             return MultiAccountEvaluationResult.NoSignal();
 
-        if (primaryType == MultiAccountMatchType.WALLET_PAYOUT)
-        {
-            primaryValue = user.DefaultPayoutAddress;
-            primaryLinked = payoutMatches;
-        }
-        else
-        {
-            primaryValue = user.DefaultRefundAddress;
-            primaryLinked = refundMatches;
-        }
+        var primary = primaryType == MultiAccountMatchType.WALLET_PAYOUT ? payoutMatch! : refundMatch!;
+        var primaryValue = primary.Address;
+        var primaryLinked = primary.LinkedAccounts;
 
         // ---------- Supporting signals (evidence only — never flag alone) ----------
         var supporting = await CollectSupportingSignalsAsync(userId, cancellationToken);
@@ -130,6 +137,7 @@ public sealed class MultiAccountDetector : IMultiAccountDetector
         {
             matchType = primaryType.ToString(),
             matchValue = primaryValue,
+            matchNetwork = primary.Network.ToString(),
             linkedAccounts = primaryLinked.Select(a => new
             {
                 steamId = a.SteamId,
@@ -161,29 +169,61 @@ public sealed class MultiAccountDetector : IMultiAccountDetector
 
         return MultiAccountEvaluationResult.Flagged(
             primaryType.Value,
-            primaryValue!,
+            primaryValue,
             primaryLinked.Count,
             supporting.Count,
             flagId);
     }
 
-    private async Task<List<LinkedAccountDto>> FindWalletMatchesAsync(
-        Guid userId, string? address, bool refund, CancellationToken cancellationToken)
+    /// <summary>
+    /// The first of <paramref name="addresses"/> (TRON before Ethereum) that
+    /// another active account holds as its <paramref name="type"/> address on
+    /// the same network, with every such account; <c>null</c> when none does.
+    /// </summary>
+    private async Task<WalletMatch?> FindFirstWalletMatchAsync(
+        Guid userId,
+        IEnumerable<(BlockchainNetwork Network, string Address)> addresses,
+        WalletAddressType type,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(address))
-            return [];
+        foreach (var (network, address) in addresses.OrderBy(a => a.Network))
+        {
+            if (string.IsNullOrWhiteSpace(address))
+                continue;
 
-        var query = _db.Set<User>().AsNoTracking()
-            .Where(u => u.Id != userId && !u.IsDeleted && !u.IsDeactivated);
+            // The column converter canonicalises the parameter (06 §1.4). The
+            // database collation is case-insensitive, so the final decision is
+            // the exact canonical comparison in memory — a TRON base58 address
+            // differing only in letter case is a different address.
+            var candidates = await _db.Set<UserWalletAddress>()
+                .AsNoTracking()
+                .Where(w => w.UserId != userId
+                            && w.Network == network
+                            && w.Type == type
+                            && w.Address == address)
+                .Join(
+                    _db.Set<User>().AsNoTracking().Where(u => !u.IsDeleted && !u.IsDeactivated),
+                    w => w.UserId,
+                    u => u.Id,
+                    (w, u) => new { w.Address, u.SteamId, u.SteamDisplayName })
+                .ToListAsync(cancellationToken);
 
-        query = refund
-            ? query.Where(u => u.DefaultRefundAddress == address)
-            : query.Where(u => u.DefaultPayoutAddress == address);
+            var linked = candidates
+                .Where(c => BlockchainAddress.AreEqual(c.Address, address))
+                .Select(c => new LinkedAccountDto(c.SteamId, c.SteamDisplayName))
+                .ToList();
 
-        return await query
-            .Select(u => new LinkedAccountDto(u.SteamId, u.SteamDisplayName))
-            .ToListAsync(cancellationToken);
+            if (linked.Count > 0)
+                return new WalletMatch(network, address, linked);
+        }
+
+        return null;
     }
+
+    private sealed record WalletMatch(
+        BlockchainNetwork Network,
+        string Address,
+        IReadOnlyList<LinkedAccountDto> LinkedAccounts);
 
     private async Task<List<SupportingSignalDto>> CollectSupportingSignalsAsync(
         Guid userId, CancellationToken cancellationToken)

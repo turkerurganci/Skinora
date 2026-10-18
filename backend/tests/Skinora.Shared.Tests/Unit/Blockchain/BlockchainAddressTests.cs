@@ -116,4 +116,31 @@ public class BlockchainAddressTests
         Assert.Equal(TronAddress, toProvider(TronAddress));
         Assert.Equal(TronAddress, fromProvider(TronAddress));
     }
+
+    // ---------- T146 — display form (06 §1.4: EVM shown as EIP-55) ----------
+
+    [Theory]
+    [InlineData(EvmLower)]
+    [InlineData(EvmUpper)]
+    [InlineData(EvmChecksummed)]
+    public void ToDisplay_EvmAddress_IsEip55(string spelling)
+        => Assert.Equal(EvmChecksummed, BlockchainAddress.ToDisplay(spelling));
+
+    [Fact]
+    public void ToDisplay_TronAddress_IsUnchanged()
+    {
+        Assert.Equal(TronAddress, BlockchainAddress.ToDisplay(TronAddress));
+        Assert.Equal(TronLowercased, BlockchainAddress.ToDisplay(TronLowercased));
+    }
+
+    [Fact]
+    public void ToDisplay_EvmTxHash_IsNotChecksummed()
+    {
+        // Only a 20-byte address has an EIP-55 form; a 32-byte hash is left as is.
+        var hash = "0x" + string.Concat(Enumerable.Repeat("ab", 32));
+        Assert.Equal(hash, BlockchainAddress.ToDisplay(hash));
+    }
+
+    [Fact]
+    public void ToDisplay_Null_IsNull() => Assert.Null(BlockchainAddress.ToDisplay(null));
 }

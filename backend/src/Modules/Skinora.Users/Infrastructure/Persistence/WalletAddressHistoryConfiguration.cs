@@ -34,7 +34,7 @@ public class WalletAddressHistoryConfiguration : IEntityTypeConfiguration<Wallet
             .IsRequired()
             .HasMaxLength(20);
 
-        // Same length as User.DefaultPayoutAddress / DefaultRefundAddress;
+        // Same length as UserWalletAddress.Address;
         // canonical form (06 §1.4).
         builder.Property(h => h.Address)
             .IsRequired()
