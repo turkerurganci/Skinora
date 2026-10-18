@@ -27,7 +27,7 @@
   - `BlockchainWebhookHandler`: tekrar kontrolü `(Network, TxHash, EventIndex)`; ağ webhook'un depozit adresinden (`PaymentAddress.Network`, soft-delete dahil) okunur; yazılan her satır o ağı taşır.
   - `PayoutIssueService` (işlemin ağı), `HotWalletService` (TRON). Diğer satır üreticileri (sweep, payout, iade kuyrukları, `AmountValidationService`) CLR varsayılanı `TRON` ile yazar — T147/T148 ağ yönlendirmesini getirene kadar bilinçli; `AmountValidationService`'e T144 paralel çalıştığı için dokunulmadı.
 - **Admin yaptırım API'si (07 §9.23–§9.24):** `network` = `TRON` | `ETHEREUM` (verilmezse `TRON`; `TRC-20` → 400 `VALIDATION_ERROR`); doğrulayıcı ağa göre (TRON base58 / EVM EIP-55); adres kanonik saklanır ve döner; listede tanınmayan ağ filtresi boş sayfa; retroaktif tarama yalnız `TRON` (profil adresleri T146'ya kadar TRON) ve birebir eşleşme.
-- **Doküman:** 06 v6.21 (§1.4 uygulandı işaretleri ve ayrıntı, §2.25, §3.1 geçmiş, §3.5/§3.7/§3.8/§3.8a/§3.22/§3.25 `Network` satırları ve anahtarlar, §5.1) · 07 v4.6 (§1.3, §9.23–§9.24) · 08 v3.20 (§3.0 adres biçimi, §3.2 atomiklik, §3.4 tekrar anahtarı) · 11 §F8 T145 karar maddesi + §7.6 izlenebilirlik satırları. Sürüm başlık ve altbilgide aynı.
+- **Doküman:** 06 v6.22 (§1.4 uygulandı işaretleri ve ayrıntı, §2.25, §3.1 geçmiş, §3.5/§3.7/§3.8/§3.8a/§3.22/§3.25 `Network` satırları ve anahtarlar, §5.1) · 07 v4.7 (§1.3, §9.23–§9.24) · 08 v3.20 (§3.0 adres biçimi, §3.2 atomiklik, §3.4 tekrar anahtarı) · 11 §F8 T145 karar maddesi + §7.6 izlenebilirlik satırları. Sürüm başlık ve altbilgide aynı.
 
 ## Etkilenen Modüller / Dosyalar
 
