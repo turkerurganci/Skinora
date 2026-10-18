@@ -141,9 +141,56 @@ describe("AcceptForm — network choice (T156)", () => {
         expect.objectContaining({
           refundWalletAddress: ETH_ADDR.toLowerCase(),
           network: BlockchainNetwork.ETHEREUM,
+          confirmLowercase: true,
         }),
       ),
     );
+  });
+
+  it("a checksummed Ethereum address sends no confirmLowercase", async () => {
+    renderForm();
+    fireEvent.click(screen.getByTestId("accept-network-ETHEREUM"));
+    fireEvent.change(screen.getByTestId("accept-refund-input"), { target: { value: ETH_ADDR } });
+    fireEvent.click(screen.getByTestId("accept-submit"));
+    await waitFor(() => expect(acceptTransaction).toHaveBeenCalled());
+    expect(acceptTransaction.mock.calls[0][1]).not.toHaveProperty("confirmLowercase");
+  });
+
+  it("a TRON address sends no confirmLowercase", async () => {
+    renderForm();
+    fireEvent.click(screen.getByTestId("accept-network-TRON"));
+    fireEvent.change(screen.getByTestId("accept-refund-input"), { target: { value: TRON_ADDR } });
+    fireEvent.click(screen.getByTestId("accept-submit"));
+    await waitFor(() => expect(acceptTransaction).toHaveBeenCalled());
+    expect(acceptTransaction.mock.calls[0][1]).not.toHaveProperty("confirmLowercase");
+  });
+
+  it("a server 400 CHECKSUM_CONFIRMATION_REQUIRED brings up the confirmation box", async () => {
+    const { ApiError } = await import("@/lib/api/client");
+    acceptTransaction.mockRejectedValueOnce(
+      new ApiError(
+        {
+          code: "INVALID_WALLET_ADDRESS",
+          message: "x",
+          details: { network: "ETHEREUM", reason: "CHECKSUM_CONFIRMATION_REQUIRED" },
+        } as never,
+        "trace",
+        400,
+      ),
+    );
+    renderForm();
+    fireEvent.click(screen.getByTestId("accept-network-ETHEREUM"));
+    // A checksummed address needs no box locally, so only the server's answer
+    // can bring it up.
+    fireEvent.change(screen.getByTestId("accept-refund-input"), { target: { value: ETH_ADDR } });
+    fireEvent.click(screen.getByTestId("accept-submit"));
+    expect(
+      await screen.findByText("Confirm that you checked the address without a checksum."),
+    ).toBeVisible();
+    fireEvent.click(await screen.findByTestId("accept-checksum-confirm"));
+    fireEvent.click(screen.getByTestId("accept-submit"));
+    await waitFor(() => expect(acceptTransaction).toHaveBeenCalledTimes(2));
+    expect(acceptTransaction.mock.calls[1][1]).toMatchObject({ confirmLowercase: true });
   });
 
   it("switching network clears an address typed for the previous one", () => {

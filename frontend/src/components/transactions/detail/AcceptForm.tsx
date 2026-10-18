@@ -50,9 +50,12 @@ export interface AcceptFormProps {
  * profile's address for that network prefills the input (K4 — the per-tx
  * override stays disabled); without one the buyer types it, its shape is
  * checked for that network, and an Ethereum address without an EIP-55
- * checksum needs an explicit confirmation before submit (02 §12.3 — the
- * accept endpoint takes no `confirmLowercase`, so this form is the only place
- * the second confirmation can happen).
+ * checksum needs an explicit confirmation before submit (02 §12.3). The server
+ * enforces it too (T156 verification, security): the accept body carries
+ * `confirmLowercase: true` once the box is ticked, and a 400
+ * `INVALID_WALLET_ADDRESS` with `details.reason = "CHECKSUM_CONFIRMATION_REQUIRED"`
+ * brings the box up even when the local shape check did not (07 §7.6). This
+ * covers a profile default too: the box is shown for it as well.
  *
  * T119a — **Steam trade URL** is mandatory (02 §2.2 adım 6) and stays editable
  * even when prefilled from the profile.
@@ -76,6 +79,8 @@ export function AcceptForm({
   );
   const [typedAddress, setTypedAddress] = useState("");
   const [checksumConfirmed, setChecksumConfirmed] = useState(false);
+  // The server asked for the second confirmation (400 CHECKSUM_CONFIRMATION_REQUIRED).
+  const [serverWantsConfirm, setServerWantsConfirm] = useState(false);
   const [tradeUrl, setTradeUrl] = useState(defaultSteamTradeUrl ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +91,7 @@ export function AcceptForm({
   const hasDefault = profileAddress !== null;
   const address = hasDefault ? profileAddress : typedAddress;
   const shape = network && address ? checkAddressShape(network, address) : null;
-  const needsChecksumConfirm = !hasDefault && shape === "NO_CHECKSUM";
+  const needsChecksumConfirm = shape === "NO_CHECKSUM" || serverWantsConfirm;
 
   function chooseNetwork(next: BlockchainNetwork) {
     if (next === network) return;
@@ -96,6 +101,7 @@ export function AcceptForm({
     // only by accident, and a TRON address is never valid on Ethereum.
     setTypedAddress("");
     setChecksumConfirmed(false);
+    setServerWantsConfirm(false);
     setError(null);
     setErrorCode(null);
   }
@@ -131,11 +137,21 @@ export function AcceptForm({
         refundWalletAddress: address.trim(),
         steamTradeUrl: tradeUrl.trim(),
         network,
+        ...(needsChecksumConfirm && checksumConfirmed ? { confirmLowercase: true } : {}),
       });
       onAccepted();
     } catch (err) {
       if (err instanceof ApiError) {
         const code = err.code;
+        const reason = (err.details as Record<string, unknown> | null)?.reason;
+        if (code === "INVALID_WALLET_ADDRESS" && reason === "CHECKSUM_CONFIRMATION_REQUIRED") {
+          // The server wants the second confirmation the local check missed.
+          setServerWantsConfirm(true);
+          setChecksumConfirmed(false);
+          setErrorCode(code);
+          setError(t("errors.CHECKSUM_CONFIRMATION_REQUIRED"));
+          return;
+        }
         setErrorCode(code ?? null);
         setError(
           tDynamic(t, `errors.${code}`, t("errors.generic"), { network: networkLabel(network) }),
@@ -230,6 +246,7 @@ export function AcceptForm({
             onChange={(e) => {
               setTypedAddress(e.target.value);
               setChecksumConfirmed(false);
+              setServerWantsConfirm(false);
             }}
             disabled={hasDefault || fieldsDisabled}
             autoComplete="off"

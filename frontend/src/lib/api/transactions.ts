@@ -480,6 +480,13 @@ export interface AcceptTransactionRequest {
    * `acceptedNetworks` (07 §7.6). Always sent by this client.
    */
   network: BlockchainNetwork;
+  /**
+   * T156 verification — the buyer's second confirmation for an Ethereum refund
+   * address without an EIP-55 checksum (07 §7.6). Without it the server answers
+   * 400 INVALID_WALLET_ADDRESS (`details.reason = "CHECKSUM_CONFIRMATION_REQUIRED"`).
+   * Ignored on TRON.
+   */
+  confirmLowercase?: boolean;
 }
 
 export interface AcceptTransactionResponse {

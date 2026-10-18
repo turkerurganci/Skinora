@@ -82,9 +82,23 @@ Backend `payment.network` bozması (etikete geri dönüş) yerelde koşulamadı 
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | PASS (bağımsız temiz bağlam doğrulayıcı, Sonnet) |
+| Bulgu sayısı | 2 |
+| Düzeltme gerekli mi | Evet — ikisi de bu kapanışta kapandı |
+
+## Doğrulama sonucu
+
+**PASS.** Bağımsız, temiz bağlamlı doğrulayıcı (Sonnet); doğrulanan HEAD `905d521`, CI `39137342419` ✓. Bozma 16/16 (her bozma en az bir testi kırdı). Dört dil dosyası 1387 anahtarla tam.
+
+**Bulgular (ikisi de kapandı):**
+1. `Docs/07_API_DESIGN.md` §1.3 satır 54: "`payment.network` yalnız gösterim metnidir (`"Tron (TRC-20)"`)" cümlesi eskiydi — makine değeri (`"TRON"` / `"ETHEREUM"`) olarak düzeltildi.
+2. `confirmLowercase` sunucu boşluğu (yapım kararı iv): kabul ucu sağlamasız Ethereum iade adresini onaysız kabul ediyordu. **Yönetici kararıyla kapatıldı** (11 §F8 "T156 kararları" (xiii), GÜVENLİK ⚠):
+   - `AcceptTransactionRequest` `bool? ConfirmLowercase` aldı; `TransactionAcceptanceService` sağlamasız Ethereum adresini `confirmLowercase: true` olmadan 400 `INVALID_WALLET_ADDRESS` + `details { network, reason: "CHECKSUM_CONFIRMATION_REQUIRED", requiresConfirmation: true }` ile reddeder (T146 profil düzeniyle birebir; durum değişikliğinden ve depozit tahsisinden önce). TRON'da alan yok sayılır.
+   - `AcceptForm.tsx`: kutu işaretliyken gövdeye `confirmLowercase: true`; sunucu 400 `CHECKSUM_CONFIRMATION_REQUIRED` dönerse kutu gösterilir; profil varsayılanı sağlamasızsa kutu onda da gösterilir (sunucu artık onay ister).
+   - Testler: backend entegrasyon (küçük/büyük harf onaysız → 400 ve hiçbir yazma yok; onaylı → kabul, kanonik saklanır; EIP-55 doğru adres onaysız kabul; TRON'da alan yok sayılır) + birim (gövde okuma); frontend 3 yeni test (gövdede alan, EIP-55/TRON'da alan yok, sunucu 400 → kutu). Frontend bozma: gövdeden `confirmLowercase` çıkarılınca 2 test kırıldı. Backend entegrasyon testleri Docker gerektirir, yerelde koşulmadı (CI).
+   - 07 §7.6 kabul ucuna alan ve hata cevabı yazıldı.
+
+**Doğrulanamayanlar:** gerçek tarayıcıda görsel kontrol; canlı gezgin (Etherscan/Tronscan) bağlantıları. **Main bütünleştirmesi:** `origin/main` (T151 `0fdc3b1` dahil) dala merge commit'iyle alındı; belge çakışmalarında iki taraf korundu (07 v4.14, 11 v1.9).
 
 ## Altyapı Değişiklikleri
 
@@ -101,7 +115,7 @@ Backend `payment.network` bozması (etikete geri dönüş) yerelde koşulamadı 
 
 ## Known Limitations / Follow-up
 
-- **Kabulde EIP-55 ikinci onayı yalnız istemcide** (T156 kararı iv): `POST /transactions/:id/accept` `confirmLowercase` almıyor, sunucu tümü küçük harfli Ethereum iade adresini onaysız kabul ediyor. API'yi doğrudan çağıran onaysız geçebilir. Sunucuya `confirmLowercase` eklenmesi yönetici kararına bırakıldı (GÜVENLİK/PARA).
+- ~~Kabulde EIP-55 ikinci onayı yalnız istemcide~~ — doğrulamada yönetici kararıyla kapandı: sunucu da `confirmLowercase` ister (karar xiii, bkz. "Doğrulama sonucu").
 - USDC (stablecoin toggle'ı, hukuki metinlerdeki "USDT, USDC") T166'da.
 - Admin işlem detayındaki Tronscan bağlantısı ve admin ekranlarının ağ başına görünümü T157'de.
 - Kabul formu ağları `supportedNetworks` ile süzmüyor; kapalı ağ seçimi 503 ile ağ adıyla döner (T156 kararı v).

@@ -148,6 +148,21 @@ public class TransactionAcceptanceUnitTests
         Assert.Contains("\"steamTradeUrl\":", json);
     }
 
+    [Fact]
+    public void AcceptTransactionRequest_Reads_ConfirmLowercase_From_CamelCase_And_Defaults_To_Null()
+    {
+        // T156 verification — 07 §7.6: the client sends confirmLowercase next
+        // to network; absent means "not confirmed".
+        var withField = JsonSerializer.Deserialize<AcceptTransactionRequest>(
+            "{\"refundWalletAddress\":\"0xab\",\"steamTradeUrl\":\"u\",\"network\":\"ETHEREUM\",\"confirmLowercase\":true}",
+            JsonOptions);
+        var without = JsonSerializer.Deserialize<AcceptTransactionRequest>(
+            "{\"refundWalletAddress\":\"0xab\",\"steamTradeUrl\":\"u\"}", JsonOptions);
+
+        Assert.True(withField!.ConfirmLowercase);
+        Assert.Null(without!.ConfirmLowercase);
+    }
+
     [Theory]
     // Canonical shape (07 §7.6 example).
     [InlineData("https://steamcommunity.com/tradeoffer/new/?partner=123456789&token=AbCdEfGh", true)]
