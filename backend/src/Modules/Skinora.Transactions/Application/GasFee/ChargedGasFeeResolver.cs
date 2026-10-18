@@ -1,26 +1,36 @@
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Enums;
+using Skinora.Transactions.Application.Networks;
 
 namespace Skinora.Transactions.Application.GasFee;
 
 /// <inheritdoc cref="IChargedGasFeeResolver"/>
+/// <remarks>
+/// T148 — both halves are per network: the estimate comes from the network's
+/// own service (<see cref="IBlockchainServiceRegistry.GasFee"/>) and the
+/// fallback / ceiling from the network's own settings
+/// (<see cref="IBlockchainNetworkSettingsProvider"/>), so a TRON fallback is
+/// never charged for an Ethereum transfer or the other way round. A network
+/// without a service answers "no estimate" and its fallback is charged.
+/// </remarks>
 public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
 {
-    private readonly IGasFeeEstimator _estimator;
-    private readonly IGasFeeSettingsProvider _settings;
+    private readonly IBlockchainServiceRegistry _services;
+    private readonly IBlockchainNetworkSettingsProvider _settings;
     private readonly ILogger<ChargedGasFeeResolver> _logger;
 
     public ChargedGasFeeResolver(
-        IGasFeeEstimator estimator,
-        IGasFeeSettingsProvider settings,
+        IBlockchainServiceRegistry services,
+        IBlockchainNetworkSettingsProvider settings,
         ILogger<ChargedGasFeeResolver> logger)
     {
-        _estimator = estimator;
+        _services = services;
         _settings = settings;
         _logger = logger;
     }
 
     public async Task<ResolvedGasFee> ResolveRefundFeeAsync(
+        BlockchainNetwork network,
         string? fromDepositAddress,
         string toAddress,
         decimal amount,
@@ -37,40 +47,44 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
         // estimator outage.
         if (string.IsNullOrWhiteSpace(fromDepositAddress))
         {
-            var settings = await _settings.GetAsync(cancellationToken);
-            var fallback = settings.RefundGasFeeEstimateUsdt;
+            var settings = await _settings.GetAsync(network, cancellationToken);
+            var fallback = settings.RefundGasFeeFallbackUsdt;
             _logger.LogWarning(
-                "Gas fee estimate skipped for refund to {To}: no deposit address to price the transfer from — charging static fallback {Fallback} USDT.",
-                toAddress, fallback);
+                "Gas fee estimate skipped for {Network} refund to {To}: no deposit address to price the transfer from — charging static fallback {Fallback} USDT.",
+                network, toAddress, fallback);
             return new ResolvedGasFee(fallback, GasFeeSource.StaticFallback);
         }
 
         return await ResolveAsync(
+            network,
             new GasFeeEstimateRequest(fromDepositAddress, toAddress, amount, token),
-            static s => s.RefundGasFeeEstimateUsdt,
+            static s => s.RefundGasFeeFallbackUsdt,
             "refund",
             cancellationToken);
     }
 
     public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
+        BlockchainNetwork network,
         string toAddress,
         decimal amount,
         StablecoinType token,
         CancellationToken cancellationToken) =>
         ResolveAsync(
+            network,
             new GasFeeEstimateRequest(FromAddress: null, toAddress, amount, token),
-            static s => s.PayoutGasFeeEstimateUsdt,
+            static s => s.PayoutGasFeeFallbackUsdt,
             "payout",
             cancellationToken);
 
     private async Task<ResolvedGasFee> ResolveAsync(
+        BlockchainNetwork network,
         GasFeeEstimateRequest request,
-        Func<GasFeeSettings, decimal> fallbackSelector,
+        Func<BlockchainNetworkSettings, decimal> fallbackSelector,
         string flow,
         CancellationToken cancellationToken)
     {
-        var settings = await _settings.GetAsync(cancellationToken);
-        var estimate = await _estimator.EstimateFeeUsdtAsync(request, cancellationToken);
+        var settings = await _settings.GetAsync(network, cancellationToken);
+        var estimate = await _services.GasFee(network).EstimateFeeUsdtAsync(request, cancellationToken);
 
         if (estimate is { } fee)
         {
@@ -86,8 +100,8 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
             {
                 var capped = fallbackSelector(settings);
                 _logger.LogError(
-                    "Gas fee estimate {Fee} USDT for {Flow} to {To} exceeds the {Cap} USDT ceiling — refusing the estimate and charging the static fallback {Fallback} USDT. Investigate the price feed and chain probes.",
-                    fee, flow, request.ToAddress, cap, capped);
+                    "Gas fee estimate {Fee} USDT for {Network} {Flow} to {To} exceeds the {Cap} USDT ceiling — refusing the estimate and charging the static fallback {Fallback} USDT. Investigate the price feed and chain probes.",
+                    fee, network, flow, request.ToAddress, cap, capped);
                 return new ResolvedGasFee(capped, GasFeeSource.EstimateRejected);
             }
 
@@ -96,8 +110,8 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
 
         var fallback = fallbackSelector(settings);
         _logger.LogWarning(
-            "Gas fee runtime estimate unavailable for {Flow} to {To} — charging static fallback {Fallback} USDT.",
-            flow, request.ToAddress, fallback);
+            "Gas fee runtime estimate unavailable for {Network} {Flow} to {To} — charging static fallback {Fallback} USDT.",
+            network, flow, request.ToAddress, fallback);
         return new ResolvedGasFee(fallback, GasFeeSource.StaticFallback);
     }
 }

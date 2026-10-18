@@ -137,6 +137,37 @@ public class RealtimeConsumerTests
         Assert.DoesNotContain(publisher.Calls, c => c.Method == "StatusChanged");
     }
 
+    [Theory]
+    // T148 — the count comes from the payment row the event carries; an event
+    // written before T148 has none and falls back to the network's policy
+    // (TRON 20), and Ethereum is never shown TRON's 20.
+    [InlineData(BlockchainNetwork.TRON, null, 20)]
+    [InlineData(BlockchainNetwork.TRON, 27, 27)]
+    [InlineData(BlockchainNetwork.ETHEREUM, 3, 3)]
+    [InlineData(BlockchainNetwork.ETHEREUM, null, 0)]
+    public async Task PaymentConfirmed_Confirmations_Come_From_The_Event_Or_The_Networks_Policy(
+        BlockchainNetwork network, int? recorded, int shown)
+    {
+        var publisher = new RecordingRealtimePublisher();
+        var sut = new PaymentReceivedRealtimeConsumer(
+            publisher, new InMemoryProcessedEventStore(),
+            NullLogger<PaymentReceivedRealtimeConsumer>.Instance);
+
+        await sut.Handle(new PaymentReceivedEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: Guid.NewGuid(),
+            Amount: 1m,
+            Stablecoin: StablecoinType.USDT,
+            TxHash: "0xabc",
+            OccurredAt: DateTime.UtcNow,
+            Network: network,
+            ConfirmationCount: recorded), CancellationToken.None);
+
+        var confirmed = Assert.IsType<TransactionRealtimePayloads.PaymentConfirmed>(
+            Assert.Single(publisher.Calls).Payload);
+        Assert.Equal(shown, confirmed.Confirmations);
+    }
+
     [Fact]
     public async Task PaymentConfirmationTransition_PushesStatusChanged_ExactlyOnce_AcrossBothConsumers()
     {

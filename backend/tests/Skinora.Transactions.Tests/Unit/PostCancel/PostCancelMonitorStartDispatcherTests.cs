@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -60,7 +61,7 @@ public class PostCancelMonitorStartDispatcherTests
     }
 
     private static PostCancelMonitorStartDispatcher BuildSut(IBlockchainSidecarClient sidecar)
-        => new(sidecar, NullLogger<PostCancelMonitorStartDispatcher>.Instance);
+        => new(FakeBlockchainServiceRegistry.ForTron(sidecar: sidecar), NullLogger<PostCancelMonitorStartDispatcher>.Instance);
 
     private static PostCancelMonitorStartRequestedEvent BuildEvent()
         => new(

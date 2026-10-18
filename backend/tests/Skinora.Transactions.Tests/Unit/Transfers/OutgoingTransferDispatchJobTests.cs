@@ -1,3 +1,5 @@
+using Skinora.Transactions.Application.Networks;
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -38,6 +40,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly AppDbContext _db;
     private readonly StubBlockchainTransferClient _client;
+    private readonly FakeBlockchainServiceRegistry _registry;
     private readonly StubRetryPolicy _retryPolicy;
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
@@ -54,6 +57,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         _db.Database.EnsureCreated();
 
         _client = new StubBlockchainTransferClient();
+        _registry = FakeBlockchainServiceRegistry.ForTron(transfers: _client);
         _retryPolicy = new StubRetryPolicy();
         _outbox = new CapturingOutboxService();
         _clock = new FakeTimeProvider();
@@ -63,10 +67,10 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         // which is what SeedRefundAsync's ActualTokenAddress fixture matches.
         _sut = new OutgoingTransferDispatchJob(
             _db,
-            _client,
+            _registry,
             _retryPolicy,
             _outbox,
-            Options.Create(new StablecoinContractOptions()),
+            StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
     }
@@ -115,6 +119,54 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             .FirstAsync(b => b.Id == fixture.PayoutRow.Id);
         Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
         Assert.Equal("tx-hash-payout", reloaded.TxHash);
+    }
+
+    // -------------------- T148 — same-network rule, fail closed per network --------------------
+
+    [Fact]
+    public async Task Row_On_An_Unconfigured_Network_Stays_Pending_Untouched_And_Nothing_Is_Sent()
+    {
+        // Until T150 Ethereum has no service. A row on it must not be sent to
+        // TRON's service, must not burn its retry budget and must not flip to
+        // FAILED — it waits, PENDING, for its own network's service.
+        var fixture = await SeedPayoutAsync(amount: 100m);
+        fixture.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+        Assert.DoesNotContain(_registry.Requests, r => r.Kind == "Transfers");
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, reloaded.Status);
+        Assert.Equal(0, reloaded.RetryCount);
+        Assert.Null(reloaded.NextAttemptAt);
+        Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+    }
+
+    [Fact]
+    public async Task Each_Row_Is_Broadcast_By_Its_Own_Networks_Service()
+    {
+        var ethereumClient = new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(TransferBroadcastStatus.Success, "0xeth", null, null),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereumClient);
+
+        var ethPayout = await SeedPayoutAsync(amount: 20m);
+        ethPayout.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        // Same-network rule (11 §F8 K3): Ethereum's service, never TRON's.
+        Assert.Equal(20m, Assert.Single(ethereumClient.Calls).Amount);
+        Assert.Empty(_client.Calls);
+        Assert.Equal(("Transfers", BlockchainNetwork.ETHEREUM), Assert.Single(_registry.Requests, r => r.Kind == "Transfers"));
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == ethPayout.PayoutRow.Id);
+        Assert.Equal("0xeth", reloaded.TxHash);
     }
 
     [Fact]

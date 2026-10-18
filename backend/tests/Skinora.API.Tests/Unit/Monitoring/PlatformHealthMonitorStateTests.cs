@@ -117,8 +117,8 @@ public sealed class PlatformHealthMonitorStateTests
             state.Record(PlatformComponents.Steam, healthy: false, Threshold);
 
         // Blockchain is still healthy — Steam's outage must not bleed across.
-        Assert.Equal(HealthTransition.None, state.Record(PlatformComponents.Blockchain, healthy: true, Threshold));
-        Assert.Equal(0, state.ConsecutiveFailures(PlatformComponents.Blockchain));
+        Assert.Equal(HealthTransition.None, state.Record(PlatformComponents.BlockchainTron, healthy: true, Threshold));
+        Assert.Equal(0, state.ConsecutiveFailures(PlatformComponents.BlockchainTron));
         Assert.Equal(Threshold, state.ConsecutiveFailures(PlatformComponents.Steam));
     }
 }

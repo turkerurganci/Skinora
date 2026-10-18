@@ -629,4 +629,79 @@ public class TimeoutFreezeServiceTests : IntegrationTestBase
         Assert.Null(persisted.TimeoutFreezeReason);
         Assert.Null(persisted.TimeoutRemainingSeconds);
     }
+
+    // -------------------- T148 — per-network blockchain freeze --------------------
+
+    [Fact]
+    public async Task Network_Scoped_Blockchain_Freeze_Touches_Only_That_Networks_Transactions()
+    {
+        // 05 §3.3a "Sağlık ve dondurma" / 11 §6.2 FK8-6 — a TRON outage must
+        // not freeze Ethereum's payment windows, and TRON's recovery must not
+        // resume an Ethereum freeze.
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
+
+        Transaction Payment(BlockchainNetwork? network, string jobSuffix)
+        {
+            var t = TimeoutTestFixtures.NewTransaction(
+                _seller.Id, TransactionStatus.SELLER_CONFIRMED, nowUtc,
+                paymentDeadline: nowUtc.AddMinutes(40),
+                paymentTimeoutJobId: "p-" + jobSuffix,
+                timeoutWarningJobId: "w-" + jobSuffix,
+                buyerId: buyer.Id, buyerRefundAddress: TimeoutTestFixtures.ValidWallet);
+            t.Network = network;
+            return t;
+        }
+
+        var tron = Payment(BlockchainNetwork.TRON, "tron");
+        var ethereum = Payment(BlockchainNetwork.ETHEREUM, "eth");
+        // A row that never recorded a network is TRON by the 06 §1.4 convention.
+        var unset = Payment(null, "unset");
+        Context.Set<Transaction>().AddRange(tron, ethereum, unset);
+        await Context.SaveChangesAsync();
+
+        var sut = CreateSut();
+
+        var frozenTron = await sut.FreezeManyAsync(
+            TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION, BlockchainNetwork.TRON, CancellationToken.None);
+
+        Assert.Equal(2, frozenTron);
+        Assert.Contains("p-tron", _scheduler.DeletedJobIds);
+        Assert.Contains("p-unset", _scheduler.DeletedJobIds);
+        Assert.DoesNotContain("p-eth", _scheduler.DeletedJobIds);
+        Assert.Null((await Reload(ethereum.Id)).TimeoutFrozenAt);
+
+        // Now Ethereum degrades too, then TRON recovers.
+        var frozenEth = await sut.FreezeManyAsync(
+            TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION, BlockchainNetwork.ETHEREUM, CancellationToken.None);
+        Assert.Equal(1, frozenEth);
+
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        var resumedTron = await sut.ResumeManyAsync(
+            TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION, BlockchainNetwork.TRON, CancellationToken.None);
+
+        Assert.Equal(2, resumedTron);
+        Assert.Null((await Reload(tron.Id)).TimeoutFrozenAt);
+        Assert.Null((await Reload(unset.Id)).TimeoutFrozenAt);
+        var stillFrozen = await Reload(ethereum.Id);
+        Assert.NotNull(stillFrozen.TimeoutFrozenAt);
+        Assert.Equal(TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION, stillFrozen.TimeoutFreezeReason);
+    }
+
+    [Theory]
+    [InlineData(TimeoutFreezeReason.MAINTENANCE)]
+    [InlineData(TimeoutFreezeReason.STEAM_OUTAGE)]
+    [InlineData(TimeoutFreezeReason.EMERGENCY_HOLD)]
+    public async Task Network_Scoped_Freeze_Is_Only_For_Blockchain_Degradation(TimeoutFreezeReason reason)
+    {
+        var sut = CreateSut();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sut.FreezeManyAsync(reason, BlockchainNetwork.TRON, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sut.ResumeManyAsync(reason, BlockchainNetwork.TRON, CancellationToken.None));
+    }
+
+    private async Task<Transaction> Reload(Guid id) =>
+        await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == id);
 }

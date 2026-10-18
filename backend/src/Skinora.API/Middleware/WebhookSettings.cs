@@ -27,6 +27,15 @@ public sealed class WebhookSettings
     public string BlockchainSharedSecret { get; set; } = string.Empty;
 
     /// <summary>
+    /// HMAC-SHA256 shared secret of the Ethereum service (T148 — 05 §3.3a
+    /// "Kimlik doğrulama": every network's service has its own webhook secret,
+    /// so one service's leaked secret cannot forge the other's callbacks).
+    /// <see cref="BlockchainSharedSecret"/> is TRON's. Blank = no Ethereum
+    /// service yet: no callback can authenticate as Ethereum.
+    /// </summary>
+    public string EthereumSharedSecret { get; set; } = string.Empty;
+
+    /// <summary>
     /// Maximum allowed clock skew between sidecar and backend (05 §3.4).
     /// Default ±5 minutes per 09 §11.3.
     /// </summary>

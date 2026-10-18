@@ -111,12 +111,21 @@ public sealed class PaymentRefundToBuyerConsumer
         // deposit-sourced); without a PaymentAddress row there is no sender to
         // price and the resolver charges the static setting instead — a
         // hot-wallet estimate would price another account's resources.
-        var depositAddress = await _db.Set<PaymentAddress>()
+        var deposit = await _db.Set<PaymentAddress>()
             .AsNoTracking()
             .Where(p => p.TransactionId == transaction.Id)
-            .Select(p => (string?)p.Address)
+            .Select(p => new { p.Address, p.Network })
             .FirstOrDefaultAsync(cancellationToken);
+        var depositAddress = deposit?.Address;
+
+        // T148 — same-network rule (11 §F8 K3): the refund leaves on the
+        // network the money arrived on. The deposit's network is that fact;
+        // without a deposit row the transaction's own network stands in, and a
+        // transaction that never chose one predates F8 and is TRON (06 §1.4).
+        var network = deposit?.Network ?? transaction.Network ?? BlockchainNetwork.TRON;
+
         var resolvedGasFee = await _chargedGasFee.ResolveRefundFeeAsync(
+            network,
             depositAddress,
             notification.BuyerRefundAddress,
             transaction.TotalAmount,
@@ -146,6 +155,7 @@ public sealed class PaymentRefundToBuyerConsumer
         {
             Id = Guid.NewGuid(),
             TransactionId = transaction.Id,
+            Network = network,
             PaymentAddressId = null,           // CK_..._Type_Outbound: NULL for BUYER_REFUND.
             Type = BlockchainTransactionType.BUYER_REFUND,
             TxHash = null,

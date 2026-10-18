@@ -1,4 +1,5 @@
 using System.Globalization;
+using Skinora.Transactions.Application.Networks;
 
 namespace Skinora.Transactions.Application.Lifecycle;
 
@@ -37,10 +38,14 @@ public sealed class TransactionParamsService : ITransactionParamsService
     private static readonly string[] _supportedStablecoins = ["USDT", "USDC"];
 
     private readonly ITransactionLimitsProvider _limitsProvider;
+    private readonly IBlockchainNetworkAvailability _networks;
 
-    public TransactionParamsService(ITransactionLimitsProvider limitsProvider)
+    public TransactionParamsService(
+        ITransactionLimitsProvider limitsProvider,
+        IBlockchainNetworkAvailability networks)
     {
         _limitsProvider = limitsProvider;
+        _networks = networks;
     }
 
     public async Task<TransactionParamsDto> GetAsync(CancellationToken cancellationToken)
@@ -65,7 +70,13 @@ public sealed class TransactionParamsService : ITransactionParamsService
                 MaxHours: maxHours,
                 DefaultHours: defaultHours),
             OpenLinkEnabled: limits.OpenLinkEnabled,
-            SupportedStablecoins: _supportedStablecoins);
+            SupportedStablecoins: _supportedStablecoins,
+            // T148 (07 §1.3, §7.4) — networks open for a new transaction right
+            // now: a configured service that is not in a health freeze. The
+            // buyer's choice among them arrives with T147.
+            SupportedNetworks: _networks.OpenForNewTransactions()
+                .Select(n => n.ToString())
+                .ToList());
     }
 
     /// <summary>

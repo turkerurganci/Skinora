@@ -33,13 +33,14 @@ public class SystemSettingsCatalogTests
     }
 
     /// <summary>
-    /// The exclusion above must stay narrow: exactly the two platform wallet
-    /// addresses, and each one must really be seedless. A third env-sourced
-    /// entry, or a seed row sneaking back under one of these keys, would make
-    /// the panel show a value nothing keeps in sync.
+    /// The exclusion above must stay narrow: exactly the platform wallet
+    /// addresses — one hot/cold pair per network since T148 (05 §3.3a) — and
+    /// each one must really be seedless. Another env-sourced entry, or a seed
+    /// row sneaking back under one of these keys, would make the panel show a
+    /// value nothing keeps in sync.
     /// </summary>
     [Fact]
-    public void Env_Sourced_Entries_Are_The_Two_Wallet_Addresses_And_Have_No_Seed_Row()
+    public void Env_Sourced_Entries_Are_The_Per_Network_Wallet_Addresses_And_Have_No_Seed_Row()
     {
         var envSourced = SystemSettingsCatalog.All
             .Where(m => m.EnvSourced)
@@ -47,17 +48,52 @@ public class SystemSettingsCatalogTests
             .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(
-            new[]
-            {
-                SystemSettingsCatalog.ColdWalletAddressKey,
-                SystemSettingsCatalog.HotWalletAddressKey,
-            },
-            envSourced);
+        var walletKeys = new[]
+        {
+            SystemSettingsCatalog.EthereumColdWalletAddressKey,
+            SystemSettingsCatalog.EthereumHotWalletAddressKey,
+            SystemSettingsCatalog.ColdWalletAddressKey,
+            SystemSettingsCatalog.HotWalletAddressKey,
+        };
+        Assert.Equal(walletKeys, envSourced);
 
         var seedKeys = SystemSettingSeed.All.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
-        Assert.DoesNotContain(SystemSettingsCatalog.HotWalletAddressKey, seedKeys);
-        Assert.DoesNotContain(SystemSettingsCatalog.ColdWalletAddressKey, seedKeys);
+        foreach (var key in walletKeys)
+            Assert.DoesNotContain(key, seedKeys);
+    }
+
+    /// <summary>
+    /// T148 — every per-network key the code reads
+    /// (<see cref="Skinora.Shared.Blockchain.BlockchainNetworkSettingKeys"/>)
+    /// is a seeded row with an admin catalogue entry, so no network's
+    /// parameter is invisible or unconfigurable.
+    /// </summary>
+    [Theory]
+    [InlineData(Skinora.Shared.Enums.BlockchainNetwork.TRON)]
+    [InlineData(Skinora.Shared.Enums.BlockchainNetwork.ETHEREUM)]
+    public void Every_Per_Network_Key_Is_Seeded_And_Catalogued(Skinora.Shared.Enums.BlockchainNetwork network)
+    {
+        var seedKeys = SystemSettingSeed.All.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var key in Skinora.Shared.Blockchain.BlockchainNetworkSettingKeys.For(network).AllKeys())
+        {
+            Assert.Contains(key, seedKeys);
+            Assert.True(SystemSettingsCatalog.Contains(key), $"{key} has no catalogue entry");
+        }
+    }
+
+    /// <summary>
+    /// T148 — Ethereum's keys never alias TRON's: a shared key would apply one
+    /// network's number to the other.
+    /// </summary>
+    [Fact]
+    public void Ethereum_Keys_Do_Not_Reuse_Tron_Keys()
+    {
+        var tron = Skinora.Shared.Blockchain.BlockchainNetworkSettingKeys.Tron.AllKeys();
+        var ethereum = Skinora.Shared.Blockchain.BlockchainNetworkSettingKeys.Ethereum.AllKeys();
+
+        Assert.Empty(tron.Intersect(ethereum, StringComparer.Ordinal));
+        Assert.All(ethereum, k => Assert.StartsWith("blockchain.ethereum.", k, StringComparison.Ordinal));
     }
 
     [Fact]

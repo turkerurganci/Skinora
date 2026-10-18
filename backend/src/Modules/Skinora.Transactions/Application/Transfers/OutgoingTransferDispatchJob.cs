@@ -7,6 +7,7 @@ using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.PaymentAddresses;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Transfers;
@@ -77,27 +78,27 @@ public sealed class OutgoingTransferDispatchJob
     ];
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainTransferClient _client;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ITransferRetryPolicy _retryPolicy;
     private readonly IOutboxService _outbox;
-    private readonly StablecoinContractOptions _contracts;
+    private readonly IStablecoinContractRegistry _contracts;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
     public OutgoingTransferDispatchJob(
         AppDbContext db,
-        IBlockchainTransferClient client,
+        IBlockchainServiceRegistry services,
         ITransferRetryPolicy retryPolicy,
         IOutboxService outbox,
-        IOptions<StablecoinContractOptions> contracts,
+        IStablecoinContractRegistry contracts,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
         _db = db;
-        _client = client;
+        _services = services;
         _retryPolicy = retryPolicy;
         _outbox = outbox;
-        _contracts = contracts.Value;
+        _contracts = contracts;
         _clock = clock;
         _logger = logger;
     }
@@ -133,6 +134,19 @@ public sealed class OutgoingTransferDispatchJob
         var row = await _db.Set<BlockchainTransaction>()
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (row is null || row.Status != BlockchainTransactionStatus.PENDING) return;
+
+        // T148 — fail closed per network (05 §3.3a). A row whose network has no
+        // service configured is left PENDING untouched: no broadcast, no retry
+        // budget spent, no FAILED flip. It is picked up again on every run and
+        // goes out as soon as the service is configured; the other network's
+        // rows are unaffected. (Before T147 every row is TRON.)
+        if (!_services.IsConfigured(row.Network))
+        {
+            _logger.LogError(
+                "Outbound row {Id} ({Type}) is on {Network}, which has no blockchain service configured — left PENDING, nothing sent.",
+                row.Id, row.Type, row.Network);
+            return;
+        }
 
         // For refund/sweep flows the deposit address is the PaymentAddress
         // that owns the original BUYER_PAYMENT row. Resolve it via the
@@ -185,7 +199,7 @@ public sealed class OutgoingTransferDispatchJob
         var broadcastToken = row.Token;
         if (row.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND)
         {
-            var actualToken = _contracts.ResolveByContract(row.ActualTokenAddress);
+            var actualToken = _contracts.ResolveByContract(row.Network, row.ActualTokenAddress);
             if (actualToken is null)
             {
                 // Unresolvable contract cannot be broadcast under any symbol.
@@ -215,7 +229,8 @@ public sealed class OutgoingTransferDispatchJob
             DepositIndex: depositIndex,
             DepositAddress: depositAddress);
 
-        var result = await _client.BroadcastAsync(request, cancellationToken);
+        // Same-network rule (11 §F8 K3): the row's own network's service.
+        var result = await _services.Transfers(row.Network).BroadcastAsync(request, cancellationToken);
         switch (result.Status)
         {
             case TransferBroadcastStatus.Success:

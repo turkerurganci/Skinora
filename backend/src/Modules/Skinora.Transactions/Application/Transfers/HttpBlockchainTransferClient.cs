@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.PaymentAddresses;
 
@@ -21,37 +21,55 @@ namespace Skinora.Transactions.Application.Transfers;
 ///     <c>ToAddress</c> carries the hot-wallet destination)</item>
 ///   <item>everything else (refund family) → <c>POST /api/transfer/refund</c></item>
 /// </list>
-/// Service-to-service auth piggybacks on the shared
+/// Service-to-service auth uses the network's own
 /// <see cref="BlockchainSidecarOptions.InternalKey"/> via
 /// <c>X-Internal-Key</c> (05 §3.4).
 /// </summary>
+/// <remarks>
+/// One instance per network (T148 — 05 §3.3a), built by
+/// <c>BlockchainServiceRegistry</c>. Every broadcast body names the network so
+/// a service reached at the wrong address refuses it, and the status read
+/// decides finality with the network's <see cref="BlockchainNetworkPolicy"/>
+/// instead of a hardcoded 20 blocks: TRON counts blocks, Ethereum waits for
+/// <c>finalized</c> (11 §F8 K5). TRON's Energy / SUN receipt fields are only
+/// passed on for a network that reports them.
+/// </remarks>
 public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
 {
+    /// <summary>TRON's named HTTP client (pre-F8 name, kept); see <see cref="Networks.BlockchainHttpClientNames"/>.</summary>
     public const string HttpClientName = "BlockchainTransfer";
 
     private const string InternalKeyHeader = "X-Internal-Key";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    private readonly BlockchainNetworkPolicy _policy;
+    private readonly string _networkWire;
     private readonly HttpClient _http;
     private readonly BlockchainSidecarOptions _options;
     private readonly ILogger<HttpBlockchainTransferClient> _logger;
 
     public HttpBlockchainTransferClient(
+        BlockchainNetwork network,
         HttpClient http,
-        IOptions<BlockchainSidecarOptions> options,
+        BlockchainSidecarOptions options,
         ILogger<HttpBlockchainTransferClient> logger)
     {
+        _policy = BlockchainNetworkPolicy.For(network);
+        _networkWire = network.ToString();
         _http = http;
-        _options = options.Value;
+        _options = options;
         _logger = logger;
     }
+
+    /// <summary>The network whose service this client talks to.</summary>
+    public BlockchainNetwork Network => _policy.Network;
 
     public async Task<TransferBroadcastResult> BroadcastAsync(
         TransferBroadcastRequest request,
         CancellationToken cancellationToken)
     {
-        var (path, body) = BuildRequest(request);
+        var (path, body) = BuildRequest(_networkWire, request);
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = JsonContent.Create(body, options: JsonOptions),
@@ -190,20 +208,24 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                     TransferStatusOutcome.Unavailable, null, null, null, "Empty status body");
             }
 
-            if (payload.Confirmations >= 20)
+            // T148 — finality is the network's rule, not a TRON constant:
+            // TRON needs 20 blocks, Ethereum an explicit `finalized: true`
+            // (a block count alone never qualifies there — 11 §F8 K5).
+            if (_policy.IsFinal(payload.Confirmations, payload.Finalized))
             {
                 var outcome = string.Equals(payload.ContractRet, "SUCCESS", StringComparison.OrdinalIgnoreCase)
                     ? TransferStatusOutcome.Confirmed
                     : TransferStatusOutcome.Failed;
+                var tronResources = _policy.ReportsTronResourceUsage;
                 return new TransferStatusResult(
                     outcome,
                     payload.BlockNumber,
                     payload.Confirmations,
                     payload.ContractRet,
                     null,
-                    payload.RealizedFeeSun,
-                    payload.EnergyUsageTotal,
-                    payload.OriginEnergyUsage);
+                    tronResources ? payload.RealizedFeeSun : null,
+                    tronResources ? payload.EnergyUsageTotal : null,
+                    tronResources ? payload.OriginEnergyUsage : null);
             }
             return new TransferStatusResult(
                 TransferStatusOutcome.Pending,
@@ -222,7 +244,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         }
     }
 
-    private static (string Path, object Body) BuildRequest(TransferBroadcastRequest request)
+    private static (string Path, object Body) BuildRequest(string network, TransferBroadcastRequest request)
     {
         var amountStr = request.Amount.ToString("0.######", CultureInfo.InvariantCulture);
         var tokenStr = request.Token.ToString();
@@ -232,7 +254,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         {
             BlockchainTransactionType.SELLER_PAYOUT => (
                 "api/transfer/payout",
-                new PayoutBody(idStr, request.ToAddress, amountStr, tokenStr)),
+                new PayoutBody(network, idStr, request.ToAddress, amountStr, tokenStr)),
             BlockchainTransactionType.BUYER_PAYMENT or BlockchainTransactionType.WRONG_TOKEN_INCOMING
                 or BlockchainTransactionType.SPAM_TOKEN_INCOMING =>
                 throw new InvalidOperationException(
@@ -244,6 +266,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             BlockchainTransactionType.SWEEP => (
                 "api/transfer/sweep",
                 new SweepBody(
+                    network,
                     idStr,
                     request.DepositIndex ?? throw new InvalidOperationException(
                         "DepositIndex is required for SWEEP."),
@@ -255,6 +278,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             _ => (
                 "api/transfer/refund",
                 new RefundBody(
+                    network,
                     idStr,
                     request.DepositIndex ?? throw new InvalidOperationException(
                         $"DepositIndex is required for {request.Type}."),
@@ -267,12 +291,14 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
     }
 
     private sealed record PayoutBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("blockchainTransactionId")] string BlockchainTransactionId,
         [property: JsonPropertyName("toAddress")] string ToAddress,
         [property: JsonPropertyName("amount")] string Amount,
         [property: JsonPropertyName("token")] string Token);
 
     private sealed record RefundBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("blockchainTransactionId")] string BlockchainTransactionId,
         [property: JsonPropertyName("depositIndex")] int DepositIndex,
         [property: JsonPropertyName("depositAddress")] string DepositAddress,
@@ -281,6 +307,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("token")] string Token);
 
     private sealed record SweepBody(
+        [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("blockchainTransactionId")] string BlockchainTransactionId,
         [property: JsonPropertyName("depositIndex")] int DepositIndex,
         [property: JsonPropertyName("depositAddress")] string DepositAddress,
@@ -295,7 +322,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("txHash")] string? TxHash,
         [property: JsonPropertyName("blockNumber")] long? BlockNumber,
         [property: JsonPropertyName("contractRet")] string? ContractRet,
-        [property: JsonPropertyName("confirmations")] int Confirmations,
+        [property: JsonPropertyName("confirmations")] int? Confirmations,
+        [property: JsonPropertyName("finalized")] bool? Finalized = null,
         [property: JsonPropertyName("realizedFeeSun")] long? RealizedFeeSun = null,
         [property: JsonPropertyName("energyUsageTotal")] long? EnergyUsageTotal = null,
         [property: JsonPropertyName("originEnergyUsage")] long? OriginEnergyUsage = null);

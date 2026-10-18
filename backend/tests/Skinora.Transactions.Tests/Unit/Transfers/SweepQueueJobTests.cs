@@ -89,6 +89,43 @@ public sealed class SweepQueueJobTests : IDisposable
         Assert.Null(sweep.NextAttemptAt);
     }
 
+    // -------------------- T148 — each network sweeps into its own hot wallet --------------------
+
+    private const string EthereumHotWallet = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+
+    [Fact]
+    public async Task Ethereum_Deposit_Is_Never_Swept_To_Trons_Hot_Wallet()
+    {
+        // TRON's hot wallet is configured, Ethereum's is not: the Ethereum
+        // deposit waits rather than being queued towards the wrong network's
+        // wallet (11 §F8 K3).
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        var (_, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        deposit.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await _db.Set<BlockchainTransaction>().AnyAsync(b => b.Type == BlockchainTransactionType.SWEEP));
+    }
+
+    [Fact]
+    public async Task Ethereum_Deposit_Is_Swept_To_Ethereums_Hot_Wallet_On_Ethereum()
+    {
+        _walletAddresses.HotWalletAddress = HotWalletAddress;
+        _walletAddresses.EthereumHotWalletAddress = EthereumHotWallet;
+        var (_, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        deposit.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var sweep = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .SingleAsync(b => b.Type == BlockchainTransactionType.SWEEP);
+        Assert.Equal(BlockchainNetwork.ETHEREUM, sweep.Network);
+        Assert.Equal(EthereumHotWallet, sweep.ToAddress);
+    }
+
     [Fact]
     public async Task HotWalletUnconfigured_QueuesNoSweep()
     {
@@ -345,6 +382,15 @@ public sealed class SweepQueueJobTests : IDisposable
     {
         public string? HotWalletAddress { get; set; }
         public string? ColdWalletAddress { get; set; }
+
+        /// <summary>T148 — Ethereum's own hot wallet; null = unconfigured.</summary>
+        public string? EthereumHotWalletAddress { get; set; }
+
+        public PlatformWalletAddresses For(BlockchainNetwork network) => network switch
+        {
+            BlockchainNetwork.TRON => new(network, HotWalletAddress, ColdWalletAddress),
+            _ => new(network, EthereumHotWalletAddress, null),
+        };
     }
 
     private async Task<(Transaction Tx, PaymentAddress Deposit)> SeedDeliveredAsync(

@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Events;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 
 #pragma warning disable IDE0005 // MediatR is added explicitly to keep the
@@ -25,14 +26,14 @@ namespace Skinora.Transactions.Application.PostCancel;
 public sealed class PostCancelMonitorStartDispatcher
     : INotificationHandler<PostCancelMonitorStartRequestedEvent>
 {
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<PostCancelMonitorStartDispatcher> _logger;
 
     public PostCancelMonitorStartDispatcher(
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         ILogger<PostCancelMonitorStartDispatcher> logger)
     {
-        _sidecar = sidecar;
+        _services = services;
         _logger = logger;
     }
 
@@ -56,7 +57,10 @@ public sealed class PostCancelMonitorStartDispatcher
         // skipped for it. Transport failures are covered anyway — the same
         // sidecar is about to be asked to start post-cancel monitoring, and
         // that call throws, so the outbox retries the pair together.
-        var stopStatus = await _sidecar.StopMonitoringAsync(
+        // T148 — both halves of the handover go to the address's own
+        // network's service (05 §3.3a).
+        var sidecar = _services.Sidecar(notification.Network);
+        var stopStatus = await sidecar.StopMonitoringAsync(
             notification.Address, cancellationToken);
         if (stopStatus != BlockchainSidecarStatus.Success)
         {
@@ -74,7 +78,7 @@ public sealed class PostCancelMonitorStartDispatcher
             ExpectedSymbol: notification.ExpectedToken.ToString(),
             CancelledAt: notification.CancelledAt);
 
-        var status = await _sidecar.StartPostCancelMonitoringAsync(request, cancellationToken);
+        var status = await sidecar.StartPostCancelMonitoringAsync(request, cancellationToken);
         switch (status)
         {
             case BlockchainSidecarStatus.Success:

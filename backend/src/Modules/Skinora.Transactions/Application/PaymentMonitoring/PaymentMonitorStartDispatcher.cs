@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Skinora.Shared.Events;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 
 #pragma warning disable IDE0005 // MediatR is added explicitly to keep the
@@ -29,14 +30,14 @@ namespace Skinora.Transactions.Application.PaymentMonitoring;
 public sealed class PaymentMonitorStartDispatcher
     : INotificationHandler<PaymentMonitorStartRequestedEvent>
 {
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<PaymentMonitorStartDispatcher> _logger;
 
     public PaymentMonitorStartDispatcher(
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         ILogger<PaymentMonitorStartDispatcher> logger)
     {
-        _sidecar = sidecar;
+        _services = services;
         _logger = logger;
     }
 
@@ -55,7 +56,9 @@ public sealed class PaymentMonitorStartDispatcher
             // once the payment is in (08 §3.4).
             Cadence: PaymentMonitorCadence.Payment);
 
-        var status = await _sidecar.StartMonitoringAsync(request, cancellationToken);
+        // T148 — the deposit address's own network's service (05 §3.3a).
+        var status = await _services.Sidecar(notification.Network)
+            .StartMonitoringAsync(request, cancellationToken);
         switch (status)
         {
             case BlockchainSidecarStatus.Success:

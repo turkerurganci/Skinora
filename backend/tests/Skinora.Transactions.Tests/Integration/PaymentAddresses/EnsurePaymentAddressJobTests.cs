@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
@@ -160,7 +161,7 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
     private EnsurePaymentAddressJob BuildJob()
     {
         var allocator = new PaymentAddressAllocator(
-            Context, _sidecar, NullLogger<PaymentAddressAllocator>.Instance);
+            Context, FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar), NullLogger<PaymentAddressAllocator>.Instance);
         return new EnsurePaymentAddressJob(
             Context, allocator, NullLogger<EnsurePaymentAddressJob>.Instance);
     }

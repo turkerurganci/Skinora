@@ -386,6 +386,9 @@ public class NetworkDimensionSchemaTests : IntegrationTestBase
         BlockchainWebhookEnvelope<PaymentDetectedData> Envelope(PaymentAddress pa) => new()
         {
             Event = "payment-detected",
+            // T148 — every webhook names its network; the service reporting a
+            // deposit is the deposit's own network's service.
+            Network = pa.Network.ToString(),
             Data = new PaymentDetectedData
             {
                 PaymentAddressId = pa.Id,

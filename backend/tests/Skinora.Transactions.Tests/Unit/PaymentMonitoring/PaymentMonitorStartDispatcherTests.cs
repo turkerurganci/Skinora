@@ -1,3 +1,4 @@
+using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -67,7 +68,7 @@ public class PaymentMonitorStartDispatcherTests
     }
 
     private static PaymentMonitorStartDispatcher BuildSut(IBlockchainSidecarClient sidecar)
-        => new(sidecar, NullLogger<PaymentMonitorStartDispatcher>.Instance);
+        => new(FakeBlockchainServiceRegistry.ForTron(sidecar: sidecar), NullLogger<PaymentMonitorStartDispatcher>.Instance);
 
     private static PaymentMonitorStartRequestedEvent BuildEvent()
         => new(

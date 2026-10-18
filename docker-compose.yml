@@ -78,6 +78,18 @@ services:
       # sending money where an admin panel pointed it. Not signing material.
       - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS:-}
       - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
+      # T148 — Ethereum's own service, key, webhook secret, token contracts
+      # and wallet pair (05 §3.3a: every network has its own). All empty until
+      # the Ethereum service exists (T150/T158): an empty EthereumSidecar BaseUrl
+      # makes every Ethereum call fail closed and leaves TRON untouched. The
+      # webhook secret MUST differ from TRON's (BLOCKCHAIN_WEBHOOK_SECRET).
+      - EthereumSidecar__BaseUrl=${ETHEREUM_SIDECAR_BASE_URL:-}
+      - EthereumSidecar__InternalKey=${ETHEREUM_SIDECAR_INTERNAL_KEY:-}
+      - Webhook__EthereumSharedSecret=${ETHEREUM_WEBHOOK_SECRET:-}
+      - EthereumStablecoinContracts__Usdt=${ETHEREUM_USDT_CONTRACT:-}
+      - EthereumStablecoinContracts__Usdc=${ETHEREUM_USDC_CONTRACT:-}
+      - ETHEREUM_HOT_WALLET_ADDRESS=${ETHEREUM_HOT_WALLET_ADDRESS:-}
+      - ETHEREUM_COLD_WALLET_ADDRESS=${ETHEREUM_COLD_WALLET_ADDRESS:-}
       # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
       # Default "logging" = fail-open, no outbound call to steamcommunity.com.
       - SteamMarket__Provider=${STEAM_MARKET_PROVIDER:-logging}

@@ -1,0 +1,18 @@
+{
+  "event": "payment.spam_token",
+  "network": "TRON",
+  "timestamp": "2026-10-18T09:30:00.000Z",
+  "data": {
+    "paymentAddressId": "aaaaaaaa-1111-2222-3333-444444444444",
+    "transactionId": "bbbbbbbb-1111-2222-3333-444444444444",
+    "txHash": "tx-contract-example-0001",
+    "eventIndex": 0,
+    "fromAddress": "TEdvoHEatmDKvTh3o9vBRB9Vdtbhn4QFhy",
+    "toAddress": "TD5gsCwxykWsLN9aPrq2TAfNjByuZKYp4E",
+    "expectedContractAddress": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+    "actualContractAddress": "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+    "amount": "1000.000000",
+    "blockTimestampMs": 1792315800000,
+    "detectedAt": "2026-10-18T09:30:00.000Z"
+  }
+}

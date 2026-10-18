@@ -1,3 +1,4 @@
+using Skinora.Transactions.Application.Networks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -154,7 +155,8 @@ public class PostCancelMonitorStarterTests : IntegrationTestBase
     }
 
     private PostCancelMonitorStarter BuildSut(StablecoinContractOptions? contracts = null)
-        => new(Context, _outbox, Options.Create(contracts ?? new StablecoinContractOptions()),
+        => new(Context, _outbox,
+            StablecoinContractRegistry.FromOptions(contracts ?? new StablecoinContractOptions()),
             NullLogger<PostCancelMonitorStarter>.Instance);
 
     private sealed class RecordingOutboxService : IOutboxService

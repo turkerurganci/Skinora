@@ -1,0 +1,14 @@
+{
+  "event": "payment.confirmed",
+  "network": "TRON",
+  "timestamp": "2026-10-18T09:30:00.000Z",
+  "data": {
+    "paymentAddressId": "aaaaaaaa-1111-2222-3333-444444444444",
+    "transactionId": "bbbbbbbb-1111-2222-3333-444444444444",
+    "txHash": "tx-contract-example-0001",
+    "eventIndex": 0,
+    "blockNumber": 76543210,
+    "confirmationCount": 20,
+    "confirmedAt": "2026-10-18T09:30:00.000Z"
+  }
+}

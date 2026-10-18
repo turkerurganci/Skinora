@@ -12,6 +12,7 @@ using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Reconciliation;
 using Skinora.Transactions.Domain.Entities;
@@ -122,7 +123,7 @@ public sealed class ReconciliationService : IReconciliationService
     ];
 
     private readonly AppDbContext _db;
-    private readonly IBlockchainSidecarClient _sidecar;
+    private readonly IBlockchainServiceRegistry _services;
     private readonly INotificationRealtimePublisher _realtime;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
@@ -130,45 +131,78 @@ public sealed class ReconciliationService : IReconciliationService
 
     public ReconciliationService(
         AppDbContext db,
-        IBlockchainSidecarClient sidecar,
+        IBlockchainServiceRegistry services,
         INotificationRealtimePublisher realtime,
         IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<ReconciliationService> logger)
     {
         _db = db;
-        _sidecar = sidecar;
+        _services = services;
         _realtime = realtime;
         _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
     }
 
+    /// <remarks>
+    /// T148 — one pass per network that has a service (05 §3.3a): that
+    /// network's deposits, hot and cold wallets, balances read from that
+    /// network's service. A network whose service is down aborts only its own
+    /// pass. With a single configured network the outcome is that pass's;
+    /// with several, counts are summed and <c>BlockNumber</c> is null (block
+    /// heights of different chains do not compare).
+    /// </remarks>
     public async Task<ReconciliationOutcome> RunAsync(CancellationToken cancellationToken)
+    {
+        var outcomes = new List<ReconciliationOutcome>();
+        foreach (var network in _services.ConfiguredNetworks)
+        {
+            outcomes.Add(await RunForNetworkAsync(network, cancellationToken));
+        }
+
+        return outcomes.Count switch
+        {
+            0 => new ReconciliationOutcome(0, false, false, 0, null),
+            1 => outcomes[0],
+            _ => new ReconciliationOutcome(
+                outcomes.Sum(o => o.DepositAddressesChecked),
+                outcomes.Any(o => o.HotWalletChecked),
+                outcomes.Any(o => o.ColdWalletChecked),
+                outcomes.Sum(o => o.MismatchCount),
+                null),
+        };
+    }
+
+    private async Task<ReconciliationOutcome> RunForNetworkAsync(
+        BlockchainNetwork network, CancellationToken cancellationToken)
     {
         // Deployment configuration, not an admin-editable setting: the same
         // env var the signer pins its destinations to (05 §3.3, owner decision
         // 2026-09-16). Unset behaves exactly as the old "NONE" sentinel did.
-        var hotWallet = _walletAddresses.HotWalletAddress;
-        var coldWallet = _walletAddresses.ColdWalletAddress;
+        var wallets = _walletAddresses.For(network);
+        var hotWallet = wallets.HotWalletAddress;
+        var coldWallet = wallets.ColdWalletAddress;
 
         if (string.IsNullOrEmpty(hotWallet))
         {
             _logger.LogWarning(
-                "Reconciliation skipping hot wallet scope: {Key} is unconfigured.",
-                EnvPlatformWalletAddressProvider.HotWalletConfigurationKey);
+                "Reconciliation skipping {Network} hot wallet scope: {Key} is unconfigured.",
+                network, HotWalletKeyFor(network));
         }
         if (string.IsNullOrEmpty(coldWallet))
         {
             _logger.LogInformation(
-                "Reconciliation skipping cold wallet scope: {Key} is unconfigured.",
-                EnvPlatformWalletAddressProvider.ColdWalletConfigurationKey);
+                "Reconciliation skipping {Network} cold wallet scope: {Key} is unconfigured.",
+                network, ColdWalletKeyFor(network));
         }
 
         var depositAddresses = await _db.Set<PaymentAddress>()
             .AsNoTracking()
             .IgnoreQueryFilters()
-            .Where(pa => !pa.IsDeleted && pa.MonitoringStatus != MonitoringStatus.STOPPED)
+            .Where(pa => !pa.IsDeleted
+                && pa.MonitoringStatus != MonitoringStatus.STOPPED
+                && pa.Network == network)
             .OrderBy(pa => pa.CreatedAt)
             .Select(pa => new { pa.Id, pa.Address })
             .Take(MaxDepositAddressesPerRun + 1)
@@ -201,11 +235,11 @@ public sealed class ReconciliationService : IReconciliationService
             return new ReconciliationOutcome(0, false, false, 0, null);
         }
 
-        var snapshot = await _sidecar.GetWalletBalancesAsync(addresses, cancellationToken);
+        var snapshot = await _services.Sidecar(network).GetWalletBalancesAsync(addresses, cancellationToken);
         if (snapshot.Status != BlockchainSidecarStatus.Success || snapshot.Balances is null)
         {
             _logger.LogWarning(
-                "Reconciliation aborted: sidecar returned {Status}.", snapshot.Status);
+                "Reconciliation of {Network} aborted: its service returned {Status}.", network, snapshot.Status);
             return new ReconciliationOutcome(0, false, false, 0, null);
         }
 
@@ -271,6 +305,16 @@ public sealed class ReconciliationService : IReconciliationService
             totalMismatches,
             snapshot.BlockNumber);
     }
+
+    private static string HotWalletKeyFor(BlockchainNetwork network) =>
+        network == BlockchainNetwork.TRON
+            ? EnvPlatformWalletAddressProvider.HotWalletConfigurationKey
+            : EnvPlatformWalletAddressProvider.EthereumHotWalletConfigurationKey;
+
+    private static string ColdWalletKeyFor(BlockchainNetwork network) =>
+        network == BlockchainNetwork.TRON
+            ? EnvPlatformWalletAddressProvider.ColdWalletConfigurationKey
+            : EnvPlatformWalletAddressProvider.EthereumColdWalletConfigurationKey;
 
     private async Task<int> ReconcileDepositAddressAsync(
         Guid paymentAddressId,

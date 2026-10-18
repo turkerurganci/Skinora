@@ -1,3 +1,4 @@
+using Skinora.Shared.Enums;
 using System.Net;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -39,8 +40,9 @@ public sealed class BlockchainSidecarMonitorStartContractTests
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         var client = new HttpBlockchainSidecarClient(
+            Enum.Parse<BlockchainNetwork>(Text(expected, "network")),
             new HttpClient(handler) { BaseAddress = new Uri(SidecarBaseUrl) },
-            Options.Create(new BlockchainSidecarOptions { BaseUrl = SidecarBaseUrl }),
+            new BlockchainSidecarOptions { BaseUrl = SidecarBaseUrl },
             NullLogger<HttpBlockchainSidecarClient>.Instance);
 
         await client.StartMonitoringAsync(

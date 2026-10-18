@@ -1,4 +1,5 @@
 {
+  "network": "TRON",
   "toAddress": "TBXSw8fM4jpQkGc6zZjsVABFpVN7UvXPdV",
   "amount": "1234.567891",
   "token": "USDT"

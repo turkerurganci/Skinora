@@ -105,9 +105,10 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
     {
         var sut = BuildSut();
 
-        // Both components report "not configured" (null) → no probe, no alert.
+        // Every component reports "not configured" (null) → no probe, no alert.
         _health.SteamHealthy = null;
         _health.BlockchainHealthy = null;
+        _health.EthereumHealthy = null;
         await sut.ProbeAsync();
         await sut.ProbeAsync();
         await sut.ProbeAsync();
@@ -203,6 +204,75 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
         Assert.Equal(
             ("Freeze", TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION),
             Assert.Single(_freeze.Calls));
+        // T148 — and the freeze is scoped to the degraded network.
+        Assert.Equal(BlockchainNetwork.TRON, Assert.Single(_freeze.Networks));
+    }
+
+    // -------------------- T148 per-network health freeze --------------------
+
+    [Fact]
+    public async Task Tron_Outage_Freezes_Only_Tron_And_Ethereum_Keeps_Running()
+    {
+        // 05 §3.3a "Sağlık ve dondurma" / 11 §6.2 FK8-6: one network down must
+        // not freeze the other. Ethereum is configured and healthy throughout.
+        var sut = BuildSut();
+        _health.SteamHealthy = true;
+        _health.EthereumHealthy = true;
+        _health.BlockchainHealthy = false;
+
+        await sut.ProbeAsync();
+        await sut.ProbeAsync();
+
+        Assert.Equal(("Freeze", TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION), Assert.Single(_freeze.Calls));
+        Assert.Equal(BlockchainNetwork.TRON, Assert.Single(_freeze.Networks));
+        // The alert names the network's component, not a shared "BLOCKCHAIN".
+        var alert = Assert.Single(_outbox.Events.OfType<PlatformOutageAlertEvent>());
+        Assert.Equal(PlatformComponents.BlockchainTron, alert.Component);
+        Assert.True(_state.IsInOutage(PlatformComponents.BlockchainTron));
+        Assert.False(_state.IsInOutage(PlatformComponents.BlockchainEthereum));
+
+        // TRON recovers → resume TRON only.
+        _health.BlockchainHealthy = true;
+        await sut.ProbeAsync();
+        Assert.Equal(("Resume", TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION), _freeze.Calls[1]);
+        Assert.Equal([BlockchainNetwork.TRON, BlockchainNetwork.TRON], _freeze.Networks);
+    }
+
+    [Fact]
+    public async Task Ethereum_Outage_Freezes_Only_Ethereum()
+    {
+        var sut = BuildSut();
+        _health.SteamHealthy = true;
+        _health.BlockchainHealthy = true;
+        _health.EthereumHealthy = false;
+
+        await sut.ProbeAsync();
+        await sut.ProbeAsync();
+
+        Assert.Equal(("Freeze", TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION), Assert.Single(_freeze.Calls));
+        Assert.Equal(BlockchainNetwork.ETHEREUM, Assert.Single(_freeze.Networks));
+        var alert = Assert.Single(_outbox.Events.OfType<PlatformOutageAlertEvent>());
+        Assert.Equal(PlatformComponents.BlockchainEthereum, alert.Component);
+        Assert.False(_state.IsInOutage(PlatformComponents.BlockchainTron));
+    }
+
+    [Fact]
+    public async Task Unconfigured_Ethereum_Is_Never_An_Outage()
+    {
+        // Until T150 the Ethereum service has no base URL: the client answers
+        // null and the probe must not read that as a failure — otherwise every
+        // deployment would freeze Ethereum (and alert) for a service that is
+        // simply not there yet.
+        var sut = BuildSut();
+        _health.SteamHealthy = true;
+        _health.BlockchainHealthy = true;
+        _health.EthereumHealthy = null;
+
+        for (var i = 0; i < Threshold + 2; i++) await sut.ProbeAsync();
+
+        Assert.Empty(_freeze.Calls);
+        Assert.Empty(_outbox.Events.OfType<PlatformOutageAlertEvent>());
+        Assert.False(_state.IsInOutage(PlatformComponents.BlockchainEthereum));
     }
 
     [Fact]
@@ -259,6 +329,9 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
     {
         public List<(string Direction, TimeoutFreezeReason Reason)> Calls { get; } = [];
 
+        /// <summary>T148 — the network of every network-scoped call, in order.</summary>
+        public List<BlockchainNetwork> Networks { get; } = [];
+
         /// <summary>
         /// Every bulk call reaching the service, including ones that throw —
         /// <see cref="Calls"/> only records the ones that got far enough to
@@ -281,7 +354,16 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
         public Task<int> ResumeManyAsync(TimeoutFreezeReason reason, CancellationToken cancellationToken)
             => RecordAsync("Resume", reason);
 
-        private async Task<int> RecordAsync(string direction, TimeoutFreezeReason reason)
+        public Task<int> FreezeManyAsync(
+            TimeoutFreezeReason reason, BlockchainNetwork network, CancellationToken cancellationToken)
+            => RecordAsync("Freeze", reason, network);
+
+        public Task<int> ResumeManyAsync(
+            TimeoutFreezeReason reason, BlockchainNetwork network, CancellationToken cancellationToken)
+            => RecordAsync("Resume", reason, network);
+
+        private async Task<int> RecordAsync(
+            string direction, TimeoutFreezeReason reason, BlockchainNetwork? network = null)
         {
             Attempts++;
 
@@ -292,6 +374,7 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
             }
 
             Calls.Add((direction, reason));
+            if (network is { } scoped) Networks.Add(scoped);
 
             if (SaveChangesOnCall is not null)
                 await SaveChangesOnCall();
@@ -329,10 +412,21 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
     private sealed class FakeSidecarHealthClient : ISidecarHealthClient
     {
         public bool? SteamHealthy { get; set; } = true;
+
+        /// <summary>TRON's blockchain service.</summary>
         public bool? BlockchainHealthy { get; set; } = null;
 
+        /// <summary>Ethereum's blockchain service (T148); null = not configured.</summary>
+        public bool? EthereumHealthy { get; set; } = null;
+
         public Task<bool?> IsHealthyAsync(string component, CancellationToken cancellationToken)
-            => Task.FromResult(component == PlatformComponents.Steam ? SteamHealthy : BlockchainHealthy);
+            => Task.FromResult(component switch
+            {
+                PlatformComponents.Steam => SteamHealthy,
+                PlatformComponents.BlockchainTron => BlockchainHealthy,
+                PlatformComponents.BlockchainEthereum => EthereumHealthy,
+                _ => null,
+            });
     }
 
     private sealed class RecordingOutbox : IOutboxService

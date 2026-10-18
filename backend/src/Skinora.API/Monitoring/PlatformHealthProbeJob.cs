@@ -35,6 +35,16 @@ namespace Skinora.API.Monitoring;
 /// maintenance freeze (WP7) is unaffected and still available.
 /// </para>
 /// <para>
+/// <b>Per network (T148 — 05 §3.3a "Sağlık ve dondurma", 11 §6.2 FK8-6).</b>
+/// Every network's blockchain service is its own component
+/// (<see cref="PlatformComponents.BlockchainTron"/>,
+/// <see cref="PlatformComponents.BlockchainEthereum"/>). A degraded network
+/// freezes the payment timeouts of ITS transactions only, and its recovery
+/// resumes only those; the other network keeps running. A network without a
+/// configured service is not probed (the client answers <c>null</c>), so its
+/// absence is never mistaken for an outage.
+/// </para>
+/// <para>
 /// The job owns its own unit of work (a standalone recurring job, not part of a
 /// larger transaction), so it stages the audit + outbox rows and calls
 /// <c>SaveChangesAsync</c> itself — mirroring <c>HeartbeatJob</c> / the
@@ -183,17 +193,30 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
     /// </remarks>
     private async Task<int?> ApplyTimeoutFreezeAsync(string component, HealthTransition transition)
     {
-        var reason = component switch
+        TimeoutFreezeReason? reason = null;
+        BlockchainNetwork? network = null;
+        if (component == PlatformComponents.Steam)
         {
-            PlatformComponents.Steam => (TimeoutFreezeReason?)TimeoutFreezeReason.STEAM_OUTAGE,
-            PlatformComponents.Blockchain => TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION,
-            _ => null,
-        };
+            reason = TimeoutFreezeReason.STEAM_OUTAGE;
+        }
+        else if (PlatformComponents.TryGetNetwork(component, out var resolved))
+        {
+            reason = TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION;
+            network = resolved;
+        }
 
         if (reason is null) return null;
 
         try
         {
+            if (network is { } scoped)
+            {
+                // T148 — only the degraded network's transactions.
+                return transition == HealthTransition.Degraded
+                    ? await _freeze.FreezeManyAsync(reason.Value, scoped, CancellationToken.None)
+                    : await _freeze.ResumeManyAsync(reason.Value, scoped, CancellationToken.None);
+            }
+
             return transition == HealthTransition.Degraded
                 ? await _freeze.FreezeManyAsync(reason.Value, CancellationToken.None)
                 : await _freeze.ResumeManyAsync(reason.Value, CancellationToken.None);

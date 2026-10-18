@@ -1,3 +1,4 @@
+using Skinora.Transactions.Application.Networks;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -761,7 +762,7 @@ public class TransactionReadinessServiceTests : IntegrationTestBase
             _steamEligibility,
             new TimeoutSchedulingService(Context, _scheduler, _clock),
             _outbox,
-            Options.Create(new StablecoinContractOptions()),
+            StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
             NullLogger<TransactionReadinessService>.Instance,
             _clock);
 

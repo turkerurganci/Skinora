@@ -17,16 +17,23 @@ public interface IChargedGasFeeResolver
     /// Fee charged on a refund-family transfer (deposit → recipient). Without a
     /// <paramref name="fromDepositAddress"/> there is no sender to price, so no
     /// estimate is asked for and the static refund setting is charged.
+    /// <paramref name="network"/> is the transfer's network (T148): its service
+    /// prices it and its fallback / ceiling apply.
     /// </summary>
     Task<ResolvedGasFee> ResolveRefundFeeAsync(
+        BlockchainNetwork network,
         string? fromDepositAddress,
         string toAddress,
         decimal amount,
         StablecoinType token,
         CancellationToken cancellationToken);
 
-    /// <summary>Fee used in the seller-payout gas-protection split (hot wallet → seller).</summary>
+    /// <summary>
+    /// Fee used in the seller-payout gas-protection split (hot wallet → seller)
+    /// on <paramref name="network"/> (T148).
+    /// </summary>
     Task<ResolvedGasFee> ResolvePayoutFeeAsync(
+        BlockchainNetwork network,
         string toAddress,
         decimal amount,
         StablecoinType token,

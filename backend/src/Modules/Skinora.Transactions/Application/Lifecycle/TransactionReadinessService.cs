@@ -8,6 +8,7 @@ using Skinora.Shared.Exceptions;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.History;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Application.Timeouts;
@@ -41,7 +42,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
     private readonly ISteamTradeEligibilityChecker _steamTradeEligibility;
     private readonly ITimeoutSchedulingService _timeouts;
     private readonly IOutboxService _outbox;
-    private readonly StablecoinContractOptions _contracts;
+    private readonly IStablecoinContractRegistry _contracts;
     private readonly ILogger<TransactionReadinessService> _logger;
     private readonly TimeProvider _clock;
 
@@ -53,7 +54,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
         ISteamTradeEligibilityChecker steamTradeEligibility,
         ITimeoutSchedulingService timeouts,
         IOutboxService outbox,
-        IOptions<StablecoinContractOptions> contracts,
+        IStablecoinContractRegistry contracts,
         ILogger<TransactionReadinessService> logger,
         TimeProvider clock)
     {
@@ -64,7 +65,7 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
         _steamTradeEligibility = steamTradeEligibility;
         _timeouts = timeouts;
         _outbox = outbox;
-        _contracts = contracts.Value;
+        _contracts = contracts;
         _logger = logger;
         _clock = clock;
     }
@@ -365,8 +366,9 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
                     Address: paymentAddress.Address,
                     ExpectedToken: paymentAddress.ExpectedToken,
                     ExpectedContractAddress: _contracts
-                        .ResolveContractAddress(paymentAddress.ExpectedToken),
-                    OccurredAt: nowUtc),
+                        .ResolveContractAddress(paymentAddress.Network, paymentAddress.ExpectedToken),
+                    OccurredAt: nowUtc,
+                    Network: paymentAddress.Network),
                 cancellationToken);
         }
         else

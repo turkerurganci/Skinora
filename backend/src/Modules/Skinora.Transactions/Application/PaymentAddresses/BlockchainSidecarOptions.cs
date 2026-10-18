@@ -1,15 +1,53 @@
+using Microsoft.Extensions.Options;
+using Skinora.Shared.Enums;
+
 namespace Skinora.Transactions.Application.PaymentAddresses;
 
 /// <summary>
-/// Binding target for the <c>BlockchainSidecar</c> configuration section. Holds
-/// the sidecar HTTP base URL and the shared internal-key used by the
-/// <c>X-Internal-Key</c> header (05 §3.4 — service-to-service auth).
-/// Mirrors <see cref="Skinora.Steam.Application.Inventory.SteamSidecarOptions"/>
-/// so deployment configuration stays symmetric.
+/// Binding target for one network's blockchain service: its HTTP base URL and
+/// its own internal key for the <c>X-Internal-Key</c> header (05 §3.4 —
+/// service-to-service auth). Mirrors
+/// <see cref="Skinora.Steam.Application.Inventory.SteamSidecarOptions"/> so
+/// deployment configuration stays symmetric.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <b>One instance per network (T148 — 05 §3.3a).</b> TRON binds the
+/// <c>BlockchainSidecar</c> section as the default (unnamed) options instance,
+/// exactly as before the network dimension, so existing deployments need no
+/// change. Ethereum binds <c>EthereumSidecar</c> as the named instance
+/// <c>"ETHEREUM"</c>. An empty <see cref="BaseUrl"/> means the network has no
+/// service: the backend sends nothing there and every caller of that network
+/// fails closed (<c>IBlockchainServiceRegistry</c>) — the other network keeps
+/// working.
+/// </para>
+/// </remarks>
 public sealed class BlockchainSidecarOptions
 {
+    /// <summary>TRON's section (pre-F8 name, kept).</summary>
     public const string SectionName = "BlockchainSidecar";
+
+    /// <summary>Ethereum's section (T148). Absent until the Ethereum service exists (T150).</summary>
+    public const string EthereumSectionName = "EthereumSidecar";
+
+    /// <summary>Configuration section of <paramref name="network"/>'s service.</summary>
+    public static string SectionNameFor(BlockchainNetwork network) => network switch
+    {
+        BlockchainNetwork.TRON => SectionName,
+        BlockchainNetwork.ETHEREUM => EthereumSectionName,
+        _ => throw new ArgumentOutOfRangeException(nameof(network), network, "No service section for this network."),
+    };
+
+    /// <summary>
+    /// Options-instance name of <paramref name="network"/>: TRON is the default
+    /// instance (so every pre-F8 <c>IOptions&lt;BlockchainSidecarOptions&gt;</c>
+    /// reader still sees TRON), other networks are named after the enum value.
+    /// </summary>
+    public static string OptionsNameFor(BlockchainNetwork network) =>
+        network == BlockchainNetwork.TRON ? Options.DefaultName : network.ToString();
+
+    /// <summary>True when the network has a service address to talk to.</summary>
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl);
 
     /// <summary>
     /// Base URL of the blockchain sidecar

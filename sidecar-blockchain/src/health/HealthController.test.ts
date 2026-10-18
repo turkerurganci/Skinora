@@ -34,9 +34,13 @@ describe('blockchain sidecar /health', () => {
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         status: string;
+        network: string;
         checks: Array<{ name: string; message?: string }>;
       };
       expect(body.status).toBe('healthy');
+      // T148 — the backend's per-network probe checks this against the
+      // network whose address it probed.
+      expect(body.network).toBe('TRON');
       expect(body.checks[0].name).toBe('tron-node');
       // The block number is the evidence the probe actually reached the chain
       // rather than merely that the process is up.

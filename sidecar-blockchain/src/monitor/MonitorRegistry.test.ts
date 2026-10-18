@@ -243,6 +243,8 @@ describe('MonitorRegistry', () => {
     const sent = sender.sent[0];
     expect(sent.endpoint).toBe(ENDPOINTS.paymentDetected);
     expect(sent.envelope.event).toBe('payment.detected');
+    // T148 (05 §3.3a) — every callback names the service's network.
+    expect(sent.envelope.network).toBe('TRON');
     const data = (
       sent.envelope as { data: { txHash: string; amount: string; tokenSymbol: string } }
     ).data;

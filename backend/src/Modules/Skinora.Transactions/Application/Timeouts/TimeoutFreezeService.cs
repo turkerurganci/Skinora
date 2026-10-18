@@ -103,14 +103,57 @@ public sealed class TimeoutFreezeService : ITimeoutFreezeService
         transaction.TimeoutRemainingSeconds = null;
     }
 
-    public async Task<int> FreezeManyAsync(TimeoutFreezeReason reason, CancellationToken cancellationToken)
+    public Task<int> FreezeManyAsync(TimeoutFreezeReason reason, CancellationToken cancellationToken) =>
+        FreezeManyCoreAsync(reason, network: null, cancellationToken);
+
+    public Task<int> FreezeManyAsync(
+        TimeoutFreezeReason reason, BlockchainNetwork network, CancellationToken cancellationToken)
+    {
+        EnsureNetworkScoped(reason);
+        return FreezeManyCoreAsync(reason, network, cancellationToken);
+    }
+
+    public Task<int> ResumeManyAsync(TimeoutFreezeReason reason, CancellationToken cancellationToken) =>
+        ResumeManyCoreAsync(reason, network: null, cancellationToken);
+
+    public Task<int> ResumeManyAsync(
+        TimeoutFreezeReason reason, BlockchainNetwork network, CancellationToken cancellationToken)
+    {
+        EnsureNetworkScoped(reason);
+        return ResumeManyCoreAsync(reason, network, cancellationToken);
+    }
+
+    // T148 — only a blockchain degradation belongs to one network; maintenance
+    // and a Steam outage halt every network alike.
+    private static void EnsureNetworkScoped(TimeoutFreezeReason reason)
+    {
+        if (reason != TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION)
+        {
+            throw new ArgumentException(
+                $"{reason} is not network-scoped — only BLOCKCHAIN_DEGRADATION freezes one network (05 §3.3a).",
+                nameof(reason));
+        }
+    }
+
+    // T148 — a network-scoped call touches only that network's transactions.
+    // A transaction that has not recorded a network (none can be active past
+    // ACCEPTED, but the convention is kept everywhere) is TRON (06 §1.4).
+    private static IQueryable<Transaction> OnNetwork(IQueryable<Transaction> query, BlockchainNetwork? network)
+    {
+        if (network is not { } scoped) return query;
+        var includeUnset = scoped == BlockchainNetwork.TRON;
+        return query.Where(t => t.Network == scoped || (includeUnset && t.Network == null));
+    }
+
+    private async Task<int> FreezeManyCoreAsync(
+        TimeoutFreezeReason reason, BlockchainNetwork? network, CancellationToken cancellationToken)
     {
         var statuses = TimeoutFreezeReasonScopes.For(reason);
 
         // !IsOnHold + TimeoutFrozenAt == null filters out emergency-held and
         // already-frozen rows so a maintenance window never clobbers an
         // EMERGENCY_HOLD freeze (T59 path).
-        var actives = await _db.Set<Transaction>()
+        var actives = await OnNetwork(_db.Set<Transaction>(), network)
             .Where(t => !t.IsDeleted
                         && !t.IsOnHold
                         && t.TimeoutFrozenAt == null
@@ -128,13 +171,14 @@ public sealed class TimeoutFreezeService : ITimeoutFreezeService
         return actives.Count;
     }
 
-    public async Task<int> ResumeManyAsync(TimeoutFreezeReason reason, CancellationToken cancellationToken)
+    private async Task<int> ResumeManyCoreAsync(
+        TimeoutFreezeReason reason, BlockchainNetwork? network, CancellationToken cancellationToken)
     {
         // Re-trigger the EMERGENCY_HOLD guard so misuse fails fast at the
         // bulk surface as well.
         _ = TimeoutFreezeReasonScopes.For(reason);
 
-        var frozen = await _db.Set<Transaction>()
+        var frozen = await OnNetwork(_db.Set<Transaction>(), network)
             .Where(t => !t.IsDeleted
                         && t.TimeoutFrozenAt != null
                         && t.TimeoutFreezeReason == reason)

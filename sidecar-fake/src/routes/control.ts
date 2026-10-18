@@ -72,6 +72,7 @@ function detectedEnvelope(
 ) {
   return {
     event: 'payment.detected',
+    network: 'TRON',
     timestamp: new Date().toISOString(),
     data: {
       paymentAddressId: dep.paymentAddressId,
@@ -92,6 +93,7 @@ function detectedEnvelope(
 function confirmedEnvelope(dep: DepositPaymentAddress, txHash: string, eventIndex: number) {
   return {
     event: 'payment.confirmed',
+    network: 'TRON',
     timestamp: new Date().toISOString(),
     data: {
       paymentAddressId: dep.paymentAddressId,
@@ -375,6 +377,7 @@ controlRouter.post('/__e2e/payment/wrong-token', async (req, res) => {
       config.blockchainWebhookSecret,
       {
         event: 'payment.wrong_token',
+        network: 'TRON',
         timestamp: new Date().toISOString(),
         data: {
           paymentAddressId: dep.paymentAddressId,
@@ -425,6 +428,7 @@ controlRouter.post('/__e2e/payment/spam-token', async (req, res) => {
       config.blockchainWebhookSecret,
       {
         event: 'payment.spam_token',
+        network: 'TRON',
         timestamp: new Date().toISOString(),
         data: {
           paymentAddressId: dep.paymentAddressId,
@@ -477,6 +481,7 @@ controlRouter.post('/__e2e/payment/late-detected', async (req, res) => {
       config.blockchainWebhookSecret,
       {
         event: 'payment.late_detected',
+        network: 'TRON',
         timestamp: new Date().toISOString(),
         data: {
           paymentAddressId: dep.paymentAddressId,
