@@ -1,0 +1,223 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { createApp } from './routes.js';
+import { EthereumHdWallet } from '../wallet/HdWalletService.js';
+import { SidecarError } from '../errors/SidecarError.js';
+import { TransferDeferredError } from '../transfer/FeePolicy.js';
+import type { TransferService } from '../transfer/TransferService.js';
+
+/**
+ * T152 — the HTTP answers of the send endpoints and what each means to the
+ * backend (HttpBlockchainTransferClient): 200 signed, 400 refused for good,
+ * 503 + deferred waits without spending a retry, 502 transient; status 404 /
+ * 409 are row-specific (the confirmation job keeps going), 502 is the network.
+ */
+
+const KEY = 'i'.repeat(64);
+const ID = '00000000-0000-0000-0000-000000000001';
+const SELLER = '0x1111111111111111111111111111111111111111';
+const DEPOSIT = '0x9858EfFD232B4033E47d90003D41EC34EcaEda94';
+const HASH = '0x' + 'ab'.repeat(32);
+
+let next: () => Promise<unknown>;
+const calls: Array<{ method: string; request: unknown }> = [];
+
+const fake = {
+  payout: (request: unknown) => (calls.push({ method: 'payout', request }), next()),
+  refund: (request: unknown) => (calls.push({ method: 'refund', request }), next()),
+  sweep: (request: unknown) => (calls.push({ method: 'sweep', request }), next()),
+  coldWalletTransfer: (request: unknown) => (calls.push({ method: 'cold', request }), next()),
+  status: (hash: unknown) => (calls.push({ method: 'status', request: hash }), next()),
+} as unknown as TransferService;
+
+let server: Server;
+let base: string;
+
+beforeAll(async () => {
+  const app = createApp({
+    internalKey: KEY,
+    chainId: 11155111,
+    wallet: new EthereumHdWallet(`${'abandon '.repeat(11)}about`),
+    finality: () => ({ state: 'ok', snapshot: null, ageSeconds: null, lastError: null }),
+    transfers: fake,
+  });
+  server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+});
+
+afterAll(async () => {
+  await new Promise((resolve) => server.close(resolve));
+});
+
+beforeEach(() => {
+  calls.length = 0;
+  next = () => Promise.resolve({ txHash: HASH, nonce: 3, replayed: false });
+});
+
+function post(path: string, body: unknown) {
+  return fetch(base + '/api' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-internal-key': KEY },
+    body: JSON.stringify(body),
+  });
+}
+
+const PAYOUT = {
+  network: 'ETHEREUM',
+  blockchainTransactionId: ID,
+  toAddress: SELLER,
+  amount: '12.5',
+  token: 'USDT',
+  feeCapUsd: '0.5',
+};
+
+describe('POST /api/transfer/payout', () => {
+  it('200 { txHash, nonce, replayed } and the fields reach the service', async () => {
+    const res = await post('/transfer/payout', PAYOUT);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ txHash: HASH, nonce: 3, replayed: false });
+    expect(calls[0]).toEqual({
+      method: 'payout',
+      request: {
+        blockchainTransactionId: ID,
+        toAddress: SELLER,
+        amount: '12.5',
+        token: 'USDT',
+        feeCapUsd: '0.5',
+      },
+    });
+  });
+
+  it.each([
+    ['no feeCapUsd', { feeCapUsd: undefined }],
+    ['an id that is not a GUID', { blockchainTransactionId: '../x' }],
+    ['a TRON address', { toAddress: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf' }],
+    ['a bad EIP-55 checksum', { toAddress: '0x9858efFD232B4033E47d90003D41EC34EcaEda94' }],
+    ['an unknown token', { token: 'DAI' }],
+    ['a numeric amount', { amount: 12.5 }],
+  ])('400 INVALID_TRANSFER_REQUEST for %s — the service is not called', async (_label, change) => {
+    const res = await post('/transfer/payout', { ...PAYOUT, ...change });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'INVALID_TRANSFER_REQUEST', retryable: false });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a body without network ETHEREUM is refused before anything (NETWORK_MISMATCH)', async () => {
+    const res = await post('/transfer/payout', { ...PAYOUT, network: 'TRON' });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'NETWORK_MISMATCH' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a wait is 503 { deferred: true, waitingSince } — nothing signed, retry not spent', async () => {
+    next = () => {
+      const err = new TransferDeferredError('above cap', 'FEE_ABOVE_CAP');
+      err.waitingSince = Date.UTC(2026, 9, 18, 9, 0, 0);
+      return Promise.reject(err);
+    };
+    const res = await post('/transfer/payout', PAYOUT);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({
+      error: 'FEE_ABOVE_CAP',
+      deferred: true,
+      retryable: true,
+      waitingSince: '2026-10-18T09:00:00.000Z',
+    });
+  });
+
+  it('a refusal is 400 with its code (terminal on the backend)', async () => {
+    next = () => Promise.reject(new SidecarError('blacklisted', 'RECIPIENT_BLACKLISTED', false));
+    const res = await post('/transfer/payout', PAYOUT);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: 'RECIPIENT_BLACKLISTED', retryable: false });
+  });
+
+  it('a transient failure is 502, an unexpected one 500 (both retried)', async () => {
+    next = () => Promise.reject(new SidecarError('rpc down', 'RPC_ALL_PROVIDERS_FAILED', true));
+    expect((await post('/transfer/payout', PAYOUT)).status).toBe(502);
+    next = () => Promise.reject(new Error('boom'));
+    expect((await post('/transfer/payout', PAYOUT)).status).toBe(500);
+  });
+});
+
+describe('POST /api/transfer/refund, /sweep, /cold-wallet', () => {
+  it('refund needs a known refundType', async () => {
+    const body = {
+      network: 'ETHEREUM',
+      blockchainTransactionId: ID,
+      depositIndex: 0,
+      depositAddress: DEPOSIT,
+      toBuyerAddress: SELLER,
+      amount: '1',
+      token: 'USDC',
+      refundType: 'WRONG_TOKEN_REFUND',
+    };
+    expect((await post('/transfer/refund', body)).status).toBe(200);
+    expect((await post('/transfer/refund', { ...body, refundType: 'SOMETHING' })).status).toBe(400);
+    expect((await post('/transfer/refund', { ...body, refundType: undefined })).status).toBe(400);
+    expect(calls.map((c) => c.method)).toEqual(['refund']);
+  });
+
+  it('sweep and cold-wallet need feeCapUsd', async () => {
+    const sweep = {
+      network: 'ETHEREUM',
+      blockchainTransactionId: ID,
+      depositIndex: 0,
+      depositAddress: DEPOSIT,
+      toHotWalletAddress: SELLER,
+      amount: '1',
+      token: 'USDT',
+      feeCapUsd: '0.5',
+    };
+    expect((await post('/transfer/sweep', sweep)).status).toBe(200);
+    expect((await post('/transfer/sweep', { ...sweep, feeCapUsd: undefined })).status).toBe(400);
+    const cold = {
+      network: 'ETHEREUM',
+      coldTransferId: ID,
+      toColdAddress: SELLER,
+      amount: '1',
+      token: 'USDT',
+      feeCapUsd: '0.5',
+    };
+    expect((await post('/transfer/cold-wallet', cold)).status).toBe(200);
+    expect((await post('/transfer/cold-wallet', { ...cold, feeCapUsd: undefined })).status).toBe(
+      400,
+    );
+  });
+});
+
+describe('GET /api/transfer/status/:txHash', () => {
+  function get(hash: string) {
+    return fetch(`${base}/api/transfer/status/${hash}`, { headers: { 'x-internal-key': KEY } });
+  }
+
+  it('200 with the service answer', async () => {
+    next = () =>
+      Promise.resolve({
+        txHash: HASH,
+        blockNumber: 7,
+        contractRet: 'SUCCESS',
+        confirmations: 3,
+        finalized: true,
+      });
+    const res = await get(HASH);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ finalized: true, contractRet: 'SUCCESS' });
+  });
+
+  it.each([
+    ['TRANSFER_NOT_FOUND', false, 404],
+    ['TRANSFER_NONCE_CONFLICT', false, 409],
+    ['RPC_ALL_PROVIDERS_FAILED', true, 502],
+  ] as const)('%s → %s', async (code, retryable, status) => {
+    next = () => Promise.reject(new SidecarError(code, code, retryable));
+    expect((await get(HASH)).status).toBe(status);
+  });
+
+  it('a malformed hash is 400 without asking the service', async () => {
+    expect((await get('0x1234')).status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+});

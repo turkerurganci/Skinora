@@ -82,6 +82,8 @@ export interface BlockHeader {
   readonly timestamp: number;
   /** The provider that answered. */
   readonly provider: string;
+  /** EIP-1559 base fee of the block (wei); null on a pre-London block. T152 prices sends with it. */
+  readonly baseFeePerGas?: bigint | null;
 }
 
 export interface LogFilter {
@@ -249,10 +251,12 @@ export class EthereumRpcClient {
       );
     }
     return this.withFailover('eth_getBlockByNumber', async (ep) => {
-      const raw = await ep.request<{ number: string; hash: string; timestamp: string } | null>(
-        'eth_getBlockByNumber',
-        [param, false],
-      );
+      const raw = await ep.request<{
+        number: string;
+        hash: string;
+        timestamp: string;
+        baseFeePerGas?: string;
+      } | null>('eth_getBlockByNumber', [param, false]);
       if (!raw) {
         throw new RpcError(`eth_getBlockByNumber(${param}) returned no block`, 'rpc', ep.name);
       }
@@ -261,6 +265,7 @@ export class EthereumRpcClient {
         hash: raw.hash,
         timestamp: Number(BigInt(raw.timestamp)),
         provider: ep.name,
+        baseFeePerGas: raw.baseFeePerGas ? BigInt(raw.baseFeePerGas) : undefined,
       };
     });
   }
@@ -309,6 +314,101 @@ export class EthereumRpcClient {
       }
     }
     return logs;
+  }
+
+  // ---- Outbound transfers (T152 — 08 §3.7.6) -------------------------------
+
+  /** Number of transactions `address` has sent as of an explicit block — its next nonce there. */
+  async getTransactionCount(address: string, blockNumber: bigint): Promise<number> {
+    assertBlockNumber(blockNumber, 'getTransactionCount block');
+    return this.withFailover('eth_getTransactionCount', async (ep) =>
+      Number(
+        BigInt(
+          await ep.request<string>('eth_getTransactionCount', [address, hexBlock(blockNumber)]),
+        ),
+      ),
+    );
+  }
+
+  /** `eth_estimateGas` against the state of an explicit block. A revert is an `rpc` answer. */
+  async estimateGas(
+    tx: { from: string; to: string; data: string; value?: bigint },
+    blockNumber: bigint,
+  ): Promise<bigint> {
+    assertBlockNumber(blockNumber, 'estimateGas block');
+    const call: Record<string, string> = { from: tx.from, to: tx.to, data: tx.data };
+    if (tx.value !== undefined) call.value = '0x' + tx.value.toString(16);
+    return this.withFailover('eth_estimateGas', async (ep) =>
+      BigInt(await ep.request<string>('eth_estimateGas', [call, hexBlock(blockNumber)])),
+    );
+  }
+
+  /** `eth_call` with a sender, at an explicit block — the pre-broadcast simulation (08 §3.7.6). */
+  async callFrom(
+    tx: { from: string; to: string; data: string },
+    blockNumber: bigint,
+  ): Promise<string> {
+    assertBlockNumber(blockNumber, 'callFrom block');
+    return this.withFailover('eth_call', (ep) =>
+      ep.request<string>('eth_call', [
+        { from: tx.from, to: tx.to, data: tx.data },
+        hexBlock(blockNumber),
+      ]),
+    );
+  }
+
+  /**
+   * Median priority fee (wei) of the last <c>blockCount</c> blocks up to an
+   * explicit block — `eth_feeHistory` at the 50th percentile. T142 measured
+   * the effective price as base fee + this median; `eth_maxPriorityFeePerGas`
+   * is not used because a keyless provider answered it with 0 (2026-10-18).
+   */
+  async medianPriorityFee(blockCount: number, newestBlock: bigint): Promise<bigint> {
+    assertBlockNumber(newestBlock, 'feeHistory newest block');
+    return this.withFailover('eth_feeHistory', async (ep) => {
+      const raw = await ep.request<{ reward?: string[][] } | null>('eth_feeHistory', [
+        '0x' + blockCount.toString(16),
+        hexBlock(newestBlock),
+        [50],
+      ]);
+      const rewards = (raw?.reward ?? [])
+        .map((r) => (r && r[0] ? BigInt(r[0]) : null))
+        .filter((r): r is bigint => r !== null)
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      if (rewards.length === 0) return 0n;
+      return rewards[Math.floor(rewards.length / 2)];
+    });
+  }
+
+  /**
+   * Broadcasts signed bytes. A transport failure falls over to the next
+   * provider with the SAME bytes (a node that already has them answers
+   * "already known"); a JSON-RPC answer (nonce too low, underpriced, ...) is
+   * returned to the caller as an `rpc` RpcError — 08 §3.7.6.
+   */
+  async sendRawTransaction(raw: string): Promise<string> {
+    return this.withFailover('eth_sendRawTransaction', (ep) =>
+      ep.request<string>('eth_sendRawTransaction', [raw]),
+    );
+  }
+
+  /** Receipt of a mined transaction, or null while it is not in a block (on the answering provider). */
+  async getTransactionReceipt(hash: string): Promise<TransactionReceipt | null> {
+    return this.withFailover('eth_getTransactionReceipt', async (ep) => {
+      const raw = await ep.request<RawReceipt | null>('eth_getTransactionReceipt', [hash]);
+      if (!raw) return null;
+      return {
+        transactionHash: raw.transactionHash,
+        blockNumber: BigInt(raw.blockNumber),
+        blockHash: raw.blockHash,
+        status: raw.status === undefined ? null : Number(BigInt(raw.status)),
+        from: raw.from,
+        to: raw.to ?? null,
+        gasUsed: BigInt(raw.gasUsed),
+        effectiveGasPrice: raw.effectiveGasPrice ? BigInt(raw.effectiveGasPrice) : null,
+        logs: (raw.logs ?? []).map(parseLog),
+      };
+    });
   }
 
   private async logsChunk(
@@ -413,6 +513,31 @@ export class EthereumRpcClient {
     });
     return check;
   }
+}
+
+export interface TransactionReceipt {
+  readonly transactionHash: string;
+  readonly blockNumber: bigint;
+  readonly blockHash: string;
+  /** 1 = success, 0 = reverted; null on a pre-Byzantium receipt (never for our sends). */
+  readonly status: number | null;
+  readonly from: string;
+  readonly to: string | null;
+  readonly gasUsed: bigint;
+  readonly effectiveGasPrice: bigint | null;
+  readonly logs: readonly RpcLog[];
+}
+
+interface RawReceipt {
+  transactionHash: string;
+  blockNumber: string;
+  blockHash: string;
+  status?: string;
+  from: string;
+  to?: string | null;
+  gasUsed: string;
+  effectiveGasPrice?: string;
+  logs?: RawLog[];
 }
 
 interface RawLog {

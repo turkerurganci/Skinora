@@ -172,6 +172,51 @@ groups:
             and closes Ethereum for new transactions. TRON is unaffected.
             Check skinora_ethereum_rpc_failover_total and the providers.
 
+      - uid: ethereum-nonce-conflict
+        title: Ethereum Send Nonce Used Elsewhere
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max(skinora_ethereum_outgoing_nonce_conflicts) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: An Ethereum send's nonce was used by a transaction the service did not sign
+          description: >-
+            The account nonce of a journalled Ethereum send (payout, refund,
+            sweep or cold transfer) moved past it while none of its signed
+            attempts is on chain (08 §3.7.6). Something outside the Ethereum
+            service signed with that key — a compromised key or a manual send.
+            Nothing is re-signed automatically; the backend row stays DETECTED
+            and its status answers 409 TRANSFER_NONCE_CONFLICT. Stop the
+            service, check the account's transactions on Etherscan and the
+            journal (DEPLOY_RUNBOOK §D) before anything is re-sent.
+
   - orgId: 1
     name: Skinora Warning Alerts
     folder: Skinora Alerts
@@ -466,3 +511,53 @@ groups:
             Check skinora_blockchain_active_monitors and the per-endpoint rate,
             then raise the plan (and TRONGRID_DAILY_REQUEST_BUDGET) or lengthen
             PAYMENT_HOLDING_POLLING_INTERVAL_MS (DEPLOY_RUNBOOK §B, §D).
+
+      # T152 — 08 §3.7.7 "Bekle" eşiği (3 sa, öneriyle kaydedildi — ⚠): an
+      # Ethereum sweep / payout / cold transfer kept unsigned by the fee cap (or a
+      # missing ETH price), or a signed one not yet in a block, for longer than
+      # the threshold the service publishes (ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS,
+      # parity with blockchain.ethereum.fee_cap_wait_alarm_minutes).
+      - uid: ethereum-transfer-wait
+        title: Ethereum Send Waiting Too Long
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max(skinora_ethereum_transfer_wait_seconds{kind=~"fee_cap|unmined"}) / max(skinora_ethereum_transfer_wait_alarm_seconds)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: An Ethereum send has waited longer than the fee-cap wait threshold
+          description: >-
+            An Ethereum sweep, payout or cold transfer has not been signed for
+            longer than the threshold (3 h by default) because the network fee
+            is above the platform's cap or no ETH price is available — or a
+            signed send has not been mined for that long (08 §3.7.7). The
+            payout of a waiting sweep waits too. Check the base fee, the ETH
+            price source, skinora_ethereum_transfer_wait_seconds by kind and
+            the blockchain.ethereum.fee_cap_usd_per_transfer setting
+            (DEPLOY_RUNBOOK §D).

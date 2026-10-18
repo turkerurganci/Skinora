@@ -100,6 +100,68 @@ export const finalizedReadFailuresTotal = getOrCreateCounter({
   help: 'Finalized-head reads that failed on every configured provider',
 });
 
+// ---- Outbound transfers (T152 — 08 §3.7.6, §3.7.7) -------------------------
+
+/** Send requests by flow and outcome: signed | replayed | deferred | refused | error. */
+export const transfersTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_transfers_total',
+  help: 'Ethereum send requests by flow and outcome',
+  labelNames: ['flow', 'outcome'] as const,
+});
+
+const TRANSFER_SOURCE = Symbol.for('skinora_ethereum_transfer_wait_source');
+export interface TransferWaitSource {
+  feeCapWaitSeconds: () => number;
+  unminedSeconds: () => number;
+  gasWaitSeconds: () => number;
+  nonceConflicts: () => number;
+}
+type TransferHolder = { [TRANSFER_SOURCE]?: TransferWaitSource };
+
+/** Where the transfer gauges read from at scrape time (TransferService + FeeWaitTracker). */
+export function setTransferWaitSource(source: TransferWaitSource): void {
+  (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE] = source;
+}
+
+/**
+ * Longest current wait, seconds, by kind: `fee_cap` — a sweep / payout / cold
+ * transfer not signed because the fee is above the cap or the ETH price is
+ * missing (08 §3.7.7, 3-hour alarm); `unmined` — a signed transfer not yet in a
+ * block; `gas` — a sender without ETH for gas (fuel, T153).
+ */
+export const transferWaitSeconds = getOrCreateGauge({
+  name: 'skinora_ethereum_transfer_wait_seconds',
+  help: 'Longest current wait of an Ethereum send, by kind (fee_cap | unmined | gas)',
+  labelNames: ['kind'] as const,
+  collect() {
+    const source = (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE];
+    if (!source) return;
+    this.set({ kind: 'fee_cap' }, source.feeCapWaitSeconds());
+    this.set({ kind: 'unmined' }, source.unminedSeconds());
+    this.set({ kind: 'gas' }, source.gasWaitSeconds());
+  },
+});
+
+/**
+ * The wait the ethereum-transfer-wait alert divides by
+ * (ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS, 10,800 — parity with the backend's
+ * blockchain.ethereum.fee_cap_wait_alarm_minutes 180, DEPLOY_RUNBOOK §D).
+ */
+export const transferWaitAlarmSeconds = getOrCreateGauge({
+  name: 'skinora_ethereum_transfer_wait_alarm_seconds',
+  help: 'Wait above which an Ethereum send raises the fee-cap wait alarm',
+});
+
+/** Journalled sends whose nonce another transaction used (key compromise / manual send). */
+export const nonceConflicts = getOrCreateGauge({
+  name: 'skinora_ethereum_outgoing_nonce_conflicts',
+  help: 'Journalled Ethereum sends whose nonce was used by a transaction the service did not sign',
+  collect() {
+    const source = (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE];
+    if (source) this.set(source.nonceConflicts());
+  },
+});
+
 export function metricsHandler(_req: Request, res: Response): void {
   client.register
     .metrics()

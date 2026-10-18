@@ -21,6 +21,7 @@ const files = {
   hot: join(dir, 'hot'),
   fuel: join(dir, 'fuel'),
   missing: join(dir, 'does-not-exist'),
+  journal: join(dir, 'tx-journal'),
 };
 const keys = new EthereumHdWallet(MNEMONIC);
 writeFileSync(files.seed, MNEMONIC + '\n');
@@ -56,6 +57,7 @@ function start(env: Record<string, string>, message: string): Promise<Startup> {
         LOKI_URL: 'http://127.0.0.1:9',
         INTERNAL_KEY: 'test-internal-key-'.padEnd(64, 'k'),
         ETHEREUM_HD_MNEMONIC_FILE: files.seed,
+        ETHEREUM_TX_JOURNAL_DIR: files.journal,
         ETHEREUM_HOT_WALLET_PRIVATE_KEY_FILE: files.missing,
         ETHEREUM_FUEL_WALLET_PRIVATE_KEY_FILE: files.missing,
         // Unreachable on purpose: the service starts without a reachable
@@ -100,6 +102,12 @@ describe('Ethereum service startup — refuses what it must not run without', ()
     ['a short internal key', { INTERNAL_KEY: 'test-short' }, 'INTERNAL_KEY_TOO_SHORT'],
     ['no seed secret', { ETHEREUM_HD_MNEMONIC_FILE: files.missing }, 'HD_WALLET_NOT_CONFIGURED'],
     ['no primary RPC', { ETHEREUM_RPC_PRIMARY_URL: '' }, 'RPC_NOT_CONFIGURED'],
+    // T152 — a signer that cannot remember what it signed must not sign.
+    [
+      'a journal directory it cannot write',
+      { ETHEREUM_TX_JOURNAL_DIR: join(files.seed, 'journal') },
+      'TX_JOURNAL_UNAVAILABLE',
+    ],
     [
       'one key for the hot and the fuel wallet',
       {

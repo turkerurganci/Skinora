@@ -3,8 +3,16 @@ import { healthCheckFactory } from '../health/HealthController.js';
 import { metricsHandler } from '../metrics.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
 import type { EthereumHdWallet } from '../wallet/HdWalletService.js';
+import type { TransferService } from '../transfer/TransferService.js';
 import { correlationMiddleware, internalKeyAuth, networkGuard } from './middleware.js';
 import { deriveAddressHandler } from './walletHandlers.js';
+import {
+  coldWalletTransferHandler,
+  payoutHandler,
+  refundHandler,
+  sweepHandler,
+  transferStatusHandler,
+} from './transferHandlers.js';
 import { NOT_YET_IMPLEMENTED, notImplementedHandler } from './notImplemented.js';
 
 export interface AppDeps {
@@ -12,6 +20,8 @@ export interface AppDeps {
   chainId: number;
   wallet: EthereumHdWallet;
   finality: () => FinalityStatus;
+  /** Outbound sends (T152). */
+  transfers: TransferService;
 }
 
 /**
@@ -32,6 +42,12 @@ export function createApp(deps: AppDeps): Express {
   api.use(internalKeyAuth(deps.internalKey));
   api.use(networkGuard);
   api.post('/wallet/derive', deriveAddressHandler(deps.wallet));
+  // T152 — sends (08 §3.7.6). Bodies and answers: transferHandlers.ts.
+  api.post('/transfer/payout', payoutHandler(deps.transfers));
+  api.post('/transfer/refund', refundHandler(deps.transfers));
+  api.post('/transfer/sweep', sweepHandler(deps.transfers));
+  api.post('/transfer/cold-wallet', coldWalletTransferHandler(deps.transfers));
+  api.get('/transfer/status/:txHash', transferStatusHandler(deps.transfers));
   for (const endpoint of NOT_YET_IMPLEMENTED) {
     api[endpoint.method](endpoint.path, notImplementedHandler(endpoint.task));
   }

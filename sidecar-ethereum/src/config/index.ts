@@ -3,6 +3,7 @@ import { checksummedEvmAddress } from '../address/evmAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { ETHEREUM_CHAINS, MAINNET_TOKEN_CONTRACTS, type EthereumChainName } from '../network.js';
 import { readSecretFile } from './secretFile.js';
+import { TOKEN_DECIMALS, parseLimit } from '../transfer/units.js';
 
 /**
  * Configuration of the Ethereum service (T150 — 05 §3.3a, §3.5; 08 §3.7).
@@ -71,7 +72,41 @@ export interface EthereumServiceConfig {
     /** Finalized block older than this → unhealthy and alarm (08 §3.7.8: 30 min). */
     readonly stallThresholdSeconds: number;
   };
+  /** Outbound sends (T152 — 08 §3.7.6, §3.7.7). */
+  readonly transfers: {
+    /** Durable journal of signed transactions (a Docker volume); the service does not start without it. */
+    readonly journalDir: string;
+    /** Raw USDT units; null = not configured → payouts / refunds refused (fail closed). */
+    readonly maxSingleTransferUnits: bigint | null;
+    /** Raw USDT units; null = not configured → payouts refused (fail closed). */
+    readonly maxDailyOutflowUnits: bigint | null;
+    /** Fuel caps in wei (T153 sends fuel; the signer enforces them); null = fuel refused. */
+    readonly fuelMaxSingleWei: bigint | null;
+    readonly fuelMaxDailyWei: bigint | null;
+    /** Wait that raises the fee-cap alarm (08 §3.7.7: 3 h). */
+    readonly waitAlarmSeconds: number;
+    /** Keeper cadence: re-broadcast, fee bump, finality, conflict check. */
+    readonly keeperIntervalMs: number;
+    /** A head-of-line send not mined after this long is re-signed with higher fees. */
+    readonly bumpAfterSeconds: number;
+  };
   readonly shutdownTimeoutMs: number;
+}
+
+/** Default journal location — the `ethereum_tx_journal` volume in docker-compose.yml. */
+export const DEFAULT_TX_JOURNAL_DIR = '/var/lib/skinora-ethereum/tx-journal';
+
+function limit(env: Env, name: string, decimals: number): bigint | null {
+  const raw = value(env, name);
+  if (raw === '') return null;
+  const parsed = parseLimit(raw, decimals);
+  if (parsed === null) {
+    throw new ConfigError(
+      'INVALID_CONFIG',
+      `${name} must be a positive decimal with at most ${decimals} fraction digits, got "${raw}".`,
+    );
+  }
+  return parsed;
 }
 
 export const DEFAULT_SECRET_PATHS = {
@@ -254,6 +289,16 @@ export function loadConfig(
     finality: {
       pollIntervalMs: positiveInt(env, 'ETHEREUM_FINALIZED_POLL_INTERVAL_MS', 30_000),
       stallThresholdSeconds: positiveInt(env, 'ETHEREUM_FINALIZED_STALL_SECONDS', 1800),
+    },
+    transfers: {
+      journalDir: value(env, 'ETHEREUM_TX_JOURNAL_DIR') || DEFAULT_TX_JOURNAL_DIR,
+      maxSingleTransferUnits: limit(env, 'ETHEREUM_MAX_SINGLE_TRANSFER_USDT', TOKEN_DECIMALS),
+      maxDailyOutflowUnits: limit(env, 'ETHEREUM_MAX_DAILY_OUTFLOW_USDT', TOKEN_DECIMALS),
+      fuelMaxSingleWei: limit(env, 'ETHEREUM_FUEL_MAX_SINGLE_ETH', 18),
+      fuelMaxDailyWei: limit(env, 'ETHEREUM_FUEL_MAX_DAILY_ETH', 18),
+      waitAlarmSeconds: positiveInt(env, 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 10_800),
+      keeperIntervalMs: positiveInt(env, 'ETHEREUM_OUTGOING_KEEPER_INTERVAL_MS', 30_000),
+      bumpAfterSeconds: positiveInt(env, 'ETHEREUM_FEE_BUMP_AFTER_SECONDS', 300),
     },
     shutdownTimeoutMs: 10_000,
   };

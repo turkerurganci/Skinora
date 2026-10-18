@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { finalizedBlockAgeSeconds, finalizedStallThresholdSeconds } from './metrics.js';
+import {
+  finalizedBlockAgeSeconds,
+  finalizedStallThresholdSeconds,
+  nonceConflicts,
+  transferWaitAlarmSeconds,
+  transferWaitSeconds,
+} from './metrics.js';
 
 /**
  * The ethereum-finalized-stalled rule (08 §3.7.8) divides two series this
@@ -36,8 +42,25 @@ describe('ethereum-finalized-stalled — wired to the series the service exports
     expect(block).toMatch(/severity: critical/);
   });
 
-  it('Prometheus scrapes the service the rule reads', () => {
+  it('Prometheus scrapes the service the rules read', () => {
     const prometheus = readFileSync(PROMETHEUS_FILE, 'utf8');
     expect(prometheus).toContain("- targets: ['skinora-ethereum-sidecar:5300']");
+  });
+});
+
+describe('T152 send alerts — wired to the series the service exports', () => {
+  it('ethereum-transfer-wait divides the fee_cap / unmined wait by the threshold the service publishes', async () => {
+    const block = ruleBlock('ethereum-transfer-wait');
+    const wait = (await transferWaitSeconds.get()).name;
+    const threshold = (await transferWaitAlarmSeconds.get()).name;
+    expect(block).toContain(`max(${wait}{kind=~"fee_cap|unmined"}) / max(${threshold})`);
+    expect(block).toMatch(/type: gt\s+params: \[1\]/);
+  });
+
+  it('ethereum-nonce-conflict fires on any conflict, as critical', async () => {
+    const block = ruleBlock('ethereum-nonce-conflict');
+    expect(block).toContain(`max(${(await nonceConflicts.get()).name})`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/severity: critical/);
   });
 });
