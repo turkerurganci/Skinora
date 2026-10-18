@@ -332,7 +332,7 @@
 | T143 | HD türetme yolunun standarda çekilmesi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T143_REPORT.md), PR [#338](https://github.com/turkerurganci/Skinora/pull/338)) |
 | T144 | Ödenecek tutarın iki haneye sabitlenmesi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T144_REPORT.md), PR [#340](https://github.com/turkerurganci/Skinora/pull/340)) |
 | T145 | Veri modeline ağ boyutu + adres biçimi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T145_REPORT.md), PR [#341](https://github.com/turkerurganci/Skinora/pull/341)) |
-| T146 | Ağ başına kullanıcı ödeme/iade adresleri | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T146_REPORT.md), dal `task/T146-ag-basina-kullanici-adresleri`) |
+| T146 | Ağ başına kullanıcı ödeme/iade adresleri | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T146_REPORT.md), PR [#342](https://github.com/turkerurganci/Skinora/pull/342), dal `task/T146-ag-basina-kullanici-adresleri`) |
 | T147 | İşlem akışında ağ seçimi | ⬚ Bekliyor |
 | T148 | Ağ başına sidecar sözleşmesi ve ayarlar | ⬚ Bekliyor |
 | T149 | Ağ ücreti politikası | ⬚ Bekliyor |

@@ -79,9 +79,9 @@
 ## Commit & PR
 
 - Branch: `task/T146-ag-basina-kullanici-adresleri`
-- Commit: COMMIT_SHA — T146: ağ başına kullanıcı ödeme/iade adresleri
-- PR: #PR_NO
-- CI: CI_RESULT
+- Commit: `6e577b8` — T146: ağ başına kullanıcı ödeme/iade adresleri
+- PR: #342
+- CI: PR CI run sonucu yönetici raporunda (bu commit'ten sonraki son run izlendi)
 
 ## Known Limitations / Follow-up
 
