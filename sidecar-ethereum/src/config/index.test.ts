@@ -197,7 +197,37 @@ describe('loadConfig — sends (T152)', () => {
       waitAlarmSeconds: 10_800,
       keeperIntervalMs: 30_000,
       bumpAfterSeconds: 300,
+      journalAcknowledgedNonces: new Map(),
     });
+  });
+
+  it('reads operator nonce acknowledgements as canonical address → nonce (T152 düzeltme turu 2)', () => {
+    const config = loadConfig(
+      {
+        ...baseEnv,
+        ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES: `${signer.address}:12, 0x${'2'.repeat(40)}:0`,
+      },
+      secrets(),
+    );
+    expect([...config.transfers.journalAcknowledgedNonces]).toEqual([
+      [signer.address.toLowerCase(), 12],
+      ['0x' + '2'.repeat(40), 0],
+    ]);
+  });
+
+  it.each([
+    'abc',
+    '0x1234:1',
+    `0x${'2'.repeat(40)}`,
+    `0x${'2'.repeat(40)}:-1`,
+    `0x${'2'.repeat(40)}:1.5`,
+    `0x${'2'.repeat(40)}:1,0x${'2'.repeat(40)}:2`,
+  ])('refuses to start on a malformed acknowledgement %j', (bad) => {
+    expect(
+      errorOf(() =>
+        loadConfig({ ...baseEnv, ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES: bad }, secrets()),
+      ).code,
+    ).toBe('INVALID_CONFIG');
   });
 
   it('parses the caps in token units (6 decimals) and wei (18 decimals)', () => {

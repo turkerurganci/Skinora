@@ -26,8 +26,12 @@ import {
  *   <item>503 `{ error, deferred: true, waitingSince }` — the send waits (fee
  *     above the cap, no ETH price, no gas on the sender). Nothing was signed;
  *     the backend keeps the row `PENDING` without spending a retry.</item>
- *   <item>502 / 500 — transient (RPC down …). Nothing was signed unless the
- *     id was already journalled, in which case the next call returns it.</item>
+ *   <item>502 / 500 — transient (RPC down, a node-side JSON-RPC error that
+ *     is not a revert …). Nothing was signed unless the id was already
+ *     journalled, in which case the next call returns it.</item>
+ *   <item>503 `JOURNAL_BEHIND_CHAIN` (no `deferred`) — the account's chain
+ *     nonce is ahead of the journal; nothing is signed until an operator
+ *     acknowledges (DEPLOY_RUNBOOK §D). Transient for the backend.</item>
  * </list>
  * </para>
  */
@@ -93,8 +97,11 @@ async function respond(
     if (err instanceof SidecarError) {
       transfersTotal.inc({ flow, outcome: err.retryable ? 'error' : 'refused' });
       req.log.warn({ code: err.code, flow, reason: err.message }, `${flow} not sent`);
+      // JOURNAL_BEHIND_CHAIN: signing is stopped for the account until an
+      // operator acknowledges — the service, not the RPC, is unavailable (503;
+      // the backend keeps the row PENDING with the same id).
       res
-        .status(err.retryable ? 502 : 400)
+        .status(err.code === 'JOURNAL_BEHIND_CHAIN' ? 503 : err.retryable ? 502 : 400)
         .json({ error: err.code, message: err.message, retryable: err.retryable });
       return;
     }

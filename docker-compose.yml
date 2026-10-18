@@ -370,6 +370,9 @@ services:
       - ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS=${ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS:-10800}
       - ETHEREUM_FEE_BUMP_AFTER_SECONDS=${ETHEREUM_FEE_BUMP_AFTER_SECONDS:-300}
       - ETHEREUM_TX_JOURNAL_DIR=/var/lib/skinora-ethereum/tx-journal
+      # T152 düzeltme turu 2 — empty by default. Set ONLY by the
+      # DEPLOY_RUNBOOK §D "ethereum-journal-behind-chain" step (0xaddr:nonce,...).
+      - ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES=${ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
     # T152 — the journal of signed transactions must outlive the container: a
     # restart resumes from it instead of signing again (08 §3.7.6, FK8-5).

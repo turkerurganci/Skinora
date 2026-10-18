@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { AllProvidersFailedError, EthereumRpcClient, RpcError } from './RpcClient.js';
+import {
+  AllProvidersFailedError,
+  EthereumRpcClient,
+  RpcError,
+  isExecutionRevert,
+} from './RpcClient.js';
 import type { RpcProviderSettings } from '../config/index.js';
 
 const SEPOLIA = 11155111;
@@ -376,5 +381,60 @@ describe('EthereumRpcClient — eth_getLogs limits (08 §3.7.4)', () => {
     expect(logs).toHaveLength(1);
     expect(ranges(chain.calls, 'chainstack')).toEqual([[0, 9]]);
     expect(new RpcError(message, 'limit', 'alchemy').retryable).toBe(true);
+  });
+});
+
+/**
+ * T152 düzeltme turu 2 (bulgu 2): which JSON-RPC answers are the EVM's revert
+ * (permanent for a send) and which are about the node at that moment
+ * (transient). The revert data a geth-style node puts in `error.data` is kept.
+ */
+describe('EthereumRpcClient — revert or node error (T152)', () => {
+  const REVERT_DATA = '0x08c379a00000000000000000000000000000000000000000000000000000000000000020';
+
+  it('keeps the error data of a revert answer and classifies it as a revert', async () => {
+    const chain = fakeChain({
+      alchemy: () => ({ rpcError: { code: 3, message: 'execution reverted', data: REVERT_DATA } }),
+      chainstack: () => '0x',
+    });
+    const err = await client(chain.fetchFn)
+      .call({ to: '0x' + '1'.repeat(40), data: '0x' }, 5n)
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'rpc', rpcCode: 3, rpcData: REVERT_DATA });
+    expect(isExecutionRevert(err)).toBe(true);
+  });
+
+  it.each([
+    ['code 3 alone', new RpcError('eth_call: error', 'rpc', 'p', 3), true],
+    ['"execution reverted" text', new RpcError('eth_call: execution reverted', 'rpc', 'p'), true],
+    [
+      'revert data without the word',
+      new RpcError('eth_call: vm error', 'rpc', 'p', -32000, '0x08c379a0'),
+      true,
+    ],
+    ['header not found', new RpcError('eth_call: header not found', 'rpc', 'p', -32000), false],
+    [
+      'missing trie node',
+      new RpcError('eth_call: missing trie node 1a2b', 'rpc', 'p', -32000),
+      false,
+    ],
+    ['internal error', new RpcError('eth_estimateGas: internal error', 'rpc', 'p', -32603), false],
+    ['empty data', new RpcError('eth_call: oops', 'rpc', 'p', -32000, '0x'), false],
+    ['a transport failure', new RpcError('eth_call: execution reverted', 'transport', 'p'), false],
+    ['not an RpcError', new Error('execution reverted'), false],
+  ] as const)('%s → revert %s', (_label, err, revert) => {
+    expect(isExecutionRevert(err)).toBe(revert);
+  });
+
+  it('getPendingTransactionCount asks for the pending count (the one read at a tag)', async () => {
+    const chain = fakeChain({ alchemy: () => '0x7', chainstack: () => '0x0' });
+    expect(await client(chain.fetchFn).getPendingTransactionCount('0x' + 'a'.repeat(40))).toBe(7);
+    expect(nonChainCalls(chain.calls)).toEqual([
+      {
+        provider: 'alchemy',
+        method: 'eth_getTransactionCount',
+        params: ['0x' + 'a'.repeat(40), 'pending'],
+      },
+    ]);
   });
 });

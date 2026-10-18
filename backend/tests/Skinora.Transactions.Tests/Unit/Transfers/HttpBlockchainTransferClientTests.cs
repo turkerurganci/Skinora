@@ -434,6 +434,38 @@ public class HttpBlockchainTransferClientTests
             eth.RealizedFeeWei);
     }
 
+    [Theory]
+    // T152 düzeltme turu 2 (M31) — a final Ethereum receipt with status 1 but
+    // without the Transfer event the send asked for is not a payment: the
+    // service reports NO_TRANSFER_LOG and the row must become FAILED, never
+    // CONFIRMED (no PayoutCompletedEvent).
+    [InlineData("NO_TRANSFER_LOG", TransferStatusOutcome.Failed)]
+    [InlineData("REVERT", TransferStatusOutcome.Failed)]
+    [InlineData("SUCCESS", TransferStatusOutcome.Confirmed)]
+    public async Task GetStatus_Ethereum_Only_SUCCESS_Is_Confirmed(
+        string contractRet, TransferStatusOutcome expected)
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    txHash = "0xhash",
+                    blockNumber = 1_000L,
+                    contractRet,
+                    confirmations = 13,
+                    finalized = true,
+                    realizedFeeWei = "1",
+                }),
+            }));
+
+        var eth = await BuildClient(handler, network: BlockchainNetwork.ETHEREUM)
+            .GetStatusAsync("0xhash", CancellationToken.None);
+
+        Assert.Equal(expected, eth.Outcome);
+        Assert.Equal(contractRet, eth.ContractRet);
+    }
+
     [Fact]
     public async Task GetStatus_Tron_Ignores_RealizedFeeWei()
     {

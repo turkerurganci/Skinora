@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   finalizedBlockAgeSeconds,
   finalizedStallThresholdSeconds,
+  journalBehindChain,
   nativeEthReceivedTotal,
   nonceConflicts,
   reconciliationIntervalSeconds,
@@ -66,6 +67,14 @@ describe('T152 send alerts — wired to the series the service exports', () => {
     const block = ruleBlock('ethereum-nonce-conflict');
     expect(block).toContain(`max(${(await nonceConflicts.get()).name})`);
     expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/severity: critical/);
+  });
+
+  it('ethereum-journal-behind-chain fires on any stopped account, as critical, at once', async () => {
+    const block = ruleBlock('ethereum-journal-behind-chain');
+    expect(block).toContain(`max(${(await journalBehindChain.get()).name})`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/for: 0m/);
     expect(block).toMatch(/severity: critical/);
   });
 });

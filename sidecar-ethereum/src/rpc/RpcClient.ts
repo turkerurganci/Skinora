@@ -45,6 +45,8 @@ export class RpcError extends SidecarError {
     public readonly kind: RpcFailureKind,
     public readonly provider: string,
     public readonly rpcCode?: number,
+    /** The JSON-RPC error's `data` (a revert's return data on geth-style nodes). */
+    public readonly rpcData?: unknown,
   ) {
     super(
       message,
@@ -57,6 +59,22 @@ export class RpcError extends SidecarError {
     );
     this.name = 'RpcError';
   }
+}
+
+/**
+ * Whether a JSON-RPC answer is the EVM's own revert of the call (T152
+ * düzeltme turu 2): geth's `execution reverted` (code 3, revert data in
+ * `data`), and the same wording other clients use. Only this is an answer
+ * about the transaction that no retry can change; every other `rpc` answer
+ * (`header not found`, `missing trie node`, an internal error of a lagging
+ * node) is about the node at that moment — the send path treats it as
+ * transient (08 §3.7.6).
+ */
+export function isExecutionRevert(err: unknown): boolean {
+  if (!(err instanceof RpcError) || err.kind !== 'rpc') return false;
+  if (err.rpcCode === 3) return true;
+  if (/revert/i.test(err.message)) return true;
+  return typeof err.rpcData === 'string' && /^0x[0-9a-fA-F]{8,}$/.test(err.rpcData);
 }
 
 export class AllProvidersFailedError extends SidecarError {
@@ -189,7 +207,7 @@ class ProviderEndpoint {
           this.name,
         );
       }
-      let body: { result?: T; error?: { code?: number; message?: string } };
+      let body: { result?: T; error?: { code?: number; message?: string; data?: unknown } };
       try {
         body = JSON.parse(text) as typeof body;
       } catch {
@@ -203,7 +221,13 @@ class ProviderEndpoint {
             ? 'transport'
             : 'rpc';
         outcome = kind;
-        throw new RpcError(`${method}: ${message}`, kind, this.name, body.error.code);
+        throw new RpcError(
+          `${method}: ${message}`,
+          kind,
+          this.name,
+          body.error.code,
+          body.error.data,
+        );
       }
       if (!('result' in body)) {
         throw new RpcError(
@@ -385,6 +409,20 @@ export class EthereumRpcClient {
           await ep.request<string>('eth_getTransactionCount', [address, hexBlock(blockNumber)]),
         ),
       ),
+    );
+  }
+
+  /**
+   * Next nonce of `address` counting the node's pending transactions
+   * (`eth_getTransactionCount(address, "pending")`) — the one read that is not
+   * at an explicit block: it asks what the network has seen, signed by
+   * anyone, beyond the last block. T152 düzeltme turu 2: before a new
+   * signature the service compares it with what its journal knows (08 §3.7.6
+   * "Günlük zincirin gerisinde").
+   */
+  async getPendingTransactionCount(address: string): Promise<number> {
+    return this.withFailover('eth_getTransactionCount', async (ep) =>
+      Number(BigInt(await ep.request<string>('eth_getTransactionCount', [address, 'pending']))),
     );
   }
 

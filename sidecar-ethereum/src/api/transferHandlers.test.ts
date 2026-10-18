@@ -142,6 +142,19 @@ describe('POST /api/transfer/payout', () => {
     expect((await post('/transfer/payout', PAYOUT)).status).toBe(502);
     next = () => Promise.reject(new Error('boom'));
     expect((await post('/transfer/payout', PAYOUT)).status).toBe(500);
+    // T152 düzeltme turu 2: a node-side JSON-RPC error that is not a revert.
+    next = () => Promise.reject(new SidecarError('header not found', 'RPC_UNAVAILABLE', true));
+    expect((await post('/transfer/payout', PAYOUT)).status).toBe(502);
+  });
+
+  it('journal behind chain is 503 without deferred — transient for the backend, row stays PENDING', async () => {
+    next = () =>
+      Promise.reject(new SidecarError('chain ahead of journal', 'JOURNAL_BEHIND_CHAIN', true));
+    const res = await post('/transfer/payout', PAYOUT);
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ error: 'JOURNAL_BEHIND_CHAIN', retryable: true });
+    expect(body.deferred).toBeUndefined();
   });
 });
 

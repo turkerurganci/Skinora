@@ -1,6 +1,6 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Transaction } from 'ethers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { canonicalAddress } from '../address/canonicalAddress.js';
@@ -57,18 +57,24 @@ function build(
     maxSingle: bigint | null;
     maxDaily: bigint | null;
     hotKey: string | null;
+    hotAddress: string | null;
+    coldAddress: string | null;
+    acknowledged: ReadonlyMap<string, number>;
   }> = {},
 ) {
   const now = () => clock;
   const journal = new TxJournal(dir);
+  const hotAddress =
+    'hotAddress' in overrides ? overrides.hotAddress! : canonicalAddress(HOT.address);
   const service = new TransferService({
     rpc: chain.rpc,
     journal,
     feeWaits: new FeeWaitTracker(dir, now),
     guard: new TransferGuard({
       rpc: chain.rpc,
-      hotWalletAddress: canonicalAddress(HOT.address),
-      coldWalletAddress: canonicalAddress(COLD),
+      hotWalletAddress: hotAddress,
+      coldWalletAddress:
+        'coldAddress' in overrides ? overrides.coldAddress! : canonicalAddress(COLD),
       tokenContracts: [USDT, USDC],
       maxSingleTransferUnits: 'maxSingle' in overrides ? overrides.maxSingle! : 5_000_000_000n,
       maxDailyOutflowUnits: 'maxDaily' in overrides ? overrides.maxDaily! : 20_000_000_000n,
@@ -82,12 +88,13 @@ function build(
       maxTokenGasLimit: 150_000n,
     },
     hotWalletKey: 'hotKey' in overrides ? overrides.hotKey! : HOT.privateKey,
-    hotWalletAddress: canonicalAddress(HOT.address),
+    hotWalletAddress: hotAddress,
     tokenContracts: { USDT, USDC },
     prices: { ethUsdMicros: () => Promise.resolve(price) },
     finalizedHead: () => chain.finalized,
     bumpAfterMs: 300_000,
     conflictConfirmMs: 30_000,
+    acknowledgedNonces: overrides.acknowledged,
     now,
   });
   return { service, journal };
@@ -260,11 +267,28 @@ describe('double payment is impossible (08 §3.7.6)', () => {
     expect(second.nonce).toBe(1);
   });
 
-  it('a nonce used outside the journal moves the next send past it', async () => {
+  it('a nonce used outside the journal STOPS signing (journal behind chain); an operator acknowledgement moves the next send past it', async () => {
     chain.foreignSend(HOT.address);
     chain.foreignSend(HOT.address);
     const { service } = build();
-    expect((await service.payout(payout())).nonce).toBe(2);
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'JOURNAL_BEHIND_CHAIN',
+      retryable: true,
+    });
+    expect(chain.sent).toHaveLength(0);
+    expect(service.journalBehindChain()).toEqual([
+      expect.objectContaining({
+        from: canonicalAddress(HOT.address),
+        chainNonce: 2,
+        journalNext: 0,
+      }),
+    ]);
+
+    const acknowledged = build({
+      acknowledged: new Map([[canonicalAddress(HOT.address), 2]]),
+    });
+    expect((await acknowledged.service.payout(payout())).nonce).toBe(2);
+    expect(acknowledged.service.journalBehindChain()).toEqual([]);
   });
 });
 
@@ -327,7 +351,8 @@ describe('keeper — fee bump, finality, conflicts', () => {
   it('a capped send is never bumped above its cap — it waits instead', async () => {
     const { service, journal } = build();
     await service.payout(payout());
-    const cap = BigInt(journal.get(`transfer:${ID(1)}`)!.feeCapWeiPerGas!);
+    const signed = journal.get(`transfer:${ID(1)}`)!;
+    const cap = BigInt(signed.feeCapWei!) / BigInt(signed.gasLimit); // highest maxFee per gas
     // Push the first attempt to the cap, then ask for a bump.
     chain.baseFee = cap; // 2 × base + tip is far above the cap now
     clock += 300_000;
@@ -399,6 +424,7 @@ describe('status (GET /api/transfer/status/:txHash)', () => {
       contractRet: null,
       confirmations: -1,
       finalized: false,
+      realizedFeeWei: null,
     });
   });
 
@@ -504,17 +530,20 @@ describe('USDT switches and the blacklist (08 §3.7.1, §3.7.6)', () => {
 });
 
 describe('fee cap and wait (08 §3.7.7)', () => {
-  it('signs with maxFeePerGas at or under the cap computed from 0.50 $ and the ETH price', async () => {
+  it('signs with gasLimit × maxFeePerGas at or under the cap computed from 0.50 $ and the ETH price', async () => {
     const { service, journal } = build();
     await service.payout(payout());
     const record = journal.get(`transfer:${ID(1)}`)!;
-    // 0.50 $ / (64,031 gas × 2,364.48 $) = 3.30 gwei (08 §3.7.7 "~3,3 gwei").
-    expect(record.feeCapWeiPerGas).toBe('3302509495');
-    expect(BigInt(record.attempts[0].maxFeePerGas)).toBeLessThanOrEqual(3_302_509_495n);
+    // Per transaction (yönetici kararı, T152 doğrulaması): 0.50 $ / 2,364.48 $ = 211,462,985,519,014 wei.
+    expect(record.feeCapWei).toBe('211462985519014');
+    expect(record.gasLimit).toBe('50822'); // 46,201 × 1.1, rounded up
+    expect(BigInt(record.gasLimit) * BigInt(record.attempts[0].maxFeePerGas)).toBeLessThanOrEqual(
+      211_462_985_519_014n,
+    );
   });
 
   it('above the cap → deferred, nothing signed; the wait clock survives retries and restarts', async () => {
-    chain.baseFee = 4_000_000_000n;
+    chain.baseFee = 5_000_000_000n; // 50,822 × 5.05 gwei > 211,462,985,519,014 wei
     const first = build();
     const err1 = await first.service.payout(payout()).catch((e: unknown) => e);
     expect(err1).toBeInstanceOf(TransferDeferredError);
@@ -534,12 +563,83 @@ describe('fee cap and wait (08 §3.7.7)', () => {
     expect(chain.sent).toHaveLength(1);
   });
 
-  it('base + tip under the cap but 2 × base + tip over it → signed with maxFeePerGas exactly the cap', async () => {
-    chain.baseFee = 2_000_000_000n; // 2 × 2 + 0.05 = 4.05 gwei > cap 3.30; 2.05 < cap
+  it('base + tip under the cap but 2 × base + tip over it → signed with maxFeePerGas = ⌊cap ÷ gasLimit⌋', async () => {
+    chain.baseFee = 3_000_000_000n; // 50,822 × 3.05 gwei < cap; × 6.05 gwei > cap
     const { service, journal } = build();
     await service.payout(payout());
     const record = journal.get(`transfer:${ID(1)}`)!;
-    expect(record.attempts[0].maxFeePerGas).toBe(record.feeCapWeiPerGas);
+    expect(record.attempts[0].maxFeePerGas).toBe(
+      String(BigInt(record.feeCapWei!) / BigInt(record.gasLimit)),
+    );
+  });
+
+  // Yönetici kararı (T152 doğrulaması): the cap is per TRANSACTION —
+  // gasLimit × maxFeePerGas ≤ cap (wei). Payout: 211,462,985,519,014 wei;
+  // gas limit 50,822 → ⌊cap ÷ gasLimit⌋ = 4,160,855,250 wei/gas.
+  const PAYOUT_CAP_WEI = 211_462_985_519_014n;
+  const CEILING_50822 = PAYOUT_CAP_WEI / 50_822n;
+
+  it('boundary: gasLimit × (base + tip) EXACTLY the cap is signed, worst case = cap or less', async () => {
+    expect(CEILING_50822).toBe(4_160_855_250n);
+    chain.baseFee = CEILING_50822 - chain.tip;
+    const { service, journal } = build();
+    await service.payout(payout());
+    const record = journal.get(`transfer:${ID(1)}`)!;
+    expect(BigInt(record.attempts[0].maxFeePerGas)).toBe(CEILING_50822);
+    expect(50_822n * CEILING_50822).toBeLessThanOrEqual(PAYOUT_CAP_WEI);
+  });
+
+  it('boundary: 1 wei per gas over the cap → waits (FEE_ABOVE_CAP), nothing signed', async () => {
+    chain.baseFee = CEILING_50822 - chain.tip + 1n;
+    const { service } = build();
+    await expect(service.payout(payout())).rejects.toMatchObject({ reason: 'FEE_ABOVE_CAP' });
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('a 136,000-gas estimate stays within 0.50 $ in the worst case (the per-gas cap paid ~0.725 $)', async () => {
+    chain.estimate = 136_000n; // gas limit 149,600
+    const { service, journal } = build();
+    await service.payout(payout());
+    const record = journal.get(`transfer:${ID(1)}`)!;
+    expect(record.gasLimit).toBe('149600');
+    const worstCase = BigInt(record.gasLimit) * BigInt(record.attempts[0].maxFeePerGas);
+    expect(worstCase).toBeLessThanOrEqual(PAYOUT_CAP_WEI);
+    // In dollars: worst case × ETH price ≤ 0.50 $ (micro-dollars).
+    expect((worstCase * ETH_USD) / 10n ** 18n).toBeLessThanOrEqual(500_000n);
+    // The old per-gas cap would have let 2 × 1 + 0.05 = 2.05 gwei through: 0.725 $.
+    expect((149_600n * 2_050_000_000n * ETH_USD) / 10n ** 18n).toBe(725_138n);
+  });
+
+  it('a fee bump stays within the same per-transaction cap', async () => {
+    const { service, journal } = build();
+    await service.payout(payout());
+    chain.baseFee = 2_100_000_000n; // the bump wants 2 × 2.1 + tip > ceiling: clamped
+    clock += 300_000;
+    await service.keepAll();
+    const record = journal.get(`transfer:${ID(1)}`)!;
+    expect(record.attempts).toHaveLength(2);
+    for (const attempt of record.attempts) {
+      expect(BigInt(record.gasLimit) * BigInt(attempt.maxFeePerGas)).toBeLessThanOrEqual(
+        PAYOUT_CAP_WEI,
+      );
+    }
+    expect(BigInt(record.attempts[1].maxFeePerGas)).toBe(CEILING_50822);
+  });
+
+  it('a sweep keeps the fuel send’s share of the cap: its own transaction gets 46,201 / 67,201 of 0.50 $', async () => {
+    chain.setToken(USDT, DEPOSIT.address, 50_000_000n);
+    chain.setEth(DEPOSIT.address, 10n ** 16n);
+    const { service, journal } = build();
+    await service.sweep({
+      blockchainTransactionId: ID(30),
+      depositIndex: 5,
+      depositAddress: DEPOSIT.address,
+      toHotWalletAddress: HOT.address,
+      amount: '50',
+      token: 'USDT',
+      feeCapUsd: '0.50',
+    });
+    expect(journal.get(`transfer:${ID(30)}`)?.feeCapWei).toBe('145381785895507');
   });
 
   it('no ETH price → ETH_PRICE_UNAVAILABLE (fail closed)', async () => {
@@ -574,8 +674,9 @@ describe('fee cap and wait (08 §3.7.7)', () => {
 
     price = ETH_USD;
     await service.refund(refund);
-    // 0.50 $ / (85,031 gas × 2,364.48 $) — fuel 21,000 + first-time-recipient transfer 64,031.
-    expect(journal.get(`transfer:${ID(8)}`)?.feeCapWeiPerGas).toBe('2486892845');
+    // 0.50 $ / 2,364.48 $ × 64,031 / 85,031 — the fuel send (21,000 of the
+    // 85,031 reference) keeps its share; the refund transaction gets the rest.
+    expect(journal.get(`transfer:${ID(8)}`)?.feeCapWei).toBe('159238235770107');
     const tx = Transaction.from(chain.sent[0]);
     expect(canonicalAddress(tx.from!)).toBe(canonicalAddress(DEPOSIT.address));
     expect(decodeTransferCall(tx.data)).toEqual({ to: BUYER, amountUnits: 49_500_000n });
@@ -732,5 +833,414 @@ describe('pinned destinations and limits (§3.3a twin)', () => {
     await expect(
       service.payout(payout(2, { toAddress: '0x0000000000000000000000000000000000000000' })),
     ).rejects.toMatchObject({ code: 'INVALID_TRANSFER_REQUEST' });
+  });
+});
+
+// ---- T152 düzeltme turu 2 ------------------------------------------------------
+
+/** A second hot wallet (another key) — "the hot key was rotated". */
+const OTHER_HOT = wallet.deriveSigner(40);
+
+function refundRequest(n: number) {
+  return {
+    blockchainTransactionId: ID(n),
+    depositIndex: 5,
+    depositAddress: DEPOSIT.address,
+    toBuyerAddress: BUYER,
+    amount: '10',
+    token: 'USDT' as const,
+    refundType: 'BUYER_REFUND' as const,
+    feeCapUsd: '0.50',
+  };
+}
+
+function sweepRequest(n: number) {
+  return {
+    blockchainTransactionId: ID(n),
+    depositIndex: 5,
+    depositAddress: DEPOSIT.address,
+    toHotWalletAddress: HOT.address,
+    amount: '50',
+    token: 'USDT' as const,
+    feeCapUsd: '0.50',
+  };
+}
+
+function coldRequest(n: number) {
+  return {
+    coldTransferId: ID(n),
+    toColdAddress: COLD,
+    amount: '1',
+    token: 'USDT' as const,
+    feeCapUsd: '0.50',
+  };
+}
+
+describe('invariant: a journalled id never gets a 400 because a setting changed (bulgu 1)', () => {
+  beforeEach(() => {
+    chain.setToken(USDT, DEPOSIT.address, 100_000_000n);
+    chain.setEth(DEPOSIT.address, 10n ** 17n);
+  });
+
+  type Change = [string, () => ReturnType<typeof build>, Partial<PayoutRequest>?];
+  const changes: Change[] = [
+    ['single-transfer cap lowered below the amount', () => build({ maxSingle: 1n })],
+    ['single-transfer cap 0', () => build({ maxSingle: 0n })],
+    ['single-transfer cap removed', () => build({ maxSingle: null })],
+    ['daily cap 0', () => build({ maxDaily: 0n })],
+    [
+      'hot key rotated (another key and address)',
+      () =>
+        build({ hotKey: OTHER_HOT.privateKey, hotAddress: canonicalAddress(OTHER_HOT.address) }),
+    ],
+    ['hot key removed', () => build({ hotKey: null, hotAddress: null })],
+    ['cold wallet changed', () => build({ coldAddress: canonicalAddress(SELLER) })],
+    ['fee cap in the request lowered to 0.01 $', () => build(), { feeCapUsd: '0.01' }],
+    ['fee cap in the request 0', () => build(), { feeCapUsd: '0' }],
+    [
+      'no ETH price',
+      () => {
+        price = null;
+        return build();
+      },
+    ],
+    [
+      'fee far above the cap',
+      () => {
+        chain.baseFee = 500_000_000_000n;
+        return build();
+      },
+    ],
+    [
+      'USDT paused',
+      () => {
+        chain.usdtState.paused = true;
+        return build();
+      },
+    ],
+  ];
+
+  it.each(changes)(
+    'payout — %s → the recorded hash, nothing new signed',
+    async (_l, after, ask) => {
+      const first = await build().service.payout(payout());
+      const sentBefore = new Set(chain.sent);
+      const { service } = after();
+      const again = await service.payout(payout(1, ask ?? {}));
+      expect(again).toEqual({ txHash: first.txHash, nonce: first.nonce, replayed: true });
+      expect(new Set(chain.sent)).toEqual(sentBefore);
+    },
+  );
+
+  it.each(changes)('refund — %s → the recorded hash', async (_l, after, ask) => {
+    const first = await build().service.refund(refundRequest(2));
+    const { service } = after();
+    const again = await service.refund({ ...refundRequest(2), ...(ask ?? {}) });
+    expect(again).toMatchObject({ txHash: first.txHash, replayed: true });
+  });
+
+  it.each(changes)('sweep — %s → the recorded hash', async (_l, after, ask) => {
+    const first = await build().service.sweep(sweepRequest(3));
+    const { service } = after();
+    const again = await service.sweep({ ...sweepRequest(3), ...(ask ?? {}) });
+    expect(again).toMatchObject({ txHash: first.txHash, replayed: true });
+  });
+
+  it.each(changes)('cold transfer — %s → the recorded hash', async (_l, after, ask) => {
+    const first = await build().service.coldWalletTransfer(coldRequest(4));
+    const { service } = after();
+    const again = await service.coldWalletTransfer({ ...coldRequest(4), ...(ask ?? {}) });
+    expect(again).toMatchObject({ txHash: first.txHash, replayed: true });
+  });
+
+  it('a sweep id signed before the hot wallet setting changed still replays', async () => {
+    const first = await build().service.sweep(sweepRequest(5));
+    // The guard's pinned hot wallet is now another address; the request is the recorded one.
+    const { service } = build({ hotAddress: canonicalAddress(OTHER_HOT.address) });
+    expect(await service.sweep(sweepRequest(5))).toMatchObject({
+      txHash: first.txHash,
+      replayed: true,
+    });
+  });
+
+  it('a different recipient / amount / flow on a journalled id is still IDEMPOTENCY_CONFLICT', async () => {
+    await build().service.payout(payout());
+    const { service } = build({ maxSingle: 0n });
+    await expect(service.payout(payout(1, { toAddress: BUYER }))).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+    await expect(service.payout(payout(1, { amount: '1' }))).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+    await expect(service.refund({ ...refundRequest(1) })).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+  });
+});
+
+describe('one id, one signature across flows (bulgu 4)', () => {
+  it('a payout and a refund with the SAME id at the same time: one signs, the other waits and is refused', async () => {
+    chain.setToken(USDT, DEPOSIT.address, 100_000_000n);
+    chain.setEth(DEPOSIT.address, 10n ** 17n);
+    const { service, journal } = build();
+    const results = await Promise.allSettled([
+      service.payout(payout(7)),
+      service.refund(refundRequest(7)),
+    ]);
+    expect(new Set(chain.sent).size).toBe(1);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const refused = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(refused.reason).toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+    expect(journal.get(`transfer:${ID(7)}`)?.purpose).toBe('PAYOUT');
+  });
+
+  it('the same id in another letter case is the same id — also when both arrive at once', async () => {
+    const lower = 'abcdef00-0000-0000-0000-00000000000a';
+    const { service } = build();
+    const results = await Promise.all([
+      service.payout({ ...payout(), blockchainTransactionId: lower }),
+      service.payout({ ...payout(), blockchainTransactionId: lower.toUpperCase() }),
+    ]);
+    expect(new Set(chain.sent).size).toBe(1);
+    expect(new Set(results.map((r) => r.txHash)).size).toBe(1);
+    expect(results.filter((r) => r.replayed)).toHaveLength(1);
+  });
+});
+
+describe('a node error is not a refusal (bulgu 2)', () => {
+  it.each([
+    ['header not found', -32000],
+    ['missing trie node 3c2a', -32000],
+    ['internal error', -32603],
+  ])(
+    'simulation answered "%s" → transient RPC_UNAVAILABLE (502), nothing signed; the retry signs',
+    async (message, code) => {
+      chain.simulationFailures.push(
+        new RpcError(`eth_estimateGas: ${message}`, 'rpc', 'fake', code),
+      );
+      const { service } = build();
+      await expect(service.payout(payout())).rejects.toMatchObject({
+        code: 'RPC_UNAVAILABLE',
+        retryable: true,
+      });
+      expect(chain.sent).toHaveLength(0);
+      expect((await service.payout(payout())).replayed).toBe(false);
+    },
+  );
+
+  it('USDT state read answered "header not found" → transient, not TOKEN_CONTRACT_UNSAFE / RPC_ERROR', async () => {
+    chain.stateReadFailures.push(new RpcError('eth_call: header not found', 'rpc', 'fake', -32000));
+    const { service } = build();
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'RPC_UNAVAILABLE',
+      retryable: true,
+    });
+  });
+
+  it.each([
+    [
+      'execution reverted (code 3 + data)',
+      new RpcError('eth_estimateGas: execution reverted', 'rpc', 'fake', 3, '0x08c379a0'),
+    ],
+    [
+      'revert data without the word',
+      new RpcError('eth_estimateGas: vm error', 'rpc', 'fake', -32000, '0x08c379a0ffff'),
+    ],
+  ])('a real revert — %s — stays a permanent refusal', async (_label, err) => {
+    chain.simulationFailures.push(err);
+    const { service } = build();
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'TRANSFER_SIMULATION_REVERTED',
+      retryable: false,
+    });
+  });
+
+  it('a USDC transfer whose simulation returns false is refused (M34)', async () => {
+    chain.setToken(USDC, DEPOSIT.address, 7_000_000n);
+    chain.setEth(DEPOSIT.address, 10n ** 17n);
+    chain.usdcReturnsFalse = true;
+    const { service } = build();
+    await expect(
+      service.refund({
+        ...refundRequest(9),
+        amount: '7',
+        token: 'USDC',
+        refundType: 'WRONG_TOKEN_REFUND',
+      }),
+    ).rejects.toMatchObject({ code: 'TRANSFER_SIMULATION_REVERTED', retryable: false });
+    expect(chain.sent).toHaveLength(0);
+  });
+});
+
+describe('realizedFeeWei (bulgu 3, T154 karar (vi))', () => {
+  const EXAMPLE = JSON.parse(
+    readFileSync(
+      resolve(__dirname, '../../contracts/transfer-status/confirmed.response.json'),
+      'utf8',
+    ),
+  ) as Record<string, unknown>;
+
+  it('the final status is the contract example: same fields, same types, the fee as gasUsed × effectiveGasPrice text', async () => {
+    const fee = BigInt(EXAMPLE.realizedFeeWei as string);
+    chain.receiptGasUsed = 63_209n; // T142's measured payout gas
+    expect(fee % 63_209n).toBe(0n);
+    chain.receiptEffectiveGasPrice = fee / 63_209n;
+    chain.head = BigInt(EXAMPLE.blockNumber as number) - 1n; // mined in the example's block
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.mine();
+    chain.finalized = chain.head + BigInt((EXAMPLE.confirmations as number) - 1);
+
+    const status = await service.status(txHash);
+    expect(Object.keys(status).sort()).toEqual(Object.keys(EXAMPLE).sort());
+    expect({ ...status, txHash: EXAMPLE.txHash }).toEqual(EXAMPLE);
+    expect(status.txHash).toBe(txHash);
+    expect(typeof status.realizedFeeWei).toBe('string');
+  });
+
+  it('no realizedFeeWei until final', async () => {
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.mine();
+    expect((await service.status(txHash)).realizedFeeWei).toBeNull();
+    finalizeAll();
+    expect((await service.status(txHash)).realizedFeeWei).toBe(
+      String(41_273n * (chain.baseFee + chain.tip)),
+    );
+  });
+});
+
+describe('journal behind chain — signing stops (bulgu 5, yönetici kararı)', () => {
+  it('a lost journal: the same id is NOT signed again with a new nonce', async () => {
+    const first = build();
+    await first.service.payout(payout());
+    chain.mine(); // nonce 0 used on chain
+    rmSync(dir, { recursive: true, force: true });
+    dir = mkdtempSync(join(tmpdir(), 'eth-transfer-lost-'));
+
+    const { service } = build();
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'JOURNAL_BEHIND_CHAIN',
+    });
+    expect(chain.sent).toHaveLength(1);
+    expect(chain.token(USDT, SELLER)).toBe(12_345_678n);
+  });
+
+  it('an old backup: a record signed after the backup is missing → stop', async () => {
+    const live = build();
+    await live.service.payout(payout(1));
+    chain.mine();
+    const backup = mkdtempSync(join(tmpdir(), 'eth-transfer-backup-'));
+    cpSync(dir, backup, { recursive: true });
+    await live.service.payout(payout(2)); // nonce 1, after the backup
+    chain.mine();
+
+    rmSync(dir, { recursive: true, force: true });
+    dir = backup;
+    const restored = build();
+    await expect(restored.service.payout(payout(2))).rejects.toMatchObject({
+      code: 'JOURNAL_BEHIND_CHAIN',
+    });
+    await expect(restored.service.payout(payout(3))).rejects.toMatchObject({
+      code: 'JOURNAL_BEHIND_CHAIN',
+    });
+    expect(chain.sent).toHaveLength(2);
+  });
+
+  it('a foreign transaction only in the mempool (pending) stops signing too; once it is gone the account is clear again', async () => {
+    chain.foreignPending(HOT.address);
+    const { service } = build();
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'JOURNAL_BEHIND_CHAIN',
+    });
+    expect(chain.sent).toHaveLength(0);
+    expect(service.journalBehindChain()).toHaveLength(1);
+
+    chain.pendingForeign.clear(); // dropped from the mempool
+    expect((await service.payout(payout())).nonce).toBe(0);
+    expect(service.journalBehindChain()).toEqual([]);
+  });
+
+  it('its own journalled pending send is not "behind": the next send takes the next nonce', async () => {
+    const { service } = build();
+    await service.payout(payout(1));
+    expect((await service.payout(payout(2))).nonce).toBe(1);
+    expect(service.journalBehindChain()).toEqual([]);
+  });
+
+  it('another account being behind does not stop this one', async () => {
+    chain.foreignSend(DEPOSIT.address);
+    const { service } = build();
+    expect((await service.payout(payout())).replayed).toBe(false);
+  });
+
+  it('an acknowledgement below the chain nonce does not open it', async () => {
+    chain.foreignSend(HOT.address);
+    chain.foreignSend(HOT.address);
+    const { service } = build({ acknowledged: new Map([[canonicalAddress(HOT.address), 1]]) });
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'JOURNAL_BEHIND_CHAIN',
+    });
+  });
+});
+
+describe('a success without the asked Transfer event is not a payment (M31)', () => {
+  it('status 1 but no Transfer log → NO_TRANSFER_LOG, final', async () => {
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.dropTransferLogs = true;
+    chain.mine();
+    finalizeAll();
+    expect(await service.status(txHash)).toMatchObject({
+      contractRet: 'NO_TRANSFER_LOG',
+      finalized: true,
+    });
+  });
+
+  it.each([
+    [
+      'another amount',
+      (l: Record<string, unknown>) => ({ ...l, data: '0x' + 1n.toString(16).padStart(64, '0') }),
+    ],
+    [
+      'another recipient',
+      (l: Record<string, unknown>) => ({
+        ...l,
+        topics: [
+          (l.topics as string[])[0],
+          (l.topics as string[])[1],
+          '0x' + '0'.repeat(24) + '2'.repeat(40),
+        ],
+      }),
+    ],
+    ['another contract', (l: Record<string, unknown>) => ({ ...l, address: USDC })],
+    ['a removed log', (l: Record<string, unknown>) => ({ ...l, removed: true })],
+  ])('a Transfer log with %s does not count', async (_label, tamper) => {
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.mine();
+    finalizeAll();
+    const receipt = chain.receipts.get(txHash)!;
+    chain.receipts.set(txHash, {
+      ...receipt,
+      logs: receipt.logs.map((l) => tamper(l as unknown as Record<string, unknown>)) as never,
+    });
+    expect((await service.status(txHash)).contractRet).toBe('NO_TRANSFER_LOG');
+  });
+});
+
+describe('daily cap window boundary — 7,200 blocks (M19)', () => {
+  it('an outflow 7,199 blocks before the head is inside the window; 7,200 blocks before is outside', async () => {
+    chain.head = 10_000n;
+    chain.addOutflowLog(USDT, HOT.address, SELLER, 15_000_000_000n, 10_000n - 7_199n);
+    const inside = build({ maxDaily: 20_000_000_000n, maxSingle: 20_000_000_000n });
+    await expect(inside.service.payout(payout(1, { amount: '5000.000001' }))).rejects.toMatchObject(
+      { code: 'DAILY_OUTFLOW_LIMIT_EXCEEDED' },
+    );
+
+    chain.logs.length = 0;
+    chain.addOutflowLog(USDT, HOT.address, SELLER, 15_000_000_000n, 10_000n - 7_200n);
+    const outside = build({ maxDaily: 20_000_000_000n, maxSingle: 20_000_000_000n });
+    expect((await outside.service.payout(payout(2, { amount: '20000' }))).replayed).toBe(false);
   });
 });

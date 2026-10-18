@@ -19,7 +19,8 @@ import { decodeTransferCall } from './erc20.js';
  *     `transfer(address,uint256)` on an allowlisted token contract — USDT, and
  *     USDC only when the request is a wrong-token refund — with `value = 0`,
  *     exactly the recipient and amount asked for, no access list, a bounded
- *     gas limit, and (when the flow has one) a fee within the cap.</item>
+ *     gas limit, and (when the flow has one) a worst-case fee
+ *     (`gasLimit × maxFeePerGas`) within the cap.</item>
  *   <item><b>The one exception — the fuel key</b> (T153): a plain ETH send
  *     (no calldata, gas limit 21,000) to an address the service itself derives
  *     from its seed, within a single-send and a 24-hour cap. Unset caps refuse
@@ -43,8 +44,12 @@ export interface TokenTransferIntent {
   readonly amountUnits: bigint;
   /** True only for a `WRONG_TOKEN_REFUND` — the one flow that may move USDC. */
   readonly wrongTokenRefund: boolean;
-  /** Platform-paid flows (sweep, payout, cold): the fee may not exceed this (08 §3.7.7). */
-  readonly feeCapWeiPerGas?: bigint;
+  /**
+   * Capped flows (sweep, payout, refund, cold): the most the transaction may
+   * cost, wei — `gasLimit × fee ceiling` may not exceed it (08 §3.7.7; per
+   * transaction, yönetici kararı T152 doğrulaması).
+   */
+  readonly feeCapWei?: bigint;
 }
 
 export interface FuelIntent {
@@ -130,10 +135,10 @@ export function assertSignableTokenTransfer(
   if (tx.gasLimit > config.maxTokenGasLimit) {
     refuse('gasLimit', `gas limit ${tx.gasLimit} is above ${config.maxTokenGasLimit}`);
   }
-  if (intent.feeCapWeiPerGas !== undefined && effectiveFeeCeiling(tx) > intent.feeCapWeiPerGas) {
+  if (intent.feeCapWei !== undefined && tx.gasLimit * effectiveFeeCeiling(tx) > intent.feeCapWei) {
     refuse(
       'feeCap',
-      `fee ceiling ${effectiveFeeCeiling(tx)} wei/gas is above the cap ${intent.feeCapWeiPerGas}`,
+      `worst-case fee ${tx.gasLimit} gas × ${effectiveFeeCeiling(tx)} wei/gas is above the transaction's cap ${intent.feeCapWei} wei`,
     );
   }
 }

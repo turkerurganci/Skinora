@@ -62,6 +62,8 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
     ['ETHEREUM_FUEL_MAX_SINGLE_ETH', 'ETHEREUM_FUEL_MAX_SINGLE_ETH'],
     ['ETHEREUM_FUEL_MAX_DAILY_ETH', 'ETHEREUM_FUEL_MAX_DAILY_ETH'],
     ['ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS'],
+    // T152 düzeltme turu 2 — operator acknowledgement of nonces the journal does not hold.
+    ['ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES', 'ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES'],
   ])('passes %s from .env (%s)', (inside, outside) => {
     expect(ethereum).toMatch(new RegExp(`^ +- ${inside}=\\$\\{${outside}(:-[^}]*)?\\}$`, 'm'));
   });

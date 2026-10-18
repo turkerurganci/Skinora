@@ -34,12 +34,14 @@ public interface IBlockchainTransferClient
 }
 
 /// <param name="FeeCapUsd">
-/// T152 — the platform-paid fee cap of the row's network in USD
+/// T152 — the fee cap of the row's network in USD
 /// (<c>blockchain.ethereum.fee_cap_usd_per_transfer</c>, 08 §3.7.7) for a
-/// SELLER_PAYOUT or SWEEP; null for a network without one (TRON) and for
-/// refunds, which are never capped. The Ethereum service converts it to wei per
-/// gas with the live ETH price and refuses to sign above it (the send waits:
-/// <see cref="TransferBroadcastStatus.Deferred"/>).
+/// SELLER_PAYOUT, a SWEEP and every refund type (refunds are capped too —
+/// yönetici kararı 2026-10-18); null for a network without one (TRON). The
+/// Ethereum service converts it with the live ETH price into the most the
+/// signed transaction may cost (<c>gasLimit × maxFeePerGas</c>, per
+/// transaction — yönetici kararı, T152 doğrulaması) and refuses to sign above
+/// it (the send waits: <see cref="TransferBroadcastStatus.Deferred"/>).
 /// </param>
 public sealed record TransferBroadcastRequest(
     Guid BlockchainTransactionId,

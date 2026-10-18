@@ -398,6 +398,35 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
     }
 
     [Fact]
+    public async Task Rows_Refused_With_A_Row_Specific_4xx_Also_Take_Turns()
+    {
+        // T152 düzeltme turu 2 (B10): BatchSize + 5 Ethereum rows whose status
+        // keeps answering a row-specific 4xx (404 / 409 — Rejected). Without the
+        // rotation stamp on Rejected the same 30 would hold the batch forever
+        // and the 5 newest would never be read.
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(TransferStatusOutcome.Rejected, null, null, null, "409 TRANSFER_NONCE_CONFLICT"),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var rows = await SeedEthereumDetectedAsync(OutgoingTransferConfirmationJob.BatchSize + 5);
+
+        await _sut.ExecuteAsync();
+        Assert.Equal(rows.Take(OutgoingTransferConfirmationJob.BatchSize).Select(r => r.TxHash), ethereum.StatusCalls);
+
+        ethereum.StatusCalls.Clear();
+        _clock.Advance(TimeSpan.FromMinutes(1));
+        await _sut.ExecuteAsync();
+
+        var newest = rows.Skip(OutgoingTransferConfirmationJob.BatchSize).Select(r => r.TxHash).ToList();
+        Assert.Equal(newest, ethereum.StatusCalls.Take(newest.Count));
+        var stamped = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .Where(b => b.Network == BlockchainNetwork.ETHEREUM && b.NextAttemptAt != null)
+            .CountAsync();
+        Assert.Equal(rows.Count, stamped);
+    }
+
+    [Fact]
     public async Task A_Same_Nonce_Replacement_Is_Recorded_With_The_Hash_That_Is_On_Chain()
     {
         var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);

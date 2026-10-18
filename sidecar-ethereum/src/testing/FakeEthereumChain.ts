@@ -419,6 +419,16 @@ export class FakeSendChain {
   onSend?: (raw: string) => void;
   /** When true, every RPC call fails at the transport level. */
   down = false;
+  /** USDC's simulated `transfer` answers false (a token that refuses without reverting). */
+  usdcReturnsFalse = false;
+  /** Errors the next estimateGas / callFrom / call (USDT state reads) throw. */
+  readonly simulationFailures: Error[] = [];
+  readonly stateReadFailures: Error[] = [];
+  /** Receipt fields of the next mined transactions (T154: realized fee). */
+  receiptGasUsed = 41_273n;
+  receiptEffectiveGasPrice: bigint | null = null;
+  /** When true, mined token transfers leave no Transfer log (a forwarding / non-moving token). */
+  dropTransferLogs = false;
   private readonly blockHashes = new Map<bigint, string>();
 
   constructor(
@@ -462,6 +472,16 @@ export class FakeSendChain {
   foreignSend(address: string): void {
     this.nonces.set(canonicalAddress(address), this.nonce(address) + 1);
     this.head += 1n;
+  }
+
+  /** Pending count the node reports beyond the mined one (a foreign transaction in the mempool). */
+  readonly pendingForeign = new Map<string, number>();
+  foreignPending(address: string): void {
+    const from = canonicalAddress(address);
+    this.pendingForeign.set(
+      from,
+      Math.max(this.pendingForeign.get(from) ?? 0, this.nonce(from)) + 1,
+    );
   }
 
   /** Mines one block: per sender, the best-priced transaction at its next nonce. */
@@ -516,8 +536,10 @@ export class FakeSendChain {
           logIndex: this.logs.length,
           removed: false,
         };
-        logs.push(log);
-        this.logs.push(log);
+        if (!this.dropTransferLogs) {
+          logs.push(log);
+          this.logs.push(log);
+        }
       }
     } else if (tx.data === '0x' && tx.value > 0n) {
       this.setEth(to, (this.ethBalances.get(to) ?? 0n) + tx.value);
@@ -529,8 +551,8 @@ export class FakeSendChain {
       status,
       from,
       to,
-      gasUsed: 41_273n,
-      effectiveGasPrice: this.baseFee + this.tip,
+      gasUsed: this.receiptGasUsed,
+      effectiveGasPrice: this.receiptEffectiveGasPrice ?? this.baseFee + this.tip,
       logs,
     });
     return hash;
@@ -571,6 +593,8 @@ export class FakeSendChain {
     },
     call: async (tx: { to: string; data: string }, _block: bigint): Promise<string> => {
       this.guard();
+      const stateFailure = this.stateReadFailures.shift();
+      if (stateFailure) throw stateFailure;
       const parsed = TOKEN_ABI.parseTransaction({ data: tx.data });
       const coder = AbiCoder.defaultAbiCoder();
       switch (parsed?.name) {
@@ -596,9 +620,11 @@ export class FakeSendChain {
       _block: bigint,
     ): Promise<string> => {
       this.guard();
+      const failure = this.simulationFailures.shift();
+      if (failure) throw failure;
       this.revertIfBlocked(tx.from, tx.to, tx.data);
       return canonicalAddress(tx.to) === this.usdc
-        ? AbiCoder.defaultAbiCoder().encode(['bool'], [true])
+        ? AbiCoder.defaultAbiCoder().encode(['bool'], [!this.usdcReturnsFalse])
         : '0x';
     },
     estimateGas: async (
@@ -606,12 +632,27 @@ export class FakeSendChain {
       _block: bigint,
     ): Promise<bigint> => {
       this.guard();
+      const failure = this.simulationFailures.shift();
+      if (failure) throw failure;
       this.revertIfBlocked(tx.from, tx.to, tx.data);
       return this.estimate;
     },
     getTransactionCount: async (address: string, _block: bigint): Promise<number> => {
       this.guard();
       return this.nonce(address);
+    },
+    /** Mined count, or one past the highest consecutive nonce of the sender in the mempool. */
+    getPendingTransactionCount: async (address: string): Promise<number> => {
+      this.guard();
+      const from = canonicalAddress(address);
+      let next = this.nonce(from);
+      const pending = new Set(
+        [...this.mempool.values()]
+          .filter((t) => canonicalAddress(t.from ?? '') === from)
+          .map((t) => t.nonce),
+      );
+      while (pending.has(next)) next++;
+      return Math.max(next, this.pendingForeign.get(from) ?? 0);
     },
     medianPriorityFee: async (_count: number, _block: bigint): Promise<bigint> => {
       this.guard();

@@ -75,8 +75,14 @@ export interface JournalRecord {
   readonly amountUnits: string;
   readonly nonce: number;
   readonly gasLimit: string;
-  /** Platform-paid flows: the cap the fees were held under (wei/gas), else null. */
-  readonly feeCapWeiPerGas: string | null;
+  /**
+   * Capped flows: the most the transaction may cost in fees, wei —
+   * `gasLimit × maxFeePerGas` of every attempt stays at or under it (08 §3.7.7,
+   * per transaction since T152 düzeltme turu 2); null when uncapped.
+   */
+  readonly feeCapWei?: string | null;
+  /** Records signed before T152 düzeltme turu 2: the cap per gas. Read as `× gasLimit`. */
+  readonly feeCapWeiPerGas?: string | null;
   readonly attempts: readonly JournalAttempt[];
   readonly createdAt: number;
   readonly lastBroadcastAt: number | null;
@@ -86,6 +92,15 @@ export interface JournalRecord {
   readonly conflictSuspectedAt: number | null;
   /** Confirmed: the nonce was consumed by a transaction this journal does not know. */
   readonly conflict: { readonly detectedAt: number; readonly chainNonce: number } | null;
+}
+
+/** A record's fee budget in wei (legacy per-gas records: per gas × gas limit), or null. */
+export function recordFeeCapWei(record: JournalRecord): bigint | null {
+  if (record.feeCapWei !== undefined && record.feeCapWei !== null) return BigInt(record.feeCapWei);
+  if (record.feeCapWeiPerGas !== undefined && record.feeCapWeiPerGas !== null) {
+    return BigInt(record.feeCapWeiPerGas) * BigInt(record.gasLimit);
+  }
+  return null;
 }
 
 const ID_PATTERN =

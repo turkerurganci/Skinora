@@ -3,8 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FeeWaitTracker, STALE_AFTER_MS } from './FeeWaitTracker.js';
-import { CAP_REFERENCE_GAS, capWeiPerGas } from './FeePolicy.js';
-import { TxJournal, isJournalId, type JournalRecord } from './TxJournal.js';
+import {
+  CAP_REFERENCE_GAS,
+  capWeiPerGas,
+  capWeiPerTransaction,
+  feeCeilingPerGas,
+} from './FeePolicy.js';
+import { TxJournal, isJournalId, recordFeeCapWei, type JournalRecord } from './TxJournal.js';
 import { formatTokenUnits, parseLimit, toTokenUnits, usdToMicros } from './units.js';
 
 let dir: string;
@@ -137,6 +142,37 @@ describe('fee cap arithmetic (08 §3.7.7)', () => {
   it('a missing price or cap gives a zero cap (nothing passes)', () => {
     expect(capWeiPerGas(500_000n, 64_031n, 0n)).toBe(0n);
     expect(capWeiPerGas(0n, 64_031n, 2_364_480_000n)).toBe(0n);
+    expect(capWeiPerTransaction(500_000n, 'PAYOUT', 0n)).toBe(0n);
+    expect(capWeiPerTransaction(0n, 'PAYOUT', 2_364_480_000n)).toBe(0n);
+  });
+
+  // T152 düzeltme turu 2 — per transaction (yönetici kararı): 0.50 $ ÷ 2,364.48 $,
+  // the deposit flows keep the fuel send's share of the reference gas.
+  it.each([
+    ['PAYOUT', 211_462_985_519_014n],
+    ['COLD', 211_462_985_519_014n],
+    ['SWEEP', 145_381_785_895_507n],
+    ['REFUND', 159_238_235_770_107n],
+  ] as const)(
+    '%s budget at 0.50 $ and 2,364.48 $/ETH = %s wei per transaction',
+    (flow, expected) => {
+      expect(capWeiPerTransaction(500_000n, flow, 2_364_480_000n)).toBe(expected);
+    },
+  );
+
+  it('the per-gas ceiling is the budget divided by the gas limit, rounded down', () => {
+    expect(feeCeilingPerGas(211_462_985_519_014n, 50_822n)).toBe(4_160_855_250n);
+    expect(50_822n * 4_160_855_250n).toBeLessThanOrEqual(211_462_985_519_014n);
+    expect(50_822n * 4_160_855_251n).toBeGreaterThan(211_462_985_519_014n);
+    expect(feeCeilingPerGas(1n, 0n)).toBe(0n);
+  });
+
+  it('a record keeps its budget; a record signed before the change is read as per gas × gas limit', () => {
+    expect(recordFeeCapWei({ ...RECORD, feeCapWeiPerGas: null, feeCapWei: '123' })).toBe(123n);
+    expect(recordFeeCapWei({ ...RECORD, feeCapWeiPerGas: '3302593213' })).toBe(
+      3_302_593_213n * 50_822n,
+    );
+    expect(recordFeeCapWei({ ...RECORD, feeCapWeiPerGas: null, feeCapWei: null })).toBeNull();
   });
 });
 

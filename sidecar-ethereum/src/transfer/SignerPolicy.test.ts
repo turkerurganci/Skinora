@@ -35,7 +35,8 @@ const INTENT: TokenTransferIntent = {
   recipient: RECIPIENT,
   amountUnits: 12_345_678n,
   wrongTokenRefund: false,
-  feeCapWeiPerGas: 3_000_000_000n,
+  // Per transaction (yönetici kararı, T152 doğrulaması): gasLimit × maxFee ≤ cap.
+  feeCapWei: 50_822n * 3_000_000_000n,
 };
 
 function token(overrides: Partial<TransactionLike> = {}): Transaction {
@@ -150,6 +151,10 @@ describe('token keys — every rule refuses', () => {
     ['one unit more', () => token({ data: encodeTransfer(RECIPIENT, 12_345_679n) })],
     ['a gas limit above the bound', () => token({ gasLimit: 150_001n })],
     ['a fee ceiling above the cap', () => token({ maxFeePerGas: 3_000_000_001n })],
+    [
+      'a gas limit one above at the cap fee (worst case over the cap)',
+      () => token({ gasLimit: 50_823n, maxFeePerGas: 3_000_000_000n }),
+    ],
     ['an access list', () => token({ accessList: [{ address: USDT, storageKeys: [] }] })],
     ['contract creation', () => token({ to: null })],
     [
@@ -187,6 +192,7 @@ describe('token keys — every rule refuses', () => {
     'one unit more': 'amount',
     'a gas limit above the bound': 'gasLimit',
     'a fee ceiling above the cap': 'feeCap',
+    'a gas limit one above at the cap fee (worst case over the cap)': 'feeCap',
     'an access list': 'accessList',
     'contract creation': 'to',
     'tip above max fee': 'fees',
@@ -197,6 +203,20 @@ describe('token keys — every rule refuses', () => {
     expect(() => assertSignableTokenTransfer(build(), intent ?? INTENT, CONFIG)).toThrow(
       expect.objectContaining({ ...refusal, message: expect.stringContaining(`(${RULE[label]})`) }),
     );
+  });
+
+  it('the worst-case fee exactly at the cap is accepted (gasLimit × maxFee = cap)', () => {
+    expect(() =>
+      assertSignableTokenTransfer(token({ maxFeePerGas: 3_000_000_000n }), INTENT, CONFIG),
+    ).not.toThrow();
+    // A lower fee may carry a higher gas limit within the same budget.
+    expect(() =>
+      assertSignableTokenTransfer(
+        token({ gasLimit: 101_644n, maxFeePerGas: 1_500_000_000n }),
+        INTENT,
+        CONFIG,
+      ),
+    ).not.toThrow();
   });
 
   it('USDC is accepted only when the request is a wrong-token refund', () => {

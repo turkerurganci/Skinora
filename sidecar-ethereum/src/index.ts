@@ -137,6 +137,7 @@ function main(): void {
     unminedSeconds: () => transfers.oldestUnminedSeconds(),
     gasWaitSeconds: () => feeWaits.longestWaitSeconds(['FUEL_REQUIRED', 'HOT_WALLET_GAS_LOW']),
     nonceConflicts: () => transfers.nonceConflictCount(),
+    journalBehindChain: () => transfers.journalBehindChain().length,
   });
   let keeping = false;
   const keeper = setInterval(() => {

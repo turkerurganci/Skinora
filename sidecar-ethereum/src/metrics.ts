@@ -115,6 +115,8 @@ export interface TransferWaitSource {
   unminedSeconds: () => number;
   gasWaitSeconds: () => number;
   nonceConflicts: () => number;
+  /** Accounts whose chain nonce is ahead of the journal — signing stopped for them. */
+  journalBehindChain: () => number;
 }
 type TransferHolder = { [TRANSFER_SOURCE]?: TransferWaitSource };
 
@@ -159,6 +161,21 @@ export const nonceConflicts = getOrCreateGauge({
   collect() {
     const source = (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE];
     if (source) this.set(source.nonceConflicts());
+  },
+});
+
+/**
+ * Accounts for which the last pre-signing check found the chain's nonce
+ * (pending included) ahead of what the journal knows — the service signs
+ * nothing new for them (08 §3.7.6 "Günlük zincirin gerisinde", T152
+ * düzeltme turu 2). Alert `ethereum-journal-behind-chain`.
+ */
+export const journalBehindChain = getOrCreateGauge({
+  name: 'skinora_ethereum_journal_behind_chain',
+  help: 'Ethereum send accounts whose chain nonce is ahead of the transaction journal (signing stopped)',
+  collect() {
+    const source = (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE];
+    if (source) this.set(source.journalBehindChain());
   },
 });
 

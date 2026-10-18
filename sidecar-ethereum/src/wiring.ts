@@ -186,6 +186,7 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
     finalizedHead: deps.finalizedHead,
     bumpAfterMs: config.transfers.bumpAfterSeconds * 1000,
     conflictConfirmMs: config.transfers.keeperIntervalMs,
+    acknowledgedNonces: config.transfers.journalAcknowledgedNonces,
   });
   return { ethPrice, feeEstimator, feeWaits, transfers };
 }

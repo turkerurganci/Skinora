@@ -206,6 +206,7 @@ describe('outbound wiring — sends and the fee estimate share one ETH price ser
         waitAlarmSeconds: 10_800,
         keeperIntervalMs: 30_000,
         bumpAfterSeconds: 300,
+        journalAcknowledgedNonces: new Map(),
       },
     };
     const built = buildOutbound(config, {

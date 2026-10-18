@@ -338,7 +338,7 @@
 | T149 | Ağ ücreti politikası | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T150 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T149_REPORT.md), PR [#345](https://github.com/turkerurganci/Skinora/pull/345)) |
 | T150 | Ethereum servis iskeleti | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346)) |
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T151_REPORT.md), PR [#347](https://github.com/turkerurganci/Skinora/pull/347)) |
-| T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T152_REPORT.md)) |
+| T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⏳ Devam ediyor — doğrulama ✗ FAIL → düzeltme turu 2 bitti (günlük önce, kimlik kilidi, yalnız revert kalıcı, `realizedFeeWei`, günlük zincirin gerisinde imza durur, işlem başına ücret tavanı — iki yönetici kararı), yeniden doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T152_REPORT.md)) |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T149 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
 | T155 | sidecar-fake Ethereum desteği + E2E | ⬚ Bekliyor |

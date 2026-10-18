@@ -89,6 +89,13 @@ export interface EthereumServiceConfig {
     readonly keeperIntervalMs: number;
     /** A head-of-line send not mined after this long is re-signed with higher fees. */
     readonly bumpAfterSeconds: number;
+    /**
+     * Operator acknowledgements of nonces the journal does not hold
+     * (`ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES` = `0xaddr:N[,0xaddr:N]`):
+     * canonical address → nonce up to which the chain is accounted for. Empty
+     * by default; set only by the DEPLOY_RUNBOOK §D journal-behind-chain step.
+     */
+    readonly journalAcknowledgedNonces: ReadonlyMap<string, number>;
   };
   /** T151 — the payment monitor (08 §3.7.4). */
   readonly monitor: {
@@ -159,6 +166,28 @@ function positiveInt(env: Env, name: string, fallback: number): number {
 }
 
 /** PORT: 0..65535 (0 = any free port, used by the startup tests). */
+/** `0xaddr:N[,0xaddr:N]` → canonical address → N. Malformed refuses to start. */
+function acknowledgedNonces(env: Env, name: string): ReadonlyMap<string, number> {
+  const raw = value(env, name);
+  const out = new Map<string, number>();
+  if (raw === '') return out;
+  for (const part of raw.split(',')) {
+    const match = /^\s*(0x[0-9a-fA-F]{40}):(\d{1,15})\s*$/.exec(part);
+    if (!match || checksummedEvmAddress(match[1]) === null) {
+      throw new ConfigError(
+        'INVALID_CONFIG',
+        `${name} must be a comma-separated list of 0xaddress:nonce, got "${part.trim()}".`,
+      );
+    }
+    const address = canonicalAddress(match[1]);
+    if (out.has(address)) {
+      throw new ConfigError('INVALID_CONFIG', `${name} names ${address} twice.`);
+    }
+    out.set(address, Number(match[2]));
+  }
+  return out;
+}
+
 function listenPort(env: Env): number {
   const raw = value(env, 'PORT');
   if (raw === '') return 5300;
@@ -320,6 +349,7 @@ export function loadConfig(
       waitAlarmSeconds: positiveInt(env, 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 10_800),
       keeperIntervalMs: positiveInt(env, 'ETHEREUM_OUTGOING_KEEPER_INTERVAL_MS', 30_000),
       bumpAfterSeconds: positiveInt(env, 'ETHEREUM_FEE_BUMP_AFTER_SECONDS', 300),
+      journalAcknowledgedNonces: acknowledgedNonces(env, 'ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES'),
     },
     monitor: {
       tickIntervalMs: positiveInt(env, 'ETHEREUM_MONITOR_TICK_MS', 15_000),

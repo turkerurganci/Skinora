@@ -311,6 +311,53 @@ groups:
             service, check the account's transactions on Etherscan and the
             journal (DEPLOY_RUNBOOK §D) before anything is re-sent.
 
+      - uid: ethereum-journal-behind-chain
+        title: Ethereum Journal Behind Chain — Signing Stopped
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max(skinora_ethereum_journal_behind_chain) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: An Ethereum send account is ahead of the transaction journal — no new signatures
+          description: >-
+            Before a new signature the Ethereum service found the account's
+            nonce on chain (pending included) ahead of the highest nonce its
+            journal holds (08 §3.7.6). Transactions the journal does not know
+            used those nonces: a lost journal volume, a restore from an old
+            backup, or a send outside the service. A journalled id among them
+            would be signed again with a new nonce — a second payment — so the
+            service signs nothing new for that account (503
+            JOURNAL_BEHIND_CHAIN; backend rows stay PENDING). Follow
+            DEPLOY_RUNBOOK §D "ethereum-journal-behind-chain" before setting
+            ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES.
+
   - orgId: 1
     name: Skinora Warning Alerts
     folder: Skinora Alerts
