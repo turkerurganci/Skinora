@@ -56,8 +56,9 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Unit (backend, bütün `*.Tests` projeleri) | ✓ 1739/1739 (11 assembly) | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
-| Integration (gerçek SQL Server, Testcontainers) | ✓ 1541/1541 | (Shared 16, Payments 6, Admin 22, Transactions 656, Auth 37, Notifications 60, Platform 74, Fraud 81, Disputes 58, API 531). İlk tam koşuda 11 assembly paralel kendi SQL konteyneriyle koşarken Transactions'ta 6 test düştü (CK_Status_Detected…, TransactionHistory_FK_Actor…, Truncated_Baseline…, Happy_Path_Creates…, Completed_SellerView…, Post_Payment_Buyer_Cancel… — hiçbiri T145 koduna dokunmuyor); tek başına yeniden koşuda 6/6 ve Transactions integration 656/656 ✓. Contract 13/13 ✓ | `dotnet test Skinora.sln --filter "FullyQualifiedName~.Integration"` |
+| Unit (backend, bütün `*.Tests` projeleri) | ✓ 1780/1780 (11 assembly) | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — origin/main (T144) birleştirildikten sonra. Birleştirme öncesi 1739/1739 |
+| Integration (gerçek SQL Server, Testcontainers) | ✓ 1553/1553 | `dotnet test Skinora.sln -m:1 --filter "FullyQualifiedName~.Integration"` birleştirme sonrası: Transactions 664, API 535, Fraud 81, Platform 74, Notifications 60, Disputes 58, Auth 37, Admin 22, Shared 16, Payments 6. Birleştirme öncesi ilk tam koşuda (11 assembly paralel, her biri kendi SQL konteyneri) Transactions'ta 6 test zaman/yük kaynaklı düştü (hiçbiri T145 koduna dokunmuyor); tek başına 6/6 ve Transactions 656/656 ✓ |
+| Contract | ✓ 13/13 | `--filter "FullyQualifiedName~.Contract"` |
 | Sidecar (vitest) | ✓ 518/518 (27 dosya) | `npx vitest run`; `tsc --noEmit` ✓, `eslint` ✓ |
 | Format | ✓ | `dotnet format Skinora.sln --verify-no-changes --severity error` temiz; sidecar dosyaları `prettier` ile |
 | Build | ✓ | `dotnet build Skinora.sln` 0 hata |
@@ -82,7 +83,7 @@
 - Branch: `task/T145-ag-boyutu-veri-modeli`
 - Commit: `2fc9755` — T145: veri modeline ağ boyutu + kanonik adres biçimi
 - PR: #341
-- CI: CI_RESULT
+- CI: PR CI run `39081964940` (head `c396961`, birleştirme sonrası) ✓ success; son rapor commit'inin run'ı da izlendi (yönetici raporunda)
 
 ## Known Limitations / Follow-up
 
