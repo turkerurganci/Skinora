@@ -50,6 +50,10 @@ describe('ERC-20 Transfer decoding (08 §3.7.4)', () => {
     ).toBeNull();
   });
 
+  it('drops a four-topic Transfer even when it carries a 32-byte data word (not ERC-20)', () => {
+    expect(decodeTransferLog(log({ topics: [...log().topics, addressWord(A)] }))).toBeNull();
+  });
+
   it('drops another event and a topic that is not an address', () => {
     expect(
       decodeTransferLog(log({ topics: ['0x' + '0'.repeat(64), ...log().topics.slice(1)] })),

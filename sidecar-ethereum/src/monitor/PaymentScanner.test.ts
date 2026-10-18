@@ -188,6 +188,43 @@ describe('token classification (08 §3.7.4 izin listesi)', () => {
   });
 });
 
+describe('a provider that refuses eth_getLogs without an address (Sepolia PublicNode, T151 probe)', () => {
+  it('still sees the payment and the wrong token through the allowlisted contracts; only spam is lost', async () => {
+    const h = monitorHarness();
+    h.chain.refuseAddressless = true;
+    h.chain.mineTo(100n);
+    h.chain.finalize(100n);
+    await h.scanner.tick();
+    afterRearmWindow(h);
+    const d = deposit(20);
+    h.arm(d);
+    await h.scanner.tick();
+    h.chain.mine([{ contract: USDT, from: BUYER, to: d, value: 1_000_000n }]);
+    h.chain.mine([{ contract: USDC, from: BUYER, to: d, value: 2_000_000n }]);
+    const spam = h.chain.mine([{ contract: SPAM, from: BUYER, to: d, value: 3n }]);
+    h.chain.mineTo(spam.block + 40n);
+    h.chain.finalize(spam.block);
+    await h.scanner.tick();
+    expect(h.sent.map((s) => s.event)).toEqual([
+      'payment.detected',
+      'payment.confirmed',
+      'payment.wrong_token',
+    ]);
+    expect(h.scanner.scannedBlock()).toBe(spam.block);
+    // The fallback still names the deposits as recipients (not every USDT transfer on chain).
+    const fallback = h.chain.calls.filter((c) => {
+      const f = c.params[0] as { address?: unknown; topics?: unknown[] } | undefined;
+      return c.method === 'eth_getLogs' && Array.isArray(f?.address) && f?.topics?.[1] === null;
+    });
+    expect(fallback.length).toBeGreaterThan(0);
+    for (const c of fallback) {
+      expect((c.params[0] as { topics: unknown[] }).topics[2]).toEqual([
+        '0x' + d.slice(2).padStart(64, '0'),
+      ]);
+    }
+  });
+});
+
 describe('wrong chain (08 §3.7.1)', () => {
   it('a provider on another chain is never read: nothing is reported and the deposit is not marked read', async () => {
     const h = monitorHarness({ chainId: 1, configuredChainId: 11155111 });
@@ -459,6 +496,30 @@ describe('where a deposit starts (restart, late arming, hand-over)', () => {
       monitorState: 'POST_CANCEL_24H',
       tokenSymbol: 'USDT',
     });
+  });
+
+  it('an address held by both registries (backend drift) is treated as cancelled: a late payment, not a payment', async () => {
+    const h = monitorHarness();
+    h.chain.mineTo(100n);
+    h.chain.finalize(100n);
+    await h.scanner.tick();
+    afterRearmWindow(h);
+    const d = deposit(18);
+    h.arm(d);
+    await h.scanner.tick();
+    h.registry.startPostCancel({
+      address: d,
+      paymentAddressId: 'pa-0012',
+      transactionId: 'tx-0012',
+      expectedContract: USDT,
+      expectedSymbol: 'USDT',
+      cancelledAt: new Date(h.clock.now),
+    });
+    const pay = h.chain.mine([{ contract: USDT, from: BUYER, to: d, value: 1n }]);
+    h.chain.mineTo(pay.block + 40n);
+    h.chain.finalize(pay.block);
+    await h.scanner.tick();
+    expect(h.sent.map((s) => s.event)).toEqual(['payment.late_detected']);
   });
 
   it('post-cancel states advance with the wall clock and stop at 30 days', async () => {

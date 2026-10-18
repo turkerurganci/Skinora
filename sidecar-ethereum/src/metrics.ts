@@ -128,6 +128,15 @@ export const paymentEventsTotal = getOrCreateCounter({
   labelNames: ['event'] as const,
 });
 
+/**
+ * Ranges read with the allowlisted tokens only because the provider refused
+ * `eth_getLogs` without an address — spam to the deposits is not visible there.
+ */
+export const spamScanUnavailableTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_monitor_spam_scan_unavailable_total',
+  help: 'Block ranges whose spam-token sweep the provider refused (address-less eth_getLogs)',
+});
+
 /** Block ranges whose scan failed (RPC or retryable webhook failure) and is retried. */
 export const monitorScanFailuresTotal = getOrCreateCounter({
   name: 'skinora_ethereum_monitor_scan_failures_total',

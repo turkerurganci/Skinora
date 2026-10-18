@@ -77,6 +77,8 @@ export class FakeEthereumChain {
   private fork = 0;
   /** When set, every call fails at the transport level (a dead provider). */
   down = false;
+  /** When set, eth_getLogs without `address` is refused the way Sepolia PublicNode refuses it (T151 probe). */
+  refuseAddressless = false;
 
   constructor(options: FakeChainOptions = {}) {
     this.opts = {
@@ -293,6 +295,12 @@ export class FakeEthereumChain {
     }
     if (to > this.latestNumber) throw new RpcFault(-32000, 'unknown block');
     const addressFilter = filter.address;
+    if (addressFilter === undefined && this.refuseAddressless) {
+      throw new RpcFault(
+        -32701,
+        'Please specify an address in your request or, to remove restrictions, order a dedicated full node here: https://www.allnodes.com/eth/host',
+      );
+    }
     const addresses =
       addressFilter === undefined
         ? null

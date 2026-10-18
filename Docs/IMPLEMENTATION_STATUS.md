@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-18 — **T150 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum servis iskeleti; rapor [`T150_REPORT.md`](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346), HEAD `2f0ba0b`, CI [`39120152616`](https://github.com/turkerurganci/Skinora/actions/runs/39120152616) ✓). Dört küçük bulgu: kesinti istisnası 05/06/08'e yayıldı; T151 (kod düzeyi kapı), T152 (onay işi kesicisi), T158 (metrik + testler + runbook) kriterlerine eklendi. Merge yönetici tarafından yapılır.
+**Son güncelleme:** 2026-10-18 — **T151 ⏳ yapım bitti, doğrulama bekliyor** (Ethereum ödeme izleyicisi; rapor [`T151_REPORT.md`](TASK_REPORTS/T151_REPORT.md), PR [#347](https://github.com/turkerurganci/Skinora/pull/347)). · **Önceki:** 2026-10-18 — **T150 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum servis iskeleti; rapor [`T150_REPORT.md`](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346), HEAD `2f0ba0b`, CI [`39120152616`](https://github.com/turkerurganci/Skinora/actions/runs/39120152616) ✓). Dört küçük bulgu: kesinti istisnası 05/06/08'e yayıldı; T151 (kod düzeyi kapı), T152 (onay işi kesicisi), T158 (metrik + testler + runbook) kriterlerine eklendi. Merge yönetici tarafından yapılır.
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -337,7 +337,7 @@
 | T148 | Ağ başına sidecar sözleşmesi ve ayarlar | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T148_REPORT.md), PR [#343](https://github.com/turkerurganci/Skinora/pull/343)) |
 | T149 | Ağ ücreti politikası | ⬚ Bekliyor |
 | T150 | Ethereum servis iskeleti | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346)) |
-| T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⬚ Bekliyor |
+| T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T151_REPORT.md), PR [#347](https://github.com/turkerurganci/Skinora/pull/347)) |
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ⬚ Bekliyor |

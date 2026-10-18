@@ -4,9 +4,10 @@ import {
   monitorScanFailuresTotal,
   monitorScannedBlock,
   paymentEventsTotal,
+  spamScanUnavailableTotal,
 } from '../metrics.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
-import type { EthereumRpcClient, RpcLog } from '../rpc/RpcClient.js';
+import { RpcError, type EthereumRpcClient, type RpcLog } from '../rpc/RpcClient.js';
 import type { BalanceReader } from '../reconcile/BalanceReader.js';
 import { CU_COST, type RatePacer } from '../reconcile/RatePacer.js';
 import {
@@ -302,11 +303,7 @@ export class PaymentScanner {
       .filter((c) => c !== '');
 
     await this.pace(from, to, recipients.length, tokens.length > 0 ? 2 : 1);
-    const incoming = await this.deps.rpc.getLogs({
-      topics: [TRANSFER_TOPIC, null, recipients],
-      fromBlock: from,
-      toBlock: to,
-    });
+    const incoming = await this.incomingLogs(from, to, recipients, tokens);
     const outgoing =
       tokens.length === 0
         ? []
@@ -336,6 +333,44 @@ export class PaymentScanner {
         continue;
       }
       await this.handleIncoming(entry, t, finalized, timestamps);
+    }
+  }
+
+  /**
+   * Transfers TO the deposits from any contract — or, when the provider
+   * refuses a query without an address (measured: Sepolia PublicNode answers
+   * -32701 "Please specify an address"; dRPC, Tenderly and 1RPC answer it, T151
+   * probe), from the allowlisted tokens only. The payment and the wrong token
+   * are then still seen; only spam is not, for that range — logged and counted
+   * (`skinora_ethereum_monitor_spam_scan_unavailable_total`). Transport and
+   * size (limit) failures still fail the range — they say nothing about it.
+   */
+  private async incomingLogs(
+    from: bigint,
+    to: bigint,
+    recipients: string[],
+    tokens: string[],
+  ): Promise<RpcLog[]> {
+    try {
+      return await this.deps.rpc.getLogs({
+        topics: [TRANSFER_TOPIC, null, recipients],
+        fromBlock: from,
+        toBlock: to,
+      });
+    } catch (err) {
+      if (!(err instanceof RpcError) || err.kind !== 'rpc' || tokens.length === 0) throw err;
+      spamScanUnavailableTotal.inc();
+      logger.warn(
+        { provider: err.provider, reason: err.message, from: String(from), to: String(to) },
+        'Provider refused eth_getLogs without an address — reading the allowlisted tokens only; spam is not visible for this range',
+      );
+      await this.deps.pacer.acquire(CU_COST.eth_getLogs);
+      return this.deps.rpc.getLogs({
+        address: tokens,
+        topics: [TRANSFER_TOPIC, null, recipients],
+        fromBlock: from,
+        toBlock: to,
+      });
     }
   }
 
