@@ -331,7 +331,7 @@
 | T142 | Ethereum ön ölçümleri (Sepolia + mainnet salt okuma) [ÖLÇÜM GÖREVİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T142_REPORT.md), PR [#339](https://github.com/turkerurganci/Skinora/pull/339)) |
 | T143 | HD türetme yolunun standarda çekilmesi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T143_REPORT.md), PR [#338](https://github.com/turkerurganci/Skinora/pull/338)) |
 | T144 | Ödenecek tutarın iki haneye sabitlenmesi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T144_REPORT.md), PR [#340](https://github.com/turkerurganci/Skinora/pull/340)) |
-| T145 | Veri modeline ağ boyutu + adres biçimi [RİSKLİ] | ⬚ Bekliyor |
+| T145 | Veri modeline ağ boyutu + adres biçimi [RİSKLİ] | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T145_REPORT.md), PR [#341](https://github.com/turkerurganci/Skinora/pull/341)) |
 | T146 | Ağ başına kullanıcı ödeme/iade adresleri | ⬚ Bekliyor |
 | T147 | İşlem akışında ağ seçimi | ⬚ Bekliyor |
 | T148 | Ağ başına sidecar sözleşmesi ve ayarlar | ⬚ Bekliyor |

@@ -54,6 +54,34 @@ describe('classifyToken()', () => {
     ).toEqual({ kind: 'spam_token' });
   });
 
+  // T145 (06 §1.4) — contract comparison is canonical.
+  it('does not fold the case of a TRON contract (base58 is case-significant)', () => {
+    expect(
+      classifyToken({ contractAddress: USDT.toLowerCase(), expectedContract: USDT, allowlist }),
+    ).toEqual({ kind: 'spam_token' });
+  });
+
+  it('matches an EVM contract in any letter case', () => {
+    const evmAllowlist: StablecoinAllowlist = {
+      USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+      USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    };
+    expect(
+      classifyToken({
+        contractAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+        expectedContract: evmAllowlist.USDT,
+        allowlist: evmAllowlist,
+      }),
+    ).toEqual({ kind: 'expected' });
+    expect(
+      classifyToken({
+        contractAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        expectedContract: evmAllowlist.USDT,
+        allowlist: evmAllowlist,
+      }),
+    ).toEqual({ kind: 'wrong_token', symbol: 'USDC' });
+  });
+
   it('ignores allowlist entries with empty contract address', () => {
     const partialAllowlist: StablecoinAllowlist = { USDT, USDC: '' };
     // The contract is the same as the empty USDC slot — must not be classified as wrong_token USDC.
@@ -121,5 +149,32 @@ describe('isIncomingFor()', () => {
     };
     expect(isIncomingFor(record, 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t')).toBe(true);
     expect(isIncomingFor(record, 'TQ8fxJKG9RbGaq9HkonU4gu1S2eWJM1PM2')).toBe(false);
+  });
+
+  // T145 (06 §1.4) — canonical comparison: exact for base58, case-folded for EVM.
+  it('does not fold the case of a TRON deposit address', () => {
+    const record = {
+      transaction_id: 'a',
+      from: 'TQ8fxJKG9RbGaq9HkonU4gu1S2eWJM1PM2',
+      to: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      type: 'Transfer',
+      value: '1',
+      block_timestamp: 0,
+      token_info: { address: USDT },
+    };
+    expect(isIncomingFor(record, 'tr7nhqjekqxgtci8q8zy4pl8otszgjlj6t')).toBe(false);
+  });
+
+  it('matches an EVM deposit address in any letter case', () => {
+    const record = {
+      transaction_id: 'a',
+      from: '0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed',
+      to: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+      type: 'Transfer',
+      value: '1',
+      block_timestamp: 0,
+      token_info: { address: USDT },
+    };
+    expect(isIncomingFor(record, '0xdAC17F958D2ee523a2206206994597C13D831ec7')).toBe(true);
   });
 });

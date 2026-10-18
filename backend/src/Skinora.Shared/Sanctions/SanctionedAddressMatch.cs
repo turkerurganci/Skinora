@@ -1,3 +1,5 @@
+using Skinora.Shared.Enums;
+
 namespace Skinora.Shared.Sanctions;
 
 /// <summary>
@@ -6,13 +8,13 @@ namespace Skinora.Shared.Sanctions;
 /// + login sanctions checks ve admin retroaktif scan.
 /// </summary>
 /// <param name="Id">SanctionedAddress.Id.</param>
-/// <param name="Address">Matched address (raw, case-sensitive).</param>
-/// <param name="Network">Network identifier — MVP yalnız <c>TRC-20</c>.</param>
+/// <param name="Address">Matched address, in canonical form (06 §1.4).</param>
+/// <param name="Network">Network of the listed address (06 §2.25).</param>
 /// <param name="Source">List source — <c>OFAC</c> / <c>EU</c> / <c>UN</c> / <c>MANUAL</c>.</param>
 /// <param name="ListedAt">Original listing date.</param>
 public sealed record SanctionedAddressMatch(
     Guid Id,
     string Address,
-    string Network,
+    BlockchainNetwork Network,
     string Source,
     DateTime ListedAt);

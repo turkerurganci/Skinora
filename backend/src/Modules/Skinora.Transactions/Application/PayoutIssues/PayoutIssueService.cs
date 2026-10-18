@@ -132,6 +132,10 @@ public sealed class PayoutIssueService : IPayoutIssueService
             Id = Guid.NewGuid(),
             TransactionId = transactionId,
             SellerId = callerUserId,
+            // 06 §1.4 (T145) — the payout went out on the transaction's
+            // network. A COMPLETED transaction has been accepted, so the
+            // value is set; TRON covers rows that predate the column.
+            Network = transaction.Network ?? BlockchainNetwork.TRON,
             Detail = trimmedDetail,
             VerificationStatus = PayoutIssueStatus.REPORTED,
             RetryCount = 0,

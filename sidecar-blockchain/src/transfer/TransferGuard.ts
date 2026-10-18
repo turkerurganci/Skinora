@@ -1,4 +1,5 @@
 import TronWeb from 'tronweb';
+import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { logger } from '../logger.js';
 import type { TokenContractMap } from './TransferService.js';
@@ -155,8 +156,11 @@ export class TransferGuard {
     this.coldWalletAddress = deps.coldWalletAddress;
     this.maxSingleTransferUnits = deps.maxSingleTransferUnits;
     this.maxDailyOutflowUnits = deps.maxDailyOutflowUnits;
+    // Canonical keys (06 §1.4, T145): exact for TRON, case-folded for EVM.
     this.allowedContracts = new Set(
-      Object.values(deps.tokenContracts).filter((address): address is string => !!address),
+      Object.values(deps.tokenContracts)
+        .filter((address): address is string => !!address)
+        .map(canonicalAddress),
     );
     this.history = deps.history;
     this.now = deps.now ?? (() => Date.now());
@@ -170,7 +174,7 @@ export class TransferGuard {
    * refused instead of being redirected.
    */
   assertSweepDestination(requested: string): void {
-    if (requested !== this.hotWalletAddress) {
+    if (!sameAddress(requested, this.hotWalletAddress)) {
       throw new SidecarError(
         `Sweep destination ${requested} is not the configured hot wallet — refusing to sign.`,
         'DESTINATION_NOT_ALLOWED',
@@ -188,7 +192,7 @@ export class TransferGuard {
         false,
       );
     }
-    if (requested !== this.coldWalletAddress) {
+    if (!sameAddress(requested, this.coldWalletAddress)) {
       throw new SidecarError(
         `Cold transfer destination ${requested} is not the configured cold wallet — refusing to sign.`,
         'DESTINATION_NOT_ALLOWED',
@@ -288,11 +292,12 @@ export class TransferGuard {
 
       for (const record of page.records) {
         if (record.block_timestamp < since) continue;
-        if (record.from !== this.hotWalletAddress) continue;
-        if (!this.allowedContracts.has(record.token_info?.address)) continue;
+        if (!sameAddress(record.from, this.hotWalletAddress)) continue;
+        const contract = record.token_info?.address;
+        if (!contract || !this.allowedContracts.has(canonicalAddress(contract))) continue;
         // Consolidation to the pinned cold wallet is platform-internal
         // movement, not outflow (owner decision 2026-09-17).
-        if (this.coldWalletAddress && record.to === this.coldWalletAddress) continue;
+        if (this.coldWalletAddress && sameAddress(record.to, this.coldWalletAddress)) continue;
         if (seen.has(record.transaction_id)) continue;
         seen.add(record.transaction_id);
         total += BigInt(record.value);

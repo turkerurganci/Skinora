@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { logger } from '../logger.js';
 import { transfersTotal } from '../metrics.js';
 import { reportActiveMonitorCount } from './activeMonitorGauge.js';
@@ -189,7 +190,10 @@ export class MonitorRegistry {
       throw new Error('MonitorRegistry has been shut down');
     }
     const cadence: MonitorCadence = options.cadence ?? 'PAYMENT';
-    const existing = this.monitors.get(options.address);
+    // Keyed by the canonical address (06 §1.4, T145) so two spellings of
+    // one EVM address are one monitor; TRON keys are the address itself.
+    const key = canonicalAddress(options.address);
+    const existing = this.monitors.get(key);
     if (existing) {
       // The backend's per-minute reconciler re-arms every open address with
       // the cadence its transaction status calls for, so a re-start is also
@@ -209,7 +213,7 @@ export class MonitorRegistry {
       }
       return { started: false, cadence };
     }
-    this.monitors.set(options.address, {
+    this.monitors.set(key, {
       options,
       correlationId: crypto.randomUUID(),
       cadence,
@@ -246,7 +250,7 @@ export class MonitorRegistry {
 
   /** The cadence an address is polled at, or undefined when it is not monitored. */
   cadenceOf(address: string): MonitorCadence | undefined {
-    return this.monitors.get(address)?.cadence;
+    return this.monitors.get(canonicalAddress(address))?.cadence;
   }
 
   /**
@@ -255,7 +259,7 @@ export class MonitorRegistry {
    * backend (state machine may have cancelled an already-confirmed monitor).
    */
   stop(address: string): { stopped: boolean } {
-    const had = this.monitors.delete(address);
+    const had = this.monitors.delete(canonicalAddress(address));
     reportActiveMonitorCount('active', this.monitors.size);
     if (had) {
       logger.info({ address }, 'Monitor stopped');
@@ -386,7 +390,7 @@ export class MonitorRegistry {
       handle: async (record) => {
         if (!this.shouldEmit(record, state)) return;
         // Defensive: only proceed if the record really belongs to the expected contract.
-        if (record.token_info.address !== state.options.expectedContract) {
+        if (!sameAddress(record.token_info.address, state.options.expectedContract)) {
           logger.debug(
             { txHash: record.transaction_id, contract: record.token_info.address },
             'Phase 1 returned a non-expected contract row — skipping',

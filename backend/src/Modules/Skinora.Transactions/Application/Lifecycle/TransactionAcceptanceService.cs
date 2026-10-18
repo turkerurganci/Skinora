@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Exceptions;
@@ -170,7 +171,10 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 TransactionErrorCodes.InvalidWalletAddress,
                 "refundWalletAddress fails TRC-20 validation (02 §12.3).");
 
-        var sanctions = await _sanctions.EvaluateAsync(request.RefundWalletAddress, cancellationToken);
+        // The refund address is screened on the transaction's network; the
+        // only network before T147 adds the buyer's choice is TRON (06 §1.4).
+        var sanctions = await _sanctions.EvaluateAsync(
+            BlockchainNetwork.TRON, request.RefundWalletAddress, cancellationToken);
         if (sanctions.IsMatch)
             return Failure(AcceptTransactionStatus.SanctionsMatch,
                 TransactionErrorCodes.SanctionsMatch,
@@ -267,7 +271,11 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
         // 06 §3.5 invariants: BuyerId + BuyerRefundAddress + BuyerTradeUrl must
         // be set BEFORE the state-machine guard fires (HasFieldsForAccepted).
         transaction.BuyerId = buyerId;
-        transaction.BuyerRefundAddress = request.RefundWalletAddress;
+        // 06 §1.4 (T145) — the network is fixed at acceptance and never changes
+        // afterwards. TRON is the only network until T147 adds the buyer's
+        // choice; the refund address is stored in canonical form.
+        transaction.Network = BlockchainNetwork.TRON;
+        transaction.BuyerRefundAddress = BlockchainAddress.Canonicalize(request.RefundWalletAddress!);
         // Store the normalized form, never the raw input: the seller's delivery
         // link is generated from this column (08 §2.2), so it must be a single
         // canonical https/lowercase-host shape with the tracking parameters a

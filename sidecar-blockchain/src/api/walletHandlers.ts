@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { canonicalAddress } from '../address/canonicalAddress.js';
 import { config } from '../config/index.js';
 import { logger } from '../logger.js';
 import { SidecarError } from '../errors/SidecarError.js';
@@ -145,7 +146,14 @@ export function walletBalancesHandler(
     }
 
     const tronClient = client ?? new TronGridClient();
-    const contractToSymbol = contractToSymbolOverride ?? buildContractToSymbol();
+    // Keyed by the canonical contract (06 §1.4, T145) so the lookup below
+    // does not depend on the letter case either side reports an EVM contract
+    // in; TRON contracts are their own canonical form.
+    const contractToSymbol = Object.fromEntries(
+      Object.entries(contractToSymbolOverride ?? buildContractToSymbol()).map(
+        ([contract, symbol]) => [canonicalAddress(contract), symbol],
+      ),
+    );
 
     try {
       const blockNumber = await tronClient.getNowSolidBlock();
@@ -154,7 +162,7 @@ export function walletBalancesHandler(
         const snapshot = await tronClient.getAccountBalances(address);
         const tokens: Record<string, string> = { TRX: snapshot.trx };
         for (const [contract, rawValue] of Object.entries(snapshot.trc20)) {
-          const symbol = contractToSymbol[contract];
+          const symbol = contractToSymbol[canonicalAddress(contract)];
           if (symbol) tokens[symbol] = rawValue;
         }
         // Ensure supported tokens always appear (zero balance is a valid

@@ -2,8 +2,8 @@ namespace Skinora.API.Services.AdminSanctions;
 
 /// <summary>AD22/AD23 response satırı (07 §9.23/§9.24).</summary>
 /// <param name="Id">SanctionedAddress.Id.</param>
-/// <param name="Address">Yaptırımlı cüzdan adresi.</param>
-/// <param name="Network">Ağ kimliği (MVP yalnız <c>TRC-20</c>).</param>
+/// <param name="Address">Yaptırımlı cüzdan adresi, kanonik biçimde (06 §1.4 — EVM küçük harf).</param>
+/// <param name="Network">Ağ — <c>TRON</c> / <c>ETHEREUM</c> (06 §2.25, T145).</param>
 /// <param name="Source">Liste kaynağı (<c>MANUAL</c> MVP; <c>OFAC</c>/<c>EU</c>/<c>UN</c> reserved).</param>
 /// <param name="Reason">Admin notu (opsiyonel).</param>
 /// <param name="ListedAt">Listeye eklenme tarihi.</param>

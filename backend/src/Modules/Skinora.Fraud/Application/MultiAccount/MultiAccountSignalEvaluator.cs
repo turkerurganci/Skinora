@@ -1,3 +1,4 @@
+using Skinora.Shared.Blockchain;
 using Skinora.Users.Application.MultiAccount;
 
 namespace Skinora.Fraud.Application.MultiAccount;
@@ -14,14 +15,15 @@ public static class MultiAccountSignalEvaluator
     /// <see cref="MultiAccountDetector.ExchangeAddressesSettingKey"/>.
     /// Handles the <see cref="MultiAccountDetector.ExchangeAddressesNoneMarker"/>
     /// sentinel ("NONE" = empty list) and trims surrounding whitespace per
-    /// token. Comparison is exact (case-sensitive); TRC-20 addresses are
-    /// case-mixed but always normalised by the wallet validator before
-    /// reaching the SystemSetting row.
+    /// token. The set compares canonical forms (06 §1.4, T145): a TRON base58
+    /// address matches exactly (base58 is case-significant), an EVM address
+    /// matches whatever case the admin typed it in — stored payment
+    /// <c>FromAddress</c> values are lowercase.
     /// </summary>
     /// <param name="raw">The CSV stored in the SystemSetting <c>Value</c> column. <c>null</c> / blank / "NONE" → empty set.</param>
     public static HashSet<string> ParseExchangeAddresses(string? raw)
     {
-        var set = new HashSet<string>(StringComparer.Ordinal);
+        var set = new HashSet<string>(BlockchainAddress.Comparer);
         if (string.IsNullOrWhiteSpace(raw)
             || string.Equals(raw.Trim(), MultiAccountDetector.ExchangeAddressesNoneMarker, StringComparison.Ordinal))
         {

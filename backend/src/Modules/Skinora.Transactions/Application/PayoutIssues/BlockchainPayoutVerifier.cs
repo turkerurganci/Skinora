@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Transfers;
@@ -99,7 +100,9 @@ public sealed class BlockchainPayoutVerifier : IPayoutVerifier
 
         if (expectedPayoutTxHash is not null
             && payout.TxHash is not null
-            && !string.Equals(expectedPayoutTxHash, payout.TxHash, StringComparison.Ordinal))
+            // Canonical comparison (06 §1.4, T145): an EVM hash is hex and
+            // matches in any letter case; a TRON id is compared exactly.
+            && !BlockchainAddress.AreEqual(expectedPayoutTxHash, payout.TxHash))
         {
             _logger.LogWarning(
                 "Payout hash mismatch for transaction {TransactionId}: expected {Expected}, recorded {Recorded}.",

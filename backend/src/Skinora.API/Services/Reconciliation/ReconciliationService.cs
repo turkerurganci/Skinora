@@ -8,6 +8,7 @@ using Skinora.Platform.Domain.Entities;
 using Skinora.Platform.Infrastructure.Configuration;
 using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -188,7 +189,7 @@ public sealed class ReconciliationService : IReconciliationService
         var addresses = new List<string>(depositAddresses.Count + 2);
         foreach (var deposit in depositAddresses) addresses.Add(deposit.Address);
         if (!string.IsNullOrEmpty(hotWallet)) addresses.Add(hotWallet);
-        if (!string.IsNullOrEmpty(coldWallet) && coldWallet != hotWallet)
+        if (!string.IsNullOrEmpty(coldWallet) && !BlockchainAddress.AreEqual(coldWallet, hotWallet))
         {
             addresses.Add(coldWallet);
         }
@@ -208,9 +209,12 @@ public sealed class ReconciliationService : IReconciliationService
             return new ReconciliationOutcome(0, false, false, 0, null);
         }
 
+        // Canonical comparer (06 §1.4, T145): the sidecar may echo an EVM
+        // address in a different letter case than the one stored/configured.
+        // TRON base58 still compares exactly.
         var snapshotByAddress = snapshot.Balances
-            .GroupBy(b => b.Address, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.First().Tokens, StringComparer.Ordinal);
+            .GroupBy(b => b.Address, BlockchainAddress.Comparer)
+            .ToDictionary(g => g.Key, g => g.First().Tokens, BlockchainAddress.Comparer);
 
         var detectedAt = _clock.GetUtcNow().UtcDateTime;
         var totalMismatches = 0;

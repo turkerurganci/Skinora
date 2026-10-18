@@ -18,6 +18,13 @@ public class SellerPayoutIssue : BaseEntity, IAuditableEntity
 {
     public Guid TransactionId { get; set; }
     public Guid SellerId { get; set; }
+
+    /// <summary>
+    /// Network the disputed payout was sent on — the transaction's network
+    /// (06 §1.4, T145). <see cref="PayoutTxHash"/> is only meaningful on it.
+    /// </summary>
+    public BlockchainNetwork Network { get; set; } = BlockchainNetwork.TRON;
+
     public string Detail { get; set; } = string.Empty;
     public string? PayoutTxHash { get; set; }
     public PayoutIssueStatus VerificationStatus { get; set; }

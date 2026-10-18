@@ -1,3 +1,4 @@
+import { sameAddress } from '../address/canonicalAddress.js';
 import type { Trc20Record } from '../tron/TronGridClient.js';
 
 /**
@@ -33,17 +34,20 @@ export type TokenClassification =
  * - Match expected → `expected` (record belongs to phase 1's stream).
  * - Match allowlist but ≠ expected → `wrong_token` (auto-refund target).
  * - No match at all → `spam_token` (ignore + log; no refund attempt).
+ *
+ * Contract comparison is canonical (06 §1.4, T145): exact for TRON base58,
+ * case-insensitive for an EVM contract.
  */
 export function classifyToken(opts: {
   contractAddress: string;
   expectedContract: string;
   allowlist: StablecoinAllowlist;
 }): TokenClassification {
-  if (opts.contractAddress === opts.expectedContract) {
+  if (sameAddress(opts.contractAddress, opts.expectedContract)) {
     return { kind: 'expected' };
   }
   for (const symbol of Object.keys(opts.allowlist) as StablecoinSymbol[]) {
-    if (opts.allowlist[symbol] && opts.contractAddress === opts.allowlist[symbol]) {
+    if (opts.allowlist[symbol] && sameAddress(opts.contractAddress, opts.allowlist[symbol])) {
       return { kind: 'wrong_token', symbol };
     }
   }
@@ -105,5 +109,5 @@ export function formatTokenAmount(rawValue: string, decimals: number): string {
  * webhook traffic.
  */
 export function isIncomingFor(record: Trc20Record, depositAddress: string): boolean {
-  return record.to === depositAddress;
+  return sameAddress(record.to, depositAddress);
 }

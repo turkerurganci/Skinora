@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Skinora.Shared.Domain.Seed;
+using Skinora.Shared.Persistence.Converters;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Users.Infrastructure.Persistence;
@@ -31,11 +32,14 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(500);
 
         // --- Wallet addresses ---
+        // Canonical form (06 §1.4, T145): EVM lowercase, TRON unchanged.
         builder.Property(u => u.DefaultPayoutAddress)
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(u => u.DefaultRefundAddress)
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(u => u.PayoutAddressChangedAt);
 

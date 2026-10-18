@@ -1,3 +1,5 @@
+using Skinora.Shared.Enums;
+
 namespace Skinora.Shared.Sanctions;
 
 /// <summary>
@@ -16,9 +18,11 @@ public interface ISanctionedAddressLookup
 {
     /// <summary>
     /// Returns a <see cref="SanctionedAddressMatch"/> when <paramref name="address"/>
-    /// is on the active sanctions list; <c>null</c> otherwise. Adres karşılaştırması
-    /// case-sensitive — TRC-20 base58 (06 §3.25).
+    /// is on the active sanctions list of <paramref name="network"/>; <c>null</c>
+    /// otherwise. Eşleşme <c>(Network, kanonik Address)</c> üzerindendir
+    /// (06 §1.4, §3.25): EVM adresi büyük/küçük harfe duyarsız, TRON base58
+    /// birebir (büyük/küçük harfe duyarlı) karşılaştırılır.
     /// </summary>
     Task<SanctionedAddressMatch?> FindActiveAsync(
-        string address, CancellationToken cancellationToken);
+        BlockchainNetwork network, string address, CancellationToken cancellationToken);
 }

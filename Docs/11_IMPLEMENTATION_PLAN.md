@@ -4660,6 +4660,8 @@ Task T139: Ödeme izleyicisinin bağlanması (arm / re-arm / disarm)
 > - **`finalized` ilerlemiyor alarmı: 30 dk** (öneriyle kaydedildi — ⚠). Son `finalized` bloğun zaman damgası 30 dakikadan eskiyse alarm (olağan en yüksek 18,8 dk ölçüldü). Belge: 08 §3.7.8. Uygulayan: T158.
 > - **Sepolia test token'ı ve muslukları** (öneriyle kaydedildi — ⚠). Tether'in resmî Sepolia token'ı yok; Aave'nin Sepolia "USDT"si `bool` döndürdüğü için mainnet davranışını sınamaz. T159, Tether kontratının doğrulanmış kaynağından Sepolia'ya kendi kopyasını kurar; yanlış token provası Circle Sepolia USDC (`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`) ile. Test ETH: QuickNode ve pk910 PoW muslukları (hesap/mainnet bakiyesi istemez). Belge: 08 §3.7.1, §9.1, §9.3. Uygulayan: T159.
 >
+> - **T145 veri modeli kararları** (öneriyle kaydedildi — ⚠) (yapımcı önerisi, T145). (i) `UserWalletAddress` tablosu ve `User` adres kolonlarının taşınması T146'ya bırakıldı — tablo okuyan/yazan servislerle aynı görevde gelmezse kullanıcı adresinin iki kaynağı olur; T145 yalnız adres geçmişini (`WalletAddressHistory.Network`) ağ başına yaptı. (ii) Kanonik biçim adreslerle birlikte hash kolonlarına da uygulanır (`0x` + hex → küçük harf; TRON değeri dokunulmaz). (iii) 20 blok CHECK'i yalnız TRON'a: `CONFIRMED` için `Network <> 'TRON' OR ConfirmationCount >= 20`, `PENDING` için `Network <> 'TRON' OR ConfirmationCount < 20`. (iv) Yaptırım listesinde Ethereum adresi: karışık harfte EIP-55 sağlaması zorunlu, tümü küçük/büyük harf sağlamasız kabul; eski `'TRC-20'` değeri API'de artık kabul edilmez. (v) `Transaction.Network` için "kabulden sonra NOT NULL" DB CHECK'i yok; T147 ağ seçimiyle zorunlu kılar. (vi) EIP-55 için Keccak-256 bağımlılıksız yazıldı (`Skinora.Shared.Blockchain`), bağımsız uygulamanın (ethers v6) çıktısına karşı test edildi. Belge: 06 §1.4, §3, §5.1 · 07 §9.23–§9.24 · 08 §3.0. Uygulayan: T145; kalanlar T146, T147.
+>
 > **Sıra:** P0 → P1 → P2 → P3 → P4 → P5. P1'in üç görevi (T143–T145) Ethereum kodundan **önce** kapanır; Ethereum servisi onların üstüne kurulur. P3, P2'nin T148'i (ağ başına servis sözleşmesi) kapanınca başlayabilir; T155 P3 ile paralel yürür.
 
 ```
@@ -4814,6 +4816,10 @@ Task T150: Ethereum servis iskeleti
       T143'ün Ethereum bilinen-cevap vektörleri bu üretim yolundan geçiyor;
       kök-düğüm kontrolünün (`HD_ROOT_NOT_MASTER`) servis üzerinden testi var
       (T143 doğrulamasının bloke etmeyen iki bulgusu)
+    - Sidecar adres karşılaştırma çağrı yerleri (TransferGuard sweep hedefi,
+      MonitorRegistry anahtarı, izin verilen kontrat kümesi,
+      FeeEstimationService) EVM yazımıyla (karışık/küçük harf) testli
+      (T145 doğrulaması)
     - Not: `finalized` uzun durursa (> ~25 dk) o blokta durum okumak arşiv
       erişimi isteyebilir; sağlayıcı seçimi ve hata davranışı buna göre (T151)
   Test beklentisi: Unit
@@ -5182,10 +5188,10 @@ Bu bölüm her task'ın hangi kaynak doküman öğelerini kapsadığını göste
 
 | Kaynak öğe | Doküman | Task | Implemented |
 |---|---|---|---|
-| Ağ kavramı: `BlockchainNetwork` enum'u, `PaymentAddress` / `Transaction` / `BlockchainTransaction` / `ColdWalletTransfer` / `SellerPayoutIssue`'da `Network` alanı, ağı içeren tekillik anahtarları (`Network`+`TxHash`+`EventIndex`, `Network`+`Address`, `Network`+`HdWalletIndex`) | 06 §1.4, §2.25, §5.1 | T145 | |
-| Kanonik adres biçimi (EVM küçük harf saklama/karşılaştırma, EIP-55 gösterim) ve büyük/küçük harf duyarlı karşılaştırmaların kapanması | 06 §1.4 | T145 | |
-| Ağ başına yaptırım listesi (`SanctionedAddress.Network` = `TRON` / `ETHEREUM`) | 06 §3.25, 07 §9.23–§9.24 | T145 | |
-| Ağ başına kullanıcı ödeme / iade adresleri (`UserWalletAddress`), cooldown ve adres geçmişi ağ başına | 02 §12, 03 §9, 06 §1.4, §3.1, 07 §5.3–§5.4 | T145, T146 | |
+| Ağ kavramı: `BlockchainNetwork` enum'u, `PaymentAddress` / `Transaction` / `BlockchainTransaction` / `ColdWalletTransfer` / `SellerPayoutIssue`'da `Network` alanı, ağı içeren tekillik anahtarları (`Network`+`TxHash`+`EventIndex`, `Network`+`Address`, `Network`+`HdWalletIndex`) | 06 §1.4, §2.25, §5.1 | T145 | ✓ T145 (PR #341) |
+| Kanonik adres biçimi (EVM küçük harf saklama/karşılaştırma, EIP-55 gösterim) ve büyük/küçük harf duyarlı karşılaştırmaların kapanması | 06 §1.4 | T145 | ✓ T145 (PR #341) — EIP-55 gösterimi T156 |
+| Ağ başına yaptırım listesi (`SanctionedAddress.Network` = `TRON` / `ETHEREUM`) | 06 §3.25, 07 §9.23–§9.24 | T145 | ✓ T145 (PR #341) |
+| Ağ başına kullanıcı ödeme / iade adresleri (`UserWalletAddress`), cooldown ve adres geçmişi ağ başına | 02 §12, 03 §9, 06 §1.4, §3.1, 07 §5.3–§5.4 | T145, T146 | kısmen — adres geçmişi ✓ T145 (PR #341); `UserWalletAddress` + cooldown T146 (öneriyle kaydedildi — ⚠) |
 | Adres doğrulayıcılar: TRON base58check, EVM EIP-55 (karışık harfte sağlama zorunlu, tümü küçük harfte ikinci onay) | 02 §12.3, 03 §9.1, 07 §5.3 | T146 | |
 | Satıcının kabul ettiği ağlar (`TransactionNetworkOption`) ve alıcının ağ seçimi (`Transaction.Network`); depozit seçilen ağda, HD indeksi ağ başına; payout ve iade aynı ağdan | 02 §4.2, 03 §2.2, §3.2, 06 §1.4, 07 §7.2, §7.4, §7.6 | T147 | |
 | Reddedilen ödeme iadeleri (eksik, fazla, yanlış token, geç ödeme, fazladan transfer) alıcının o ağdaki iade adresine (K9 — T110-K1'in tersi); `AmountValidationService` `FromAddress` kullanmaz | 02 §4.4, 03 §4.3, §5, 05 §3.3, 06 §3.8, 08 §3.4 | T146, T147 | |

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Sanctions;
 using Skinora.Users.Domain.Entities;
@@ -60,9 +61,12 @@ public sealed class DbLoginSanctionsCheck : ISanctionsCheck
         if (wallets is null)
             return SanctionsDecision.NoMatch();
 
+        // The profile addresses are TRON addresses until T146 moves them to
+        // per-network rows (06 §1.4); the match key includes the network.
         if (!string.IsNullOrEmpty(wallets.DefaultPayoutAddress))
         {
             var payoutMatch = await _lookup.FindActiveAsync(
+                BlockchainNetwork.TRON,
                 wallets.DefaultPayoutAddress, cancellationToken);
             if (payoutMatch is not null)
                 return SanctionsDecision.Match(payoutMatch.Source);
@@ -71,6 +75,7 @@ public sealed class DbLoginSanctionsCheck : ISanctionsCheck
         if (!string.IsNullOrEmpty(wallets.DefaultRefundAddress))
         {
             var refundMatch = await _lookup.FindActiveAsync(
+                BlockchainNetwork.TRON,
                 wallets.DefaultRefundAddress, cancellationToken);
             if (refundMatch is not null)
                 return SanctionsDecision.Match(refundMatch.Source);

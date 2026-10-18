@@ -14,6 +14,14 @@ namespace Skinora.Payments.Domain.Entities;
 public class ColdWalletTransfer : IAppendOnly
 {
     public long Id { get; set; }
+
+    /// <summary>
+    /// Network of the hot and cold wallet the transfer moved between
+    /// (06 §1.4, T145). Every network has its own pair (08 §3.0); uniqueness is
+    /// <c>(Network, TxHash)</c>.
+    /// </summary>
+    public BlockchainNetwork Network { get; set; } = BlockchainNetwork.TRON;
+
     public decimal Amount { get; set; }
     public StablecoinType Token { get; set; }
     public string FromAddress { get; set; } = string.Empty;

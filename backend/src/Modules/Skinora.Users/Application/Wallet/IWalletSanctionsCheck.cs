@@ -1,3 +1,5 @@
+using Skinora.Shared.Enums;
+
 namespace Skinora.Users.Application.Wallet;
 
 /// <summary>
@@ -8,10 +10,15 @@ namespace Skinora.Users.Application.Wallet;
 /// on-chain address). The real list integration lands in T82 — until then,
 /// <see cref="NoMatchWalletSanctionsCheck"/> is the default no-op.
 /// </summary>
+/// <remarks>
+/// The match key is <c>(network, canonical address)</c> (06 §1.4, §3.25 — T145).
+/// Until T146 adds per-network user addresses every caller screens a TRON
+/// address and passes <see cref="BlockchainNetwork.TRON"/>.
+/// </remarks>
 public interface IWalletSanctionsCheck
 {
     Task<WalletSanctionsDecision> EvaluateAsync(
-        string walletAddress, CancellationToken cancellationToken);
+        BlockchainNetwork network, string walletAddress, CancellationToken cancellationToken);
 }
 
 public sealed record WalletSanctionsDecision(bool IsMatch, string? MatchedList)
@@ -23,6 +30,6 @@ public sealed record WalletSanctionsDecision(bool IsMatch, string? MatchedList)
 public sealed class NoMatchWalletSanctionsCheck : IWalletSanctionsCheck
 {
     public Task<WalletSanctionsDecision> EvaluateAsync(
-        string walletAddress, CancellationToken cancellationToken)
+        BlockchainNetwork network, string walletAddress, CancellationToken cancellationToken)
         => Task.FromResult(WalletSanctionsDecision.NoMatch());
 }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Skinora.Shared.Persistence.Converters;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
 
@@ -36,8 +37,14 @@ public class SellerPayoutIssueConfiguration
             .IsRequired()
             .HasMaxLength(2000);
 
+        // 06 §1.4 (T145) — the transaction's network.
+        builder.Property(i => i.Network)
+            .IsRequired()
+            .HasMaxLength(20);
+
         builder.Property(i => i.PayoutTxHash)
-            .HasMaxLength(100);
+            .HasMaxLength(100)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(i => i.VerificationStatus)
             .IsRequired()

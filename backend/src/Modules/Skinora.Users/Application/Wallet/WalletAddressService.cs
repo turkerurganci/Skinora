@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Blockchain;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Sanctions;
 using Skinora.Users.Application.MultiAccount;
@@ -49,7 +51,14 @@ public sealed class WalletAddressService : IWalletAddressService
             return WalletUpdateResult.Failure(WalletUpdateStatus.InvalidAddress);
 
         // Validator guarantees non-null, trimmed-equivalent content when IsValid returns true.
-        var candidate = newAddress!;
+        // Canonical form (06 §1.4, T145) so every comparison below — and the
+        // value returned to the caller — matches what the column stores. A
+        // TRON address passes through unchanged (base58 is case-significant).
+        var candidate = BlockchainAddress.Canonicalize(newAddress!);
+
+        // User profile addresses are TRON addresses until T146 moves them to
+        // per-network rows (06 §1.4).
+        const BlockchainNetwork network = BlockchainNetwork.TRON;
 
         // T105a: a suspended user cannot change payout/refund addresses
         // (defense-in-depth for a fraud-suspended account — prevents redirecting
@@ -77,7 +86,7 @@ public sealed class WalletAddressService : IWalletAddressService
         if (!string.IsNullOrEmpty(previous) && !reAuthValidated)
             return WalletUpdateResult.Failure(WalletUpdateStatus.ReAuthRequired);
 
-        var sanctions = await _sanctions.EvaluateAsync(candidate, cancellationToken);
+        var sanctions = await _sanctions.EvaluateAsync(network, candidate, cancellationToken);
         if (sanctions.IsMatch)
         {
             // T82 — 02 §21.1, 03 §11a.3: yeni adres reddedilir + hesap
@@ -92,7 +101,7 @@ public sealed class WalletAddressService : IWalletAddressService
         }
 
         var activeUsingOld = 0;
-        if (!string.IsNullOrEmpty(previous) && previous != candidate)
+        if (!string.IsNullOrEmpty(previous) && !BlockchainAddress.AreEqual(previous, candidate))
         {
             activeUsingOld = await _activeCounter.CountActiveUsingAddressAsync(
                 userId, role, previous, cancellationToken);
@@ -108,11 +117,12 @@ public sealed class WalletAddressService : IWalletAddressService
         // address + the date it had been set so the admin detail view can show
         // the full address timeline. It is inserted into the same SaveChanges as
         // the User mutation, so the two commit atomically.
-        if (!string.IsNullOrEmpty(previous) && previous != candidate)
+        if (!string.IsNullOrEmpty(previous) && !BlockchainAddress.AreEqual(previous, candidate))
         {
             _db.Set<WalletAddressHistory>().Add(new WalletAddressHistory
             {
                 UserId = user.Id,
+                Network = network,
                 Type = role == WalletRole.Seller
                     ? WalletAddressHistoryType.Seller
                     : WalletAddressHistoryType.Buyer,

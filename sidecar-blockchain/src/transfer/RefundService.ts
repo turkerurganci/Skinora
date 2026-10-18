@@ -1,4 +1,5 @@
 import { logger } from '../logger.js';
+import { sameAddress } from '../address/canonicalAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import { TronTransferClient, SendTransferResult } from '../tron/TronTransferClient.js';
@@ -86,7 +87,7 @@ export class RefundService {
       );
     }
     const signer = this.wallet.deriveSigner(request.depositIndex);
-    if (signer.address !== request.depositAddress) {
+    if (!sameAddress(signer.address, request.depositAddress)) {
       throw new SidecarError(
         `Derived address ${signer.address} does not match expected deposit address ${request.depositAddress}.`,
         'DEPOSIT_ADDRESS_MISMATCH',

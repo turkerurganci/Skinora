@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Persistence.Converters;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Infrastructure.Persistence;
@@ -164,12 +165,20 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
             .HasPrecision(18, 6);
 
         // --- Wallet Addresses ---
+        // 06 §1.4 (T145) — NULL until the buyer accepts, then fixed. Existing
+        // accepted rows were backfilled to TRON by the migration.
+        builder.Property(t => t.Network)
+            .HasMaxLength(20);
+
+        // Wallet snapshots in the canonical form (06 §1.4).
         builder.Property(t => t.SellerPayoutAddress)
             .IsRequired()
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         builder.Property(t => t.BuyerRefundAddress)
-            .HasMaxLength(50);
+            .HasMaxLength(50)
+            .HasConversion(CanonicalChainIdentifierConverter.Instance);
 
         // --- Timeout ---
         builder.Property(t => t.PaymentTimeoutMinutes)

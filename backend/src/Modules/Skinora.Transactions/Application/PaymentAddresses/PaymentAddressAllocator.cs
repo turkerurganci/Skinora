@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
@@ -81,12 +82,21 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
                 ErrorMessage: null);
         }
 
+        // 06 §1.4 (T145) — the deposit address lives on the transaction's
+        // network and the HD index is counted per network (each network has
+        // its own seed, 11 §F8 K7). Before T147 adds the buyer's choice the
+        // only network is TRON; a transaction allocated before acceptance has
+        // no network yet and is a TRON transaction by construction.
+        var network = transaction.Network ?? BlockchainNetwork.TRON;
+
         for (var attempt = 1; attempt <= MaxRetryAttempts; attempt++)
         {
             // Read MAX across soft-deleted rows too — derivation indices must
-            // never be reused (08 §3.2, 06 §3.7 invariant).
+            // never be reused (08 §3.2, 06 §3.7 invariant). Per network: the
+            // uniqueness key is (Network, HdWalletIndex).
             var maxIndex = await _db.Set<PaymentAddress>()
                 .IgnoreQueryFilters()
+                .Where(p => p.Network == network)
                 .MaxAsync(p => (int?)p.HdWalletIndex, cancellationToken);
             var nextIndex = (maxIndex ?? -1) + 1;
 
@@ -116,7 +126,8 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
             {
                 Id = Guid.NewGuid(),
                 TransactionId = transactionId,
-                Address = deriveResult.Address!,
+                Network = network,
+                Address = BlockchainAddress.Canonicalize(deriveResult.Address!),
                 HdWalletIndex = nextIndex,
                 ExpectedAmount = transaction.TotalAmount,
                 ExpectedToken = transaction.StablecoinType,

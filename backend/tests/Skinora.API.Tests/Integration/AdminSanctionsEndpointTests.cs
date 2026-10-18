@@ -148,7 +148,7 @@ public class AdminSanctionsEndpointTests
             new
             {
                 address = SanctionedAddress1,
-                network = "TRC-20",
+                network = "TRON",
                 source = "MANUAL",
                 reason = "Test bildirim no. 2026-05-19",
             });
@@ -176,7 +176,7 @@ public class AdminSanctionsEndpointTests
             new
             {
                 address = InvalidShortAddress,
-                network = "TRC-20",
+                network = "TRON",
                 source = "MANUAL",
             });
 
@@ -199,7 +199,7 @@ public class AdminSanctionsEndpointTests
             new
             {
                 address = SanctionedAddress1,
-                network = "TRC-20",
+                network = "TRON",
                 source = "MANUAL",
             });
 
@@ -225,7 +225,7 @@ public class AdminSanctionsEndpointTests
             new
             {
                 address = SanctionedAddress1,
-                network = "TRC-20",
+                network = "TRON",
                 source = "MANUAL",
                 reason = "Retroactive scan test",
             });
@@ -235,6 +235,137 @@ public class AdminSanctionsEndpointTests
         var fraudFlagged = await _factory.HasPendingSanctionsFlagAsync(holder.Id);
         Assert.True(fraudFlagged,
             "Retroactive scan should have staged a PENDING account-level SANCTIONS_MATCH flag.");
+    }
+
+    // ---------- T145 — per-network sanctions list (07 §9.23–§9.24, 06 §1.4) ----------
+
+    [Fact]
+    public async Task AddAddress_EthereumChecksummed_Returns201_StoredAndEchoedLowercase()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+                network = "ETHEREUM",
+                source = "MANUAL",
+            });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal("0xdac17f958d2ee523a2206206994597c13d831ec7", data.GetProperty("address").GetString());
+        Assert.Equal("ETHEREUM", data.GetProperty("network").GetString());
+
+        // The same address in another letter case is the same listed address.
+        var again = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                network = "ETHEREUM",
+                source = "MANUAL",
+            });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+    }
+
+    [Fact]
+    public async Task AddAddress_EthereumBadChecksum_Returns400InvalidWalletAddress()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        // One letter of the USDT contract flipped → mixed case, wrong EIP-55 checksum.
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = "0xdaC17F958D2ee523a2206206994597C13D831ec7",
+                network = "ETHEREUM",
+                source = "MANUAL",
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("INVALID_WALLET_ADDRESS",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddAddress_TronAddressUnderEthereum_Returns400InvalidWalletAddress()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new { address = SanctionedAddress1, network = "ETHEREUM", source = "MANUAL" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AddAddress_PreF8NetworkValue_Returns400ValidationError()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new { address = SanctionedAddress1, network = "TRC-20", source = "MANUAL" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("VALIDATION_ERROR",
+            body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AddAddress_NetworkOmitted_DefaultsToTron()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new { address = SanctionedAddress1, source = "MANUAL" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("data");
+        Assert.Equal("TRON", data.GetProperty("network").GetString());
+    }
+
+    [Fact]
+    public async Task ListAddresses_NetworkFilter_ReturnsOnlyThatNetwork()
+    {
+        var admin = await _factory.CreateUserAsync();
+        await _factory.AddSanctionedAddressAsync(SanctionedAddress1, admin.Id, isActive: true);
+        var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
+        var add = await client.PostAsJsonAsync(
+            "/api/v1/admin/sanctions/addresses",
+            new
+            {
+                address = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+                network = "ETHEREUM",
+                source = "MANUAL",
+            });
+        Assert.Equal(HttpStatusCode.Created, add.StatusCode);
+
+        async Task<List<string?>> AddressesAsync(string query)
+        {
+            var response = await client.GetAsync("/api/v1/admin/sanctions/addresses" + query);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var items = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+                .GetProperty("data").GetProperty("items");
+            return items.EnumerateArray().Select(i => i.GetProperty("address").GetString()).ToList();
+        }
+
+        Assert.Equal(SanctionedAddress1, Assert.Single(await AddressesAsync("")));
+        Assert.Equal(SanctionedAddress1, Assert.Single(await AddressesAsync("?network=TRON")));
+        Assert.Equal("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", Assert.Single(await AddressesAsync("?network=ETHEREUM")));
+        Assert.Empty(await AddressesAsync("?network=TRC-20"));
     }
 
     // ---------- AD24 DELETE /admin/sanctions/addresses/:id ----------
@@ -416,7 +547,7 @@ public class AdminSanctionsEndpointTests
             {
                 Id = Guid.NewGuid(),
                 Address = address,
-                Network = SanctionedAddressNetworks.Trc20,
+                Network = BlockchainNetwork.TRON,
                 Source = SanctionedAddressSources.Manual,
                 Reason = "Test seed",
                 ListedAt = nowUtc,

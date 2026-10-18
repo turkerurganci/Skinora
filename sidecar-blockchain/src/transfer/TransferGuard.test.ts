@@ -109,6 +109,16 @@ describe('TransferGuard destination pinning', () => {
     );
   });
 
+  it('does not fold the case of a TRON destination (base58 is case-significant)', () => {
+    const { guard } = build();
+    expect(() => guard.assertSweepDestination(HOT.toLowerCase())).toThrowError(
+      expect.objectContaining({ code: 'DESTINATION_NOT_ALLOWED' }),
+    );
+    expect(() => guard.assertColdDestination(COLD.toUpperCase())).toThrowError(
+      expect.objectContaining({ code: 'DESTINATION_NOT_ALLOWED' }),
+    );
+  });
+
   it('refuses a cold transfer when no cold wallet is configured', () => {
     const { guard } = build({ coldWalletAddress: '' });
     expect(() => guard.assertColdDestination(OTHER)).toThrowError(
