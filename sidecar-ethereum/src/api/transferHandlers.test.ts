@@ -206,6 +206,27 @@ describe('POST /api/transfer/refund, /sweep, /cold-wallet', () => {
   });
 });
 
+describe('T153 — a sweep waiting for its fuel', () => {
+  it.each(['FUEL_PENDING', 'FUEL_REQUIRED', 'FUEL_LIMIT_REACHED', 'FUEL_WALLET_LOW'] as const)(
+    '%s is 503 { deferred: true } — the backend keeps the row PENDING, never FAILED',
+    async (reason) => {
+      next = () => Promise.reject(new TransferDeferredError('fuel', reason));
+      const res = await post('/transfer/sweep', {
+        network: 'ETHEREUM',
+        blockchainTransactionId: ID,
+        depositIndex: 0,
+        depositAddress: DEPOSIT,
+        toHotWalletAddress: SELLER,
+        amount: '1',
+        token: 'USDT',
+        feeCapUsd: '0.5',
+      });
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ error: reason, deferred: true, retryable: true });
+    },
+  );
+});
+
 describe('GET /api/transfer/status/:txHash', () => {
   function get(hash: string) {
     return fetch(`${base}/api/transfer/status/${hash}`, { headers: { 'x-internal-key': KEY } });

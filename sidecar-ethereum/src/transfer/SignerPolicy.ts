@@ -23,8 +23,11 @@ import { decodeTransferCall } from './erc20.js';
  *     (`gasLimit × maxFeePerGas`) within the cap.</item>
  *   <item><b>The one exception — the fuel key</b> (T153): a plain ETH send
  *     (no calldata, gas limit 21,000) to an address the service itself derives
- *     from its seed, within a single-send and a 24-hour cap. Unset caps refuse
- *     (fail closed).</item>
+ *     from its seed — never a platform wallet — of no more than the token send
+ *     it pays for lacks, within a single-send cap (value) and a 24-hour cap
+ *     (value + the fuel's own worst-case fee) and (as every
+ *     capped send) within its share of the fee cap. Unset caps refuse (fail
+ *     closed).</item>
  * </list>
  */
 
@@ -59,8 +62,27 @@ export interface FuelIntent {
   readonly isOwnDeposit: (address: string) => boolean;
   readonly maxSingleWei: bigint | null;
   readonly maxDailyWei: bigint | null;
-  /** Fuel already signed in the last 24 h (journal). */
+  /**
+   * ETH the fuel key already signed away in the last 24 h (journal): each
+   * fuel's value plus its own worst-case fee (`21,000 × maxFeePerGas`) — the
+   * daily cap counts both (yönetici kararı, T153 doğrulaması bulgu a). This
+   * transaction's value and worst-case fee are added on top here.
+   */
   readonly spentLast24hWei: bigint;
+  /**
+   * T153 — the most this ONE fuel may carry, computed by the caller
+   * independently of the amount: the fee budget of the token transaction it
+   * pays for (`gasLimit × maxFeePerGas` of that send) less the deposit's ETH
+   * that is this request's to spend (balance − what the deposit's other
+   * sends and other requests' fuel reserve). Fuel above what the send lacks
+   * is never signed (08 §3.7.5 "tam gereken kadar", 11 T153 (ii)); a bump
+   * re-signs the recorded amount and passes it here.
+   */
+  readonly maxForSendWei: bigint;
+  /** Platform wallets (hot, cold, fuel) — never a fuel destination. */
+  readonly platformAddresses: readonly string[];
+  /** The fuel send's share of the flow's fee cap, wei: `21,000 × maxFeePerGas` may not exceed it. */
+  readonly feeCapWei: bigint;
 }
 
 /** Gas limit of a plain ETH send. */
@@ -155,11 +177,26 @@ export function assertSignableFuel(
   if (!intent.isOwnDeposit(to)) {
     refuse('recipient', `${to} is not an address this service derives from its own seed`);
   }
+  if (intent.platformAddresses.some((a) => a !== '' && sameAddress(a, to))) {
+    refuse('recipient', `${to} is a platform wallet, not a deposit`);
+  }
   if (tx.data !== '0x') refuse('calldata', 'a fuel send carries no calldata');
   if (tx.gasLimit !== NATIVE_TRANSFER_GAS)
     refuse('gasLimit', 'a fuel send uses exactly 21,000 gas');
   if (tx.value <= 0n || tx.value !== intent.amountWei) {
     refuse('value', 'fuel value must be positive and the amount asked for');
+  }
+  if (tx.gasLimit * effectiveFeeCeiling(tx) > intent.feeCapWei) {
+    refuse(
+      'feeCap',
+      `worst-case fee ${tx.gasLimit} gas × ${effectiveFeeCeiling(tx)} wei/gas is above the fuel send's cap ${intent.feeCapWei} wei`,
+    );
+  }
+  if (tx.value > intent.maxForSendWei) {
+    refuse(
+      'amount',
+      `fuel ${tx.value} wei is more than the send it pays for needs (${intent.maxForSendWei} wei)`,
+    );
   }
   if (intent.maxSingleWei === null || intent.maxDailyWei === null) {
     refuse('fuelCaps', 'fuel single / daily caps are not configured (fail closed)');
@@ -167,10 +204,11 @@ export function assertSignableFuel(
   if (tx.value > intent.maxSingleWei) {
     refuse('fuelCaps', `fuel ${tx.value} wei is above the single-send cap ${intent.maxSingleWei}`);
   }
-  if (intent.spentLast24hWei + tx.value > intent.maxDailyWei) {
+  const outflow = intent.spentLast24hWei + tx.value + tx.gasLimit * effectiveFeeCeiling(tx);
+  if (outflow > intent.maxDailyWei) {
     refuse(
       'fuelCaps',
-      `fuel would reach ${intent.spentLast24hWei + tx.value} wei in 24 h, above ${intent.maxDailyWei}`,
+      `fuel value + fee would reach ${outflow} wei in 24 h, above ${intent.maxDailyWei}`,
     );
   }
 }

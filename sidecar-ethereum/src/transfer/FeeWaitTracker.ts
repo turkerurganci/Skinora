@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../logger.js';
+import type { DeferralReason } from './FeePolicy.js';
 import { writeFileDurably } from './TxJournal.js';
 
 /**
@@ -23,16 +24,26 @@ import { writeFileDurably } from './TxJournal.js';
  * </para>
  */
 
-export type WaitReason =
-  | 'FEE_ABOVE_CAP'
-  | 'ETH_PRICE_UNAVAILABLE'
-  | 'FUEL_REQUIRED'
-  | 'HOT_WALLET_GAS_LOW';
+export type WaitReason = DeferralReason;
 
 /** Reasons the 3-hour fee-cap alarm counts (08 §3.7.7); gas shortages have their own balance alarms. */
 export const FEE_CAP_WAIT_REASONS: readonly WaitReason[] = [
   'FEE_ABOVE_CAP',
   'ETH_PRICE_UNAVAILABLE',
+];
+
+/**
+ * Gas shortages (`kind="gas"`): the sender has no ETH for the fee. They are
+ * not the fee-cap alarm's; the fuel and hot wallet balance alarms
+ * (`ethereum-wallet-eth-low`, T153) and the backend's
+ * `outbound-transfer-stuck` see them.
+ */
+export const GAS_WAIT_REASONS: readonly WaitReason[] = [
+  'FUEL_REQUIRED',
+  'FUEL_PENDING',
+  'FUEL_LIMIT_REACHED',
+  'FUEL_WALLET_LOW',
+  'HOT_WALLET_GAS_LOW',
 ];
 
 interface WaitEntry {

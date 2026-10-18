@@ -368,6 +368,12 @@ services:
       - ETHEREUM_FUEL_MAX_SINGLE_ETH=${ETHEREUM_FUEL_MAX_SINGLE_ETH:-}
       - ETHEREUM_FUEL_MAX_DAILY_ETH=${ETHEREUM_FUEL_MAX_DAILY_ETH:-}
       - ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS=${ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS:-10800}
+      # T153 — ETH floors of the fuel and hot wallets (alert ethereum-wallet-eth-low);
+      # must equal the backend's blockchain.ethereum.{fuel,hot}_wallet_eth_balance_minimum
+      # (DEPLOY_RUNBOOK §D).
+      - ETHEREUM_FUEL_WALLET_MIN_ETH=${ETHEREUM_FUEL_WALLET_MIN_ETH:-0.06}
+      - ETHEREUM_HOT_WALLET_MIN_ETH=${ETHEREUM_HOT_WALLET_MIN_ETH:-0.06}
+      - ETHEREUM_WALLET_BALANCE_INTERVAL_MS=${ETHEREUM_WALLET_BALANCE_INTERVAL_MS:-300000}
       - ETHEREUM_FEE_BUMP_AFTER_SECONDS=${ETHEREUM_FEE_BUMP_AFTER_SECONDS:-300}
       - ETHEREUM_TX_JOURNAL_DIR=/var/lib/skinora-ethereum/tx-journal
       # T152 düzeltme turu 2 — empty by default. Set ONLY by the

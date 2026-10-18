@@ -429,6 +429,16 @@ export class FakeSendChain {
   receiptEffectiveGasPrice: bigint | null = null;
   /** When true, mined token transfers leave no Transfer log (a forwarding / non-moving token). */
   dropTransferLogs = false;
+  /**
+   * T153 — when true the chain charges gas like a node: a transaction whose
+   * sender cannot cover `value + gasLimit × maxFeePerGas` is refused at
+   * broadcast and never mined, and a mined one pays `gasUsed × effective
+   * price` out of the sender's ETH. Off by default (the T152 suites price
+   * nothing out of balances).
+   */
+  chargeGas = false;
+  /** T153 — a plain ETH send to one of these addresses reverts (status 0, nothing moves). */
+  readonly revertEthTo = new Set<string>();
   private readonly blockHashes = new Map<bigint, string>();
 
   constructor(
@@ -502,6 +512,7 @@ export class FakeSendChain {
         candidates.sort((a, b) => ((b.maxFeePerGas ?? 0n) > (a.maxFeePerGas ?? 0n) ? 1 : -1));
         const tx = candidates[0];
         if ((tx.maxFeePerGas ?? 0n) < this.baseFee) break; // priced out; waits
+        if (this.chargeGas && this.ethOf(from) < this.worstCase(tx)) break; // cannot pay; waits
         mined.push(this.execute(tx, block));
         for (const t of candidates) this.mempool.delete((t.hash ?? '').toLowerCase());
         this.nonces.set(from, next + 1);
@@ -511,10 +522,22 @@ export class FakeSendChain {
     return mined;
   }
 
+  ethOf(address: string): bigint {
+    return this.ethBalances.get(canonicalAddress(address)) ?? 0n;
+  }
+
+  private worstCase(tx: Transaction): bigint {
+    return tx.value + tx.gasLimit * (tx.maxFeePerGas ?? 0n);
+  }
+
   private execute(tx: Transaction, block: bigint): string {
     const hash = (tx.hash ?? '').toLowerCase();
     const from = canonicalAddress(tx.from ?? '');
     const to = canonicalAddress(tx.to ?? '');
+    const plainEth = tx.data === '0x';
+    const gasUsed = plainEth ? 21_000n : this.receiptGasUsed;
+    const price = this.receiptEffectiveGasPrice ?? this.baseFee + this.tip;
+    if (this.chargeGas) this.setEth(from, this.ethOf(from) - gasUsed * price);
     const logs: RpcLog[] = [];
     let status = 1;
     const call = decodeTransferCall(tx.data);
@@ -541,8 +564,11 @@ export class FakeSendChain {
           this.logs.push(log);
         }
       }
-    } else if (tx.data === '0x' && tx.value > 0n) {
-      this.setEth(to, (this.ethBalances.get(to) ?? 0n) + tx.value);
+    } else if (plainEth && tx.value > 0n && this.revertEthTo.has(to)) {
+      status = 0;
+    } else if (plainEth && tx.value > 0n) {
+      this.setEth(from, this.ethOf(from) - tx.value);
+      this.setEth(to, this.ethOf(to) + tx.value);
     }
     this.receipts.set(hash, {
       transactionHash: hash,
@@ -551,8 +577,8 @@ export class FakeSendChain {
       status,
       from,
       to,
-      gasUsed: this.receiptGasUsed,
-      effectiveGasPrice: this.receiptEffectiveGasPrice ?? this.baseFee + this.tip,
+      gasUsed,
+      effectiveGasPrice: price,
       logs,
     });
     return hash;
@@ -672,6 +698,9 @@ export class FakeSendChain {
         throw new RpcError('already known', 'rpc', 'fake');
       }
       if (tx.nonce < this.nonce(from)) throw new RpcError('nonce too low', 'rpc', 'fake');
+      if (this.chargeGas && this.ethOf(from) < this.worstCase(tx)) {
+        throw new RpcError('insufficient funds for gas * price + value', 'rpc', 'fake');
+      }
       for (const other of this.mempool.values()) {
         if (canonicalAddress(other.from ?? '') === from && other.nonce === tx.nonce) {
           const okFee = (tx.maxFeePerGas ?? 0n) * 10n >= (other.maxFeePerGas ?? 0n) * 11n;

@@ -190,13 +190,19 @@ describe('outbound wiring — sends and the fee estimate share one ETH price ser
     });
   }) as typeof fetch;
 
-  function outbound(fetchFn: typeof fetch = priceFetch) {
+  function outbound(fetchFn: typeof fetch = priceFetch, overrides: Partial<OutboundConfig> = {}) {
     const config: OutboundConfig = {
       chainId: 11155111,
       tokenContracts: { USDT, USDC },
       hotWalletKey: null,
       hotWalletAddress: null,
       coldWalletAddress: null,
+      fuelWalletKey: null,
+      walletBalances: {
+        fuelFloorWei: 6n * 10n ** 16n,
+        hotFloorWei: 6n * 10n ** 16n,
+        intervalMs: 300_000,
+      },
       transfers: {
         journalDir: dir,
         maxSingleTransferUnits: null,
@@ -208,6 +214,7 @@ describe('outbound wiring — sends and the fee estimate share one ETH price ser
         bumpAfterSeconds: 300,
         journalAcknowledgedNonces: new Map(),
       },
+      ...overrides,
     };
     const built = buildOutbound(config, {
       rpc: new EthereumRpcClient({
@@ -230,6 +237,26 @@ describe('outbound wiring — sends and the fee estimate share one ETH price ser
       .prices;
     return { ...built, estimatorPrices, sendPrices };
   }
+
+  it('T153 M33: the hot and the fuel wallet are both watched for their ETH floor, each with its own', () => {
+    const hd = new EthereumHdWallet(`${'abandon '.repeat(11)}about`);
+    const hot = hd.deriveSigner(30);
+    const fuel = hd.deriveSigner(40);
+    const { walletBalances } = outbound(priceFetch, {
+      hotWalletKey: hot.privateKey,
+      hotWalletAddress: hot.address.toLowerCase(),
+      fuelWalletKey: fuel.privateKey,
+      walletBalances: { fuelFloorWei: 7n, hotFloorWei: 9n, intervalMs: 300_000 },
+    });
+    const watched = (walletBalances as unknown as { deps: { wallets: unknown[] } }).deps.wallets;
+    expect(watched).toEqual([
+      { label: 'fuel', address: fuel.address.toLowerCase(), floorWei: 7n },
+      { label: 'hot', address: hot.address.toLowerCase(), floorWei: 9n },
+    ]);
+    // No key mounted: nothing to watch (and nothing to alarm on).
+    const none = outbound().walletBalances as unknown as { deps: { wallets: unknown[] } };
+    expect(none.deps.wallets).toEqual([]);
+  });
 
   it('the estimate holds the built price service itself', () => {
     const { ethPrice, estimatorPrices } = outbound();

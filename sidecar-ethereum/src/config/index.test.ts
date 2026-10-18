@@ -260,6 +260,45 @@ describe('loadConfig — sends (T152)', () => {
   );
 });
 
+describe('loadConfig — platform wallet ETH floors (T153)', () => {
+  it('defaults both floors to 0.06 ETH (T142) and the reading to every 5 minutes', () => {
+    expect(loadConfig(baseEnv, secrets()).walletBalances).toEqual({
+      fuelFloorWei: 60_000_000_000_000_000n,
+      hotFloorWei: 60_000_000_000_000_000n,
+      intervalMs: 300_000,
+    });
+  });
+
+  it('reads the floors in ETH (18 decimals)', () => {
+    const config = loadConfig(
+      {
+        ...baseEnv,
+        ETHEREUM_FUEL_WALLET_MIN_ETH: '0.1',
+        ETHEREUM_HOT_WALLET_MIN_ETH: '0.000000000000000001',
+        ETHEREUM_WALLET_BALANCE_INTERVAL_MS: '60000',
+      },
+      secrets(),
+    );
+    expect(config.walletBalances).toEqual({
+      fuelFloorWei: 100_000_000_000_000_000n,
+      hotFloorWei: 1n,
+      intervalMs: 60_000,
+    });
+  });
+
+  it.each([
+    ['ETHEREUM_FUEL_WALLET_MIN_ETH', '0'],
+    ['ETHEREUM_FUEL_WALLET_MIN_ETH', '-0.06'],
+    ['ETHEREUM_HOT_WALLET_MIN_ETH', '0.0000000000000000001'],
+    ['ETHEREUM_HOT_WALLET_MIN_ETH', 'abc'],
+    ['ETHEREUM_WALLET_BALANCE_INTERVAL_MS', '0'],
+  ])('refuses to start on %s=%j', (name, bad) => {
+    expect(errorOf(() => loadConfig({ ...baseEnv, [name]: bad }, secrets())).code).toBe(
+      'INVALID_CONFIG',
+    );
+  });
+});
+
 describe('providerHost', () => {
   it('shows the host only — the path carries the API key', () => {
     expect(providerHost(PRIMARY_URL)).toBe('eth-sepolia.g.alchemy.com');

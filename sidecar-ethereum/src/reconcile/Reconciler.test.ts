@@ -140,6 +140,31 @@ describe('native ETH on a deposit (no Transfer log, no automatic refund)', () =>
   });
 });
 
+describe('FuelLedger (T153 — fed by the fuel sender)', () => {
+  const d = '0x' + '5'.repeat(40);
+  it('the same fuel recorded twice (keeper pass + the send that waited for it) counts once', () => {
+    const ledger = new FuelLedger();
+    ledger.record(d, 7n, 100n, '0xAB');
+    ledger.record(d, 7n, 100n, '0xab');
+    expect(ledger.sentBetween(d, 99n, 100n)).toBe(7n);
+  });
+
+  it('a re-org that moves the fuel to another block moves its record', () => {
+    const ledger = new FuelLedger();
+    ledger.record(d, 7n, 100n, '0xab');
+    ledger.record(d, 7n, 103n, '0xab');
+    expect(ledger.sentBetween(d, 99n, 100n)).toBe(0n);
+    expect(ledger.sentBetween(d, 102n, 103n)).toBe(7n);
+  });
+
+  it('two different fuels to one deposit both count', () => {
+    const ledger = new FuelLedger();
+    ledger.record(d, 7n, 100n, '0xab');
+    ledger.record(d, 5n, 100n, '0xcd');
+    expect(ledger.sentBetween(d, 99n, 100n)).toBe(12n);
+  });
+});
+
 describe('never silent when it cannot reconcile', () => {
   it('skips a round when the finalized head is older than 25 min (archive depth) and counts it', async () => {
     const { reconciler, finalityAge } = await setup();

@@ -14,6 +14,8 @@ import {
   transferWaitAlarmSeconds,
   transferWaitSeconds,
   usdtStatusOk,
+  walletEthBalance,
+  walletEthFloor,
 } from './metrics.js';
 
 /**
@@ -120,5 +122,17 @@ describe('T151 alarms — wired to the series the service exports', () => {
     const block = ruleBlock('ethereum-usdt-status');
     expect(block).toContain('or vector(1)');
     expect(block).toMatch(/type: lt\s+params: \[1\]/);
+  });
+});
+
+describe('T153 — ethereum-wallet-eth-low reads the series the service exports', () => {
+  it('divides each wallet’s ETH balance by the floor the service publishes, firing below 1', async () => {
+    const block = ruleBlock('ethereum-wallet-eth-low');
+    const balance = (await walletEthBalance.get()).name;
+    const floor = (await walletEthFloor.get()).name;
+    expect(block).toContain(`min by (wallet) (${balance}) / min by (wallet) (${floor})`);
+    expect(block).toContain('or vector(1)');
+    expect(block).toMatch(/type: lt\s+params: \[1\]/);
+    expect(block).toMatch(/severity: warning/);
   });
 });

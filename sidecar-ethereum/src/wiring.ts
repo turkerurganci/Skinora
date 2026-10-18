@@ -18,6 +18,9 @@ import { TransferGuard } from './transfer/TransferGuard.js';
 import { TransferService } from './transfer/TransferService.js';
 import type { TxJournal } from './transfer/TxJournal.js';
 import type { EthereumHdWallet } from './wallet/HdWalletService.js';
+import { WalletBalanceMonitor, type WatchedWallet } from './wallet/WalletBalanceMonitor.js';
+import { canonicalAddress } from './address/canonicalAddress.js';
+import { computeAddress } from 'ethers';
 
 /**
  * The service's moving parts and the order they are started in — the one
@@ -128,6 +131,8 @@ export type OutboundConfig = Pick<
   | 'hotWalletAddress'
   | 'coldWalletAddress'
   | 'transfers'
+  | 'fuelWalletKey'
+  | 'walletBalances'
 >;
 
 export interface OutboundDeps {
@@ -140,6 +145,32 @@ export interface OutboundDeps {
   feeHotWalletAddress: string | null;
   /** Options of the ONE ETH price service (tests inject `fetchFn` / `now`). */
   priceOptions?: EthPriceServiceOptions;
+  /**
+   * T153 — the reconciliation's ledger of fuel (buildServices' `fuel`): every
+   * fuel the journal holds in a block is recorded at startup, every one the
+   * keeper sees later as it lands — so fuel never reads as foreign ETH.
+   */
+  fuelLedger?: FuelLedger;
+}
+
+/**
+ * T153 — rebuilds the FuelLedger from the journal (a restart must not turn a
+ * fuel that lands after the deposit's first reading into a false
+ * `ethereum-deposit-native-eth` alarm). Returns how many fuels were recorded.
+ */
+export function seedFuelLedger(journal: TxJournal, ledger: FuelLedger): number {
+  let seeded = 0;
+  for (const record of journal.all()) {
+    if (record.purpose !== 'FUEL' || record.mined?.status !== 1) continue;
+    ledger.record(
+      record.recipient,
+      BigInt(record.amountUnits),
+      BigInt(record.mined.blockNumber),
+      record.mined.hash,
+    );
+    seeded++;
+  }
+  return seeded;
 }
 
 /**
@@ -187,6 +218,39 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
     bumpAfterMs: config.transfers.bumpAfterSeconds * 1000,
     conflictConfirmMs: config.transfers.keeperIntervalMs,
     acknowledgedNonces: config.transfers.journalAcknowledgedNonces,
+    // T153 — the fuel wallet (08 §3.7.5): its own key, the T152 caps.
+    fuel: {
+      key: config.fuelWalletKey,
+      maxSingleWei: config.transfers.fuelMaxSingleWei,
+      maxDailyWei: config.transfers.fuelMaxDailyWei,
+      coldWalletAddress: config.coldWalletAddress,
+      onMined: deps.fuelLedger
+        ? (deposit, wei, block, hash) => deps.fuelLedger?.record(deposit, wei, block, hash)
+        : undefined,
+    },
   });
-  return { ethPrice, feeEstimator, feeWaits, transfers };
+  const fuelLedgerSeeded = deps.fuelLedger ? seedFuelLedger(journal, deps.fuelLedger) : 0;
+
+  // T153 — ETH floors of the wallets that pay gas (alert ethereum-wallet-eth-low).
+  const watched: WatchedWallet[] = [];
+  if (config.fuelWalletKey) {
+    watched.push({
+      label: 'fuel',
+      address: canonicalAddress(computeAddress(config.fuelWalletKey)),
+      floorWei: config.walletBalances.fuelFloorWei,
+    });
+  }
+  if (config.hotWalletKey && config.hotWalletAddress) {
+    watched.push({
+      label: 'hot',
+      address: config.hotWalletAddress,
+      floorWei: config.walletBalances.hotFloorWei,
+    });
+  }
+  const walletBalances = new WalletBalanceMonitor({
+    rpc,
+    wallets: watched,
+    intervalMs: config.walletBalances.intervalMs,
+  });
+  return { ethPrice, feeEstimator, feeWaits, transfers, walletBalances, fuelLedgerSeeded };
 }
