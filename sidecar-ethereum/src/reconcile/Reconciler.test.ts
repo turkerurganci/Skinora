@@ -192,3 +192,36 @@ describe('spread under the provider rate limit (Alchemy Free 300 CU/s)', () => {
     expect(RatePacer.minimumSeconds(300 * (20 + 26 + 26), 200)).toBe(108);
   });
 });
+
+describe('the block the round reads (T151 doğrulaması)', () => {
+  it('with the cursor behind the finalized head, balances are read at the cursor, not at the head', async () => {
+    const { h, reconciler } = await setup();
+    const cursor = h.scanner.scannedBlock()!;
+    // The chain finalizes far ahead, but the scanner has not ticked: the cursor stays.
+    h.chain.mineTo(cursor + 60n);
+    h.chain.finalize(cursor + 50n);
+    const before = h.chain.calls.length;
+    const out = await reconciler.runOnce();
+    expect(out).toMatchObject({ kind: 'completed', block: cursor, deposits: 1 });
+    const blocks = h.chain.calls
+      .slice(before)
+      .filter((c) => c.method === 'eth_call' || c.method === 'eth_getBalance')
+      .map((c) => c.params[1]);
+    expect(blocks.length).toBeGreaterThan(0);
+    expect(new Set(blocks)).toEqual(new Set(['0x' + cursor.toString(16)]));
+  });
+
+  it('with a lagging provider (head behind the cursor), balances are read at the head', async () => {
+    const { h, reconciler } = await setup();
+    const cursor = h.scanner.scannedBlock()!;
+    h.head.override = cursor - 3n;
+    const before = h.chain.calls.length;
+    const out = await reconciler.runOnce();
+    expect(out).toMatchObject({ kind: 'completed', block: cursor - 3n });
+    const blocks = h.chain.calls
+      .slice(before)
+      .filter((c) => c.method === 'eth_call' || c.method === 'eth_getBalance')
+      .map((c) => c.params[1]);
+    expect(new Set(blocks)).toEqual(new Set(['0x' + (cursor - 3n).toString(16)]));
+  });
+});

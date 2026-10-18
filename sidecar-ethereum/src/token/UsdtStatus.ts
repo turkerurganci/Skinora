@@ -74,11 +74,21 @@ export interface UsdtStatusMonitorDeps {
   contract: string;
   finality: () => FinalityStatus;
   intervalMs: number;
+  /**
+   * While the state is still `unknown` (no read has succeeded — typically the
+   * finalized head was not read yet at start) the read is retried this often,
+   * so a restart does not leave payments closed for a whole `intervalMs`
+   * (T151 doğrulaması). Default 15 s.
+   */
+  retryMs?: number;
 }
+
+export const DEFAULT_UNKNOWN_RETRY_MS = 15_000;
 
 export class UsdtStatusMonitor {
   private snapshot: UsdtStatusSnapshot;
   private timer?: NodeJS.Timeout;
+  private retryTimer?: NodeJS.Timeout;
   private checking = false;
 
   constructor(private readonly deps: UsdtStatusMonitorDeps) {
@@ -99,11 +109,17 @@ export class UsdtStatusMonitor {
     void this.checkOnce();
     this.timer = setInterval(() => void this.checkOnce(), this.deps.intervalMs);
     this.timer.unref();
+    this.retryTimer = setInterval(() => {
+      if (this.snapshot.state === 'unknown') void this.checkOnce();
+    }, this.deps.retryMs ?? DEFAULT_UNKNOWN_RETRY_MS);
+    this.retryTimer.unref();
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.retryTimer) clearInterval(this.retryTimer);
     this.timer = undefined;
+    this.retryTimer = undefined;
   }
 
   /**

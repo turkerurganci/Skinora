@@ -570,3 +570,91 @@ describe('where a deposit starts (restart, late arming, hand-over)', () => {
     ]);
   });
 });
+
+describe('address list limit — exactly at the provider limit and one over (T151 doğrulaması)', () => {
+  /** One finalized block read with <c>n</c> deposits; returns the eth_getLogs list lengths of that tick. */
+  async function listsFor(n: number) {
+    const h = monitorHarness({ maxBlockRange: 10, maxAddresses: 1000 });
+    h.chain.mineTo(100n);
+    h.chain.finalize(100n);
+    await h.scanner.tick();
+    afterRearmWindow(h);
+    for (let i = 0; i < n; i++) {
+      h.registry.startActive({
+        address: deposit(1000 + i),
+        paymentAddressId: `pa${i}`,
+        transactionId: `t${i}`,
+        expectedContract: USDT,
+        expectedSymbol: 'USDT',
+        cadence: 'HOLDING',
+      });
+    }
+    await h.scanner.tick();
+    await h.scanner.tick();
+    const mined = h.chain.mine([
+      { contract: USDT, from: BUYER, to: deposit(1000 + n - 1), value: 3n },
+    ]);
+    h.chain.mineTo(mined.block + 2n);
+    h.chain.finalize(mined.block + 2n);
+    const before = h.chain.calls.length;
+    await h.scanner.tick();
+    const lists = h.chain.calls
+      .slice(before)
+      .filter((c) => c.method === 'eth_getLogs')
+      .map((c) =>
+        (c.params[0] as { topics: unknown[] }).topics
+          .filter((t): t is string[] => Array.isArray(t))
+          .map((t) => t.length),
+      );
+    const detected = h.sent.filter((x) => x.event === 'payment.detected');
+    return { lists, detected };
+  }
+
+  it('1,000 deposits fit one request per direction (not split)', async () => {
+    const { lists, detected } = await listsFor(1000);
+    expect(lists).toEqual([[1000], [1000]]);
+    expect(detected).toHaveLength(1);
+  });
+
+  it('1,001 deposits are split into 1,000 + 1 in each direction and the payment to the last one is reported once', async () => {
+    const { lists, detected } = await listsFor(1001);
+    expect(lists.map((l) => l[0]).sort((a, b) => a - b)).toEqual([1, 1, 1000, 1000]);
+    expect(detected).toHaveLength(1);
+  });
+});
+
+describe('logs a provider must not be trusted with are dropped (T151 doğrulaması)', () => {
+  async function scenario(
+    tamper: ((logs: Array<Record<string, unknown>>) => Array<Record<string, unknown>>) | null,
+  ) {
+    const h = monitorHarness();
+    h.chain.mineTo(100n);
+    h.chain.finalize(100n);
+    await h.scanner.tick();
+    afterRearmWindow(h);
+    const d = deposit(3);
+    h.arm(d);
+    await h.scanner.tick();
+    const { block } = h.chain.mine([{ contract: USDT, from: BUYER, to: d, value: 7n }]);
+    h.chain.mineTo(block + 5n);
+    h.chain.finalize(block + 5n);
+    h.chain.tamperLogs = tamper;
+    await h.scanner.tick();
+    return h.sent.map((s) => s.event);
+  }
+
+  it('control: the same transfer without tampering is reported', async () => {
+    expect(await scenario(null)).toEqual(['payment.detected', 'payment.confirmed']);
+  });
+
+  it('a log flagged removed:true inside a finalized range is not reported', async () => {
+    expect(await scenario((logs) => logs.map((l) => ({ ...l, removed: true })))).toEqual([]);
+  });
+
+  it('a log whose block is outside the requested range is not reported', async () => {
+    expect(await scenario((logs) => logs.map((l) => ({ ...l, blockNumber: '0x1' })))).toEqual([]);
+    expect(await scenario((logs) => logs.map((l) => ({ ...l, blockNumber: '0xffff' })))).toEqual(
+      [],
+    );
+  });
+});

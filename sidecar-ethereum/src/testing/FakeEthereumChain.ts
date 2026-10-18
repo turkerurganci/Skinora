@@ -79,6 +79,9 @@ export class FakeEthereumChain {
   down = false;
   /** When set, eth_getLogs without `address` is refused the way Sepolia PublicNode refuses it (T151 probe). */
   refuseAddressless = false;
+  /** Rewrites every eth_getLogs answer — a provider that returns removed or out-of-range logs (tests only). */
+  tamperLogs: ((logs: Array<Record<string, unknown>>) => Array<Record<string, unknown>>) | null =
+    null;
 
   constructor(options: FakeChainOptions = {}) {
     this.opts = {
@@ -346,7 +349,7 @@ export class FakeEthereumChain {
         }
       }
     }
-    return out;
+    return this.tamperLogs ? this.tamperLogs(out as Array<Record<string, unknown>>) : out;
   }
 }
 
