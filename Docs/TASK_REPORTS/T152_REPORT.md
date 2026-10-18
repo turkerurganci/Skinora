@@ -82,8 +82,8 @@ Her bozma tek değişiklik, ilgili test dosyası koşuldu, sonra geri alındı (
 ## Commit & PR
 - Branch: `task/T152-ethereum-gonderim-servisi`
 - Commit'ler: `55ca5f5` (servis), `0575967` (ek testler), `d75aac9` (backend), son commit (testlerin kural denetimi + belgeler) — PR'da
-- PR: (açılınca yazılır)
-- CI: (izleniyor)
+- PR: #349
+- CI: PR CI izleniyor (son run ID dönüş mesajında ve PR yorumunda)
 
 ## Known Limitations / Follow-up
 - **ETH fiyatı yok (T154):** `NO_ETH_PRICE` bağlı; sweep, payout ve soğuk aktarım `ETH_PRICE_UNAVAILABLE` ile bekler. T154 `EthUsdPriceSource`'u (`FeePolicy.ts`, mikro-dolar) uygulayıp `index.ts`'te bağlar. Backend'in `EthereumSidecar:BaseUrl`'i zaten T151–T154 bitene kadar boş.
