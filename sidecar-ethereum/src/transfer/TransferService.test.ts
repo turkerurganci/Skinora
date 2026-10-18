@@ -978,6 +978,64 @@ describe('invariant: a journalled id never gets a 400 because a setting changed 
   });
 });
 
+describe('replay identity — every recorded field is compared (M3–M6, T152 doğrulaması)', () => {
+  const OTHER_DEPOSIT = wallet.derive(6);
+
+  beforeEach(() => {
+    chain.setToken(USDT, DEPOSIT.address, 100_000_000n);
+    chain.setEth(DEPOSIT.address, 10n ** 17n);
+  });
+
+  it.each([
+    ['refundType (M3)', { refundType: 'EXCESS_REFUND' as const }],
+    ['depositAddress (M4)', { depositAddress: OTHER_DEPOSIT.address }],
+    ['depositIndex (M5)', { depositIndex: 6 }],
+    ['token (M6)', { token: 'USDC' as const }],
+  ])(
+    'a refund replayed with another %s → IDEMPOTENCY_CONFLICT, nothing new signed',
+    async (_l, change) => {
+      const { service } = build();
+      await service.refund(refundRequest(2));
+      const sentBefore = chain.sent.length;
+      await expect(service.refund({ ...refundRequest(2), ...change })).rejects.toMatchObject({
+        code: 'IDEMPOTENCY_CONFLICT',
+        retryable: false,
+      });
+      expect(chain.sent.length).toBe(sentBefore);
+    },
+  );
+
+  it('a payout replayed with another token → IDEMPOTENCY_CONFLICT (M6)', async () => {
+    const { service } = build();
+    await service.payout(payout());
+    await expect(service.payout(payout(1, { token: 'USDC' }))).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+    });
+  });
+
+  it('a replay after the OLD attempt was mined answers the hash on chain, not the latest attempt (M36)', async () => {
+    const { service, journal } = build();
+    const first = await service.payout(payout());
+    chain.baseFee = 1_300_000_000n;
+    clock += 300_000;
+    chain.sendFailures.push(new RpcError('fake transport failure', 'transport', 'fake'));
+    await service.keepAll(); // bump signed, its broadcast lost
+    const record = journal.get(`transfer:${ID(1)}`)!;
+    expect(record.attempts).toHaveLength(2);
+    expect(record.attempts[1].hash).not.toBe(first.txHash);
+    chain.mine(); // only the first attempt is in the mempool
+    await service.keepAll(); // the keeper records the mined attempt
+
+    const sentBefore = chain.sent.length;
+    expect(await service.payout(payout())).toEqual({
+      txHash: first.txHash,
+      nonce: first.nonce,
+      replayed: true,
+    });
+    expect(chain.sent.length).toBe(sentBefore);
+  });
+});
+
 describe('one id, one signature across flows (bulgu 4)', () => {
   it('a payout and a refund with the SAME id at the same time: one signs, the other waits and is refused', async () => {
     chain.setToken(USDT, DEPOSIT.address, 100_000_000n);
@@ -1012,6 +1070,8 @@ describe('a node error is not a refusal (bulgu 2)', () => {
     ['header not found', -32000],
     ['missing trie node 3c2a', -32000],
     ['internal error', -32603],
+    ['revision id 3 cannot be reverted', -32000],
+    ['upstream block reverted (reorg)', -32000],
   ])(
     'simulation answered "%s" → transient RPC_UNAVAILABLE (502), nothing signed; the retry signs',
     async (message, code) => {
@@ -1174,6 +1234,50 @@ describe('journal behind chain — signing stops (bulgu 5, yönetici kararı)', 
     expect((await service.payout(payout())).replayed).toBe(false);
   });
 
+  it('an acknowledgement ABOVE the chain nonce (typo) is ignored: after a lost journal the same id is NOT signed again (yönetici kararı (a))', async () => {
+    const first = build();
+    await first.service.payout(payout());
+    chain.mine(); // nonce 0 used on chain
+    rmSync(dir, { recursive: true, force: true });
+    dir = mkdtempSync(join(tmpdir(), 'eth-transfer-lost-'));
+
+    const { service } = build({ acknowledged: new Map([[canonicalAddress(HOT.address), 1000]]) });
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'JOURNAL_BEHIND_CHAIN',
+    });
+    expect(chain.sent).toHaveLength(1);
+    expect(chain.token(USDT, SELLER)).toBe(12_345_678n);
+    expect(service.journalBehindChain()).toEqual([
+      expect.objectContaining({ chainNonce: 1, journalNext: 0 }),
+    ]);
+    expect(service.acknowledgementsAheadOfChain()).toEqual([
+      expect.objectContaining({
+        from: canonicalAddress(HOT.address),
+        acknowledged: 1000,
+        chainNonce: 1,
+      }),
+    ]);
+  });
+
+  it('an acknowledgement equal to the chain nonce opens the account and is not reported as ahead', async () => {
+    chain.foreignSend(HOT.address);
+    chain.foreignSend(HOT.address);
+    const { service } = build({ acknowledged: new Map([[canonicalAddress(HOT.address), 2]]) });
+    expect((await service.payout(payout())).nonce).toBe(2);
+    expect(service.acknowledgementsAheadOfChain()).toEqual([]);
+  });
+
+  it('an acknowledgement above the chain nonce with an intact journal signs normally, is reported, and clears once the chain reaches it', async () => {
+    const { service } = build({ acknowledged: new Map([[canonicalAddress(HOT.address), 1]]) });
+    expect((await service.payout(payout(1))).nonce).toBe(0);
+    expect(service.journalBehindChain()).toEqual([]);
+    expect(service.acknowledgementsAheadOfChain()).toHaveLength(1);
+
+    chain.mine(); // chain nonce 1 = the acknowledgement
+    expect((await service.payout(payout(2))).nonce).toBe(1);
+    expect(service.acknowledgementsAheadOfChain()).toEqual([]);
+  });
+
   it('an acknowledgement below the chain nonce does not open it', async () => {
     chain.foreignSend(HOT.address);
     chain.foreignSend(HOT.address);
@@ -1210,6 +1314,17 @@ describe('a success without the asked Transfer event is not a payment (M31)', ()
           (l.topics as string[])[0],
           (l.topics as string[])[1],
           '0x' + '0'.repeat(24) + '2'.repeat(40),
+        ],
+      }),
+    ],
+    [
+      'another sender (M31)',
+      (l: Record<string, unknown>) => ({
+        ...l,
+        topics: [
+          (l.topics as string[])[0],
+          '0x' + '0'.repeat(24) + '3'.repeat(40),
+          (l.topics as string[])[2],
         ],
       }),
     ],

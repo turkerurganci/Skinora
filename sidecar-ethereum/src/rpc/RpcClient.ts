@@ -63,17 +63,22 @@ export class RpcError extends SidecarError {
 
 /**
  * Whether a JSON-RPC answer is the EVM's own revert of the call (T152
- * düzeltme turu 2): geth's `execution reverted` (code 3, revert data in
- * `data`), and the same wording other clients use. Only this is an answer
- * about the transaction that no retry can change; every other `rpc` answer
- * (`header not found`, `missing trie node`, an internal error of a lagging
- * node) is about the node at that moment — the send path treats it as
- * transient (08 §3.7.6).
+ * düzeltme turu 2): JSON-RPC code 3, revert data in `data` (`0x` + selector
+ * …), or the exact wording clients use for it — geth's `execution reverted`
+ * and Ganache / Hardhat's `VM Exception while processing transaction:
+ * revert`. Only this is an answer about the transaction that no retry can
+ * change; every other `rpc` answer (`header not found`, `missing trie node`,
+ * an internal error of a lagging node, and messages that merely contain the
+ * word — `revision id 3 cannot be reverted`, `upstream block reverted
+ * (reorg)`) is about the node at that moment — the send path treats it as
+ * transient (08 §3.7.6; T152 doğrulaması, yönetici kararı (b)).
  */
+const REVERT_MESSAGE = /execution reverted|VM Exception while processing transaction: revert/i;
+
 export function isExecutionRevert(err: unknown): boolean {
   if (!(err instanceof RpcError) || err.kind !== 'rpc') return false;
   if (err.rpcCode === 3) return true;
-  if (/revert/i.test(err.message)) return true;
+  if (REVERT_MESSAGE.test(err.message)) return true;
   return typeof err.rpcData === 'string' && /^0x[0-9a-fA-F]{8,}$/.test(err.rpcData);
 }
 

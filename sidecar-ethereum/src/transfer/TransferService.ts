@@ -230,6 +230,19 @@ export interface JournalBehind {
   readonly detectedAt: number;
 }
 
+/**
+ * An operator acknowledgement (`ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES`) above
+ * the account's nonce on chain (pending included) — a typo or a stale value.
+ * It is ignored, so it cannot open a stopped account (T152 doğrulaması,
+ * yönetici kararı (a)); alert `ethereum-journal-ack-ahead-of-chain`.
+ */
+export interface AcknowledgementAhead {
+  readonly from: string;
+  readonly acknowledged: number;
+  readonly chainNonce: number;
+  readonly detectedAt: number;
+}
+
 /** Gas-limit headroom over `eth_estimateGas` (10 %). Unused gas is not charged. */
 const GAS_LIMIT_HEADROOM_PERCENT = 110n;
 
@@ -270,6 +283,7 @@ export class TransferService {
   /** Per request id: a second request with the same id waits for the first (bulgu 4). */
   private readonly idLocks = new KeyedMutex();
   private readonly behind = new Map<string, JournalBehind>();
+  private readonly ackAhead = new Map<string, AcknowledgementAhead>();
   private readonly now: () => number;
 
   constructor(private readonly deps: TransferServiceDeps) {
@@ -506,6 +520,11 @@ export class TransferService {
     return [...this.behind.values()];
   }
 
+  /** Accounts whose configured acknowledgement is above the chain nonce — ignored (yönetici kararı (a)). */
+  acknowledgementsAheadOfChain(): AcknowledgementAhead[] {
+    return [...this.ackAhead.values()];
+  }
+
   private async keep(id: string): Promise<void> {
     const record = this.deps.journal.get(id);
     if (!record || record.conflict || record.mined?.final) return;
@@ -714,10 +733,18 @@ export class TransferService {
    * of what the journal knows (its highest nonce + 1, or an operator
    * acknowledgement): if it is, transactions the journal does not hold used
    * those nonces — the journal was lost or restored from an old backup, or
-   * someone sent with the key. A journalled id among them would be signed
-   * AGAIN with a new nonce (a second payment), so nothing is signed until an
+   * someone sent with the key. A request id whose record is no longer in the
+   * journal would be signed AGAIN with a new nonce (a second payment), so
+   * nothing is signed until an
    * operator has looked (yönetici kararı, T152 doğrulaması; 08 §3.7.6,
    * DEPLOY_RUNBOOK §D). Retryable 503: the backend keeps the row PENDING.
+   *
+   * An acknowledgement ABOVE the chain nonce accounts for nothing that
+   * happened — a typo (1000 for 10) would otherwise open the check for good,
+   * and after a lost journal the same id would be signed again. It is
+   * ignored (the account stays JOURNAL_BEHIND_CHAIN if the journal is
+   * behind), logged and published on its own gauge (T152 doğrulaması,
+   * yönetici kararı (a)).
    */
   private async nextNonce(from: string, block: bigint): Promise<number> {
     const latestCount = await this.deps.rpc.getTransactionCount(from, block);
@@ -725,9 +752,26 @@ export class TransferService {
     const journalNext = this.deps.journal
       .bySender(from)
       .reduce((next, r) => (r.nonce + 1 > next ? r.nonce + 1 : next), 0);
-    const acknowledged = this.deps.acknowledgedNonces?.get(from) ?? 0;
-    const known = Math.max(journalNext, acknowledged);
+    const configured = this.deps.acknowledgedNonces?.get(from) ?? 0;
     const chainNext = Math.max(latestCount, pendingCount);
+    let acknowledged = configured;
+    if (configured > chainNext) {
+      acknowledged = 0;
+      const detectedAt = this.ackAhead.get(from)?.detectedAt ?? this.now();
+      this.ackAhead.set(from, {
+        from,
+        acknowledged: configured,
+        chainNonce: chainNext,
+        detectedAt,
+      });
+      logger.error(
+        { from, acknowledged: configured, chainNonce: chainNext, latestCount, pendingCount },
+        'JOURNAL ACKNOWLEDGEMENT AHEAD OF CHAIN — ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES is above the account nonce on chain (typo or stale value); it is IGNORED. Correct it to the chain nonce (DEPLOY_RUNBOOK §D).',
+      );
+    } else {
+      this.ackAhead.delete(from);
+    }
+    const known = Math.max(journalNext, acknowledged);
     if (chainNext > known) {
       const detectedAt = this.behind.get(from)?.detectedAt ?? this.now();
       this.behind.set(from, { from, chainNonce: chainNext, journalNext: known, detectedAt });

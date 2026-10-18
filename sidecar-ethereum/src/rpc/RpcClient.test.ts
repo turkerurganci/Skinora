@@ -408,6 +408,26 @@ describe('EthereumRpcClient — revert or node error (T152)', () => {
     ['code 3 alone', new RpcError('eth_call: error', 'rpc', 'p', 3), true],
     ['"execution reverted" text', new RpcError('eth_call: execution reverted', 'rpc', 'p'), true],
     [
+      'Ganache / Hardhat wording',
+      new RpcError(
+        'eth_call: VM Exception while processing transaction: revert Pausable: paused',
+        'rpc',
+        'p',
+        -32000,
+      ),
+      true,
+    ],
+    [
+      '"revision id 3 cannot be reverted" (a node-side snapshot error)',
+      new RpcError('eth_call: revision id 3 cannot be reverted', 'rpc', 'p', -32000),
+      false,
+    ],
+    [
+      '"upstream block reverted (reorg)" (a provider-side reorg)',
+      new RpcError('eth_estimateGas: upstream block reverted (reorg)', 'rpc', 'p', -32000),
+      false,
+    ],
+    [
       'revert data without the word',
       new RpcError('eth_call: vm error', 'rpc', 'p', -32000, '0x08c379a0'),
       true,

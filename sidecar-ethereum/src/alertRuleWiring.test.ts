@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   finalizedBlockAgeSeconds,
   finalizedStallThresholdSeconds,
+  journalAckAheadOfChain,
   journalBehindChain,
   nativeEthReceivedTotal,
   nonceConflicts,
@@ -73,6 +74,14 @@ describe('T152 send alerts — wired to the series the service exports', () => {
   it('ethereum-journal-behind-chain fires on any stopped account, as critical, at once', async () => {
     const block = ruleBlock('ethereum-journal-behind-chain');
     expect(block).toContain(`max(${(await journalBehindChain.get()).name})`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/for: 0m/);
+    expect(block).toMatch(/severity: critical/);
+  });
+
+  it('ethereum-journal-ack-ahead-of-chain fires on any ignored acknowledgement, as critical, at once', async () => {
+    const block = ruleBlock('ethereum-journal-ack-ahead-of-chain');
+    expect(block).toContain(`max(${(await journalAckAheadOfChain.get()).name})`);
     expect(block).toMatch(/type: gt\s+params: \[0\]/);
     expect(block).toMatch(/for: 0m/);
     expect(block).toMatch(/severity: critical/);

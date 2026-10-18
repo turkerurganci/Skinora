@@ -117,6 +117,8 @@ export interface TransferWaitSource {
   nonceConflicts: () => number;
   /** Accounts whose chain nonce is ahead of the journal — signing stopped for them. */
   journalBehindChain: () => number;
+  /** Accounts whose configured acknowledgement is above the chain nonce — ignored. */
+  journalAckAheadOfChain: () => number;
 }
 type TransferHolder = { [TRANSFER_SOURCE]?: TransferWaitSource };
 
@@ -176,6 +178,21 @@ export const journalBehindChain = getOrCreateGauge({
   collect() {
     const source = (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE];
     if (source) this.set(source.journalBehindChain());
+  },
+});
+
+/**
+ * Accounts whose `ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES` value is above the
+ * account's nonce on chain (pending included) — a typo or stale value the
+ * service ignores (T152 doğrulaması, yönetici kararı (a)). Alert
+ * `ethereum-journal-ack-ahead-of-chain`, beside `ethereum-journal-behind-chain`.
+ */
+export const journalAckAheadOfChain = getOrCreateGauge({
+  name: 'skinora_ethereum_journal_ack_ahead_of_chain',
+  help: 'Ethereum send accounts whose journal acknowledgement is above the chain nonce (ignored)',
+  collect() {
+    const source = (globalThis as unknown as TransferHolder)[TRANSFER_SOURCE];
+    if (source) this.set(source.journalAckAheadOfChain());
   },
 });
 

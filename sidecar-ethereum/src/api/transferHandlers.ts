@@ -247,8 +247,9 @@ export function coldWalletTransferHandler(service: TransferService) {
 
 /**
  * GET /api/transfer/status/:txHash →
- *   200 `{ txHash, blockNumber, contractRet, confirmations, finalized }` — `txHash` is the
- *       attempt that is in a block (a fee bump changes it);
+ *   200 `{ txHash, blockNumber, contractRet, confirmations, finalized, realizedFeeWei }` —
+ *       `txHash` is the attempt that is in a block (a fee bump changes it); `realizedFeeWei`
+ *       (gasUsed × effectiveGasPrice) once final, else null;
  *   404 `TRANSFER_NOT_FOUND`, 409 `TRANSFER_NONCE_CONFLICT`, 400 bad hash — row-specific, the
  *       backend's confirmation job does not stop the network's other rows for them;
  *   502 — RPC unavailable (the job stops this network's turn).
