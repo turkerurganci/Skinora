@@ -335,7 +335,7 @@
 | T146 | Ağ başına kullanıcı ödeme/iade adresleri | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T146_REPORT.md), PR [#342](https://github.com/turkerurganci/Skinora/pull/342)) |
 | T147 | İşlem akışında ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T148 sonrası entegre edildi; [rapor](TASK_REPORTS/T147_REPORT.md), PR [#344](https://github.com/turkerurganci/Skinora/pull/344)) |
 | T148 | Ağ başına sidecar sözleşmesi ve ayarlar | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T148_REPORT.md), PR [#343](https://github.com/turkerurganci/Skinora/pull/343)) |
-| T149 | Ağ ücreti politikası | ⬚ Bekliyor |
+| T149 | Ağ ücreti politikası | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor (F8 yönetici düzeni; [rapor](TASK_REPORTS/T149_REPORT.md), PR [#345](https://github.com/turkerurganci/Skinora/pull/345)) |
 | T150 | Ethereum servis iskeleti | ⬚ Bekliyor |
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⬚ Bekliyor |
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |

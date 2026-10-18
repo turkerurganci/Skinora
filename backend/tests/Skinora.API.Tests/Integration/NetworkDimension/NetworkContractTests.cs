@@ -445,7 +445,9 @@ public class NetworkSettingsMigrationRehearsalTests : IntegrationTestBase
         Assert.Equal("3.25", after["blockchain.refund_gas_fee_estimate_usdt"]);
         Assert.Equal("250", after["hot_wallet.trx_balance_minimum"]);
         var ethereumKeys = BlockchainNetworkSettingKeys.Ethereum.AllKeys();
-        Assert.Equal(8, ethereumKeys.Count);
+        // T148's eight rows + T149's minimum-refund multiplier; migrating to
+        // the latest applies both, and rolling back to before T148 removes both.
+        Assert.Equal(9, ethereumKeys.Count);
         foreach (var key in ethereumKeys)
             Assert.Equal(SystemSettingSeed.All.Single(s => s.Key == key).Value, after[key]);
 

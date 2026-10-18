@@ -92,6 +92,38 @@ public class SystemSettingsValidatorTests
         Assert.Equal(expected, result.IsValid);
     }
 
+    // ---- Range — T149 network fee policy keys ----
+
+    [Theory]
+    [InlineData("2.0", true)]
+    [InlineData("0", false)]
+    public void ValidateSingle_EthereumMinRefundThresholdRatio_IsAPositiveMultiplier(string value, bool expected)
+    {
+        var result = _v.ValidateSingle("blockchain.ethereum.min_refund_threshold_ratio", value, "decimal");
+        Assert.Equal(expected, result.IsValid);
+    }
+
+    [Theory]
+    [InlineData("0", true)]        // no head-room is allowed
+    [InlineData("0.007", true)]
+    [InlineData("0.999", true)]
+    [InlineData("1", false)]       // would at least double the buyer's line
+    [InlineData("-0.001", false)]
+    public void ValidateSingle_TronNetworkFeeBuffer_IsHalfOpenZeroToOne(string value, bool expected)
+    {
+        var result = _v.ValidateSingle("blockchain.tron.network_fee_buffer_ratio", value, "decimal");
+        Assert.Equal(expected, result.IsValid);
+    }
+
+    [Theory]
+    [InlineData("3.00", true)]
+    [InlineData("0", false)]
+    public void ValidateSingle_TronNetworkFeeFallback_IsPositive(string value, bool expected)
+    {
+        var result = _v.ValidateSingle("blockchain.tron.network_fee_fallback_usdt", value, "decimal");
+        Assert.Equal(expected, result.IsValid);
+    }
+
     // ---- Range — price deviation threshold may exceed 1 (WP4a) ----
     // deviation = |quoted-market|/market can be >100% (08 §7.3 = 282%), and the
     // spec recommends a WIDE threshold (≥100% = ≥1.0). It is a positive ratio,
