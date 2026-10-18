@@ -41,6 +41,14 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
 
     private const string InternalKeyHeader = "X-Internal-Key";
 
+    /// <summary>
+    /// Error code of a broadcast that never got an answer from the service
+    /// (connection refused, timeout, a non-JSON 5xx). The dispatch job reads it
+    /// as "this network's service is unreachable" and leaves the network's
+    /// other rows for the next run (T150 — <c>NetworkWorkQueue</c>).
+    /// </summary>
+    public const string TransportFailureCode = "TRANSPORT_FAILURE";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly BlockchainNetworkPolicy _policy;
@@ -87,7 +95,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                 "Blockchain sidecar broadcast transport failure for {BlockchainTransactionId} ({Type})",
                 request.BlockchainTransactionId, request.Type);
             return new TransferBroadcastResult(
-                TransferBroadcastStatus.TransientFailure, null, "TRANSPORT_FAILURE", ex.Message);
+                TransferBroadcastStatus.TransientFailure, null, TransportFailureCode, ex.Message);
         }
 
         using (response)
@@ -148,7 +156,7 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             return new TransferBroadcastResult(
                 TransferBroadcastStatus.TransientFailure,
                 null,
-                error?.Error ?? "TRANSPORT_FAILURE",
+                error?.Error ?? TransportFailureCode,
                 error?.Message);
         }
     }

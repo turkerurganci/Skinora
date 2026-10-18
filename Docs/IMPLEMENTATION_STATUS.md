@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-17 — **T141 ⏳ Devam ediyor — doğrulama tur 1 ✗ FAIL (4 bloke eden + 6 bloke etmeyen bulgu), düzeltme turu 1 yapıldı (2026-10-18), yeniden doğrulama bekliyor** (çok ağlı ödeme — doküman ve karar tabanı; rapor [`T141_REPORT.md`](TASK_REPORTS/T141_REPORT.md), PR [#337](https://github.com/turkerurganci/Skinora/pull/337), dal `task/T141-cok-agli-odeme-dokuman`). **Proje sahibi kararları (11 §F8):** **K7** Ethereum depozitleri ayrı kök tohumdan, Ethereum servisi kendi konteynerinde (yol `m/44'/60'/0'/0/{i}`) · **K8** TRON'da sweep ücretini alıcı öder — kabul anında ayrı "TRON ağ ücreti" satırı (≈ 2,90 USDT), payout ücretini satıcı mevcut %10 kuralıyla; sweep öncesi iadede satır tam iade; Ethereum'da ücreti platform üstlenir · **K9** reddedilen ödeme iadeleri alıcının o ağdaki iade adresine — **T110-K1 tersine döndü**, kod T146/T147'de. On iki `(öneriyle kaydedildi — ⚠)` kararı (sekizi yönetici girdisi, dördü yapımcı önerisi) 11 §F8'de tek listede; F8 Gate Check'ten önce proje sahibine gösterilecek. Ağ kavramı veri modelinde (06 §1.4, §2.25), API'de (07 §1.3) ve servis sözleşmesinde (05 §3.3a); Ethereum akışı 08 §3.7'de; yalnız USDT (K2) 10 ve 02'de; hibrit kilit uykuda (DEPLOY_RUNBOOK §C.2); 11 §7.6 F8 izlenebilirlik tablosu. **Kod değişikliği yok.** Backlog **38 aktif / 155 çözülmüş** (değişmedi; üç satıra not; açık 🔴 YOK). **#334 merge teyidi:** squash `2e70a03` sonrası main'de CI [`39063106414`](https://github.com/turkerurganci/Skinora/actions/runs/39063106414) ✓ + Docker Publish [`39063106482`](https://github.com/turkerurganci/Skinora/actions/runs/39063106482) ✓.
+**Son güncelleme:** 2026-10-18 — **T150 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum servis iskeleti; rapor [`T150_REPORT.md`](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346), HEAD `2f0ba0b`, CI [`39120152616`](https://github.com/turkerurganci/Skinora/actions/runs/39120152616) ✓). Dört küçük bulgu: kesinti istisnası 05/06/08'e yayıldı; T151 (kod düzeyi kapı), T152 (onay işi kesicisi), T158 (metrik + testler + runbook) kriterlerine eklendi. Merge yönetici tarafından yapılır.
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -336,7 +336,7 @@
 | T147 | İşlem akışında ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T148 sonrası entegre edildi; [rapor](TASK_REPORTS/T147_REPORT.md), PR [#344](https://github.com/turkerurganci/Skinora/pull/344)) |
 | T148 | Ağ başına sidecar sözleşmesi ve ayarlar | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T148_REPORT.md), PR [#343](https://github.com/turkerurganci/Skinora/pull/343)) |
 | T149 | Ağ ücreti politikası | ⬚ Bekliyor |
-| T150 | Ethereum servis iskeleti | ⬚ Bekliyor |
+| T150 | Ethereum servis iskeleti | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346)) |
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⬚ Bekliyor |
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |

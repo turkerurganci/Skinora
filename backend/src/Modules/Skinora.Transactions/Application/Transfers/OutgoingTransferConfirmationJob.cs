@@ -50,6 +50,7 @@ public sealed class OutgoingTransferConfirmationJob
 
     private readonly AppDbContext _db;
     private readonly IBlockchainServiceRegistry _services;
+    private readonly IBlockchainNetworkHealth _health;
     private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferConfirmationJob> _logger;
@@ -57,12 +58,14 @@ public sealed class OutgoingTransferConfirmationJob
     public OutgoingTransferConfirmationJob(
         AppDbContext db,
         IBlockchainServiceRegistry services,
+        IBlockchainNetworkHealth health,
         IOutboxService outbox,
         TimeProvider clock,
         ILogger<OutgoingTransferConfirmationJob> logger)
     {
         _db = db;
         _services = services;
+        _health = health;
         _outbox = outbox;
         _clock = clock;
         _logger = logger;
@@ -75,35 +78,58 @@ public sealed class OutgoingTransferConfirmationJob
         // Unavailable and the row stays DETECTED). Selecting it would keep it at
         // the head of the oldest-first batch forever and starve every other
         // network's confirmations, so only configured networks are candidates.
-        var configured = _services.ConfiguredNetworks.ToList();
-        if (configured.Count == 0) return;
+        //
+        // T150 — and only networks not in a detected outage; each reachable
+        // network gets its own oldest-first batch, worked round-robin, and the
+        // first "unavailable" answer of a network ends its turn for this run
+        // (NetworkWorkQueue). A down service therefore never holds another
+        // network's confirmations. (Rotation among one network's own long-
+        // pending rows is T152's criterion.)
+        var reachable = _services.ReachableNetworks(_health);
+        if (reachable.Count == 0) return;
 
-        var candidateIds = await _db.Set<BlockchainTransaction>()
-            .AsNoTracking()
-            .IgnoreQueryFilters()
-            .Where(b => b.Status == BlockchainTransactionStatus.DETECTED
-                && b.TxHash != null
-                && OutboundTypes.Contains(b.Type)
-                && configured.Contains(b.Network))
-            .OrderBy(b => b.CreatedAt)
-            .Take(BatchSize)
-            .Select(b => b.Id)
-            .ToListAsync(cancellationToken);
+        var perNetwork = new List<IReadOnlyList<(BlockchainNetwork Network, Guid Id)>>();
+        foreach (var network in reachable)
+        {
+            var ids = await _db.Set<BlockchainTransaction>()
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(b => b.Status == BlockchainTransactionStatus.DETECTED
+                    && b.TxHash != null
+                    && OutboundTypes.Contains(b.Type)
+                    && b.Network == network)
+                .OrderBy(b => b.CreatedAt)
+                .Take(BatchSize)
+                .Select(b => b.Id)
+                .ToListAsync(cancellationToken);
+            perNetwork.Add(ids.Select(id => (network, id)).ToList());
+        }
 
-        if (candidateIds.Count == 0) return;
+        var candidates = NetworkWorkQueue.Interleave(perNetwork);
+        if (candidates.Count == 0) return;
 
-        foreach (var id in candidateIds)
+        var breaker = new NetworkRunBreaker();
+        foreach (var (network, id) in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await ConfirmOneAsync(id, cancellationToken);
+            if (breaker.IsTripped(network)) continue;
+
+            var serviceUnavailable = await ConfirmOneAsync(id, cancellationToken);
+            if (serviceUnavailable && breaker.Trip(network))
+            {
+                _logger.LogWarning(
+                    "{Network} blockchain service did not answer a status read — its remaining DETECTED rows wait for the next run; other networks continue.",
+                    network);
+            }
         }
     }
 
-    private async Task ConfirmOneAsync(Guid id, CancellationToken cancellationToken)
+    /// <returns>True when the network's service could not answer (Unavailable).</returns>
+    private async Task<bool> ConfirmOneAsync(Guid id, CancellationToken cancellationToken)
     {
         var row = await _db.Set<BlockchainTransaction>()
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
-        if (row is null || row.Status != BlockchainTransactionStatus.DETECTED || row.TxHash is null) return;
+        if (row is null || row.Status != BlockchainTransactionStatus.DETECTED || row.TxHash is null) return false;
 
         // T148 — the row's own network's service answers, and the network's
         // policy (not a TRON constant) fills in what the answer left out.
@@ -154,7 +180,7 @@ public sealed class OutgoingTransferConfirmationJob
                     "Outbound transfer CONFIRMED — row {Id} ({Type}) tx {TxHash} @ block {Block}; charged {Charged} USDT, realized {RealizedSun} SUN (energy {Energy}, owner-paid {OwnerEnergy})",
                     row.Id, row.Type, row.TxHash, status.BlockNumber,
                     row.GasFee, status.RealizedFeeSun, status.EnergyUsageTotal, status.OriginEnergyUsage);
-                return;
+                return false;
 
             case TransferStatusOutcome.Failed:
                 row.Status = BlockchainTransactionStatus.FAILED;
@@ -166,18 +192,18 @@ public sealed class OutgoingTransferConfirmationJob
                 _logger.LogError(
                     "Outbound transfer on-chain FAILED — row {Id} ({Type}) tx {TxHash} contractRet={ContractRet}",
                     row.Id, row.Type, row.TxHash, status.ContractRet);
-                return;
+                return false;
 
             case TransferStatusOutcome.Unavailable:
                 _logger.LogWarning(
                     "Outbound transfer status unavailable — row {Id} tx {TxHash}: {Message}",
                     row.Id, row.TxHash, status.ErrorMessage);
-                return;
+                return true;
 
             case TransferStatusOutcome.Pending:
             default:
                 // Solidity node has not caught up — keep DETECTED, no row mutation.
-                return;
+                return false;
         }
     }
 

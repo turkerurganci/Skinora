@@ -41,6 +41,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
     private readonly AppDbContext _db;
     private readonly StubBlockchainTransferClient _client;
     private readonly FakeBlockchainServiceRegistry _registry;
+    private readonly SettableNetworkHealth _health = new();
     private readonly StubRetryPolicy _retryPolicy;
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
@@ -69,6 +70,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         _sut = new OutgoingTransferDispatchJob(
             _db,
             _registry,
+            _health,
             _retryPolicy,
             _outbox,
             StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
@@ -242,6 +244,136 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         await _sut.ExecuteAsync();
 
         Assert.Equal(tronRows.Take(OutgoingTransferDispatchJob.BatchSize), _client.Calls.Select(c => c.BlockchainTransactionId));
+    }
+
+    // -------------------- T150 — configured but unreachable network --------------------
+    //
+    // 11 §F8 T150 "Yapılandırılmış ama erişilemeyen ağ ortak kuyrukları
+    // tıkamaz" (T148 validation N1–N2). T148 kept UNCONFIGURED networks out of
+    // the batch; a configured network whose service is down still shared one
+    // oldest-first batch with TRON and cost a timeout per row.
+
+    private StubBlockchainTransferClient DownEthereum()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(
+                TransferBroadcastStatus.TransientFailure, null,
+                HttpBlockchainTransferClient.TransportFailureCode, "connection refused"),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        return ethereum;
+    }
+
+    private async Task<List<Guid>> SeedEthereumPayoutsAsync(int count)
+    {
+        var ids = new List<Guid>();
+        for (var i = 0; i < count; i++)
+        {
+            var eth = await SeedPayoutAsync(amount: 1m + i);
+            eth.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+            ids.Add(eth.PayoutRow.Id);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+        return ids;
+    }
+
+    [Fact]
+    public async Task A_Down_Network_Costs_One_Attempt_Per_Run_And_Does_Not_Hold_Tron()
+    {
+        var ethereum = DownEthereum();
+        var ethRows = await SeedEthereumPayoutsAsync(OutgoingTransferDispatchJob.BatchSize + 5);
+        var tron = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 77m);
+        _client.NextResult = new TransferBroadcastResult(TransferBroadcastStatus.Success, "tx-tron", null, null);
+
+        await _sut.ExecuteAsync();
+
+        // TRON went out in the same run.
+        Assert.Equal(tron.RefundRow.Id, Assert.Single(_client.Calls).BlockchainTransactionId);
+        // Ethereum's service was asked once; the first unreachable answer
+        // ended Ethereum's turn for the run.
+        var attempted = Assert.Single(ethereum.Calls).BlockchainTransactionId;
+        Assert.Equal(ethRows[0], attempted);
+
+        var rows = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .Where(b => ethRows.Contains(b.Id)).ToListAsync();
+        // Only the attempted row spent a retry (normal transient backoff); the
+        // others are untouched.
+        Assert.Equal(1, rows.Single(r => r.Id == attempted).RetryCount);
+        Assert.All(rows.Where(r => r.Id != attempted), r =>
+        {
+            Assert.Equal(BlockchainTransactionStatus.PENDING, r.Status);
+            Assert.Equal(0, r.RetryCount);
+            Assert.Null(r.NextAttemptAt);
+        });
+    }
+
+    [Fact]
+    public async Task Each_Network_Has_Its_Own_Batch_And_They_Are_Worked_Round_Robin()
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        // BatchSize Ethereum rows, all older than TRON's.
+        await SeedEthereumPayoutsAsync(OutgoingTransferDispatchJob.BatchSize);
+        var tronRows = new List<Guid>();
+        for (var i = 0; i < 3; i++)
+        {
+            tronRows.Add((await SeedRefundAsync(BlockchainTransactionType.EXCESS_REFUND, amount: 1m + i)).RefundRow.Id);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+
+        await _sut.ExecuteAsync();
+
+        // Before T150 one oldest-first batch of BatchSize was all Ethereum.
+        Assert.Equal(tronRows, _client.Calls.Select(c => c.BlockchainTransactionId));
+        Assert.Equal(OutgoingTransferDispatchJob.BatchSize, ethereum.Calls.Count);
+        // Round-robin: the first TRON row goes out second, not after Ethereum's batch.
+        var order = _registry.Requests.Where(r => r.Kind == "Transfers").Select(r => r.Network).Take(4).ToList();
+        Assert.Equal(
+            [BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM, BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM],
+            order);
+    }
+
+    [Fact]
+    public async Task A_Network_In_A_Detected_Outage_Is_Skipped_With_Its_Retry_Budget_Kept()
+    {
+        var ethereum = DownEthereum();
+        var ethRows = await SeedEthereumPayoutsAsync(3);
+        var tron = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 5m);
+        _health.Degraded.Add(BlockchainNetwork.ETHEREUM);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(ethereum.Calls);
+        Assert.DoesNotContain(_registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        Assert.Equal(tron.RefundRow.Id, Assert.Single(_client.Calls).BlockchainTransactionId);
+        var rows = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .Where(b => ethRows.Contains(b.Id)).ToListAsync();
+        Assert.All(rows, r =>
+        {
+            Assert.Equal(BlockchainTransactionStatus.PENDING, r.Status);
+            Assert.Equal(0, r.RetryCount);
+        });
+    }
+
+    [Fact]
+    public async Task A_Transient_Answer_From_A_Working_Service_Does_Not_Stop_The_Network()
+    {
+        // The service answered (5xx with a code) — that is about the row, not
+        // the service; the rest of the network's rows are still attempted.
+        var rows = new List<Guid>();
+        for (var i = 0; i < 3; i++)
+        {
+            rows.Add((await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 1m + i)).RefundRow.Id);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.TransientFailure, null, "TRANSFER_BROADCAST_FAILED", "Bandwidth exhausted");
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(rows, _client.Calls.Select(c => c.BlockchainTransactionId));
     }
 
     [Fact]
@@ -617,7 +749,8 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         public TransferBroadcastResult NextResult { get; set; } =
             new(TransferBroadcastStatus.Success, "tx-stub", null, null);
 
-        private int _hashSeq;
+        // Static: two networks' stubs in one test must not mint the same hash.
+        private static int _hashSeq;
 
         public TransferStatusResult NextStatus { get; set; } =
             new(TransferStatusOutcome.Pending, null, 0, null, null);
