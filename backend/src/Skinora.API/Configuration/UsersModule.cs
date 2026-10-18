@@ -59,7 +59,7 @@ public static class UsersModule
         // T34 — wallet address management (07 §5.3, §5.4). T82 swaps the
         // NoMatchWalletSanctionsCheck stub for DbWalletSanctionsCheck which
         // queries SanctionedAddress via ISanctionedAddressLookup (06 §3.25).
-        services.AddSingleton<ITrc20AddressValidator, Trc20AddressValidator>();
+        services.AddSingleton<IWalletAddressValidator, WalletAddressValidator>();
         services.AddScoped<IWalletSanctionsCheck, DbWalletSanctionsCheck>();
         services.AddScoped<IActiveTransactionCounter, ActiveTransactionCounter>();
         services.AddScoped<IWalletAddressService, WalletAddressService>();

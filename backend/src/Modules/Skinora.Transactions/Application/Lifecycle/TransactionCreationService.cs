@@ -20,8 +20,7 @@ namespace Skinora.Transactions.Application.Lifecycle;
 /// Orchestrates the full <c>POST /transactions</c> happy path (T45 — 07 §7.2,
 /// 03 §2.2). All side effects happen inside a single
 /// <see cref="DbContext.SaveChangesAsync"/> so the entity insert,
-/// <c>OutboxMessages</c> row and <c>User.PayoutAddressChangedAt</c>
-/// snapshot land atomically.
+/// <c>OutboxMessages</c> row and the payout-address snapshot land atomically.
 /// </summary>
 public sealed class TransactionCreationService : ITransactionCreationService
 {
@@ -42,7 +41,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
     private readonly ISteamInventoryReader _inventory;
     private readonly IFraudPreCheckService _fraudPreCheck;
     private readonly ITransactionFraudFlagWriter _flagWriter;
-    private readonly ITrc20AddressValidator _addressValidator;
+    private readonly IWalletAddressValidator _addressValidator;
     private readonly IWalletSanctionsCheck _sanctions;
     private readonly IInvitationCodeGenerator _inviteCodes;
     private readonly IOutboxService _outbox;
@@ -58,7 +57,7 @@ public sealed class TransactionCreationService : ITransactionCreationService
         ISteamInventoryReader inventory,
         IFraudPreCheckService fraudPreCheck,
         ITransactionFraudFlagWriter flagWriter,
-        ITrc20AddressValidator addressValidator,
+        IWalletAddressValidator addressValidator,
         IWalletSanctionsCheck sanctions,
         IInvitationCodeGenerator inviteCodes,
         IOutboxService outbox,
@@ -169,26 +168,36 @@ public sealed class TransactionCreationService : ITransactionCreationService
         // The two checks below are NOT redundant with `WalletAddressService`,
         // which validates on write:
         //   - format: rows can reach the column without passing that service
-        //     (migrations, seeds, e2e `db.ts` writes `DefaultPayoutAddress` in
+        //     (migrations, seeds, e2e `db.ts` writes `UserWalletAddresses` in
         //     raw SQL), so this stays defense-in-depth against a malformed row;
         //   - sanctions: the list GROWS after an address is stored. The write
         //     path can only screen against the list as it was that day; this is
         //     the only point that screens against the list as it is TODAY, so
         //     removing it would let an address sanctioned after it was saved go
         //     on opening transactions.
-        var payoutAddress = seller.DefaultPayoutAddress;
+        //
+        // T146 — profile addresses are per network (06 §1.4). Until T147 lets
+        // the seller choose the networks a listing accepts, every transaction
+        // is a TRON transaction, so the TRON payout address is the one read.
+        const BlockchainNetwork network = BlockchainNetwork.TRON;
+        var payoutAddress = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == seller.Id
+                        && w.Network == network
+                        && w.Type == WalletAddressType.PAYOUT)
+            .Select(w => w.Address)
+            .FirstOrDefaultAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(payoutAddress))
             return Failure(CreateTransactionStatus.SellerWalletAddressMissing,
                 TransactionErrorCodes.SellerWalletAddressMissing,
                 "Seller profile has no payout address (02 §12.3).");
 
-        if (!_addressValidator.IsValid(payoutAddress))
+        if (!_addressValidator.Validate(network, payoutAddress).IsUsable)
             return Failure(CreateTransactionStatus.InvalidWallet, TransactionErrorCodes.InvalidWalletAddress,
-                "Seller profile payout address fails TRC-20 validation (02 §12.3).");
+                "Seller profile payout address fails TRON address validation (02 §12.3).");
 
-        // The profile payout address is a TRON address until T146 (06 §1.4).
         var sanctions = await _sanctions.EvaluateAsync(
-            BlockchainNetwork.TRON, payoutAddress, cancellationToken);
+            network, payoutAddress, cancellationToken);
         if (sanctions.IsMatch)
             return Failure(CreateTransactionStatus.SanctionsMatch, TransactionErrorCodes.SanctionsMatch,
                 $"Seller profile payout address matched sanctions list '{sanctions.MatchedList}'.");

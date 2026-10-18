@@ -42,7 +42,7 @@ public class TransactionListServiceTests : IntegrationTestBase
             SteamId = "76561198000000060",
             SteamDisplayName = "SellerPlayer",
             SteamAvatarUrl = "https://steamcdn.example/seller.jpg",
-            DefaultPayoutAddress = ValidWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet) },
             CreatedAt = DateTime.UtcNow.AddDays(-200),
         };
         _buyer = new User

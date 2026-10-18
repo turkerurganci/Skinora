@@ -51,7 +51,7 @@ public class TransactionCancellationServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = SellerSteamId,
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = ValidWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet) },
             MobileAuthenticatorVerified = true,
         };
         _buyer = new User

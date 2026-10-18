@@ -279,8 +279,13 @@ public class AccountLifecycleEndpointTests
             u.SteamAvatarUrl = "https://steamcdn.test/avatar.jpg";
             u.Email = "player@example.com";
             u.EmailVerifiedAt = DateTime.UtcNow;
-            u.DefaultPayoutAddress = "TDefau1t4567abcdefghijkmnopqrs1234";
-            u.DefaultRefundAddress = "TDefau1t4567abcdefghijkmnopqrs5678";
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TWHPPkNRxo1ovxC2uCWmyoir9AiWpt4F2H"));
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.REFUND, "THLYcxdu71TwB4HWoQFkMfrhjw5tgH2QkE"));
+            // T146 — a second network's address is personal data too.
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"));
             u.SteamTradeUrl = "https://steamcommunity.com/tradeoffer/new/?partner=1&token=abc";
             u.SteamTradePartner = "1";
             u.SteamTradeAccessToken = "abc";
@@ -322,8 +327,8 @@ public class AccountLifecycleEndpointTests
         Assert.Null(reloaded.SteamAvatarUrl);
         Assert.Null(reloaded.Email);
         Assert.Null(reloaded.EmailVerifiedAt);
-        Assert.Null(reloaded.DefaultPayoutAddress);
-        Assert.Null(reloaded.DefaultRefundAddress);
+        // T146 — every saved address row (all networks) is removed (06 §6.2).
+        Assert.False(await db.Set<UserWalletAddress>().AnyAsync(w => w.UserId == user.Id));
         Assert.Null(reloaded.SteamTradeUrl);
         Assert.Null(reloaded.SteamTradePartner);
         Assert.Null(reloaded.SteamTradeAccessToken);
@@ -619,6 +624,8 @@ public class AccountLifecycleEndpointTests
             db.Set<Transaction>().RemoveRange(
                 db.Set<Transaction>().IgnoreQueryFilters());
             var seedIds = new[] { Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId };
+            // T146 — saved addresses reference Users (FK); remove them first.
+            db.Set<UserWalletAddress>().RemoveRange(db.Set<UserWalletAddress>());
             db.Set<User>().RemoveRange(
                 db.Set<User>().IgnoreQueryFilters().Where(u => !seedIds.Contains(u.Id)));
             db.SaveChanges();

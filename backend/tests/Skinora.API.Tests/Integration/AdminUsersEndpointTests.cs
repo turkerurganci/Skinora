@@ -134,10 +134,10 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
         var admin = await _factory.CreateUserAsync(displayName: "Admin");
         var target = await _factory.CreateUserAsync(displayName: "TargetUser", c =>
         {
-            c.DefaultPayoutAddress = "TXyzSeller";
-            c.PayoutAddressChangedAt = DateTime.UtcNow.AddDays(-3);
-            c.DefaultRefundAddress = "TAbcBuyer";
-            c.RefundAddressChangedAt = DateTime.UtcNow.AddDays(-5);
+            c.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TXyzSeller", DateTime.UtcNow.AddDays(-3)));
+            c.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.REFUND, "TAbcBuyer", DateTime.UtcNow.AddDays(-5)));
         });
 
         var client = BuildClient(admin.Id, admin.SteamId, AuthRoles.SuperAdmin);
@@ -398,13 +398,18 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
     [Fact]
     public async Task GetUserDetail_WalletHistory_IncludesCurrentAndPreviousAddresses()
     {
-        // T105b — current addresses (current=true) come from the User row,
-        // previous addresses (current=false) from the append-only history.
+        // T105b — current addresses (current=true) come from the per-network
+        // UserWalletAddress rows (T146), previous addresses (current=false)
+        // from the append-only history. Every entry carries its network.
         var admin = await _factory.CreateUserAsync(displayName: "Admin");
         var target = await _factory.CreateUserAsync(displayName: "Trader", c =>
         {
-            c.DefaultPayoutAddress = "TCurrentSeller";
-            c.PayoutAddressChangedAt = DateTime.UtcNow.AddDays(-1);
+            c.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TCurrentSeller", DateTime.UtcNow.AddDays(-1)));
+            // Stored lowercase (06 §1.4), shown in its EIP-55 spelling.
+            c.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT,
+                "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", DateTime.UtcNow.AddDays(-2)));
         });
         await _factory.SeedWalletHistoryAsync(
             target.Id, "seller", "TOldSeller", DateTime.UtcNow.AddDays(-10));
@@ -415,17 +420,22 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
         var data = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
             .GetProperty("data");
         var wallet = data.GetProperty("walletHistory");
-        Assert.Equal(2, wallet.GetArrayLength());
+        Assert.Equal(3, wallet.GetArrayLength());
 
-        // Current entry first.
+        // Current entries first — TRON, then Ethereum.
         Assert.Equal("TCurrentSeller", wallet[0].GetProperty("address").GetString());
+        Assert.Equal("TRON", wallet[0].GetProperty("network").GetString());
         Assert.True(wallet[0].GetProperty("current").GetBoolean());
+        Assert.Equal("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed", wallet[1].GetProperty("address").GetString());
+        Assert.Equal("ETHEREUM", wallet[1].GetProperty("network").GetString());
+        Assert.True(wallet[1].GetProperty("current").GetBoolean());
 
         // Then the superseded address with its set date.
-        Assert.Equal("seller", wallet[1].GetProperty("type").GetString());
-        Assert.Equal("TOldSeller", wallet[1].GetProperty("address").GetString());
-        Assert.False(wallet[1].GetProperty("current").GetBoolean());
-        Assert.Equal(JsonValueKind.String, wallet[1].GetProperty("setAt").ValueKind);
+        Assert.Equal("seller", wallet[2].GetProperty("type").GetString());
+        Assert.Equal("TOldSeller", wallet[2].GetProperty("address").GetString());
+        Assert.Equal("TRON", wallet[2].GetProperty("network").GetString());
+        Assert.False(wallet[2].GetProperty("current").GetBoolean());
+        Assert.Equal(JsonValueKind.String, wallet[2].GetProperty("setAt").ValueKind);
     }
 
     [Fact]
@@ -946,6 +956,8 @@ public class AdminUsersEndpointTests : IClassFixture<AdminUsersEndpointTests.Fac
                 db.Set<AdminRole>().IgnoreQueryFilters().ToList());
 
             var seedIds = new[] { Skinora.Shared.Domain.Seed.SeedConstants.SystemUserId };
+            // T146 — saved addresses reference Users (FK); remove them first.
+            db.Set<UserWalletAddress>().RemoveRange(db.Set<UserWalletAddress>());
             db.Set<User>().RemoveRange(
                 db.Set<User>().IgnoreQueryFilters().Where(u => !seedIds.Contains(u.Id)));
             db.SaveChanges();

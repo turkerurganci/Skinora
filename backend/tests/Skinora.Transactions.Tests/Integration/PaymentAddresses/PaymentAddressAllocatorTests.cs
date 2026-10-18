@@ -40,7 +40,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000400",
             SteamDisplayName = "Allocator Seller",
-            DefaultPayoutAddress = SellerWallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, SellerWallet) },
             MobileAuthenticatorVerified = true,
         };
         context.Set<User>().Add(_seller);

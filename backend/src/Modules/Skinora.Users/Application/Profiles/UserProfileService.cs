@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Skinora.Shared.Blockchain;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Application.Reputation;
+using Skinora.Users.Application.Wallet;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Users.Application.Profiles;
@@ -45,6 +48,26 @@ public sealed class UserProfileService : IUserProfileService
             nowUtc,
             cancellationToken);
 
+        // T146 — saved addresses, one row per (network, type) (06 §1.4).
+        var walletRows = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == user.Id)
+            .ToListAsync(cancellationToken);
+
+        var wallets = walletRows
+            .OrderBy(w => w.Network)
+            .ThenBy(w => w.Type)
+            .Select(w => new UserWalletAddressDto(
+                w.Network.ToString(),
+                w.Type.ToString(),
+                BlockchainAddress.ToDisplay(w.Address)!,
+                w.ChangedAt))
+            .ToList();
+
+        // Pre-F8 fields (07 §5.1): the TRON addresses only.
+        string? TronAddressOf(WalletAddressType type) => walletRows
+            .FirstOrDefault(w => w.Network == BlockchainNetwork.TRON && w.Type == type)?.Address;
+
         return new UserProfileDto(
             Id: user.Id,
             SteamId: user.SteamId,
@@ -56,13 +79,14 @@ public sealed class UserProfileService : IUserProfileService
             CompletedTransactionCount: user.CompletedTransactionCount,
             SuccessfulTransactionRate: user.SuccessfulTransactionRate,
             CancelRate: CancelRateFrom(user.SuccessfulTransactionRate),
-            SellerWalletAddress: user.DefaultPayoutAddress,
-            RefundWalletAddress: user.DefaultRefundAddress,
+            SellerWalletAddress: TronAddressOf(WalletAddressType.PAYOUT),
+            RefundWalletAddress: TronAddressOf(WalletAddressType.REFUND),
             MobileAuthenticatorActive: user.MobileAuthenticatorVerified,
             // T119a — accept-form prefill source (07 §7.6). Already normalized
             // by U17 (SteamTradeUrlService), so it round-trips through the
             // accept endpoint's parser unchanged.
-            SteamTradeUrl: user.SteamTradeUrl);
+            SteamTradeUrl: user.SteamTradeUrl,
+            Wallets: wallets);
     }
 
     public async Task<UserStatsDto?> GetOwnStatsAsync(

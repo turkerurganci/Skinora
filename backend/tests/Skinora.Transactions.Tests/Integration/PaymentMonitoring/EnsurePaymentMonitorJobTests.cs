@@ -46,7 +46,7 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000401",
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = Wallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, Wallet) },
             MobileAuthenticatorVerified = true,
         };
         _buyer = new User
@@ -54,7 +54,7 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000402",
             SteamDisplayName = "Buyer",
-            DefaultRefundAddress = Wallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.REFUND, Wallet) },
             MobileAuthenticatorVerified = true,
         };
         context.Set<User>().AddRange(_seller, _buyer);

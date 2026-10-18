@@ -101,6 +101,15 @@ public sealed class AccountLifecycleService : IAccountLifecycleService
         // (kept as anonymous audit trail).
         AnonymizeUserInPlace(user, now);
 
+        // 06 §6.2 (T146) — the saved payout/refund addresses are personal data
+        // and live in their own per-network rows (06 §1.4); they are removed,
+        // not masked. Transactions keep their own address snapshots, and the
+        // append-only WalletAddressHistory keeps the audit trail.
+        var walletRows = await _db.Set<UserWalletAddress>()
+            .Where(w => w.UserId == userId)
+            .ToListAsync(cancellationToken);
+        _db.Set<UserWalletAddress>().RemoveRange(walletRows);
+
         // Persist User anonymization first — the NotificationDelivery masking
         // below reads Channel + current TargetExternalId, so a single-round
         // SaveChanges is sufficient and keeps the operation simple.
@@ -129,9 +138,6 @@ public sealed class AccountLifecycleService : IAccountLifecycleService
         user.SteamId = $"ANON_{Guid.NewGuid():N}"[..20];
         user.SteamDisplayName = "Deleted User";
         user.SteamAvatarUrl = null;
-
-        user.DefaultPayoutAddress = null;
-        user.DefaultRefundAddress = null;
 
         user.Email = null;
         user.EmailVerifiedAt = null;

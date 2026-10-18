@@ -280,8 +280,11 @@ public class NetworkDimensionSchemaTests : IntegrationTestBase
                 Id = Guid.NewGuid(),
                 SteamId = "76561198000000903",
                 SteamDisplayName = "Canonical",
-                DefaultPayoutAddress = EvmChecksummed2,
-                DefaultRefundAddress = TronAddress,
+                WalletAddresses =
+                {
+                    UserWalletAddress.For(BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, EvmChecksummed2),
+                    UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.REFUND, TronAddress),
+                },
             };
             ctx.Set<User>().Add(user);
             await ctx.SaveChangesAsync();
@@ -299,10 +302,13 @@ public class NetworkDimensionSchemaTests : IntegrationTestBase
             $"SELECT ToAddress AS Value FROM BlockchainTransactions WHERE PaymentAddressId = '{ethPa.Id}'"));
         Assert.Equal("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", await ScalarAsync(
             $"SELECT ActualTokenAddress AS Value FROM BlockchainTransactions WHERE PaymentAddressId = '{ethPa.Id}'"));
+        // T146 — user addresses live in UserWalletAddresses (06 §1.4).
         Assert.Equal(EvmLower2, await ScalarAsync(
-            "SELECT DefaultPayoutAddress AS Value FROM Users WHERE SteamId = '76561198000000903'"));
+            "SELECT w.Address AS Value FROM UserWalletAddresses w JOIN Users u ON u.Id = w.UserId " +
+            "WHERE u.SteamId = '76561198000000903' AND w.Type = 'PAYOUT'"));
         Assert.Equal(TronAddress, await ScalarAsync(
-            "SELECT DefaultRefundAddress AS Value FROM Users WHERE SteamId = '76561198000000903'"));
+            "SELECT w.Address AS Value FROM UserWalletAddresses w JOIN Users u ON u.Id = w.UserId " +
+            "WHERE u.SteamId = '76561198000000903' AND w.Type = 'REFUND'"));
     }
 
     [Fact]

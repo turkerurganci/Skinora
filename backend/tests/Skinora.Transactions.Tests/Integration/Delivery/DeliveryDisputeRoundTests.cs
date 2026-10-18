@@ -70,7 +70,7 @@ public class DeliveryDisputeRoundTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = SellerSteamId,
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = ValidWallet1,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet1) },
         };
         _buyer = new User { Id = Guid.NewGuid(), SteamId = BuyerSteamId, SteamDisplayName = "Buyer" };
         _admin = new User { Id = Guid.NewGuid(), SteamId = AdminSteamId, SteamDisplayName = "Admin" };

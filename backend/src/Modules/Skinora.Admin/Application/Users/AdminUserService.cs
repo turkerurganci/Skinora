@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Admin.Domain.Entities;
+using Skinora.Shared.Blockchain;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Models;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Application.Profiles;
@@ -290,7 +292,7 @@ public sealed class AdminUserService : IAdminUserService
 
     /// <summary>
     /// AD16 walletHistory[] (04 §8.9.3): current addresses (<c>current = true</c>)
-    /// come from the <see cref="User"/> row; previous addresses
+    /// come from the per-network <see cref="UserWalletAddress"/> rows (T146); previous addresses
     /// (<c>current = false</c>, newest first) come from the append-only
     /// WalletAddressHistory recorded on each change (T105b). "current" is never a
     /// stored flag — it is derived here, so the history table stays append-only.
@@ -298,33 +300,38 @@ public sealed class AdminUserService : IAdminUserService
     private async Task<List<AdminUserWalletEntryDto>> BuildWalletEntriesAsync(
         User user, CancellationToken cancellationToken)
     {
-        var entries = new List<AdminUserWalletEntryDto>();
+        // T146 — current addresses are the per-network rows (06 §1.4), payout
+        // ("seller") before refund ("buyer"), then by network.
+        var currentRows = await _db.Set<UserWalletAddress>()
+            .AsNoTracking()
+            .Where(w => w.UserId == user.Id)
+            .ToListAsync(cancellationToken);
 
-        if (!string.IsNullOrEmpty(user.DefaultPayoutAddress))
-        {
-            entries.Add(new AdminUserWalletEntryDto(
-                Type: AdminWalletEntryType.Seller,
-                Address: user.DefaultPayoutAddress,
-                SetAt: user.PayoutAddressChangedAt,
-                Current: true));
-        }
-        if (!string.IsNullOrEmpty(user.DefaultRefundAddress))
-        {
-            entries.Add(new AdminUserWalletEntryDto(
-                Type: AdminWalletEntryType.Buyer,
-                Address: user.DefaultRefundAddress,
-                SetAt: user.RefundAddressChangedAt,
-                Current: true));
-        }
+        var entries = currentRows
+            .OrderBy(w => w.Type)
+            .ThenBy(w => w.Network)
+            .Select(w => new AdminUserWalletEntryDto(
+                Type: w.Type == WalletAddressType.PAYOUT
+                    ? AdminWalletEntryType.Seller
+                    : AdminWalletEntryType.Buyer,
+                Network: w.Network.ToString(),
+                Address: BlockchainAddress.ToDisplay(w.Address)!,
+                SetAt: w.ChangedAt,
+                Current: true))
+            .ToList();
 
         // Superseded addresses, newest replacement first. Type is stored as the
         // AD16 wire value ("seller"/"buyer") so it projects straight through.
-        var past = await _db.Set<WalletAddressHistory>()
+        var pastRows = await _db.Set<WalletAddressHistory>()
             .AsNoTracking()
             .Where(h => h.UserId == user.Id)
             .OrderByDescending(h => h.Id)
-            .Select(h => new AdminUserWalletEntryDto(h.Type, h.Address, h.SetAt, false))
             .ToListAsync(cancellationToken);
+
+        var past = pastRows
+            .Select(h => new AdminUserWalletEntryDto(
+                h.Type, h.Network.ToString(), BlockchainAddress.ToDisplay(h.Address)!, h.SetAt, false))
+            .ToList();
 
         entries.AddRange(past);
         return entries;

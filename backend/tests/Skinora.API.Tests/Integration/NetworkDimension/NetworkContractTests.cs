@@ -30,6 +30,10 @@ public class NetworkContractTests : IntegrationTestBase
 {
     protected override bool UseMigrations => true;
 
+    // T146 added a Skinora.Shared.Blockchain.TronAddress type; the fixture's
+    // constant is aliased so the two names cannot collide.
+    private const string TronDeposit = NetworkDimensionTestSupport.TronAddress;
+
     static NetworkContractTests() => RegisterAllModules();
 
     private User _seller = null!;
@@ -80,7 +84,7 @@ public class NetworkContractTests : IntegrationTestBase
     [Fact]
     public async Task Every_Webhook_Kind_With_The_Wrong_Network_Is_Rejected_And_Writes_Nothing()
     {
-        var pa = await SeedPaymentAddressAsync(BlockchainNetwork.TRON, TronAddress, hdIndex: 70,
+        var pa = await SeedPaymentAddressAsync(BlockchainNetwork.TRON, TronDeposit, hdIndex: 70,
             status: MonitoringStatus.POST_CANCEL_24H);
         const string wrong = "ETHEREUM";
         var hash = new string('c', 64);
@@ -98,7 +102,7 @@ public class NetworkContractTests : IntegrationTestBase
                         PaymentAddressId = pa.Id,
                         TransactionId = pa.TransactionId,
                         TxHash = hash,
-                        FromAddress = TronAddress,
+                        FromAddress = TronDeposit,
                         ToAddress = pa.Address,
                         TokenSymbol = "USDT",
                         Amount = "51.000000",
@@ -128,7 +132,7 @@ public class NetworkContractTests : IntegrationTestBase
                         PaymentAddressId = pa.Id,
                         TransactionId = pa.TransactionId,
                         TxHash = hash,
-                        FromAddress = TronAddress,
+                        FromAddress = TronDeposit,
                         ToAddress = pa.Address,
                         ActualContractAddress = SellerWallet,
                         ActualTokenSymbol = "USDC",
@@ -145,7 +149,7 @@ public class NetworkContractTests : IntegrationTestBase
                         PaymentAddressId = pa.Id,
                         TransactionId = pa.TransactionId,
                         TxHash = hash,
-                        FromAddress = TronAddress,
+                        FromAddress = TronDeposit,
                         ToAddress = pa.Address,
                         ActualContractAddress = SellerWallet,
                         Amount = "51.000000",
@@ -161,7 +165,7 @@ public class NetworkContractTests : IntegrationTestBase
                         PaymentAddressId = pa.Id,
                         TransactionId = pa.TransactionId,
                         TxHash = hash,
-                        FromAddress = TronAddress,
+                        FromAddress = TronDeposit,
                         ToAddress = pa.Address,
                         TokenSymbol = "USDT",
                         Amount = "51.000000",
@@ -198,7 +202,7 @@ public class NetworkContractTests : IntegrationTestBase
     [InlineData("BSC")]
     public async Task Webhook_With_A_Missing_Or_Unknown_Network_Is_Invalid(string? network)
     {
-        var pa = await SeedPaymentAddressAsync(BlockchainNetwork.TRON, TronAddress, hdIndex: 71);
+        var pa = await SeedPaymentAddressAsync(BlockchainNetwork.TRON, TronDeposit, hdIndex: 71);
 
         await using (var ctx = CreateContext())
         {
@@ -212,7 +216,7 @@ public class NetworkContractTests : IntegrationTestBase
                         PaymentAddressId = pa.Id,
                         TransactionId = pa.TransactionId,
                         TxHash = new string('d', 64),
-                        FromAddress = TronAddress,
+                        FromAddress = TronDeposit,
                         ToAddress = pa.Address,
                         TokenSymbol = "USDT",
                         Amount = "51.000000",
@@ -229,7 +233,7 @@ public class NetworkContractTests : IntegrationTestBase
     [Fact]
     public async Task Tron_Confirmation_Is_Stored_At_Its_20_Block_Floor_Ethereum_At_What_Was_Reported()
     {
-        var tronPa = await SeedPaymentAddressAsync(BlockchainNetwork.TRON, TronAddress, hdIndex: 72);
+        var tronPa = await SeedPaymentAddressAsync(BlockchainNetwork.TRON, TronDeposit, hdIndex: 72);
         var ethPa = await SeedPaymentAddressAsync(BlockchainNetwork.ETHEREUM, EvmLower, hdIndex: 72);
         var tronHash = new string('e', 64);
         var ethHash = "0x" + new string('e', 64);

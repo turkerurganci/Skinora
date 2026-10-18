@@ -89,6 +89,23 @@ public class EnumTests
         Assert.Equal(BlockchainNetwork.TRON, default(BlockchainNetwork));
     }
 
+    // ── WalletAddressType (2) — 06 §2.26, T146 ─────────────────────
+
+    [Fact]
+    public void WalletAddressType_ShouldHave2Values()
+    {
+        var values = Enum.GetValues<WalletAddressType>();
+        Assert.Equal(2, values.Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(WalletAddressType.PAYOUT))]
+    [InlineData(nameof(WalletAddressType.REFUND))]
+    public void WalletAddressType_ShouldContainExpectedValue(string valueName)
+    {
+        Assert.True(Enum.IsDefined(typeof(WalletAddressType), Enum.Parse<WalletAddressType>(valueName)));
+    }
+
     // ── StablecoinType (2) ──────────────────────────────────────────
 
     [Fact]
@@ -612,7 +629,8 @@ public class EnumTests
 
         // 25 after the v3.0 P2P pivot removed 5 bot/trade enums (TradeOfferDirection,
         // TradeOfferStatus, PlatformSteamBotStatus, BotRecoveryStatus, ItemRefundTrigger)
-        // and added DeliveryEvidence; 26 since T145 added BlockchainNetwork (06 §2.25).
-        Assert.Equal(26, enumTypes.Count);
+        // and added DeliveryEvidence; 26 since T145 added BlockchainNetwork (06 §2.25);
+        // 27 since T146 added WalletAddressType (06 §2.26).
+        Assert.Equal(27, enumTypes.Count);
     }
 }

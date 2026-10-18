@@ -24,6 +24,7 @@ using Skinora.Auth.Application.Session;
 using Skinora.Auth.Configuration;
 using Skinora.Auth.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
+using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
@@ -70,7 +71,10 @@ public class AuthSessionEndpointTests : IClassFixture<AuthSessionEndpointTests.F
             u.TosAcceptedAt = DateTime.UtcNow.AddDays(-1);
             u.TosAcceptedVersion = "1.0";
             u.PreferredLanguage = "tr";
-            u.DefaultPayoutAddress = "TRC20xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+            // T146 — an Ethereum-only payout address still counts: the flag
+            // means "a payout address on any network" (07 §4.5).
+            u.WalletAddresses.Add(UserWalletAddress.For(
+                BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"));
             u.SteamAvatarUrl = "https://steamcdn/avatar.jpg";
         });
         var client = BuildAuthenticatedClient(user.Id, user.SteamId);
@@ -417,6 +421,8 @@ public class AuthSessionEndpointTests : IClassFixture<AuthSessionEndpointTests.F
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.Set<RefreshToken>().RemoveRange(db.Set<RefreshToken>());
+            // T146 — saved addresses reference Users (FK); remove them first.
+            db.Set<UserWalletAddress>().RemoveRange(db.Set<UserWalletAddress>());
             db.Set<User>().RemoveRange(db.Set<User>());
             db.SaveChanges();
         }

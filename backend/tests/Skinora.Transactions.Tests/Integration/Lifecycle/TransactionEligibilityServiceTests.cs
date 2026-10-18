@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
@@ -6,6 +7,7 @@ using Skinora.Transactions.Tests.Helpers;
 using Skinora.Transactions.Infrastructure.Persistence;
 using Skinora.Users.Domain.Entities;
 using Skinora.Users.Infrastructure.Persistence;
+using Skinora.Shared.Enums;
 
 namespace Skinora.Transactions.Tests.Integration.Lifecycle;
 
@@ -35,7 +37,7 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000050",
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567",
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567") },
             MobileAuthenticatorVerified = true,
         };
         context.Set<User>().AddRange(_seller);
@@ -112,8 +114,9 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
     [Fact]
     public async Task Returns_Payout_Address_Cooldown_Active_When_Recent_Change()
     {
-        _seller.PayoutAddressChangedAt = _clock.GetUtcNow().UtcDateTime.AddHours(-2);
-        Context.Set<User>().Update(_seller);
+        var tronPayout = await Context.Set<UserWalletAddress>()
+            .SingleAsync(w => w.UserId == _seller.Id && w.Network == BlockchainNetwork.TRON);
+        tronPayout.ChangedAt = _clock.GetUtcNow().UtcDateTime.AddHours(-2);
         await Context.SaveChangesAsync();
 
         var sut = BuildSut(flagsActive: false);
@@ -125,10 +128,55 @@ public class TransactionEligibilityServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Payout_Cooldown_Is_Per_Network_Ethereum_Change_Does_Not_Block_Tron()
+    {
+        // T146 (02 §12.3, 06 §1.4): changing the Ethereum payout address arms
+        // only the Ethereum cooldown. Transactions are TRON until T147, so the
+        // seller stays eligible.
+        Context.Set<UserWalletAddress>().Add(WithUser(UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT,
+            "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+            _clock.GetUtcNow().UtcDateTime.AddHours(-2))));
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut(flagsActive: false);
+
+        var dto = await sut.GetAsync(_seller.Id, CancellationToken.None);
+
+        Assert.DoesNotContain(TransactionErrorCodes.PayoutAddressCooldownActive, dto.Reasons ?? []);
+        Assert.DoesNotContain(TransactionErrorCodes.SellerWalletAddressMissing, dto.Reasons ?? []);
+    }
+
+    [Fact]
+    public async Task Ethereum_Only_Payout_Address_Is_Missing_For_A_Tron_Transaction()
+    {
+        // Until T147 every listing is TRON: an Ethereum payout address alone
+        // does not make the seller able to list.
+        Context.Set<UserWalletAddress>().RemoveRange(
+            Context.Set<UserWalletAddress>().Where(w => w.UserId == _seller.Id));
+        Context.Set<UserWalletAddress>().Add(WithUser(UserWalletAddress.For(
+            BlockchainNetwork.ETHEREUM, WalletAddressType.PAYOUT, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")));
+        await Context.SaveChangesAsync();
+
+        var sut = BuildSut(flagsActive: false);
+
+        var dto = await sut.GetAsync(_seller.Id, CancellationToken.None);
+
+        Assert.False(dto.Eligible);
+        Assert.Contains(TransactionErrorCodes.SellerWalletAddressMissing, dto.Reasons!);
+    }
+
+    private UserWalletAddress WithUser(UserWalletAddress row)
+    {
+        row.UserId = _seller.Id;
+        return row;
+    }
+
+    [Fact]
     public async Task Returns_Seller_Wallet_Address_Missing_When_DefaultPayout_Null()
     {
-        _seller.DefaultPayoutAddress = null;
-        Context.Set<User>().Update(_seller);
+        Context.Set<UserWalletAddress>().RemoveRange(
+            Context.Set<UserWalletAddress>().Where(w => w.UserId == _seller.Id));
         await Context.SaveChangesAsync();
 
         var sut = BuildSut(flagsActive: false);

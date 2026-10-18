@@ -44,7 +44,7 @@ public class PostCancelMonitorStarterTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000301",
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = Wallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, Wallet) },
             MobileAuthenticatorVerified = true,
         };
         _buyer = new User
@@ -52,7 +52,7 @@ public class PostCancelMonitorStarterTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = "76561198000000302",
             SteamDisplayName = "Buyer",
-            DefaultRefundAddress = Wallet,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.REFUND, Wallet) },
             MobileAuthenticatorVerified = true,
         };
         context.Set<User>().AddRange(_seller, _buyer);

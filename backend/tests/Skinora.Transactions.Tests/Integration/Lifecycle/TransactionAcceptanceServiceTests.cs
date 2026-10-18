@@ -33,8 +33,10 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Skinora.Platform.Infrastructure.Persistence.PlatformModuleDbRegistration.RegisterPlatformModule();
     }
 
-    private const string ValidWallet1 = "TXyzABCDEFGHJKLMNPQRSTUVWXYZ234567";
-    private const string ValidWallet2 = "TabcDEFGHJKLMNPQRSTUVWXYZ234567Xyz";
+    // Real base58check TRON addresses (T146 — the refund address is validated
+    // with the checksum); tronweb 5.3.5 fromHex.
+    private const string ValidWallet1 = "TSUj7JoASMqs36TxFnpK9zsHs7wi1ji2vE";
+    private const string ValidWallet2 = "TMwDwmmHe5vTFDEiGNWF8RGxic9b8a2sdY";
     private const string SellerSteamId = "76561198000000080";
     private const string BuyerSteamId = "76561198000000081";
     private const string LateBuyerSteamId = "76561198000000999";
@@ -66,7 +68,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = SellerSteamId,
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = ValidWallet1,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet1) },
             MobileAuthenticatorVerified = true,
         };
         _buyer = new User
@@ -122,9 +124,12 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         // snapshot only (asserted on Transaction.BuyerRefundAddress above).
         // Accepting must NOT mutate the buyer's profile default or start the
         // profile-level cooldown (02 §12.2, 04 §7.3 "profil adresi etkilenmez").
-        var buyer = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == _buyer.Id);
-        Assert.Null(buyer.DefaultRefundAddress);
-        Assert.Null(buyer.RefundAddressChangedAt);
+        Assert.False(await Context.Set<UserWalletAddress>().AsNoTracking()
+            .AnyAsync(w => w.UserId == _buyer.Id));
+
+        // K9 (11 §F8) — the accept-time refund address is recorded together
+        // with the network it belongs to (TRON until T147).
+        Assert.Equal(BlockchainNetwork.TRON, persisted.Network);
     }
 
     [Fact]
@@ -261,7 +266,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
 
         var sut = new TransactionAcceptanceService(
             raceDb,
-            new Trc20AddressValidator(),
+            new WalletAddressValidator(),
             new NoMatchWalletSanctionsCheck(),
             new StubAccountFlagChecker(false),
             new TradeUrlParser(),
@@ -310,7 +315,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
 
         var sut = new TransactionAcceptanceService(
             raceDb,
-            new Trc20AddressValidator(),
+            new WalletAddressValidator(),
             new NoMatchWalletSanctionsCheck(),
             new StubAccountFlagChecker(false),
             new TradeUrlParser(),
@@ -358,8 +363,17 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Equal(TransactionErrorCodes.RefundAddressRequired, outcome.ErrorCode);
     }
 
-    [Fact]
-    public async Task Refund_Address_Format_Invalid_Returns_400()
+    [Theory]
+    [InlineData("NOT_A_TRC20_ADDRESS")]
+    // T146 — TRON shape (34 chars, 'T', base58) with a broken checksum: the
+    // pre-T146 regex validator accepted it (tronweb isAddress = false).
+    [InlineData("TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6u")]
+    // T146 — valid base58check over version byte 0x42 instead of 0x41: still
+    // 34 chars starting with 'T', not a TRON address (tronweb isAddress = false).
+    [InlineData("TpSyGx2w2bR9GdrDrYtrYwbvSPhwSmg7ER")]
+    // An Ethereum address is not a TRON refund address while every transaction is TRON.
+    [InlineData("0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed")]
+    public async Task Refund_Address_Format_Invalid_Returns_400(string refundAddress)
     {
         var transaction = await CreateTransactionAsync(
             BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
@@ -367,7 +381,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         var sut = BuildSut();
         var outcome = await sut.AcceptAsync(
             _buyer.Id, transaction.Id,
-            new AcceptTransactionRequest("NOT_A_TRC20_ADDRESS", BuyerTradeUrl),
+            new AcceptTransactionRequest(refundAddress, BuyerTradeUrl),
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.InvalidWallet, outcome.Status);
@@ -394,9 +408,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     public async Task Wallet_Cooldown_Active_Rejects_With_403()
     {
         // Buyer changed refund address 1h ago, cooldown is 24h → blocked.
-        _buyer.RefundAddressChangedAt = _clock.GetUtcNow().UtcDateTime.AddHours(-1);
-        Context.Set<User>().Update(_buyer);
-        await Context.SaveChangesAsync();
+        await SetBuyerRefundAsync(BlockchainNetwork.TRON, ValidWallet1, _clock.GetUtcNow().UtcDateTime.AddHours(-1));
 
         var transaction = await CreateTransactionAsync(
             BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
@@ -415,9 +427,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     public async Task Wallet_Cooldown_Expired_Allows_Acceptance()
     {
         // Buyer changed address 25h ago, cooldown is 24h → allowed.
-        _buyer.RefundAddressChangedAt = _clock.GetUtcNow().UtcDateTime.AddHours(-25);
-        Context.Set<User>().Update(_buyer);
-        await Context.SaveChangesAsync();
+        await SetBuyerRefundAsync(BlockchainNetwork.TRON, ValidWallet1, _clock.GetUtcNow().UtcDateTime.AddHours(-25));
 
         var transaction = await CreateTransactionAsync(
             BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
@@ -429,6 +439,37 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             CancellationToken.None);
 
         Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+    }
+
+    [Fact]
+    public async Task Wallet_Cooldown_Is_Per_Network_Ethereum_Change_Does_Not_Block_Tron_Acceptance()
+    {
+        // T146 (02 §12.3, 06 §1.4): the buyer changed the ETHEREUM refund
+        // address 1h ago (24h cooldown). The transaction is TRON (until T147),
+        // so only the TRON refund address's cooldown applies — and the TRON
+        // address was set long ago.
+        await SetBuyerRefundAsync(BlockchainNetwork.TRON, ValidWallet1, _clock.GetUtcNow().UtcDateTime.AddDays(-10));
+        await SetBuyerRefundAsync(BlockchainNetwork.ETHEREUM, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+            _clock.GetUtcNow().UtcDateTime.AddHours(-1));
+
+        var transaction = await CreateTransactionAsync(
+            BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
+
+        var sut = BuildSut();
+        var outcome = await sut.AcceptAsync(
+            _buyer.Id, transaction.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
+    }
+
+    private async Task SetBuyerRefundAsync(BlockchainNetwork network, string address, DateTime? changedAt)
+    {
+        var row = UserWalletAddress.For(network, WalletAddressType.REFUND, address, changedAt);
+        row.UserId = _buyer.Id;
+        Context.Set<UserWalletAddress>().Add(row);
+        await Context.SaveChangesAsync();
     }
 
     [Fact]
@@ -483,17 +524,14 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
     public async Task Accept_With_Different_Address_Does_Not_Mutate_Profile_Default()
     {
         // WP12 (T90 K3) — even when the accept-time address differs from the
-        // buyer's profile default, accepting leaves User.DefaultRefundAddress +
-        // RefundAddressChangedAt untouched (02 §12.2, 04 §7.3 "profil adresi
+        // buyer's profile default, accepting leaves the buyer's REFUND
+        // UserWalletAddress row (address + ChangedAt) untouched (02 §12.2, 04 §7.3 "profil adresi
         // etkilenmez"). The per-transaction address lives only on
         // Transaction.BuyerRefundAddress. This replaces the prior
         // "same address does not reset cooldown" test — the accept path no
         // longer writes the profile at all, so the differentiating branch is
         // gone and the meaningful invariant is "profile is never touched".
-        _buyer.DefaultRefundAddress = ValidWallet1;
-        _buyer.RefundAddressChangedAt = null;
-        Context.Set<User>().Update(_buyer);
-        await Context.SaveChangesAsync();
+        await SetBuyerRefundAsync(BlockchainNetwork.TRON, ValidWallet1, changedAt: null);
 
         var transaction = await CreateTransactionAsync(
             BuyerIdentificationMethod.STEAM_ID, BuyerSteamId);
@@ -507,9 +545,10 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Equal(AcceptTransactionStatus.Accepted, outcome.Status);
         var persisted = await Context.Set<Transaction>().AsNoTracking().SingleAsync(t => t.Id == transaction.Id);
         Assert.Equal(ValidWallet2, persisted.BuyerRefundAddress); // snapshot = request
-        var buyer = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == _buyer.Id);
-        Assert.Equal(ValidWallet1, buyer.DefaultRefundAddress);   // profile unchanged
-        Assert.Null(buyer.RefundAddressChangedAt);                // no cooldown started
+        var profile = await Context.Set<UserWalletAddress>().AsNoTracking()
+            .SingleAsync(w => w.UserId == _buyer.Id && w.Type == WalletAddressType.REFUND);
+        Assert.Equal(ValidWallet1, profile.Address);   // profile unchanged
+        Assert.Null(profile.ChangedAt);                // no cooldown started
     }
 
     // ---------------------------------------------------------------------
@@ -865,7 +904,7 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         ISteamTradeEligibilityChecker? steamEligibility = null) =>
         new(
             Context,
-            new Trc20AddressValidator(),
+            new WalletAddressValidator(),
             sanctions ?? new NoMatchWalletSanctionsCheck(),
             flagChecker ?? new StubAccountFlagChecker(false),
             // T119a — the real U17 parser, not a stub: the accept endpoint's

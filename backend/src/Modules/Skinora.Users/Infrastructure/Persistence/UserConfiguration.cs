@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Skinora.Shared.Domain.Seed;
-using Skinora.Shared.Persistence.Converters;
 using Skinora.Users.Domain.Entities;
 
 namespace Skinora.Users.Infrastructure.Persistence;
@@ -30,20 +29,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.SteamAvatarUrl)
             .HasMaxLength(500);
-
-        // --- Wallet addresses ---
-        // Canonical form (06 §1.4, T145): EVM lowercase, TRON unchanged.
-        builder.Property(u => u.DefaultPayoutAddress)
-            .HasMaxLength(50)
-            .HasConversion(CanonicalChainIdentifierConverter.Instance);
-
-        builder.Property(u => u.DefaultRefundAddress)
-            .HasMaxLength(50)
-            .HasConversion(CanonicalChainIdentifierConverter.Instance);
-
-        builder.Property(u => u.PayoutAddressChangedAt);
-
-        builder.Property(u => u.RefundAddressChangedAt);
 
         // --- Profile ---
         builder.Property(u => u.Email)
@@ -105,13 +90,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(u => u.SteamId)
             .IsUnique()
             .HasDatabaseName("UQ_Users_SteamId");
-
-        // --- Performance indexes (06 §5.2) ---
-        builder.HasIndex(u => u.DefaultPayoutAddress)
-            .HasDatabaseName("IX_Users_DefaultPayoutAddress");
-
-        builder.HasIndex(u => u.DefaultRefundAddress)
-            .HasDatabaseName("IX_Users_DefaultRefundAddress");
 
         // --- Seed: SYSTEM service account (06 §8.9) ---
         // Referenced as the sentinel ActorId for AuditLog / TransactionHistory

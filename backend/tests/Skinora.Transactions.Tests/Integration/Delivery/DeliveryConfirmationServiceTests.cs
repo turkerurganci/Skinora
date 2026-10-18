@@ -65,7 +65,7 @@ public class DeliveryConfirmationServiceTests : IntegrationTestBase
             Id = Guid.NewGuid(),
             SteamId = SellerSteamId,
             SteamDisplayName = "Seller",
-            DefaultPayoutAddress = ValidWallet1,
+            WalletAddresses = { UserWalletAddress.For(BlockchainNetwork.TRON, WalletAddressType.PAYOUT, ValidWallet1) },
         };
         _buyer = new User
         {
