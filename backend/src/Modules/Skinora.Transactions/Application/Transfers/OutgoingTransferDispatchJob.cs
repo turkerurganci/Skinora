@@ -79,6 +79,7 @@ public sealed class OutgoingTransferDispatchJob
 
     private readonly AppDbContext _db;
     private readonly IBlockchainServiceRegistry _services;
+    private readonly IBlockchainNetworkHealth _health;
     private readonly ITransferRetryPolicy _retryPolicy;
     private readonly IOutboxService _outbox;
     private readonly IStablecoinContractRegistry _contracts;
@@ -88,6 +89,7 @@ public sealed class OutgoingTransferDispatchJob
     public OutgoingTransferDispatchJob(
         AppDbContext db,
         IBlockchainServiceRegistry services,
+        IBlockchainNetworkHealth health,
         ITransferRetryPolicy retryPolicy,
         IOutboxService outbox,
         IStablecoinContractRegistry contracts,
@@ -96,6 +98,7 @@ public sealed class OutgoingTransferDispatchJob
     {
         _db = db;
         _services = services;
+        _health = health;
         _retryPolicy = retryPolicy;
         _outbox = outbox;
         _contracts = contracts;
@@ -115,29 +118,56 @@ public sealed class OutgoingTransferDispatchJob
         // sweeps. Filtering in the query keeps the batch for rows that can move.
         var configured = _services.ConfiguredNetworks.ToList();
         await LogParkedRowsAsync(configured, cancellationToken);
-        if (configured.Count == 0) return;
 
-        var candidateIds = await _db.Set<BlockchainTransaction>()
-            .AsNoTracking()
-            .IgnoreQueryFilters()
-            .Where(b => b.Status == BlockchainTransactionStatus.PENDING
-                && OutboundTypes.Contains(b.Type)
-                && configured.Contains(b.Network)
-                && (b.NextAttemptAt == null || b.NextAttemptAt <= now))
-            .OrderBy(b => b.CreatedAt)
-            .Take(BatchSize)
-            .Select(b => b.Id)
-            .ToListAsync(cancellationToken);
+        // T150 — a configured network in a detected outage is skipped the same
+        // way (its rows keep their retry budget), every reachable network gets
+        // its own oldest-first batch, and the batches are worked round-robin
+        // (NetworkWorkQueue).
+        var reachable = _services.ReachableNetworks(_health);
+        foreach (var network in configured.Except(reachable))
+        {
+            _logger.LogWarning(
+                "Outbound rows on {Network} wait: its blockchain service is in a detected outage — nothing sent, retry budget kept, other networks unaffected.",
+                network);
+        }
+        if (reachable.Count == 0) return;
 
-        if (candidateIds.Count == 0) return;
+        var perNetwork = new List<IReadOnlyList<(BlockchainNetwork Network, Guid Id)>>();
+        foreach (var network in reachable)
+        {
+            var ids = await _db.Set<BlockchainTransaction>()
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(b => b.Status == BlockchainTransactionStatus.PENDING
+                    && OutboundTypes.Contains(b.Type)
+                    && b.Network == network
+                    && (b.NextAttemptAt == null || b.NextAttemptAt <= now))
+                .OrderBy(b => b.CreatedAt)
+                .Take(BatchSize)
+                .Select(b => b.Id)
+                .ToListAsync(cancellationToken);
+            perNetwork.Add(ids.Select(id => (network, id)).ToList());
+        }
+
+        var candidates = NetworkWorkQueue.Interleave(perNetwork);
+        if (candidates.Count == 0) return;
 
         _logger.LogInformation(
-            "OutgoingTransferDispatchJob picked up {Count} eligible rows", candidateIds.Count);
+            "OutgoingTransferDispatchJob picked up {Count} eligible rows", candidates.Count);
 
-        foreach (var id in candidateIds)
+        var breaker = new NetworkRunBreaker();
+        foreach (var (network, id) in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await DispatchOneAsync(id, cancellationToken);
+            if (breaker.IsTripped(network)) continue;
+
+            var serviceUnreachable = await DispatchOneAsync(id, cancellationToken);
+            if (serviceUnreachable && breaker.Trip(network))
+            {
+                _logger.LogWarning(
+                    "{Network} blockchain service is unreachable — its remaining outbound rows wait for the next run (nothing sent, retry budget kept); other networks continue.",
+                    network);
+            }
         }
     }
 
@@ -173,11 +203,11 @@ public sealed class OutgoingTransferDispatchJob
         }
     }
 
-    private async Task DispatchOneAsync(Guid id, CancellationToken cancellationToken)
+    private async Task<bool> DispatchOneAsync(Guid id, CancellationToken cancellationToken)
     {
         var row = await _db.Set<BlockchainTransaction>()
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
-        if (row is null || row.Status != BlockchainTransactionStatus.PENDING) return;
+        if (row is null || row.Status != BlockchainTransactionStatus.PENDING) return false;
 
         // T148 — fail closed per network (05 §3.3a). A row whose network has no
         // service configured is left PENDING untouched: no broadcast, no retry
@@ -190,7 +220,7 @@ public sealed class OutgoingTransferDispatchJob
             _logger.LogError(
                 "Outbound row {Id} ({Type}) is on {Network}, which has no blockchain service configured — left PENDING, nothing sent.",
                 row.Id, row.Type, row.Network);
-            return;
+            return false;
         }
 
         // For refund/sweep flows the deposit address is the PaymentAddress
@@ -214,7 +244,7 @@ public sealed class OutgoingTransferDispatchJob
                 _logger.LogWarning(
                     "Dispatcher could not resolve deposit address for outbound row {Id} ({Type}, transaction {TransactionId}) — skipping",
                     row.Id, row.Type, row.TransactionId);
-                return;
+                return false;
             }
             var addressRow = await _db.Set<PaymentAddress>()
                 .AsNoTracking()
@@ -226,7 +256,7 @@ public sealed class OutgoingTransferDispatchJob
                 _logger.LogWarning(
                     "Dispatcher could not resolve PaymentAddress row {PaymentAddressId} for outbound {Id} ({Type})",
                     sourcePayment.PaymentAddressId, row.Id, row.Type);
-                return;
+                return false;
             }
             depositIndex = addressRow.HdWalletIndex;
             depositAddress = addressRow.Address;
@@ -259,7 +289,7 @@ public sealed class OutgoingTransferDispatchJob
                         $"ActualTokenAddress '{row.ActualTokenAddress}' does not match a configured stablecoin contract."),
                     terminal: true,
                     cancellationToken);
-                return;
+                return false;
             }
 
             broadcastToken = actualToken.Value;
@@ -280,18 +310,18 @@ public sealed class OutgoingTransferDispatchJob
         {
             case TransferBroadcastStatus.Success:
                 await HandleSuccessAsync(row, result, cancellationToken);
-                return;
+                return false;
 
             case TransferBroadcastStatus.InvalidRequest:
                 // Sidecar refused the payload outright — no further attempts
                 // help. Flip to FAILED and alert immediately.
                 await HandleFailureAsync(row, result, terminal: true, cancellationToken);
-                return;
+                return false;
 
             case TransferBroadcastStatus.TransientFailure:
             default:
                 await HandleTransientAsync(row, result, cancellationToken);
-                return;
+                return result.ErrorCode == HttpBlockchainTransferClient.TransportFailureCode;
         }
     }
 

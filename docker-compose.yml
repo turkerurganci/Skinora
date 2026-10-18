@@ -79,10 +79,13 @@ services:
       - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS:-}
       - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
       # T148 — Ethereum's own service, key, webhook secret, token contracts
-      # and wallet pair (05 §3.3a: every network has its own). All empty until
-      # the Ethereum service exists (T150/T158): an empty EthereumSidecar BaseUrl
-      # makes every Ethereum call fail closed and leaves TRON untouched. The
-      # webhook secret MUST differ from TRON's (BLOCKCHAIN_WEBHOOK_SECRET).
+      # and wallet pair (05 §3.3a: every network has its own). The service is
+      # skinora-ethereum-sidecar below (T150, compose profile "ethereum").
+      # ETHEREUM_SIDECAR_BASE_URL stays EMPTY until that service is complete
+      # (T151–T154; the T150 skeleton only derives addresses): an empty
+      # EthereumSidecar BaseUrl makes every Ethereum call fail closed and
+      # leaves TRON untouched. Then: http://skinora-ethereum-sidecar:5300.
+      # The webhook secret MUST differ from TRON's (BLOCKCHAIN_WEBHOOK_SECRET).
       - EthereumSidecar__BaseUrl=${ETHEREUM_SIDECAR_BASE_URL:-}
       - EthereumSidecar__InternalKey=${ETHEREUM_SIDECAR_INTERNAL_KEY:-}
       - Webhook__EthereumSharedSecret=${ETHEREUM_WEBHOOK_SECRET:-}
@@ -306,6 +309,68 @@ services:
     networks:
       - skinora-network
 
+  # T150 — the Ethereum service (11 §F8 K7: its own container, its own seed;
+  # 05 §3.3a, 08 §3.7). Opt-in through the "ethereum" profile so a stack
+  # without the Ethereum secrets keeps starting:
+  #   docker compose -f docker-compose.yml --profile ethereum up -d
+  # Signing material arrives ONLY as Docker secrets (files under ./secrets,
+  # see secrets/README.md) and ONLY to this service: the TRON seed and keys
+  # never reach it, and its seed and keys reach no other container. It does
+  # not start without INTERNAL_KEY (>= 32 chars), its seed and a primary RPC.
+  skinora-ethereum-sidecar:
+    build:
+      context: ./sidecar-ethereum
+      dockerfile: Dockerfile
+    container_name: skinora-ethereum-sidecar
+    profiles: ["ethereum"]
+    ports:
+      - "${ETHEREUM_SIDECAR_PORT:-5300}:5300"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - BACKEND_URL=${ETHEREUM_SIDECAR_BACKEND_URL:-http://skinora-backend:5000}
+      # Must match the backend's EthereumSidecar__InternalKey above.
+      - INTERNAL_KEY=${ETHEREUM_SIDECAR_INTERNAL_KEY:-}
+      # Must match the backend's Webhook__EthereumSharedSecret (used from T151).
+      - WEBHOOK_SECRET=${ETHEREUM_WEBHOOK_SECRET:-}
+      - ETHEREUM_NETWORK=${ETHEREUM_NETWORK:-sepolia}
+      # Provider URLs carry the API keys (08 §3.7.1: Alchemy primary,
+      # Chainstack backup; per-provider eth_getLogs limits, §3.7.4).
+      - ETHEREUM_RPC_PRIMARY_URL=${ETHEREUM_RPC_PRIMARY_URL:-}
+      - ETHEREUM_RPC_PRIMARY_NAME=${ETHEREUM_RPC_PRIMARY_NAME:-alchemy}
+      - ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE=${ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE:-10}
+      - ETHEREUM_RPC_PRIMARY_MAX_ADDRESSES=${ETHEREUM_RPC_PRIMARY_MAX_ADDRESSES:-1000}
+      - ETHEREUM_RPC_BACKUP_URL=${ETHEREUM_RPC_BACKUP_URL:-}
+      - ETHEREUM_RPC_BACKUP_NAME=${ETHEREUM_RPC_BACKUP_NAME:-chainstack}
+      - ETHEREUM_RPC_BACKUP_MAX_BLOCK_RANGE=${ETHEREUM_RPC_BACKUP_MAX_BLOCK_RANGE:-100}
+      - ETHEREUM_RPC_BACKUP_MAX_ADDRESSES=${ETHEREUM_RPC_BACKUP_MAX_ADDRESSES:-1000}
+      - ETHEREUM_FINALIZED_POLL_INTERVAL_MS=${ETHEREUM_FINALIZED_POLL_INTERVAL_MS:-30000}
+      - ETHEREUM_FINALIZED_STALL_SECONDS=${ETHEREUM_FINALIZED_STALL_SECONDS:-1800}
+      # Same values the backend reads above — they MUST agree (the TRON rule).
+      - ETHEREUM_USDT_CONTRACT=${ETHEREUM_USDT_CONTRACT:-}
+      - ETHEREUM_USDC_CONTRACT=${ETHEREUM_USDC_CONTRACT:-}
+      - ETHEREUM_HOT_WALLET_ADDRESS=${ETHEREUM_HOT_WALLET_ADDRESS:-}
+      - ETHEREUM_COLD_WALLET_ADDRESS=${ETHEREUM_COLD_WALLET_ADDRESS:-}
+      - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
+    # Mounted at /run/secrets/<name>; the service reads them from there.
+    secrets:
+      - ethereum_hd_mnemonic
+      - ethereum_hot_wallet_private_key
+      - ethereum_fuel_wallet_private_key
+    depends_on:
+      skinora-backend:
+        condition: service_healthy
+      skinora-loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5300/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - skinora-network
+
   # --- Infrastructure Services ---
 
   skinora-db:
@@ -514,6 +579,18 @@ volumes:
   # every `up` by skinora-grafana-provisioning. Never edit it directly.
   skinora-grafana-provisioning:
   skinora-uptime-kuma-data:
+
+# T150 — Docker secrets of the Ethereum service (05 §3.5, 08 §3.7.2, K7). Files
+# under ./secrets (gitignored; secrets/README.md). Only the "ethereum" profile
+# needs them to exist. The two key files may be empty until T152 / T153 use
+# them; the seed file may not.
+secrets:
+  ethereum_hd_mnemonic:
+    file: ./secrets/ethereum_hd_mnemonic.txt
+  ethereum_hot_wallet_private_key:
+    file: ./secrets/ethereum_hot_wallet_private_key.txt
+  ethereum_fuel_wallet_private_key:
+    file: ./secrets/ethereum_fuel_wallet_private_key.txt
 
 networks:
   skinora-network:

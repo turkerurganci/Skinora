@@ -1,6 +1,6 @@
 name: Docker Publish
 
-# main'e merge sonrasi 4 servis image'ini ghcr.io'ya push eder.
+# main'e merge sonrasi 5 servis image'ini ghcr.io'ya push eder (T150: + sidecar-ethereum).
 # PR'larda calismaz (ci.yml docker-build-check zaten build dogrulamasi yapar).
 
 on:
@@ -30,6 +30,7 @@ jobs:
           - { name: frontend,           context: frontend           }
           - { name: sidecar-steam,      context: sidecar-steam      }
           - { name: sidecar-blockchain, context: sidecar-blockchain }
+          - { name: sidecar-ethereum,   context: sidecar-ethereum   }
     steps:
       - name: Checkout
         uses: actions/checkout@v4

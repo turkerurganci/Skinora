@@ -120,6 +120,58 @@ groups:
           summary: Blockchain sidecar is down
           description: The skinora-blockchain-sidecar service has been unreachable for more than 2 minutes.
 
+      # T150 — Ethereum `finalized` stopped advancing (08 §3.7.8; 30 min eşiği
+      # T142 ölçümünden: olağan gecikme 12,8–18,8 dk). Eşik tekrarlanmıyor:
+      # servis kendi /health'inin uyguladığı eşiği
+      # `skinora_ethereum_finalized_stall_threshold_seconds` gauge'una yazıyor
+      # (ETHEREUM_FINALIZED_STALL_SECONDS), kural yaşı ona bölüyor — oran > 1.
+      # Yaş scrape anında bloğun kendi zaman damgasından hesaplanır; servis
+      # başı okuyamıyorsa da yaş büyür. `or vector(0)`: servis kurulu değilken
+      # (compose profili "ethereum" kapalı) seri yoktur, kural sessiz kalır.
+      - uid: ethereum-finalized-stalled
+        title: Ethereum Finality Stalled
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max(skinora_ethereum_finalized_block_age_seconds) / max(skinora_ethereum_finalized_stall_threshold_seconds)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Ethereum finalized block is older than the stall threshold
+          description: >-
+            The last finalized Ethereum block the Ethereum service read is older
+            than its stall threshold (ETHEREUM_FINALIZED_STALL_SECONDS, 30 min by
+            default; normal finality lag is 13–19 min). No Ethereum payment can
+            be accepted while finality is stalled (11 §F8 K5); the service
+            reports unhealthy, so the backend freezes Ethereum payment timeouts
+            and closes Ethereum for new transactions. TRON is unaffected.
+            Check skinora_ethereum_rpc_failover_total and the providers.
+
   - orgId: 1
     name: Skinora Warning Alerts
     folder: Skinora Alerts

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { HDNodeWallet, Mnemonic } from 'ethers';
 import TronWeb from 'tronweb';
 import {
@@ -10,6 +10,8 @@ import {
   derivationPath,
   masterNodeFromPhrase,
 } from './HdWalletService.js';
+import { deriveChild } from './hdRoot.js';
+import { SidecarError } from '../errors/SidecarError.js';
 
 // BIP-39 reference mnemonic (12-word "abandon ... about", empty passphrase).
 //
@@ -34,8 +36,7 @@ import {
 // reproduces exactly the five addresses the old version of this file asserted
 // (and wrongly attributed to the standard path); index 0 of that path is
 // PRE_T143_INDEX0_ADDRESS below.
-const TREZOR_MNEMONIC =
-  'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+const TREZOR_MNEMONIC = `${'abandon '.repeat(11)}about`;
 
 // TRON, m/44'/195'/0'/0/{index}.
 const EXPECTED_ADDRESSES: ReadonlyArray<{ readonly index: number; readonly address: string }> = [
@@ -106,14 +107,72 @@ describe('master node (T143 regression guard)', () => {
   });
 
   it.each(EXPECTED_ETHEREUM_ADDRESSES)(
-    "derives the known Ethereum address at m/44'/60'/0'/0/$index",
+    "derives the known Ethereum address at m/44'/60'/0'/0/$index through the production root and child builders",
     ({ index, address }) => {
+      // T150: masterNodeFromPhrase IS the root builder HdWalletService uses
+      // (getRoot delegates to it) and deriveChild is its child step, so these
+      // vectors run through the production path. The Ethereum service runs
+      // the same vectors through its own copy of hdRoot.ts.
       const path = `m/44'/60'/0'/0/${index}`;
-      const child = masterNodeFromPhrase(TREZOR_MNEMONIC).derivePath(path);
+      const child = deriveChild(masterNodeFromPhrase(TREZOR_MNEMONIC), path);
       expect(child.path).toBe(path);
       expect(child.address).toBe(address);
     },
   );
+});
+
+/**
+ * T150 (T143 validation, non-blocking finding 2): the master-node guard must
+ * be exercised through the SERVICE, not only through the helper. ethers is
+ * made to ignore the explicit "m" path — the pre-T143 call shape — so the
+ * service is handed the depth-5 node at m/44'/60'/0'/0/0 as its "root".
+ */
+describe('HdWalletService — master-node guard through the service', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function returnDefaultPathNodeInsteadOfMaster(): void {
+    const original = HDNodeWallet.fromMnemonic.bind(HDNodeWallet);
+    vi.spyOn(HDNodeWallet, 'fromMnemonic').mockImplementation((mnemonic) => original(mnemonic));
+  }
+
+  it.each(['derive', 'deriveSigner'] as const)(
+    '%s refuses with HD_ROOT_NOT_MASTER when the root is not the master node',
+    (method) => {
+      returnDefaultPathNodeInsteadOfMaster();
+      const service = new HdWalletService(TREZOR_MNEMONIC);
+
+      let caught: unknown;
+      try {
+        service[method](0);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(SidecarError);
+      expect((caught as SidecarError).code).toBe('HD_ROOT_NOT_MASTER');
+      expect(HDNodeWallet.fromMnemonic).toHaveBeenCalled();
+    },
+  );
+
+  it('the same service derives the standard address once the root is the master node', () => {
+    // Control: without the mock the identical call succeeds, so the refusal
+    // above comes from the root check, not from the phrase or the index.
+    expect(new HdWalletService(TREZOR_MNEMONIC).derive(0).address).toBe(
+      EXPECTED_ADDRESSES[0].address,
+    );
+  });
+
+  it('a malformed phrase is INVALID_MASTER_MNEMONIC, never HD_ROOT_NOT_MASTER', () => {
+    const service = new HdWalletService(`${'abandon '.repeat(11)}abandon`);
+    let caught: unknown;
+    try {
+      service.derive(0);
+    } catch (err) {
+      caught = err;
+    }
+    expect((caught as SidecarError).code).toBe('INVALID_MASTER_MNEMONIC');
+  });
 });
 
 describe('HdWalletService', () => {
@@ -214,9 +273,7 @@ describe('HdWalletService', () => {
   describe('invalid mnemonic', () => {
     it('rejects a phrase that fails BIP-39 checksum on first derive', () => {
       // 12 valid wordlist words but invalid checksum (changed last word).
-      const service = new HdWalletService(
-        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon',
-      );
+      const service = new HdWalletService(`${'abandon '.repeat(11)}abandon`);
       expect(() => service.derive(0)).toThrow(/INVALID_MASTER_MNEMONIC|invalid|checksum/i);
     });
   });

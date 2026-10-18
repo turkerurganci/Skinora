@@ -33,6 +33,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly AppDbContext _db;
     private readonly StubBlockchainTransferClient _client;
+    private readonly SettableNetworkHealth _health = new();
     private readonly FakeBlockchainServiceRegistry _registry;
     private readonly CapturingOutboxService _outbox;
     private readonly FakeTimeProvider _clock;
@@ -58,6 +59,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         _sut = new OutgoingTransferConfirmationJob(
             _db,
             _registry,
+            _health,
             _outbox,
             _clock,
             NullLogger<OutgoingTransferConfirmationJob>.Instance);
@@ -208,6 +210,88 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
             parkedRows,
             await _db.Set<BlockchainTransaction>().AsNoTracking().CountAsync(b =>
                 b.Network == BlockchainNetwork.ETHEREUM && b.Status == BlockchainTransactionStatus.DETECTED));
+    }
+
+    // -------------------- T150 — configured but unreachable network --------------------
+
+    private async Task<List<BlockchainTransaction>> SeedEthereumDetectedAsync(int count)
+    {
+        var rows = new List<BlockchainTransaction>();
+        for (var i = 0; i < count; i++)
+        {
+            var eth = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+            eth.Network = BlockchainNetwork.ETHEREUM;
+            rows.Add(eth);
+            _clock.Advance(TimeSpan.FromSeconds(1));
+        }
+        await _db.SaveChangesAsync();
+        return rows;
+    }
+
+    [Fact]
+    public async Task A_Down_Network_Is_Asked_Once_Per_Run_And_Does_Not_Hold_Tron()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(TransferStatusOutcome.Unavailable, null, null, null, "connection refused"),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var ethRows = await SeedEthereumDetectedAsync(OutgoingTransferConfirmationJob.BatchSize + 5);
+        var tron = await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_000L, 20, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(tron.TxHash, Assert.Single(_client.StatusCalls));
+        Assert.Equal(ethRows[0].TxHash, Assert.Single(ethereum.StatusCalls));
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == tron.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        Assert.Equal(
+            ethRows.Count,
+            await _db.Set<BlockchainTransaction>().AsNoTracking().CountAsync(b =>
+                b.Network == BlockchainNetwork.ETHEREUM && b.Status == BlockchainTransactionStatus.DETECTED));
+    }
+
+    [Fact]
+    public async Task Each_Network_Has_Its_Own_Batch_Of_Pending_Confirmations()
+    {
+        // Ethereum rows waiting for `finalized` (Pending) fill a whole batch and
+        // are all older than TRON's; TRON's are still read in the same run,
+        // round-robin.
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(TransferStatusOutcome.Pending, null, null, null, null),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        await SeedEthereumDetectedAsync(OutgoingTransferConfirmationJob.BatchSize);
+        var tron = await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_000L, 20, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(tron.TxHash, Assert.Single(_client.StatusCalls));
+        Assert.Equal(OutgoingTransferConfirmationJob.BatchSize, ethereum.StatusCalls.Count);
+        Assert.Equal(
+            BlockchainNetwork.TRON,
+            _registry.Requests.First(r => r.Kind == "Transfers").Network);
+    }
+
+    [Fact]
+    public async Task A_Network_In_A_Detected_Outage_Is_Not_Asked()
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        await SeedEthereumDetectedAsync(2);
+        var tron = await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        _health.Degraded.Add(BlockchainNetwork.ETHEREUM);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(ethereum.StatusCalls);
+        Assert.DoesNotContain(_registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        Assert.Equal(tron.TxHash, Assert.Single(_client.StatusCalls));
     }
 
     [Fact]

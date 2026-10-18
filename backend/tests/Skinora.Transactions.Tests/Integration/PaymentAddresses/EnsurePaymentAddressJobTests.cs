@@ -1,4 +1,5 @@
 using Skinora.Transactions.Tests.Helpers;
+using Skinora.Transactions.Application.Networks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Skinora.Shared.Enums;
@@ -215,13 +216,71 @@ public class EnsurePaymentAddressJobTests : IntegrationTestBase
         Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == tron.Id));
     }
 
-    private EnsurePaymentAddressJob BuildJob(FakeBlockchainServiceRegistry? registry = null)
+    // T150 — a CONFIGURED network whose service fails must not hold the other
+    // network's allocations either (11 §F8 T150, T148 validation N1–N2): each
+    // network has its own oldest-first batch and the batches are worked
+    // round-robin. Before T150 one batch of BatchSize covered every configured
+    // network, so BatchSize older failing Ethereum transactions kept TRON's out.
+    [Fact]
+    public async Task A_Configured_But_Failing_Network_Does_Not_Starve_Tron()
+    {
+        for (var i = 0; i < EnsurePaymentAddressJob.BatchSize + 5; i++)
+        {
+            await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.ETHEREUM);
+        }
+        var tron = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.TRON);
+
+        var ethereumSidecar = new StubBlockchainSidecarClient();
+        for (var i = 0; i < EnsurePaymentAddressJob.BatchSize; i++)
+        {
+            ethereumSidecar.Responses.Enqueue(
+                new BlockchainSidecarDeriveResult(BlockchainSidecarStatus.Unavailable, null, null));
+        }
+        var registry = FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar)
+            .With(BlockchainNetwork.ETHEREUM, sidecar: ethereumSidecar);
+
+        await BuildJob(registry).ExecuteAsync();
+
+        Assert.Equal(tron.Id, Assert.Single(_sidecar.Calls).TransactionId);
+        // Round-robin: TRON's turn comes at the start of the run, not after
+        // Ethereum's whole batch of failures.
+        var firstTron = registry.Requests.FindIndex(r => r.Network == BlockchainNetwork.TRON);
+        Assert.InRange(firstTron, 0, 1);
+        Assert.Equal(EnsurePaymentAddressJob.BatchSize, ethereumSidecar.Calls.Count);
+        await using var verify = CreateContext();
+        Assert.True(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == tron.Id));
+    }
+
+    [Fact]
+    public async Task A_Network_In_A_Detected_Outage_Is_Not_Asked_And_The_Other_Proceeds()
+    {
+        var eth = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.ETHEREUM);
+        var tron = await SeedTransactionAsync(TransactionStatus.ACCEPTED, BlockchainNetwork.TRON);
+        var ethereumSidecar = new StubBlockchainSidecarClient();
+        var registry = FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar)
+            .With(BlockchainNetwork.ETHEREUM, sidecar: ethereumSidecar);
+        var health = new SettableNetworkHealth();
+        health.Degraded.Add(BlockchainNetwork.ETHEREUM);
+
+        await BuildJob(registry, health).ExecuteAsync();
+
+        Assert.Empty(ethereumSidecar.Calls);
+        Assert.DoesNotContain(registry.Requests, r => r.Network == BlockchainNetwork.ETHEREUM);
+        Assert.Equal(tron.Id, Assert.Single(_sidecar.Calls).TransactionId);
+        await using var verify = CreateContext();
+        Assert.False(await verify.Set<PaymentAddress>().AnyAsync(p => p.TransactionId == eth.Id));
+    }
+
+    private EnsurePaymentAddressJob BuildJob(
+        FakeBlockchainServiceRegistry? registry = null,
+        IBlockchainNetworkHealth? health = null)
     {
         registry ??= FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar);
         var allocator = new PaymentAddressAllocator(
             Context, registry, NullLogger<PaymentAddressAllocator>.Instance);
         return new EnsurePaymentAddressJob(
-            Context, allocator, registry, NullLogger<EnsurePaymentAddressJob>.Instance);
+            Context, allocator, registry, health ?? new SettableNetworkHealth(),
+            NullLogger<EnsurePaymentAddressJob>.Instance);
     }
 
     private async Task<Transaction> SeedTransactionAsync(

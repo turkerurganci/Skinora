@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Skinora.API.Outbox;
 using Skinora.API.Tests.Common;
 using Skinora.Shared.BackgroundJobs;
@@ -126,6 +127,7 @@ public class OutboxTests : IDisposable
     private readonly SqliteConnection _connection;
     private readonly ServiceProvider _serviceProvider;
     private readonly OutboxOptions _options;
+    private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero));
 
     public OutboxTests()
     {
@@ -153,6 +155,9 @@ public class OutboxTests : IDisposable
             DefaultExternalIdempotencyLeaseSeconds = 60,
         };
         services.AddSingleton(Options.Create(_options));
+
+        // T150 — the dispatcher's retry backoff reads this clock.
+        services.AddSingleton<TimeProvider>(_clock);
 
         // MediatR — register handlers from this test assembly.
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(OutboxTests).Assembly));
@@ -369,9 +374,10 @@ public class OutboxTests : IDisposable
     {
         await PublishAsync(new AlwaysFailingTestEvent(Guid.NewGuid(), DateTime.UtcNow));
 
-        // 06 §3.18 — dispatcher pulls PENDING + FAILED together; consecutive
-        // iterations keep retrying the same row until MaxRetryCount.
+        // 06 §3.18 — a FAILED row is retried on a later iteration once its
+        // backoff (T150) has passed.
         await RunDispatcherAsync();
+        _clock.Advance(OutboxDispatcher.RetryDelay(_options, 1));
         await RunDispatcherAsync();
 
         var row = (await AllOutboxAsync()).Single();
@@ -385,9 +391,7 @@ public class OutboxTests : IDisposable
         await PublishAsync(new AlwaysFailingTestEvent(Guid.NewGuid(), DateTime.UtcNow));
 
         // MaxRetryCount = 3 in test options.
-        await RunDispatcherAsync();
-        await RunDispatcherAsync();
-        await RunDispatcherAsync();
+        await RunUntilAttemptsAsync(3);
 
         var row = (await AllOutboxAsync()).Single();
         Assert.Equal(OutboxMessageStatus.FAILED, row.Status);
@@ -396,6 +400,151 @@ public class OutboxTests : IDisposable
         var sink = _serviceProvider.GetRequiredService<SpyOutboxAdminAlertSink>();
         Assert.Single(sink.Raised);
         Assert.Equal(row.Id, sink.Raised[0].Id);
+    }
+
+    // ----------------------------- T150 — backoff, no starvation --------
+    //
+    // OutboxNoBackoffOrDeadLetter (T148 validation N1): FAILED rows were re-read
+    // on every poll in one oldest-first batch with fresh rows, so enough
+    // failures — a configured-but-unreachable network's monitor starts — took
+    // every slot and stalled every other event.
+
+    /// <summary>Runs iterations, advancing the clock past each backoff, until the failing row has <paramref name="attempts"/> attempts.</summary>
+    private async Task RunUntilAttemptsAsync(int attempts)
+    {
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            await RunDispatcherAsync();
+            _clock.Advance(OutboxDispatcher.RetryDelay(_options, attempt));
+        }
+    }
+
+    [Fact]
+    public async Task Failed_Row_Waits_For_Its_Backoff_Before_The_Next_Attempt()
+    {
+        await PublishAsync(new AlwaysFailingTestEvent(Guid.NewGuid(), DateTime.UtcNow));
+        var start = _clock.GetUtcNow().UtcDateTime;
+
+        await RunDispatcherAsync();
+        var row = (await AllOutboxAsync()).Single();
+        Assert.Equal(1, row.RetryCount);
+        Assert.Equal(start.AddSeconds(_options.RetryBackoffBaseSeconds), row.NextAttemptAt);
+
+        // Not due yet: further polls leave it alone.
+        _clock.Advance(TimeSpan.FromSeconds(_options.RetryBackoffBaseSeconds - 1));
+        await RunDispatcherAsync();
+        await RunDispatcherAsync();
+        Assert.Equal(1, (await AllOutboxAsync()).Single().RetryCount);
+
+        // Due: retried once, and the next delay doubles.
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        await RunDispatcherAsync();
+        row = (await AllOutboxAsync()).Single();
+        Assert.Equal(2, row.RetryCount);
+        Assert.Equal(
+            _clock.GetUtcNow().UtcDateTime.AddSeconds(2 * _options.RetryBackoffBaseSeconds),
+            row.NextAttemptAt);
+    }
+
+    [Theory]
+    [InlineData(1, 5)]
+    [InlineData(2, 10)]
+    [InlineData(5, 80)]
+    [InlineData(8, 640)]
+    [InlineData(9, 900)]
+    [InlineData(40, 900)]
+    public void Retry_Delay_Doubles_From_The_Base_Up_To_The_Cap(int retryCount, int expectedSeconds)
+    {
+        var options = new OutboxOptions { RetryBackoffBaseSeconds = 5, RetryBackoffMaxSeconds = 900 };
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), OutboxDispatcher.RetryDelay(options, retryCount));
+    }
+
+    [Fact]
+    public async Task Fresh_Events_Are_Dispatched_Even_When_Older_Failures_Exceed_The_Batch()
+    {
+        // 3 × BatchSize failing events, all older than the fresh one, all due.
+        for (var i = 0; i < 3 * _options.BatchSize; i++)
+            await PublishAsync(new AlwaysFailingTestEvent(Guid.NewGuid(), DateTime.UtcNow));
+        await RunDispatcherAsync();
+        await RunDispatcherAsync();
+        await RunDispatcherAsync();
+        _clock.Advance(TimeSpan.FromHours(1)); // every failure is due again
+
+        var fresh = new TestOutboxEvent(Guid.NewGuid(), "behind the failures", DateTime.UtcNow);
+        await PublishAsync(fresh);
+
+        await RunDispatcherAsync();
+
+        Assert.Equal(fresh.EventId, Assert.Single(TestOutboxEventHandler.Received).EventId);
+    }
+
+    [Fact]
+    public async Task Failures_Are_Not_Retried_On_Every_Poll()
+    {
+        var failing = new List<Guid>();
+        for (var i = 0; i < _options.BatchSize; i++)
+            failing.Add(await PublishAsync(new AlwaysFailingTestEvent(Guid.NewGuid(), DateTime.UtcNow)));
+
+        await RunDispatcherAsync();
+        // Ten more polls inside the first backoff window: nobody retries.
+        for (var i = 0; i < 10; i++)
+            await RunDispatcherAsync();
+
+        var rows = await AllOutboxAsync();
+        Assert.All(rows, r => Assert.Equal(1, r.RetryCount));
+    }
+
+    [Fact]
+    public async Task Due_Retries_Still_Get_Their_Slots_When_Fresh_Events_Fill_The_Batch()
+    {
+        var failingId = await PublishAsync(new AlwaysFailingTestEvent(Guid.NewGuid(), DateTime.UtcNow));
+        await RunDispatcherAsync();
+        _clock.Advance(OutboxDispatcher.RetryDelay(_options, 1));
+
+        // A full batch of fresh events arrives in the same poll.
+        for (var i = 0; i < _options.BatchSize; i++)
+            await PublishAsync(new TestOutboxEvent(Guid.NewGuid(), $"fresh-{i}", DateTime.UtcNow));
+
+        await RunDispatcherAsync();
+
+        Assert.Equal(_options.BatchSize, TestOutboxEventHandler.Received.Count);
+        var failing = (await AllOutboxAsync()).Single(r => r.Id == failingId);
+        Assert.Equal(2, failing.RetryCount);
+    }
+
+    [Fact]
+    public async Task A_Row_Past_The_Alert_Threshold_Keeps_Retrying_And_Alerts_Only_Once()
+    {
+        await PublishAsync(new AlwaysFailingTestEvent(Guid.NewGuid(), DateTime.UtcNow));
+
+        // MaxRetryCount = 3; run well past it.
+        await RunUntilAttemptsAsync(6);
+
+        var row = (await AllOutboxAsync()).Single();
+        Assert.Equal(OutboxMessageStatus.FAILED, row.Status);
+        Assert.Equal(6, row.RetryCount);
+        Assert.Single(_serviceProvider.GetRequiredService<SpyOutboxAdminAlertSink>().Raised);
+    }
+
+    [Fact]
+    public async Task A_Failed_Row_Written_Before_The_Backoff_Column_Is_Due_Immediately()
+    {
+        var id = await PublishAsync(new TestOutboxEvent(Guid.NewGuid(), "legacy failure", DateTime.UtcNow));
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var row = await ctx.OutboxMessages.SingleAsync(m => m.Id == id);
+            row.Status = OutboxMessageStatus.FAILED;
+            row.RetryCount = 2;
+            row.ErrorMessage = "failed before T150";
+            row.NextAttemptAt = null;
+            await ctx.SaveChangesAsync();
+        }
+
+        await RunDispatcherAsync();
+
+        Assert.Single(TestOutboxEventHandler.Received);
+        Assert.Equal(OutboxMessageStatus.PROCESSED, (await AllOutboxAsync()).Single().Status);
     }
 
     // ----------------------------- Self-rescheduling --------------------
