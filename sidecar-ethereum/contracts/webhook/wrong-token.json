@@ -1,0 +1,19 @@
+{
+  "event": "payment.wrong_token",
+  "network": "ETHEREUM",
+  "timestamp": "2026-10-18T09:30:00.000Z",
+  "data": {
+    "paymentAddressId": "aaaaaaaa-1111-2222-3333-444444444444",
+    "transactionId": "bbbbbbbb-1111-2222-3333-444444444444",
+    "txHash": "0xabababababababababababababababababababababababababababababababab",
+    "eventIndex": 2,
+    "fromAddress": "0xb0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0",
+    "toAddress": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+    "expectedContractAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "actualContractAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "actualTokenSymbol": "USDC",
+    "amount": "20.400000",
+    "blockTimestampMs": 1792315800000,
+    "detectedAt": "2026-10-18T09:30:00.000Z"
+  }
+}
