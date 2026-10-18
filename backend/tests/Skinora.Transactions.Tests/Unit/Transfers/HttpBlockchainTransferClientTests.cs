@@ -521,6 +521,142 @@ public class HttpBlockchainTransferClientTests
         Assert.All(headers, h => Assert.Equal("super-secret-shared", h));
     }
 
+    // -------------------- T152 — Ethereum sends: cap, refund type, deferral, row-specific 4xx --------------------
+
+    [Theory]
+    [InlineData(BlockchainTransactionType.SELLER_PAYOUT, "api/transfer/payout")]
+    [InlineData(BlockchainTransactionType.SWEEP, "api/transfer/sweep")]
+    public async Task Fee_Cap_Travels_In_The_Body_When_Set_And_Is_Omitted_Otherwise(
+        BlockchainTransactionType type, string path)
+    {
+        var bodies = new List<string>();
+        var handler = new RecordingHandler(async (req, _) =>
+        {
+            Assert.EndsWith(path, req.RequestUri!.ToString());
+            bodies.Add(await req.Content!.ReadAsStringAsync());
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { txHash = "0xa" }) };
+        });
+        var sut = BuildClient(handler, network: BlockchainNetwork.ETHEREUM);
+        TransferBroadcastRequest Request(decimal? cap) => new(
+            Guid.NewGuid(), type, StablecoinType.USDT, 10m, "0x1111111111111111111111111111111111111111",
+            type == BlockchainTransactionType.SWEEP ? 3 : null,
+            type == BlockchainTransactionType.SWEEP ? "0x2222222222222222222222222222222222222222" : null,
+            cap);
+
+        await sut.BroadcastAsync(Request(0.5m), CancellationToken.None);
+        await sut.BroadcastAsync(Request(null), CancellationToken.None);
+
+        Assert.Contains("\"feeCapUsd\":\"0.5\"", bodies[0]);
+        Assert.DoesNotContain("feeCapUsd", bodies[1]);
+    }
+
+    [Fact]
+    public async Task Refund_Body_Names_Its_Refund_Type()
+    {
+        string? body = null;
+        var handler = new RecordingHandler(async (req, _) =>
+        {
+            body = await req.Content!.ReadAsStringAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { txHash = "0xa" }) };
+        });
+
+        await BuildClient(handler, network: BlockchainNetwork.ETHEREUM).BroadcastAsync(
+            new TransferBroadcastRequest(
+                Guid.NewGuid(), BlockchainTransactionType.WRONG_TOKEN_REFUND, StablecoinType.USDC, 7m,
+                "0x1111111111111111111111111111111111111111", 3, "0x2222222222222222222222222222222222222222"),
+            CancellationToken.None);
+
+        Assert.Contains("\"refundType\":\"WRONG_TOKEN_REFUND\"", body);
+    }
+
+    [Fact]
+    public async Task A_Deferred_Answer_Is_Deferred_Not_A_Transient_Failure()
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                Content = JsonContent.Create(new
+                {
+                    error = "FEE_ABOVE_CAP",
+                    message = "above cap",
+                    deferred = true,
+                    retryable = true,
+                    waitingSince = "2026-10-18T09:00:00.000Z",
+                }),
+            }));
+
+        var result = await BuildClient(handler, network: BlockchainNetwork.ETHEREUM).BroadcastAsync(
+            new TransferBroadcastRequest(
+                Guid.NewGuid(), BlockchainTransactionType.SELLER_PAYOUT, StablecoinType.USDT, 1m,
+                "0x1111111111111111111111111111111111111111", null, null, 0.5m),
+            CancellationToken.None);
+
+        Assert.Equal(TransferBroadcastStatus.Deferred, result.Status);
+        Assert.Equal("FEE_ABOVE_CAP", result.ErrorCode);
+        Assert.Contains("2026-10-18T09:00:00", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task A_503_Without_The_Deferred_Flag_Stays_A_Transient_Failure()
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                Content = JsonContent.Create(new { error = "NOT_IMPLEMENTED", retryable = true }),
+            }));
+
+        var result = await BuildClient(handler, network: BlockchainNetwork.ETHEREUM).BroadcastAsync(
+            new TransferBroadcastRequest(
+                Guid.NewGuid(), BlockchainTransactionType.SELLER_PAYOUT, StablecoinType.USDT, 1m,
+                "0x1111111111111111111111111111111111111111", null, null),
+            CancellationToken.None);
+
+        Assert.Equal(TransferBroadcastStatus.TransientFailure, result.Status);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, TransferStatusOutcome.Rejected)]
+    [InlineData(HttpStatusCode.NotFound, TransferStatusOutcome.Rejected)]
+    [InlineData(HttpStatusCode.Conflict, TransferStatusOutcome.Rejected)]
+    [InlineData(HttpStatusCode.Unauthorized, TransferStatusOutcome.Unavailable)]
+    [InlineData(HttpStatusCode.Forbidden, TransferStatusOutcome.Unavailable)]
+    [InlineData(HttpStatusCode.TooManyRequests, TransferStatusOutcome.Unavailable)]
+    [InlineData(HttpStatusCode.BadGateway, TransferStatusOutcome.Unavailable)]
+    [InlineData(HttpStatusCode.InternalServerError, TransferStatusOutcome.Unavailable)]
+    public async Task GetStatus_A_Row_Specific_4xx_Is_Rejected_The_Rest_Unavailable(
+        HttpStatusCode code, TransferStatusOutcome expected)
+    {
+        var handler = new RecordingHandler((_, _) => Task.FromResult(new HttpResponseMessage(code)));
+
+        var result = await BuildClient(handler, network: BlockchainNetwork.ETHEREUM)
+            .GetStatusAsync("0xabc", CancellationToken.None);
+
+        Assert.Equal(expected, result.Outcome);
+    }
+
+    [Fact]
+    public async Task GetStatus_Passes_On_The_Hash_The_Service_Reports()
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    txHash = "0xreplacement",
+                    blockNumber = 10L,
+                    contractRet = "SUCCESS",
+                    confirmations = 2,
+                    finalized = true,
+                }),
+            }));
+
+        var result = await BuildClient(handler, network: BlockchainNetwork.ETHEREUM)
+            .GetStatusAsync("0xoriginal", CancellationToken.None);
+
+        Assert.Equal(TransferStatusOutcome.Confirmed, result.Outcome);
+        Assert.Equal("0xreplacement", result.TxHash);
+    }
+
     private static HttpBlockchainTransferClient BuildClient(
         HttpMessageHandler handler, string internalKey = "", int timeoutSeconds = 5,
         BlockchainNetwork network = BlockchainNetwork.TRON)

@@ -62,6 +62,13 @@ public sealed class OutgoingTransferDispatchJob
     /// </summary>
     public const int BatchSize = 20;
 
+    /// <summary>
+    /// T152 — how soon a row the service deferred (fee above the cap, no ETH
+    /// price, no gas — 08 §3.7.7) is asked again. Matches the job cadence: the
+    /// send goes out on the first tick after the fee falls under the cap.
+    /// </summary>
+    public static readonly TimeSpan DeferredRetryDelay = TimeSpan.FromMinutes(1);
+
     private static readonly BlockchainTransactionType[] OutboundTypes =
     [
         BlockchainTransactionType.SELLER_PAYOUT,
@@ -83,6 +90,7 @@ public sealed class OutgoingTransferDispatchJob
     private readonly ITransferRetryPolicy _retryPolicy;
     private readonly IOutboxService _outbox;
     private readonly IStablecoinContractRegistry _contracts;
+    private readonly IBlockchainNetworkSettingsProvider _networkSettings;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
@@ -93,6 +101,7 @@ public sealed class OutgoingTransferDispatchJob
         ITransferRetryPolicy retryPolicy,
         IOutboxService outbox,
         IStablecoinContractRegistry contracts,
+        IBlockchainNetworkSettingsProvider networkSettings,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
@@ -102,6 +111,7 @@ public sealed class OutgoingTransferDispatchJob
         _retryPolicy = retryPolicy;
         _outbox = outbox;
         _contracts = contracts;
+        _networkSettings = networkSettings;
         _clock = clock;
         _logger = logger;
     }
@@ -295,6 +305,17 @@ public sealed class OutgoingTransferDispatchJob
             broadcastToken = actualToken.Value;
         }
 
+        // T152 — sweep and payout are platform-paid on a network with a fee cap
+        // (Ethereum, 08 §3.7.7); the admin setting travels with the request and
+        // the signer refuses above it. Refunds are never capped. TRON has no cap
+        // (null), so its bodies are unchanged.
+        decimal? feeCapUsd = null;
+        if (row.Type is BlockchainTransactionType.SELLER_PAYOUT or BlockchainTransactionType.SWEEP)
+        {
+            feeCapUsd = (await _networkSettings.GetAsync(row.Network, cancellationToken))
+                .FeeCapUsdPerTransfer;
+        }
+
         var request = new TransferBroadcastRequest(
             BlockchainTransactionId: row.Id,
             Type: row.Type,
@@ -302,7 +323,8 @@ public sealed class OutgoingTransferDispatchJob
             Amount: row.Amount,
             ToAddress: row.ToAddress,
             DepositIndex: depositIndex,
-            DepositAddress: depositAddress);
+            DepositAddress: depositAddress,
+            FeeCapUsd: feeCapUsd);
 
         // Same-network rule (11 §F8 K3): the row's own network's service.
         var result = await _services.Transfers(row.Network).BroadcastAsync(request, cancellationToken);
@@ -310,6 +332,12 @@ public sealed class OutgoingTransferDispatchJob
         {
             case TransferBroadcastStatus.Success:
                 await HandleSuccessAsync(row, result, cancellationToken);
+                return false;
+
+            case TransferBroadcastStatus.Deferred:
+                // Nothing was signed; the row waits for the fee / price / gas —
+                // no retry spent, not FAILED, other rows unaffected.
+                await HandleDeferredAsync(row, result, cancellationToken);
                 return false;
 
             case TransferBroadcastStatus.InvalidRequest:
@@ -341,6 +369,21 @@ public sealed class OutgoingTransferDispatchJob
         _logger.LogInformation(
             "Outbound transfer broadcast OK — row {Id} ({Type}) → txHash {TxHash}",
             row.Id, row.Type, result.TxHash);
+    }
+
+    private async Task HandleDeferredAsync(
+        BlockchainTransaction row,
+        TransferBroadcastResult result,
+        CancellationToken cancellationToken)
+    {
+        row.NextAttemptAt = _clock.GetUtcNow().UtcDateTime.Add(DeferredRetryDelay);
+        row.ErrorMessage = TrimError(result.ErrorCode, result.ErrorMessage);
+        // RetryCount is NOT incremented: waiting for the fee is not a failure.
+
+        await _db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation(
+            "Outbound transfer waits — row {Id} ({Type}) on {Network}: {Code} — {Message}; asked again after {Delay}",
+            row.Id, row.Type, row.Network, result.ErrorCode, result.ErrorMessage, DeferredRetryDelay);
     }
 
     private async Task HandleTransientAsync(

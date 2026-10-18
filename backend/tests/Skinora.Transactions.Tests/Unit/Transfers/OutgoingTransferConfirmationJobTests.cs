@@ -294,6 +294,85 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         Assert.Equal(tron.TxHash, Assert.Single(_client.StatusCalls));
     }
 
+    // -------------------- T152 — rotation and the row-specific 4xx --------------------
+
+    [Fact]
+    public async Task A_Row_Specific_4xx_On_The_Oldest_Row_Does_Not_Stop_The_Networks_Other_Rows()
+    {
+        // T150 doğrulaması: the oldest DETECTED row keeps getting 400/404/409
+        // (Rejected); the network's other rows are confirmed in the SAME run.
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var rows = await SeedEthereumDetectedAsync(4);
+        ethereum.Respond = hash => hash == rows[0].TxHash
+            ? new TransferStatusResult(TransferStatusOutcome.Rejected, null, null, null, "404 TRANSFER_NOT_FOUND")
+            : new TransferStatusResult(TransferStatusOutcome.Confirmed, 21_000_000L, 3, "SUCCESS", null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(rows.Select(r => r.TxHash), ethereum.StatusCalls);
+        var states = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .Where(b => b.Network == BlockchainNetwork.ETHEREUM)
+            .ToDictionaryAsync(b => b.Id, b => b.Status);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, states[rows[0].Id]);
+        Assert.All(rows.Skip(1), r => Assert.Equal(BlockchainTransactionStatus.CONFIRMED, states[r.Id]));
+    }
+
+    [Fact]
+    public async Task An_Unavailable_Answer_Still_Ends_The_Networks_Turn()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(TransferStatusOutcome.Unavailable, null, null, null, "502"),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        await SeedEthereumDetectedAsync(3);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Single(ethereum.StatusCalls);
+    }
+
+    [Fact]
+    public async Task Long_Pending_Rows_Take_Turns_So_A_Newer_Row_Behind_A_Full_Batch_Is_Read()
+    {
+        // BatchSize + 5 Ethereum rows waiting for finalized. Oldest-first alone
+        // would read the same 30 forever; with rotation the 5 newest are read on
+        // the second run.
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(TransferStatusOutcome.Pending, null, null, null, null),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var rows = await SeedEthereumDetectedAsync(OutgoingTransferConfirmationJob.BatchSize + 5);
+
+        await _sut.ExecuteAsync();
+        Assert.Equal(rows.Take(OutgoingTransferConfirmationJob.BatchSize).Select(r => r.TxHash), ethereum.StatusCalls);
+
+        ethereum.StatusCalls.Clear();
+        _clock.Advance(TimeSpan.FromMinutes(1));
+        await _sut.ExecuteAsync();
+
+        var newest = rows.Skip(OutgoingTransferConfirmationJob.BatchSize).Select(r => r.TxHash).ToList();
+        Assert.Equal(newest, ethereum.StatusCalls.Take(newest.Count));
+        Assert.Equal(OutgoingTransferConfirmationJob.BatchSize, ethereum.StatusCalls.Count);
+    }
+
+    [Fact]
+    public async Task A_Same_Nonce_Replacement_Is_Recorded_With_The_Hash_That_Is_On_Chain()
+    {
+        var row = await SeedDetectedAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        var onChain = "0x" + new string('A', 64);
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 1_500_050L, 22, "SUCCESS", null, TxHash: onChain);
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(onChain.ToLowerInvariant(), reloaded.TxHash);
+        Assert.Equal(onChain.ToLowerInvariant(), Assert.Single(_outbox.Events.OfType<PayoutCompletedEvent>()).PayoutTxHash);
+    }
+
     [Fact]
     public async Task InboundDetectedRow_IsNotPolled()
     {
@@ -462,6 +541,9 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
 
         public List<string> StatusCalls { get; } = new();
 
+        /// <summary>Per-hash answer (T152 tests); falls back to <see cref="NextStatus"/>.</summary>
+        public Func<string, TransferStatusResult?>? Respond { get; set; }
+
         public Task<TransferBroadcastResult> BroadcastAsync(
             TransferBroadcastRequest request,
             CancellationToken cancellationToken) =>
@@ -471,7 +553,7 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
             string txHash, CancellationToken cancellationToken)
         {
             StatusCalls.Add(txHash);
-            return Task.FromResult(NextStatus);
+            return Task.FromResult(Respond?.Invoke(txHash) ?? NextStatus);
         }
     }
 

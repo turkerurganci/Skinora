@@ -239,6 +239,7 @@ public class NetworkQueueIsolationTests : IntegrationTestBase
             var job = new OutgoingTransferDispatchJob(
                 ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new FixedRetryPolicy(),
                 new OutboxService(ctx), StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
+                new BlockchainNetworkSettingsProvider(ctx),
                 _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
             await job.ExecuteAsync();
         }
