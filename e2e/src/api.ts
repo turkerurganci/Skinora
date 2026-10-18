@@ -74,6 +74,12 @@ export function acceptTransaction(
   });
 }
 
+/** T4 - GET /transactions/params (07 7.4): carries `supportedNetworks`, the networks open
+ *  for a NEW transaction right now. */
+export function getTransactionParams(token: string): Promise<ApiResult> {
+  return call('GET', '/api/v1/transactions/params', token);
+}
+
 export function getTransaction(token: string, id: string): Promise<ApiResult> {
   return call('GET', `/api/v1/transactions/${id}`, token);
 }

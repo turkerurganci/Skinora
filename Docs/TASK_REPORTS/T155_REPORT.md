@@ -81,6 +81,8 @@
 
 **Main bütünleştirmesi:** `origin/main` (T151 `0fdc3b1` girdi) merge commit'le dala alındı; MEMORY, 08 ve 11'de çakışmalar iki tarafı koruyarak çözüldü (08 v3.30, 11 v1.9 → bu kapanışta v1.10). Birleşince T151'in Ethereum webhook sözleşme örnekleri sahte servis testinde koşuyor ve geçiyor.
 
+**Birleşme sonrası E2E düzeltmesi:** T151'in kod düzeyi kapısı Ethereum'u ancak sağlık yoklaması (dakikada bir) `acceptsPayments: true` gördükten sonra yeni işleme açar; ilk kapanış CI'ında (`39140479993`) yeni yığında ilk yoklamadan önce listeleme `NETWORK_UNAVAILABLE` verdi (multi-network 3 test kırmızı, diğer bacaklar yeşil). `multi-network.spec.ts` başına `beforeAll` eklendi: `GET /transactions/params`'ta `supportedNetworks` Ethereum'u içerene kadar bekler (en çok 3 dk).
+
 **Testler (kapanış):** `sidecar-fake` `npm test` 118/118, `tsc --noEmit` ve `eslint` temiz. E2E CI'da.
 
 ## Altyapı Değişiklikleri

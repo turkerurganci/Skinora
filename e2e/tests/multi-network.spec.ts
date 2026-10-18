@@ -48,6 +48,25 @@ const TRON_PAYOUT = seed.sellerPayoutAddress;
 const ETH_PAYOUT = seed.sellerEthereumPayoutAddress.toLowerCase();
 const ETH_REFUND = seed.buyerEthereumRefundAddress;
 
+// T151 gate: the backend offers Ethereum only after a health probe has seen the
+// service declare `acceptsPayments: true`; the probe runs once a minute, so on a
+// freshly started stack Ethereum is closed for up to a minute. Wait for it to open
+// instead of racing the first probe.
+test.beforeAll(async () => {
+  test.setTimeout(5 * 60 * 1000);
+  await seedHappyPath();
+  const { sellerToken } = tokens();
+  let last = 'no answer';
+  for (let i = 0; i < 90; i++) {
+    const res = await api.getTransactionParams(sellerToken);
+    const networks = api.unwrap(res.body).supportedNetworks;
+    if (Array.isArray(networks) && networks.includes('ETHEREUM')) return;
+    last = JSON.stringify(res.body);
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  throw new Error(`Ethereum never opened for new transactions: ${last}`);
+});
+
 test.beforeEach(async () => {
   await api.resetFakeSteamState();
   await api.resetFakeBlockchain();
