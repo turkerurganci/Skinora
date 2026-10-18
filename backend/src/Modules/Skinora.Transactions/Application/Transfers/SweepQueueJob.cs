@@ -243,10 +243,10 @@ public sealed class SweepQueueJob
             TxHash = null,
             FromAddress = deposit.Address,      // Source deposit; dispatcher re-resolves the same address.
             ToAddress = hotWallet,              // Sweep destination (reconciliation hot-wallet inflow key).
-            Amount = transaction.TotalAmount,   // Full escrowed total (price + commission); excess drained separately.
+            Amount = transaction.TotalAmount,   // Full escrowed total (price + commission + TRON network fee line, T149); excess drained separately.
             Token = transaction.StablecoinType,
             ActualTokenAddress = null,          // CK_..._Type_Sweep: NULL (canonical stablecoin, no wrong-token).
-            GasFee = null,                      // Sweeper account funds energy via delegation (05 §3.3); not deducted.
+            GasFee = null,                      // Not deducted: the hot wallet spends the TRX; on TRON the buyer paid it up front as the network fee line (T149, 11 §F8 K8).
             Status = BlockchainTransactionStatus.PENDING,
             BlockNumber = null,
             ConfirmationCount = 0,

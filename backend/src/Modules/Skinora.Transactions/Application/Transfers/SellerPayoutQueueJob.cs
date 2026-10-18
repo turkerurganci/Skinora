@@ -286,9 +286,13 @@ public sealed class SellerPayoutQueueJob
         var gasEstimate = resolvedGasFee.FeeUsdt;
 
         // Gas-fee-protection split (02 §4.7) — ResolveSellerPayoutAsync reads
-        // the live gas_fee_protection_ratio internally.
+        // the live gas_fee_protection_ratio internally. T149 — per network
+        // (11 §F8 K8): TRON keeps the split (the seller bears the overage);
+        // on Ethereum the platform absorbs the payout fee and the seller
+        // receives the full price. The estimate is still snapshotted on the
+        // row either way (07 §7.5 reconstruction).
         var payout = await _refundDecisionService.ResolveSellerPayoutAsync(
-            transaction.Price, transaction.CommissionAmount, gasEstimate, cancellationToken);
+            network, transaction.Price, transaction.CommissionAmount, gasEstimate, cancellationToken);
 
         if (payout <= 0m)
         {

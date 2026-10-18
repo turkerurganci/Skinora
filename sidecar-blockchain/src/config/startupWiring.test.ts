@@ -44,6 +44,7 @@ function start(env: Record<string, string>, message: string = STARTUP_MESSAGE): 
         COLD_WALLET_ADDRESS: '',
         STAKE_ACCOUNT_ADDRESS: '',
         STAKE_ACCOUNT_PERMISSION_ID: '',
+        ENERGY_STAKING_ENABLED: '',
         ...env,
       },
     });
@@ -77,11 +78,13 @@ describe('sidecar startup — the stake account reaches both services index.ts b
   it('delegates from the stake account under its permission id, and the refund estimate reads the same account', async () => {
     // A non-default id, so an id that never arrives (default 2) shows.
     const startup = await start({
+      ENERGY_STAKING_ENABLED: 'true',
       STAKE_ACCOUNT_ADDRESS: STAKE_ACCOUNT,
       STAKE_ACCOUNT_PERMISSION_ID: '5',
     });
 
     expect(startup.line, startup.output).toMatchObject({
+      stakingEnabled: true,
       delegationOwner: STAKE_ACCOUNT,
       permissionId: 5,
       refundEstimateReadsStakeFrom: STAKE_ACCOUNT,
@@ -89,9 +92,10 @@ describe('sidecar startup — the stake account reaches both services index.ts b
   }, 30_000);
 
   it('keeps the hot wallet as its own stake holder when no stake account is set', async () => {
-    const startup = await start({});
+    const startup = await start({ ENERGY_STAKING_ENABLED: 'true' });
 
     expect(startup.line, startup.output).toMatchObject({
+      stakingEnabled: true,
       delegationOwner: HOT_WALLET,
       permissionId: null,
       refundEstimateReadsStakeFrom: HOT_WALLET,
@@ -99,12 +103,51 @@ describe('sidecar startup — the stake account reaches both services index.ts b
   }, 30_000);
 
   it('refuses to start on a stake address the flow cannot use', async () => {
-    const startup = await start({ STAKE_ACCOUNT_ADDRESS: 'TStakeAccountHoldingTheFrozenTrx' });
+    const startup = await start({
+      ENERGY_STAKING_ENABLED: 'true',
+      STAKE_ACCOUNT_ADDRESS: 'TStakeAccountHoldingTheFrozenTrx',
+    });
 
     expect(startup.line).toBeUndefined();
     // Exited on its own — a process still running at the timeout has no code.
     expect(startup.exitCode ?? 0).toBeGreaterThan(0);
     expect(startup.output).toContain('STAKE_ACCOUNT_MISCONFIGURED');
+  }, 30_000);
+});
+
+/**
+ * T149 (11 §F8, öneriyle kaydedildi — ⚠) — the hybrid stake is dormant behind
+ * ENERGY_STAKING_ENABLED, default OFF. Started the way production starts it,
+ * the process must report it off when the variable is unset — even with a
+ * stake account left in .env — and refuse a value it cannot read.
+ */
+describe('sidecar startup — the dormant stake switch', () => {
+  it('is OFF when ENERGY_STAKING_ENABLED is unset, and a configured stake account is then ignored', async () => {
+    const startup = await start({
+      STAKE_ACCOUNT_ADDRESS: STAKE_ACCOUNT,
+      STAKE_ACCOUNT_PERMISSION_ID: '5',
+    });
+
+    expect(startup.line, startup.output).toMatchObject({
+      stakingEnabled: false,
+      delegationOwner: HOT_WALLET,
+      permissionId: null,
+    });
+    expect(String(startup.line?.message ?? startup.output)).toContain('OFF');
+  }, 30_000);
+
+  it('starts with a leftover malformed stake account while the switch is off', async () => {
+    const startup = await start({ STAKE_ACCOUNT_ADDRESS: 'TStakeAccountHoldingTheFrozenTrx' });
+
+    expect(startup.line, startup.output).toMatchObject({ stakingEnabled: false });
+  }, 30_000);
+
+  it('refuses to start on a switch value it cannot read', async () => {
+    const startup = await start({ ENERGY_STAKING_ENABLED: 'yes' });
+
+    expect(startup.line).toBeUndefined();
+    expect(startup.exitCode ?? 0).toBeGreaterThan(0);
+    expect(startup.output).toContain('ENERGY_STAKING_ENABLED');
   }, 30_000);
 });
 

@@ -1,3 +1,5 @@
+using Skinora.Shared.Enums;
+
 namespace Skinora.Transactions.Application.GasFee;
 
 /// <summary>
@@ -25,9 +27,11 @@ public interface IRefundDecisionService
     /// <summary>
     /// Decide what to do with a full-cancellation refund (02 §4.6, 09 §14.4):
     /// <c>net = totalPaid − gasFee</c>, refund only if
-    /// <c>net ≥ gasFee × min_refund_threshold_ratio</c>.
+    /// <c>net ≥ gasFee × min_refund_threshold_ratio</c>. T149 — the ratio is
+    /// <paramref name="network"/>'s (06 §3.17).
     /// </summary>
     Task<RefundDecision> ResolveBuyerRefundAsync(
+        BlockchainNetwork network,
         decimal totalPaid,
         decimal gasFee,
         CancellationToken cancellationToken);
@@ -41,6 +45,7 @@ public interface IRefundDecisionService
     /// with reason <see cref="Skinora.Shared.Events.RefundBlockedReason.NegativeAmount"/>.
     /// </summary>
     Task<RefundDecision> ResolveOverpaymentRefundAsync(
+        BlockchainNetwork network,
         decimal expected,
         decimal received,
         decimal gasFee,
@@ -50,9 +55,13 @@ public interface IRefundDecisionService
     /// Compute the seller payout under the gas-fee-protection rule
     /// (02 §4.7, 09 §14.4). Pure delegation to
     /// <see cref="Skinora.Transactions.Domain.Calculations.FinancialCalculator.CalculateSellerPayout"/>
-    /// with the live <c>gas_fee_protection_ratio</c>.
+    /// with the live <c>gas_fee_protection_ratio</c>. T149 — per network: on a
+    /// network where the platform absorbs the payout fee (Ethereum,
+    /// <see cref="Skinora.Transactions.Domain.Calculations.NetworkFeeRules"/>)
+    /// the seller receives the full price.
     /// </summary>
     Task<decimal> ResolveSellerPayoutAsync(
+        BlockchainNetwork network,
         decimal price,
         decimal commissionAmount,
         decimal gasFee,

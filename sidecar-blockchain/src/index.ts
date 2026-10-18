@@ -66,6 +66,8 @@ const energyDelegation = new EnergyDelegationService({
   resources: tronResourceClient,
   sweeperAddress: config.hotWalletAddress,
   sweeperPrivateKey: config.hotWalletPrivateKey,
+  // T149 — the hybrid stake is dormant; OFF unless ENERGY_STAKING_ENABLED=true.
+  stakingEnabled: config.energyStakingEnabled,
   stakeAddress: config.stakeAccountAddress,
   stakePermissionId: config.stakeAccountPermissionId,
   fallbackAmountSun: config.sweepTrxFallbackSun,
@@ -120,13 +122,16 @@ const feeEstimationService = new FeeEstimationService({
 // unit test reaches (#325 re-validation).
 logger.info(
   {
+    stakingEnabled: energyDelegation.stakingEnabled,
     delegationOwner: energyDelegation.delegationOwner,
     permissionId: energyDelegation.delegationPermissionId ?? null,
     refundEstimateReadsStakeFrom: feeEstimationService.delegationOwner,
   },
-  energyDelegation.delegationPermissionId === undefined
-    ? 'Energy delegation: the hot wallet holds its own stake (STAKE_ACCOUNT_ADDRESS unset)'
-    : 'Energy delegation: stake account, signed by the hot wallet key through an active permission',
+  !energyDelegation.stakingEnabled
+    ? 'Energy delegation: OFF (ENERGY_STAKING_ENABLED is not true) — no stake is read, every deposit transfer burns'
+    : energyDelegation.delegationPermissionId === undefined
+      ? 'Energy delegation: the hot wallet holds its own stake (STAKE_ACCOUNT_ADDRESS unset)'
+      : 'Energy delegation: stake account, signed by the hot wallet key through an active permission',
 );
 
 // T139-ActiveMonitorQuotaAlarm — the two cadences and the budget the

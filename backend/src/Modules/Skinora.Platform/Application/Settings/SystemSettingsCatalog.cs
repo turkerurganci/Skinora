@@ -124,6 +124,9 @@ public static class SystemSettingsCatalog
         new(ColdWalletAddressKey,                         "blockchain_health",    "Cold wallet adresi (ortam değişkeni, salt okunur)",         null, EnvSourced: true),
         new("hot_wallet.monitor_cron",                    "blockchain_health",    "Hot wallet monitor job cron ifadesi (T77)",                 null),
         new("hot_wallet.trx_balance_minimum",             "wallet_security",      "Hot wallet TRX bakiye alt eşiği (gas için)",                "TRX"),
+        // T149 — TRON network fee line (11 §F8 K8): the buyer pays the sweep.
+        new("blockchain.tron.network_fee_buffer_ratio",   "blockchain_health",    "TRON ağ ücreti satırı — TRX fiyat tamponu (oran)",          "oran"),
+        new("blockchain.tron.network_fee_fallback_usdt",  "blockchain_health",    "TRON ağ ücreti satırı — tahmin alınamazsa yazılan yedek",   "USDT"),
 
         // --- Ethereum per-network parameters (T148 — 05 §3.3a, 06 §1.4 "Ayarlar") ---
         // TRON keeps the unprefixed keys above. Values are the T142
@@ -139,6 +142,7 @@ public static class SystemSettingsCatalog
         new("blockchain.ethereum.finality_stall_alarm_minutes", "blockchain_health", "Ethereum — son finalized blok bu süreden eskiyse alarm", "dakika"),
         new("blockchain.ethereum.hot_wallet_eth_balance_minimum",  "wallet_security", "Ethereum — hot wallet ETH bakiye alt eşiği (gas için)", "ETH"),
         new("blockchain.ethereum.fuel_wallet_eth_balance_minimum", "wallet_security", "Ethereum — yakıt cüzdanı ETH bakiye alt eşiği", "ETH"),
+        new("blockchain.ethereum.min_refund_threshold_ratio",      "blockchain_health", "Ethereum — minimum iade eşiği (gas fee × bu oran altı iade yapılmaz)", "oran"),
 
         // --- Buyer identification (open link toggle, 02 §16.2 "Yöntem 2'yi aktif/pasif") ---
         new("open_link_enabled",                          "buyer_identification", "Açık link yöntemi aktif",                                   null),

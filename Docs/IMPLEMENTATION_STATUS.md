@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-18 — **T150 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (Ethereum servis iskeleti; rapor [`T150_REPORT.md`](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346), HEAD `2f0ba0b`, CI [`39120152616`](https://github.com/turkerurganci/Skinora/actions/runs/39120152616) ✓). Dört küçük bulgu: kesinti istisnası 05/06/08'e yayıldı; T151 (kod düzeyi kapı), T152 (onay işi kesicisi), T158 (metrik + testler + runbook) kriterlerine eklendi. Merge yönetici tarafından yapılır.
+**Son güncelleme:** 2026-10-18 — **T149 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (ağ ücreti politikası; rapor [`T149_REPORT.md`](TASK_REPORTS/T149_REPORT.md), PR [#345](https://github.com/turkerurganci/Skinora/pull/345), doğrulanan HEAD `2a1f5e5`, CI [`39122769568`](https://github.com/turkerurganci/Skinora/actions/runs/39122769568) ✓). Arada main'e birleşen T150 dala merge commit'le bütünleştirildi (çakışan dokuz dosyada iki tarafın içeriği korundu; migration sırası T149 → T150, model değişikliği bekleyen yok). **Proje sahibi kararı (2026-10-18):** sweep **sonrası** iadede TRON ağ ücreti satırı geri verilmez. Küçük bulgular kapatıldı: iki test boşluğu (Ethereum payout'unda satıcıya tam fiyat; tampon 0'ın 0 okunması), sweep sonrası iadenin yolu (`AdminResolveRefund` — admin iptali değil), 08 §3.1a yedeğin bekleme süresi, detay servisi yorumu. Merge yönetici tarafından yapılır.
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -335,7 +335,7 @@
 | T146 | Ağ başına kullanıcı ödeme/iade adresleri | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T146_REPORT.md), PR [#342](https://github.com/turkerurganci/Skinora/pull/342)) |
 | T147 | İşlem akışında ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T148 sonrası entegre edildi; [rapor](TASK_REPORTS/T147_REPORT.md), PR [#344](https://github.com/turkerurganci/Skinora/pull/344)) |
 | T148 | Ağ başına sidecar sözleşmesi ve ayarlar | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T148_REPORT.md), PR [#343](https://github.com/turkerurganci/Skinora/pull/343)) |
-| T149 | Ağ ücreti politikası | ⬚ Bekliyor |
+| T149 | Ağ ücreti politikası | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T150 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T149_REPORT.md), PR [#345](https://github.com/turkerurganci/Skinora/pull/345)) |
 | T150 | Ethereum servis iskeleti | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; [rapor](TASK_REPORTS/T150_REPORT.md), PR [#346](https://github.com/turkerurganci/Skinora/pull/346)) |
 | T151 | Ethereum ödeme izleyicisi [RİSKLİ] | ⬚ Bekliyor |
 | T152 | Ethereum gönderim servisi [ÇOK RİSKLİ] | ⬚ Bekliyor |

@@ -22,7 +22,28 @@ public interface IGasFeeEstimator
     /// </summary>
     Task<decimal?> EstimateFeeUsdtAsync(
         GasFeeEstimateRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T149 — what sweeping one fresh deposit to the hot wallet will cost the
+    /// platform, priced now (TRON: <c>POST /api/transfer/estimate-sweep-fee</c>
+    /// — activation + the burn top-up for the whole transfer with its 10%
+    /// margin + the top-up's Bandwidth, and the live TRX/USDT price). The
+    /// buyer's network fee line is derived from it at acceptance
+    /// (11 §F8 K8). <c>null</c> when no estimate could be obtained — callers
+    /// write the per-network fallback; acceptance never waits on this.
+    /// </summary>
+    Task<SweepCostEstimate?> EstimateSweepCostAsync(
+        StablecoinType token, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// T149 — the sweep cost estimate in the network's native unit and the price
+/// that converts it, kept apart so the buffer is applied before the single
+/// round-up (<c>FinancialCalculator.CalculateTronNetworkFeeLine</c>).
+/// </summary>
+/// <param name="SweepCostSun">Native-unit cost of one sweep (TRON: SUN).</param>
+/// <param name="NativePriceUsdt">Live native-asset price in USDT (TRON: TRX/USDT).</param>
+public sealed record SweepCostEstimate(long SweepCostSun, decimal NativePriceUsdt);
 
 /// <param name="FromAddress">
 /// Sender of the eventual transfer. <c>null</c> → the hot wallet (payout
