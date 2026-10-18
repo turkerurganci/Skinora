@@ -23,8 +23,10 @@ namespace Skinora.Transactions.Application.GasFee;
 /// One instance per network (T148 — 05 §3.3a), built by
 /// <c>BlockchainServiceRegistry</c>; the body names the network. The
 /// breakdown fields of the answer (Energy, SUN burned, TRX price) are TRON's
-/// and are only logged for a network that reports them — Ethereum's estimate
-/// is wei (T154).
+/// and are only logged for a network that reports them. Ethereum's estimate
+/// is wei (T154): its answer carries <c>feeWei</c> and <c>ethPriceUsdt</c> as
+/// decimal strings, and the charged <c>feeUsdt</c> is accepted only if it is
+/// exactly their rounded-up product (<see cref="WeiAmount"/>).
 /// </remarks>
 public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
 {
@@ -87,8 +89,11 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
                 return null;
             }
 
-            var payload = await response.Content.ReadFromJsonAsync<EstimateFeeResponse>(
+            var answer = await response.Content.ReadFromJsonAsync<JsonElement>(
                 JsonOptions, cancellationToken);
+            var payload = answer.ValueKind == JsonValueKind.Object
+                ? answer.Deserialize<EstimateFeeResponse>(JsonOptions)
+                : null;
             if (payload is null
                 || !decimal.TryParse(
                     payload.FeeUsdt, NumberStyles.Number, CultureInfo.InvariantCulture, out var fee)
@@ -106,6 +111,28 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
                     "Gas fee estimate {FeeUsdt} USDT for {To} ({Token}): energy {EnergyShortfall}/{EnergyRequired} short, burn {BurnSun} sun, TRX price {TrxPrice} ({PriceSource}).",
                     fee, request.ToAddress, request.Token, payload.EnergyShortfall,
                     payload.EnergyRequired, payload.BurnSun, payload.TrxPriceUsdt, payload.PriceSource);
+            }
+            else if (_policy.ReportsFeeInWei)
+            {
+                // T154 — the wei figure is the estimate; feeUsdt is only its
+                // conversion. Re-derive it here with exact integer arithmetic:
+                // an answer whose two figures disagree (a unit slip, a lossy
+                // number on either side) is not charged — the fallback is.
+                var wei = answer.Deserialize<WeiFeeFields>(JsonOptions);
+                if (wei is null
+                    || !WeiAmount.TryUsdtCentsCeil(wei.FeeWei, wei.EthPriceUsdt, out var derived)
+                    || derived != fee)
+                {
+                    _logger.LogError(
+                        "Gas fee estimate on {Network} for {To} ({Token}): feeUsdt {FeeUsdt} does not follow from feeWei '{FeeWei}' at ETH price '{EthPrice}' — falling back to static setting.",
+                        _policy.Network, request.ToAddress, request.Token, fee, wei?.FeeWei, wei?.EthPriceUsdt);
+                    return null;
+                }
+
+                _logger.LogInformation(
+                    "Gas fee estimate {FeeUsdt} USDT for {To} ({Token}) on {Network}: {FeeWei} wei ({Sender}, gas {GasLimit} + fuel {FuelGasLimit}, max {MaxFeePerGasWei} wei/gas) at ETH price {EthPrice} ({PriceSource}).",
+                    fee, request.ToAddress, request.Token, _policy.Network, wei.FeeWei, wei.Sender,
+                    wei.GasLimit, wei.FuelGasLimit, wei.MaxFeePerGasWei, wei.EthPriceUsdt, wei.PriceSource);
             }
             else
             {
@@ -171,5 +198,16 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
         long? EnergyShortfall,
         long? BurnSun,
         decimal? TrxPriceUsdt,
+        string? PriceSource);
+
+    // T154 — Ethereum's breakdown. Every integer is a decimal string (wei
+    // passes 2^53); the example body is sidecar-ethereum/contracts/estimate-fee/response.json.
+    private sealed record WeiFeeFields(
+        string? FeeWei,
+        string? EthPriceUsdt,
+        string? Sender,
+        string? GasLimit,
+        string? FuelGasLimit,
+        string? MaxFeePerGasWei,
         string? PriceSource);
 }

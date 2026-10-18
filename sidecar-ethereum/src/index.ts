@@ -7,6 +7,8 @@ import { checkWalletKeys, type WalletKeyAddresses } from './wallet/walletKeys.js
 import { EthereumRpcClient } from './rpc/RpcClient.js';
 import { FinalityTracker } from './finality/FinalityTracker.js';
 import { createApp } from './api/routes.js';
+import { EthPriceService } from './price/EthPriceService.js';
+import { EthFeeEstimationService } from './fee/FeeEstimationService.js';
 
 /**
  * Entry point of the Ethereum service (T150 — 05 §3.3a, 08 §3.7).
@@ -97,6 +99,13 @@ function main(): void {
     chainId: config.chainId,
     wallet,
     finality: () => finality.status(),
+    feeEstimator: new EthFeeEstimationService({
+      rpc,
+      prices: new EthPriceService(),
+      tokenContracts: config.tokenContracts,
+      // The configured address prices a payout even before the key is mounted.
+      hotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
+    }),
   });
 
   const server = app.listen(config.port, '0.0.0.0', () => {

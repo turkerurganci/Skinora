@@ -5,6 +5,8 @@ import type { FinalityStatus } from '../finality/FinalityTracker.js';
 import type { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { correlationMiddleware, internalKeyAuth, networkGuard } from './middleware.js';
 import { deriveAddressHandler } from './walletHandlers.js';
+import { estimateFeeHandler } from './feeHandlers.js';
+import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 import { NOT_YET_IMPLEMENTED, notImplementedHandler } from './notImplemented.js';
 
 export interface AppDeps {
@@ -12,6 +14,8 @@ export interface AppDeps {
   chainId: number;
   wallet: EthereumHdWallet;
   finality: () => FinalityStatus;
+  /** T154 — `POST /api/transfer/estimate-fee`. */
+  feeEstimator: EthFeeEstimationService;
 }
 
 /**
@@ -32,6 +36,7 @@ export function createApp(deps: AppDeps): Express {
   api.use(internalKeyAuth(deps.internalKey));
   api.use(networkGuard);
   api.post('/wallet/derive', deriveAddressHandler(deps.wallet));
+  api.post('/transfer/estimate-fee', estimateFeeHandler(deps.feeEstimator));
   for (const endpoint of NOT_YET_IMPLEMENTED) {
     api[endpoint.method](endpoint.path, notImplementedHandler(endpoint.task));
   }

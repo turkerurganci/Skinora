@@ -71,6 +71,12 @@ public enum TransferBroadcastStatus
 /// to a non-zero value here means the CONTRACT paid — not that the transfer
 /// was free to arrange.
 /// </param>
+/// <param name="RealizedFeeWei">
+/// T154 — Ethereum: what the transfer paid, in wei (receipt
+/// <c>gasUsed × effectiveGasPrice</c>), parsed exactly from the service's
+/// <c>realizedFeeWei</c> decimal string. NULL for TRON, and when the service
+/// did not report a well-formed value.
+/// </param>
 public sealed record TransferStatusResult(
     TransferStatusOutcome Outcome,
     long? BlockNumber,
@@ -79,7 +85,8 @@ public sealed record TransferStatusResult(
     string? ErrorMessage,
     long? RealizedFeeSun = null,
     long? EnergyUsageTotal = null,
-    long? OriginEnergyUsage = null);
+    long? OriginEnergyUsage = null,
+    decimal? RealizedFeeWei = null);
 
 public enum TransferStatusOutcome
 {
