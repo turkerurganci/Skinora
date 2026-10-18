@@ -42,7 +42,7 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Backend yeni/değişen | {BE} | `dotnet test` (LocalDB: `INTEGRATION_TEST_SQL_SERVER=(localdb)\MSSQLLocalDB`) |
+| Backend yeni/değişen | ✓ API 854/854 (tek tek ve tüm çözümde; paralel tam çözüm koşusunda bir yaşam döngüsü testi LocalDB yükü yüzünden bir kez kırıldı, tek başına 61/61), Transactions 1637/1637, Platform 235/235, Shared 592/592, Transactions sözleşme 30/30 | `dotnet test` (LocalDB: `INTEGRATION_TEST_SQL_SERVER=(localdb)\MSSQLLocalDB`) |
 | sidecar-ethereum (vitest) | ✓ 750/750 | `npx vitest run`; `tsc`, `eslint`, `prettier` temiz |
 | Frontend (vitest) | ✓ 387/387 | `npx tsc --noEmit`, `npm run lint`, prettier, `npm run build`, `i18n:check` (1574 anahtar × 4 dil) temiz |
 
@@ -63,7 +63,7 @@
 ## Commit & PR
 
 - Branch: `task/T157-admin-ag-basina`
-- PR: {PR}
+- PR: #354
 - CI: {CI}
 
 ## Known Limitations / Follow-up

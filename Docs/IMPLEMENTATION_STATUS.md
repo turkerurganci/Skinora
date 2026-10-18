@@ -343,7 +343,7 @@
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T149 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
 | T155 | sidecar-fake Ethereum desteği + E2E | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T155_REPORT.md)) |
 | T156 | Kullanıcı arayüzü — ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
-| T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
+| T157 | Admin ekranları ağ başına | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)) |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ⬚ Bekliyor |
 | T159 | Sepolia canlı provası + TRON regresyonu | ⬚ Bekliyor |
 | T160 | F8 Gate Check | ⬚ Bekliyor |
