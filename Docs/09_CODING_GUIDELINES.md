@@ -1,6 +1,6 @@
 # Skinora — Coding Guidelines
 
-**Versiyon: v1.4** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-18 (**T146 — kullanıcı adresleri ağ başına**: §9.5 snapshot tablosu ve örneği `UserWalletAddress` satırına çevrildi (06 §3.1a); kaynak, işlemin ağındaki profil adresi — T147'ye kadar TRON.) · 2026-10-18 (**T144 — ödenecek tutar 2 ondalıklı**: §7.2 "Ödenecek tutar" ve "Gösterim metni" satırları (komisyon kuruşa aşağı, gösterilen = beklenen, `MoneyFormat.Display` yuvarlamasız, FE önizlemesi tamsayı kuruşla); §14.2 ödenecek tutarlar 2 ondalık; §14.3 komisyon satırı (öneriyle kaydedildi — ⚠); §14.4 formül; §14.5 ızgara testi.) · 2026-10-17 (**T141** — §7.2'ye F8 hedef notu: alıcının ödeyeceği toplam 2 ondalıklı ve gösterilen = beklenen; bugünkü 6 haneli beklenen tutar / 2 haneli gösterim farkı T144'te kapanır, 11 §F8) · 2026-10-01 (**§14.4 — satıcı alacağı sıfır ya da altındaysa** — ödeme gönderilmez, ertelenir ve üçüncü ertelemede admin alert (02 §4.7, `PayoutStallsOnNonPositiveNet`).) · 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
+**Versiyon: v1.5** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md`, `08_INTEGRATION_SPEC.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-18 (**T147 — işlem akışında ağ seçimi**: §9.5 snapshot tablosu — satıcı ödeme adresi oluşturmada kabul edilen her ağ için `TransactionNetworkOption`'da, kabulde seçilen ağın satırından `Transaction.SellerPayoutAddress`'e (06 §3.5b).) · 2026-10-18 (**T146 — kullanıcı adresleri ağ başına**: §9.5 snapshot tablosu ve örneği `UserWalletAddress` satırına çevrildi (06 §3.1a); kaynak, işlemin ağındaki profil adresi — T147'ye kadar TRON.) · 2026-10-18 (**T144 — ödenecek tutar 2 ondalıklı**: §7.2 "Ödenecek tutar" ve "Gösterim metni" satırları (komisyon kuruşa aşağı, gösterilen = beklenen, `MoneyFormat.Display` yuvarlamasız, FE önizlemesi tamsayı kuruşla); §14.2 ödenecek tutarlar 2 ondalık; §14.3 komisyon satırı (öneriyle kaydedildi — ⚠); §14.4 formül; §14.5 ızgara testi.) · 2026-10-17 (**T141** — §7.2'ye F8 hedef notu: alıcının ödeyeceği toplam 2 ondalıklı ve gösterilen = beklenen; bugünkü 6 haneli beklenen tutar / 2 haneli gösterim farkı T144'te kapanır, 11 §F8) · 2026-10-01 (**§14.4 — satıcı alacağı sıfır ya da altındaysa** — ödeme gönderilmez, ertelenir ve üçüncü ertelemede admin alert (02 §4.7, `PayoutStallsOnNonPositiveNet`).) · 2026-08-19 (**T133** — §4.4.1 Steam sidecar dizin ağacı gerçek yapıya çekildi: `bot/` ve `webhook/` dizinleri ile `TradeOfferService.ts` silindi, `TradeHoldService`/`cache`/`queue` eklendi. Yalnız ağaç güncellendi, kural metni değişmedi.)
 
 > **Amaç:** Bu doküman, projede kod üretirken ve mevcut kodu değiştirirken uyulması gereken teknik geliştirme kurallarını tanımlar.
 >
@@ -988,7 +988,8 @@ Belirli field'lar işlem oluşturma veya kabul anında "dondurulur" ve işlem bo
 
 | Snapshot field | Ne zaman alınır | Kaynak |
 |---------------|----------------|--------|
-| `SellerPayoutAddress` | İşlem oluşturma anında | Satıcının profildeki ödeme adresi — o ağın `UserWalletAddress` `PAYOUT` satırı (06 §3.1a, T146; T147'ye kadar TRON). Gövdeden alınmaz (07 §7.2) |
+| `TransactionNetworkOption.SellerPayoutAddress` *(T147)* | İşlem oluşturma anında, kabul edilen her ağ için | Satıcının profildeki o ağın `UserWalletAddress` `PAYOUT` satırı (06 §3.1a, §3.5b). Gövdeden alınmaz (07 §7.2) |
+| `SellerPayoutAddress`, `Network` | Alıcı kabul anında (T147) | Alıcının seçtiği ağın `TransactionNetworkOption` satırından kopyalanır — yani oluşturma anının snapshot'ı; kabulden önce NULL |
 | `BuyerRefundAddress` | Alıcı kabul anında | Kabul gövdesindeki `refundWalletAddress` (istemci profildeki o ağın `REFUND` adresiyle ön-doldurur); işlemin ağının doğrulayıcısından geçer |
 | `CommissionRate`, `CommissionAmount` | İşlem oluşturma anında | SystemSetting'deki aktif oran |
 | `MarketPriceAtCreation` | İşlem oluşturma anında | ItemPriceCache'den (fraud detection için) |
@@ -1002,7 +1003,8 @@ Belirli field'lar işlem oluşturma veya kabul anında "dondurulur" ve işlem bo
 
 ```csharp
 // Doğru: snapshot al
-transaction.SellerPayoutAddress = sellerPayoutRow.Address; // UserWalletAddress (network, PAYOUT)
+option.SellerPayoutAddress = sellerPayoutRow.Address;       // oluşturma: UserWalletAddress (network, PAYOUT)
+transaction.SellerPayoutAddress = chosenOption.SellerPayoutAddress; // kabul: seçilen ağın snapshot'ı (T147)
 transaction.CommissionRate = await _settingsService.GetCommissionRateAsync(ct);
 
 // YANLIŞ: sonradan profili sorgulama
@@ -2295,4 +2297,4 @@ Her kod tesliminde sorulacak sorular:
 
 ---
 
-*Skinora — Coding Guidelines v1.4*
+*Skinora — Coding Guidelines v1.5*

@@ -71,10 +71,11 @@ export const seed = {
 };
 
 // The buyer's on-chain wallet the fake sidecar pays FROM = fakeTronAddress(999_001)
-// (sidecar-fake/src/routes/control.ts BUYER_WALLET). Every payment-edge-case
-// refund returns to the payment *source* address (08 §562), so the refund row's
-// ToAddress equals this — distinct from seed.buyerRefundAddress (the trade-side
-// refund wallet used only by the item-timeout BUYER_REFUND).
+// (sidecar-fake/src/routes/control.ts BUYER_WALLET). Since T147 (11 §F8 K9) no
+// refund goes back here: every refund — the payment-edge-case rejections and the
+// item-timeout BUYER_REFUND alike — goes to seed.buyerRefundAddress, the refund
+// address fixed at acceptance. Kept so the specs can assert the refund is NOT
+// sent to the payment source.
 export const fakeBuyerWallet = 'TGDcTRVZVvKBUE7h5fRCVUjRGj6K52AFWg';
 
 /** Seed seller, buyer, and a matching price-cache row (0% deviation → CREATED,
@@ -136,6 +137,7 @@ export async function seedHappyPath(): Promise<typeof seed> {
        DELETE spi FROM SellerPayoutIssues spi JOIN Transactions t ON spi.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE bt FROM BlockchainTransactions bt JOIN Transactions t ON bt.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE pa FROM PaymentAddresses pa JOIN Transactions t ON pa.TransactionId=t.Id WHERE t.SellerId=@s;
+       DELETE o FROM TransactionNetworkOptions o JOIN Transactions t ON o.TransactionId=t.Id WHERE t.SellerId=@s;
        DELETE FROM TransactionHistory WHERE TransactionId IN (SELECT Id FROM Transactions WHERE SellerId=@s);
        DELETE FROM Transactions WHERE SellerId=@s;
        DELETE FROM AdminUserRoles WHERE UserId IN (@s,@b);
