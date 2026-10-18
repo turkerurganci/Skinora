@@ -1,8 +1,12 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { ItemCard, type ItemCardItem } from "@/components/common";
-import { StablecoinType } from "@/types/enums";
+import { BlockchainNetwork, StablecoinType } from "@/types/enums";
+import type { SellerNetworkOption } from "@/lib/transactions/networkChoice";
+import { networkLabel } from "@/lib/utils/blockchain";
+import { maskAddress } from "@/components/transactions/detail/helpers";
 import type { TransactionParamsResponse } from "@/lib/api/transactions";
 import type { SteamInventoryItem } from "@/lib/api/steam";
 import { cn } from "@/lib/utils/cn";
@@ -16,6 +20,13 @@ export interface Step2DetailsProps {
   price: string;
   paymentTimeoutHours: number;
   priceError: string | null;
+  /**
+   * T156 — the networks on offer (`supportedNetworks` only — a closed network
+   * is not in the list) and whether each can be ticked (payout address saved).
+   */
+  networkOptions: readonly SellerNetworkOption[];
+  acceptedNetworks: readonly BlockchainNetwork[];
+  onToggleNetwork: (network: BlockchainNetwork) => void;
   onChangeItem: () => void;
   onChangeStablecoin: (value: StablecoinType) => void;
   onChangePrice: (value: string) => void;
@@ -47,12 +58,16 @@ export function Step2Details({
   price,
   paymentTimeoutHours,
   priceError,
+  networkOptions,
+  acceptedNetworks,
+  onToggleNetwork,
   onChangeItem,
   onChangeStablecoin,
   onChangePrice,
   onChangeTimeout,
 }: Step2DetailsProps) {
   const t = useTranslations("newTransaction.step2");
+  const locale = useLocale();
   const commission = commissionPreview(price, params.commissionRate, stablecoin);
   const commissionPercent = (params.commissionRate * 100).toFixed(0);
 
@@ -105,6 +120,74 @@ export function Step2Details({
             );
           })}
         </div>
+      </fieldset>
+
+      <fieldset className="space-y-2" aria-describedby="networks-hint">
+        <legend className="text-sm font-medium text-gray-700">{t("networks.label")}</legend>
+        <p id="networks-hint" className="text-xs text-gray-500">
+          {t("networks.hint")}
+        </p>
+        <ul className="space-y-2">
+          {networkOptions.map((option) => {
+            const id = `network-${option.network}`;
+            const checked = option.selectable && acceptedNetworks.includes(option.network);
+            return (
+              <li
+                key={option.network}
+                className={cn(
+                  "rounded-md border p-3",
+                  checked ? "border-blue-600 bg-blue-50" : "border-gray-300 bg-white",
+                  !option.selectable && "bg-gray-50",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    id={id}
+                    type="checkbox"
+                    checked={checked}
+                    disabled={!option.selectable}
+                    onChange={() => onToggleNetwork(option.network)}
+                    aria-describedby={`${id}-note`}
+                    className="mt-1"
+                    data-testid={`network-option-${option.network}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <label htmlFor={id} className="text-sm font-semibold text-gray-900">
+                      {networkLabel(option.network)}
+                    </label>
+                    <div id={`${id}-note`} className="space-y-0.5 text-xs text-gray-600">
+                      {option.payoutAddress ? (
+                        <p>
+                          {t("networks.payoutAddress")}:{" "}
+                          <span className="font-mono" title={option.payoutAddress}>
+                            {maskAddress(option.payoutAddress)}
+                          </span>
+                        </p>
+                      ) : (
+                        <p className="text-red-700">
+                          {t("networks.noPayoutAddress")}{" "}
+                          <Link href={`/${locale}/profile`} className="underline">
+                            {t("networks.addInProfile")}
+                          </Link>
+                        </p>
+                      )}
+                      <p>
+                        {option.network === BlockchainNetwork.TRON
+                          ? t("networks.tronFeeNote")
+                          : t("networks.ethereumFeeNote")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        {acceptedNetworks.length === 0 && (
+          <p role="alert" className="text-xs text-red-600">
+            {t("networks.noneSelected")}
+          </p>
+        )}
       </fieldset>
 
       <div className="space-y-1">

@@ -1,4 +1,29 @@
 import { apiClient } from "./client";
+import type { BlockchainNetwork } from "@/types/enums";
+
+/** Address role on the profile (07 §5.1 `wallets[].type`, 06 §3.1a). */
+export type WalletType = "PAYOUT" | "REFUND";
+
+/**
+ * One saved address (07 §5.1 `wallets[]`, T146): per network and per type.
+ * `address` is the display form — EIP-55 mixed case on Ethereum, TRON as is
+ * (06 §1.4) — so the UI shows it verbatim and never re-cases it.
+ */
+export interface UserWalletEntry {
+  network: BlockchainNetwork;
+  type: WalletType;
+  address: string;
+  changedAt: string | null;
+}
+
+/** The saved address for a network + type, or null. */
+export function findWallet(
+  wallets: readonly UserWalletEntry[] | null | undefined,
+  network: BlockchainNetwork,
+  type: WalletType,
+): string | null {
+  return wallets?.find((w) => w.network === network && w.type === type)?.address ?? null;
+}
 
 /**
  * Response body for U2 — GET /users/me/stats (07 §5.2).
@@ -42,8 +67,15 @@ export interface UserProfile {
   completedTransactionCount: number;
   successfulTransactionRate: number | null;
   cancelRate: number | null;
+  /** TRON-only legacy fields (07 §5.1) — every network's addresses are in `wallets`. */
   sellerWalletAddress: string | null;
   refundWalletAddress: string | null;
+  /**
+   * T146/T156 — every saved address, per network and type (07 §5.1). The UI
+   * reads addresses from here only; an older backend that predates the field
+   * leaves it undefined, which reads as "no addresses".
+   */
+  wallets?: UserWalletEntry[];
   mobileAuthenticatorActive: boolean;
   /**
    * T119a — normalized Steam trade URL saved through U17
@@ -127,14 +159,18 @@ export function getPublicUserProfile(steamId: string): Promise<PublicUserProfile
  */
 export interface UpdateWalletResponse {
   walletAddress: string;
+  /** T146 — the network the address was saved on. */
+  network?: BlockchainNetwork;
   updatedAt: string;
   activeTransactionsUsingOldAddress: number;
+  /** T146 — false when an unchecksummed Ethereum address was saved on confirmation. */
+  checksumVerified?: boolean;
 }
 
 /**
- * Re-auth token header sent for wallet changes when the user already has
- * an address on file (07 §4.7 / §5.3 "Ek Auth"). Absent on first-time
- * wallet creation since there is no previous value to protect.
+ * Re-auth token header sent for wallet changes (07 §4.7 / §5.3 "Ek Auth").
+ * Required when the user already has an address OF THIS TYPE on any network —
+ * see {@link walletChangeNeedsReAuth}.
  */
 const REAUTH_HEADER = "X-ReAuth-Token";
 
@@ -142,24 +178,51 @@ function buildReAuthHeaders(reAuthToken: string | null): Record<string, string> 
   return reAuthToken ? { [REAUTH_HEADER]: reAuthToken } : {};
 }
 
+/**
+ * Body of U3/U4 (07 §5.3). `network` is always sent — the server's "missing
+ * means TRON" fallback (T146 decision i) exists for the pre-T156 client only.
+ * `confirmLowercase` is the user's second confirmation for an Ethereum address
+ * without an EIP-55 checksum; it is sent only when the user gave it.
+ */
+export interface UpdateWalletRequest {
+  walletAddress: string;
+  network: BlockchainNetwork;
+  confirmLowercase?: boolean;
+}
+
+/**
+ * 07 §5.3 "Ek Auth" (T146 decision xv, T147 decision xi): Steam re-auth is
+ * required when the user already has an address of the SAME TYPE on ANY
+ * network — changing it, and also adding a first address on a NEW network. A
+ * hijacked session must not be able to add a second payout target just
+ * because it picked a network the account had not used yet. Only the very
+ * first address of a type goes through without re-auth.
+ */
+export function walletChangeNeedsReAuth(
+  wallets: readonly UserWalletEntry[] | null | undefined,
+  type: WalletType,
+): boolean {
+  return (wallets ?? []).some((w) => w.type === type);
+}
+
 export function updateSellerWallet(
-  walletAddress: string,
+  body: UpdateWalletRequest,
   reAuthToken: string | null,
 ): Promise<UpdateWalletResponse> {
   return apiClient<UpdateWalletResponse>("/users/me/wallet/seller", {
     method: "PUT",
-    body: JSON.stringify({ walletAddress }),
+    body: JSON.stringify(body),
     headers: buildReAuthHeaders(reAuthToken),
   });
 }
 
 export function updateRefundWallet(
-  walletAddress: string,
+  body: UpdateWalletRequest,
   reAuthToken: string | null,
 ): Promise<UpdateWalletResponse> {
   return apiClient<UpdateWalletResponse>("/users/me/wallet/refund", {
     method: "PUT",
-    body: JSON.stringify({ walletAddress }),
+    body: JSON.stringify(body),
     headers: buildReAuthHeaders(reAuthToken),
   });
 }

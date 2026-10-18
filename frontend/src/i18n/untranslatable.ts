@@ -13,6 +13,9 @@ export const UNTRANSLATABLE_TERMS = [
   "USDC",
   "TRC-20",
   "Tron",
+  // T156 — F8 network names (04 §10.4, T141).
+  "ERC-20",
+  "Ethereum",
   // Steam (04 §10.4)
   "Steam",
   "Steam ID",

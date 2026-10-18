@@ -2,7 +2,9 @@
 
 import { useTranslations } from "next-intl";
 import { Spinner } from "@/components/common/LoadingState";
-import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
+import { BlockchainNetwork, BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
+import { networkLabel } from "@/lib/utils/blockchain";
+import type { SellerNetworkOption } from "@/lib/transactions/networkChoice";
 import { formatStablecoin } from "@/lib/utils/format";
 import { calculateCommission } from "@/lib/utils/money";
 import type { SteamInventoryItem } from "@/lib/api/steam";
@@ -15,8 +17,12 @@ export interface Step4SummaryProps {
   paymentTimeoutHours: number;
   buyerMethod: BuyerIdentificationMethod;
   buyerSteamId: string;
-  sellerWalletAddress: string;
-  submitError: string | null;
+  /** T156 — the networks the listing is created with (step 2). */
+  acceptedNetworks: readonly BlockchainNetwork[];
+  /** Carries each network's payout address (06 §3.5b snapshot source). */
+  networkOptions: readonly SellerNetworkOption[];
+  /** Error panel; `network` is the label of `error.details.network` when present. */
+  submitError: { message: string; network?: string } | null;
   isSubmitting: boolean;
   onBack: () => void;
   onSubmit: () => void;
@@ -35,7 +41,8 @@ export function Step4Summary({
   paymentTimeoutHours,
   buyerMethod,
   buyerSteamId,
-  sellerWalletAddress,
+  acceptedNetworks,
+  networkOptions,
   submitError,
   isSubmitting,
   onBack,
@@ -73,8 +80,14 @@ export function Step4Summary({
             {commissionDisplay} <span className="text-xs">({t("rows.commissionPayer")})</span>
           </span>
         </Row>
-        <Row label={t("rows.token")}>
-          <span className="text-sm text-gray-900">{stablecoin} (TRC-20)</span>
+        <Row label={t("rows.networks")}>
+          <ul className="space-y-0.5 text-sm text-gray-900" data-testid="summary-networks">
+            {acceptedNetworks.map((network) => (
+              <li key={network}>
+                {stablecoin} · {networkLabel(network)}
+              </li>
+            ))}
+          </ul>
         </Row>
         <Row label={t("rows.timeout")}>
           <span className="text-sm text-gray-900">
@@ -91,9 +104,20 @@ export function Step4Summary({
           )}
         </Row>
         <Row label={t("rows.wallet")}>
-          <span className="font-mono text-sm text-gray-900" title={sellerWalletAddress}>
-            {maskAddress(sellerWalletAddress)}
-          </span>
+          <ul className="space-y-0.5 text-sm text-gray-900">
+            {acceptedNetworks.map((network) => {
+              const address =
+                networkOptions.find((o) => o.network === network)?.payoutAddress ?? "";
+              return (
+                <li key={network}>
+                  <span className="text-xs text-gray-600">{networkLabel(network)}:</span>{" "}
+                  <span className="font-mono" title={address}>
+                    {maskAddress(address)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </Row>
       </dl>
 
@@ -102,7 +126,10 @@ export function Step4Summary({
           role="alert"
           className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900"
         >
-          {submitError}
+          <p>{submitError.message}</p>
+          {submitError.network && (
+            <p className="mt-1 text-xs">{t("errorNetwork", { network: submitError.network })}</p>
+          )}
         </div>
       )}
 

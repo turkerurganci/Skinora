@@ -115,7 +115,7 @@
       "summary": {
         "escrow": "Ödemeniz, satıcı eşyayı teslim edene kadar emanette tutulur; platform eşyanın kendisini hiçbir zaman tutmaz.",
         "commission": "İşlem tamamlandığında satıcıdan komisyon kesilir.",
-        "crypto": "Ödemeler yalnızca TRON ağı üzerinden USDT veya USDC ile yapılır.",
+        "crypto": "Ödemeler yalnızca TRON veya Ethereum ağı üzerinden USDT veya USDC ile yapılır.",
         "disputes": "İtirazlar Skinora yöneticileri tarafından incelenir.",
         "kyc": "Yaptırım listesindeki cüzdanlar ve ambargolu bölgeler engellenir."
       },
@@ -821,7 +821,7 @@
       "sections": {
         "dataWeCollect": {
           "heading": "Topladığımız veriler",
-          "body": "Steam ile (Steam OpenID) oturum açtığınızda Steam ID, görünen ad ve avatar dâhil Steam genel profilinizi alırız. Ayrıca TRON ağı üzerinde TRC-20 stablecoin (USDT, USDC) ödemeleri için sağladığınız cüzdan adreslerini ve teklifler, emanet durumu, ödemeler, iadeler ve uyuşmazlıklar gibi platformdaki işlem aktivitenize ilişkin kayıtları saklarız. Steam parolanızı veya Steam Mobile Authenticator kimlik bilgilerinizi almayız."
+          "body": "Steam ile (Steam OpenID) oturum açtığınızda Steam ID, görünen ad ve avatar dâhil Steam genel profilinizi alırız. Ayrıca TRON (TRC-20) ve Ethereum (ERC-20) ağlarındaki stablecoin (USDT, USDC) ödemeleri için ağ başına sağladığınız cüzdan adreslerini ve teklifler, emanet durumu, ödemeler, iadeler ve uyuşmazlıklar gibi platformdaki işlem aktivitenize ilişkin kayıtları saklarız. Steam parolanızı veya Steam Mobile Authenticator kimlik bilgilerinizi almayız."
         },
         "howWeUse": {
           "heading": "Verilerinizi nasıl kullanırız",
@@ -829,7 +829,7 @@
         },
         "dataSharing": {
           "heading": "Veri paylaşımı",
-          "body": "Verileri yalnızca hizmeti sunmak için gereken taraflarla (takas doğrulaması için Steam ve zincir üstü ödemeler için TRON blok zinciri ağı gibi) ve adımıza hareket eden hizmet sağlayıcılarla paylaşırız. Genel bir blok zincirine kaydedilen işlemlerin doğası gereği başkalarınca görülebileceğini unutmayın. Yasaların gerektirdiği veya şartlarımızı uygulamak için gerekli olduğu durumlarda da veri açıklayabiliriz; kişisel veri satmıyoruz."
+          "body": "Verileri yalnızca hizmeti sunmak için gereken taraflarla (takas doğrulaması için Steam ve zincir üstü ödemeler için ödeme yaptığınız blok zinciri ağı — TRON veya Ethereum — gibi) ve adımıza hareket eden hizmet sağlayıcılarla paylaşırız. Genel bir blok zincirine kaydedilen işlemlerin doğası gereği başkalarınca görülebileceğini unutmayın. Yasaların gerektirdiği veya şartlarımızı uygulamak için gerekli olduğu durumlarda da veri açıklayabiliriz; kişisel veri satmıyoruz."
         },
         "dataRetention": {
           "heading": "Veri saklama",
@@ -855,7 +855,7 @@
         },
         "serviceDescription": {
           "heading": "Hizmet",
-          "body": "Skinora, satıcı kararlaştırılan CS2 eşyasını bir Steam takası aracılığıyla teslim edene kadar alıcının TRC-20 stablecoin ödemesini emanette tutan bir aracı olarak hareket eder. Teslimat doğrulandığında, platform komisyonu ve ağ gas ücretini düştükten sonra ödemeyi satıcıya serbest bırakırız. Takas genellikle iyi durumda bir Steam hesabı gerektirir ve Steam Mobile Authenticator gerekebilir. Skinora bağımsız bir hizmettir; Valve veya Steam ile bağlantılı değildir, onlar tarafından desteklenmez veya işletilmez."
+          "body": "Skinora, satıcı kararlaştırılan CS2 eşyasını bir Steam takası aracılığıyla teslim edene kadar alıcının stablecoin ödemesini (alıcının seçtiği ağda: TRON'da TRC-20 veya Ethereum'da ERC-20) emanette tutan bir aracı olarak hareket eder. Teslimat doğrulandığında, platform komisyonu ve varsa ağ gas ücretini düştükten sonra ödemeyi satıcıya aynı ağda serbest bırakırız. Takas genellikle iyi durumda bir Steam hesabı gerektirir ve Steam Mobile Authenticator gerekebilir. Skinora bağımsız bir hizmettir; Valve veya Steam ile bağlantılı değildir, onlar tarafından desteklenmez veya işletilmez."
         },
         "userObligations": {
           "heading": "Yükümlülükleriniz",
@@ -863,7 +863,7 @@
         },
         "fees": {
           "heading": "Ücretler",
-          "body": "Her işleme bir platform komisyonu ve bir blok zinciri ağ (gas) ücreti uygulanır. Geçerli tutarlar, bir işlemi onaylamadan önce uygulama içinde size gösterilir; kesin oranlar yapılandırılabilir ve zamanla değişebilir. Blok zinciri ağ ücretleri TRON ağı tarafından belirlenir ve kontrolümüz dışındadır."
+          "body": "Her işleme bir platform komisyonu ve ağa bağlı olarak bir blok zinciri ağ (gas) ücreti uygulanır. Geçerli tutarlar, bir işlemi onaylamadan önce uygulama içinde size gösterilir; kesin oranlar yapılandırılabilir ve zamanla değişebilir. TRON'da alıcı, işlem kabul edildiğinde sabitlenen ayrı bir TRON ağ ücreti öder; Ethereum'da ağ ücretini platform karşılar. Blok zinciri ağ ücretleri ilgili ağ (TRON veya Ethereum) tarafından belirlenir ve kontrolümüz dışındadır."
         },
         "liability": {
           "heading": "Sorumluluk",
@@ -1042,16 +1042,20 @@
     "ariaLabel": "Dil seç"
   },
   "walletAddress": {
-    "label": "TRC-20 cüzdan adresi",
-    "hint": "T ile başlamalı, 34 karakter",
-    "invalidFormat": "Geçersiz TRC-20 adresi",
+    "label": "{network} cüzdan adresi",
+    "invalidFormat": "Geçerli bir {network} adresi girin.",
     "sanctioned": "Bu adres yaptırım listesinde. Lütfen başka bir adres girin.",
     "validationError": "Doğrulama sırasında bir hata oluştu",
     "edit": "Düzenle",
     "confirm": "Onayla",
     "validating": "Kontrol ediliyor",
     "continue": "Devam",
-    "confirmTitle": "Bu adres doğru mu?"
+    "confirmTitle": "Bu adres doğru mu?",
+    "hintTron": "TRON adresi: T ile başlar, 34 karakter.",
+    "hintEthereum": "Ethereum adresi: 0x ve ardından 40 onaltılık karakter. Cüzdanınızın gösterdiği gibi yapıştırın (büyük-küçük harf karışımı EIP-55 sağlamasını taşır).",
+    "networkLabel": "Ağ",
+    "evmSameAddressNote": "Aynı 0x adresi başka EVM ağlarında da bulunur. Bu adres yalnız Ethereum için kaydedilir.",
+    "noChecksumConfirm": "Bu adres tümüyle küçük (ya da tümüyle büyük) harfli; EIP-55 sağlaması taşımadığı için yazım hatası fark edilemez. Adresi karakter karakter kontrol ettim."
   },
   "pagination": {
     "ariaLabel": "Sayfalama",
@@ -1182,6 +1186,14 @@
         "title": "Profilinizde ödeme adresi yok",
         "description": "Ödemeler profilinizde kayıtlı adrese yapılır. Profilinizden bir adres ekleyip geri dönün — güvenlik nedeniyle adres, kaydettikten 24 saat sonra kullanılabilir olur.",
         "cta": "Profile git"
+      },
+      "noOpenNetwork": {
+        "title": "Yeni işlem için açık ağ yok",
+        "description": "Ödemeler şu anda hiçbir ağda kullanılamıyor. Bu geçici bir durum — lütfen daha sonra tekrar deneyin."
+      },
+      "noPayoutOnOpenNetwork": {
+        "title": "Açık ağlarda ödeme adresiniz yok",
+        "description": "Yeni işlem şu ağlarda açılabilir: {networks}. Bu ağlarda ödeme adresiniz yok. İşlem başlatmak için profilinizden adres ekleyin."
       }
     },
     "step1": {
@@ -1231,6 +1243,16 @@
         "label": "Komisyon (alıcı öder)",
         "value": "Alıcı %{percent} komisyon ödeyecek: {amount}",
         "placeholder": "Fiyatı girince hesaplanacak (%{percent})"
+      },
+      "networks": {
+        "label": "Kabul ettiğiniz ağlar",
+        "hint": "Token her zaman USDT'dir. Alıcı bu ağlardan birini seçer; size ödeme ve her türlü iade aynı ağdan yapılır.",
+        "payoutAddress": "Ödeme adresi",
+        "noPayoutAddress": "Bu ağda ödeme adresiniz yok.",
+        "addInProfile": "Profilinizden ekleyin",
+        "tronFeeNote": "TRON'da alıcı ayrıca kabul anında sabitlenen bir TRON ağ ücreti öder. Size yapılacak ödemenin ağ ücretinin komisyonla karşılanmayan kısmı alacağınızdan düşülür.",
+        "ethereumFeeNote": "Ethereum'da ne siz ne de alıcı ağ ücreti ödersiniz.",
+        "noneSelected": "En az bir ağ seçin."
       }
     },
     "step3": {
@@ -1260,13 +1282,13 @@
         "price": "Fiyat",
         "commission": "Komisyon",
         "commissionPayer": "alıcı öder",
-        "token": "Token",
         "timeout": "Ödeme süresi",
         "timeoutValue": "{hours} saat",
         "buyer": "Alıcı",
         "buyerSteamId": "Steam ID: {steamId}",
         "buyerOpenLink": "Açık link (ilk kabul eden alır)",
-        "wallet": "Ödeme adresi"
+        "wallet": "Ödeme adresi",
+        "networks": "Ağlar"
       },
       "back": "Geri",
       "submit": "İşlemi Başlat",
@@ -1274,7 +1296,7 @@
       "errors": {
         "generic": "İşlem başlatılamadı. Lütfen tekrar deneyin.",
         "VALIDATION_ERROR": "Form bilgilerinde hata var. Lütfen tüm alanları kontrol edin.",
-        "INVALID_WALLET_ADDRESS": "Ödeme adresi geçersiz. TRC-20 formatında bir adres girin.",
+        "INVALID_WALLET_ADDRESS": "Profilinizdeki ödeme adresi bu ağ için geçerli değil. Profilinizden güncelleyin.",
         "SANCTIONS_MATCH": "Bu cüzdan adresi yaptırım listesindedir. Lütfen başka bir adres kullanın.",
         "CONCURRENT_LIMIT_REACHED": "Aktif işlem limitine ulaştınız. Mevcut işlemleriniz tamamlandığında yeni işlem başlatabilirsiniz.",
         "CANCEL_COOLDOWN_ACTIVE": "İptal cooldown'u devam ediyor. Süre dolana kadar yeni işlem başlatamazsınız.",
@@ -1294,12 +1316,13 @@
         "OPEN_LINK_DISABLED": "Açık link yöntemi şu an kapalı. Lütfen Steam ID yöntemini kullanın.",
         "BUYER_STEAM_ID_NOT_FOUND": "Belirttiğiniz Steam ID kayıtlı bir kullanıcıya ait değil.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "Ödeme adresi cooldown'u devam ediyor.",
-        "SELLER_WALLET_ADDRESS_MISSING": "Profilinizde ödeme adresi yok. Önce profilinizden bir adres ekleyin."
-      }
+        "SELLER_WALLET_ADDRESS_MISSING": "Profilinizde ödeme adresi yok. Önce profilinizden bir adres ekleyin.",
+        "NETWORK_UNAVAILABLE": "Seçtiğiniz ağlardan biri şu anda kullanılamıyor. O ağı kaldırın ya da daha sonra tekrar deneyin."
+      },
+      "errorNetwork": "Ağ: {network}"
     }
   },
   "transactionDetail": {
-    "viewOnTronscan": "Tronscan'de görüntüle",
     "header": {
       "title": "İşlem #{id}"
     },
@@ -1308,7 +1331,11 @@
       "commission": "Komisyon",
       "total": "Toplam",
       "token": "Token",
-      "createdAt": "Oluşturulma"
+      "createdAt": "Oluşturulma",
+      "tronNetworkFee": "TRON ağ ücreti",
+      "network": "Ağ",
+      "acceptedNetworks": "Kabul edilen ağlar",
+      "totalExcludingTronFee": "Toplam (TRON ağ ücreti hariç)"
     },
     "parties": {
       "seller": "Satıcı",
@@ -1317,17 +1344,23 @@
     },
     "paymentInfo": {
       "title": "Ödeme bilgileri",
-      "addressLabel": "Ödeme adresi",
+      "addressLabel": "Ödeme adresi ({network})",
       "amountLabel": "Gönderilecek tutar",
       "tokenLabel": "Token",
       "networkLabel": "Ağ",
       "remainingLabel": "Kalan süre",
       "warnings": {
         "title": "Uyarılar",
-        "onlyTrc20": "Yalnızca {token} (TRC-20) ağı üzerinden gönderin.",
         "fullAmount": "Tam tutarı tek seferde gönderin.",
         "noOtherToken": "Farklı bir token göndermeyin.",
-        "noExchange": "Exchange'den gönderim yapmayın — iade adresinize ulaşılamayabilir."
+        "onlyNetwork": "Yalnız {network} ağında {token} gönderin.",
+        "evmSameAddress": "Aynı 0x adresi başka EVM ağlarında da bulunur (ör. BSC, Arbitrum, Polygon). Başka bir ağdan gönderilen ödeme bu işleme sayılmaz ve otomatik iade edilmez — destek talebi açmanız gerekir."
+      },
+      "unknownNetwork": "Ödeme ağı okunamadığı için ödeme adresi gösterilmiyor. Hiçbir şey göndermeyin — sayfayı yenileyin ya da destekle iletişime geçin.",
+      "breakdown": {
+        "price": "Fiyat",
+        "commission": "Komisyon",
+        "tronNetworkFee": "TRON ağ ücreti"
       }
     },
     "paymentEvents": {
@@ -1341,7 +1374,7 @@
       },
       "WRONG_TOKEN": {
         "title": "Yanlış token gönderildi",
-        "body": "Desteklenmeyen token tespit edildi ve iade edildi. Lütfen yalnızca {token} (TRC-20) gönderin."
+        "body": "Desteklenmeyen token tespit edildi ve iade edildi. Lütfen yalnızca {token} ({standard}) gönderin."
       },
       "LATE_PAYMENT": {
         "title": "Gecikmeli ödeme tespit edildi",
@@ -1424,8 +1457,8 @@
       "buyerWillBeNotified": "Alıcıya bildirim gönderilecek."
     },
     "accept": {
-      "addressLabel": "İade adresiniz",
-      "addressHint": "Sorun çıkarsa ödeme bu TRC-20 adresine iade edilir.",
+      "addressLabel": "İade adresiniz ({network})",
+      "addressHint": "Bu işlemin her iadesi — reddedilen ödemeler (yanlış tutar, yanlış token, geç ödeme) dahil — bu {network} adresine gider.",
       "submit": "Kabul Ediyorum",
       "submitting": "Kabul ediliyor...",
       "change": "Değiştir",
@@ -1437,7 +1470,7 @@
       "maSetupLink": "Steam Mobile Authenticator nasıl kurulur?",
       "errors": {
         "REFUND_ADDRESS_REQUIRED": "İade adresi zorunludur.",
-        "INVALID_WALLET_ADDRESS": "İade adresi geçersiz. TRC-20 formatında bir adres girin.",
+        "INVALID_WALLET_ADDRESS": "İade adresi geçerli bir {network} adresi değil.",
         "SANCTIONS_MATCH": "Bu cüzdan adresi yaptırım listesindedir. Lütfen başka bir adres kullanın.",
         "WALLET_COOLDOWN_ACTIVE": "İade adresiniz yakın zamanda değiştirildi. Cooldown süresinin bitmesini bekleyin.",
         "STEAM_ID_MISMATCH": "Bu işlem başka bir Steam hesabı için oluşturulmuş.",
@@ -1451,8 +1484,21 @@
         "STEAM_ACCOUNT_TOO_NEW": "Steam hesabınız takas için henüz çok yeni. Steam, yeni hesapların ilk 15 gün takas yapmasına izin vermiyor.",
         "MOBILE_AUTHENTICATOR_REQUIRED": "Kabul edebilmek için Steam Mobile Authenticator’ınız aktif olmalı. Aktif değilse Steam takası 15 gün kendi emanetinde bekletir.",
         "STEAM_UNAVAILABLE": "Steam’e şu anda ulaşılamadı, Mobile Authenticator doğrulanamadı. Lütfen biraz sonra tekrar deneyin.",
-        "generic": "İşlem kabul edilemedi. Lütfen tekrar deneyin."
-      }
+        "generic": "İşlem kabul edilemedi. Lütfen tekrar deneyin.",
+        "NETWORK_REQUIRED": "Ödeme yapacağınız ağı seçin.",
+        "addressFormat": "Geçerli bir {network} adresi girin.",
+        "CHECKSUM_CONFIRMATION_REQUIRED": "Sağlaması olmayan adresi kontrol ettiğinizi onaylayın.",
+        "NETWORK_NOT_ACCEPTED": "Satıcı bu işlemde {network} kabul etmiyor. Başka bir ağ seçin.",
+        "NETWORK_UNAVAILABLE": "{network} şu anda kullanılamıyor. Başka bir ağ seçin ya da daha sonra tekrar deneyin."
+      },
+      "networkLabel": "Ödeme ağı",
+      "networkHint": "Ödeme yapacağınız ağı seçin. Ödemeniz, satıcıya ödeme ve her türlü iade bu ağda yapılır. TRON'da ağ ücreti kabul anında sabitlenir.",
+      "quote": {
+        "total": "Göndereceğiniz tutar: {amount}",
+        "tronFee": "TRON ağ ücreti dahil: {amount}",
+        "unavailable": "Tutar kabulden sonra gösterilir."
+      },
+      "noChecksumConfirm": "Bu adres tümüyle küçük (ya da tümüyle büyük) harfli; EIP-55 sağlaması taşımadığı için yazım hatası fark edilemez. Adresi karakter karakter kontrol ettim."
     },
     "actions": {
       "countdownLabel": "Kalan",
@@ -1564,7 +1610,8 @@
         "title": "İşlem yüklenemedi",
         "message": "İşlem detayları yüklenemedi. Lütfen tekrar deneyin."
       }
-    }
+    },
+    "viewOnExplorer": "{explorer}'da görüntüle"
   },
   "profile": {
     "header": {
@@ -1593,13 +1640,17 @@
       "cancel": "Vazgeç",
       "activeTransactionsNotice": "Aktif {count} işleminiz mevcut eski adresle tamamlanacaktır.",
       "errors": {
-        "invalidAddress": "Cüzdan adresi geçerli bir TRC-20 adresi değil.",
+        "invalidAddress": "Cüzdan adresi bu ağ için geçerli bir adres değil.",
         "sanctioned": "Bu adres yaptırım listesinde, kullanılamaz.",
         "reAuthRequired": "Adresi değiştirmek için Steam ile yeniden doğrulamanız gerekir.",
         "reAuthTokenInvalid": "Doğrulama oturumu süresi doldu veya geçersiz. Lütfen tekrar deneyin.",
         "validation": "Geçersiz istek. Lütfen tekrar deneyin.",
-        "generic": "Adres güncellenemedi. Lütfen tekrar deneyin."
-      }
+        "generic": "Adres güncellenemedi. Lütfen tekrar deneyin.",
+        "checksumMismatch": "Adresin sağlaması tutmuyor — yazım hatası olup olmadığını kontrol edin.",
+        "checksumConfirmationRequired": "Bu Ethereum adresinde sağlama yok. Adresi yeniden girin ve onay adımında onaylayın."
+      },
+      "perNetworkNote": "Adresler ağ başına tutulur (TRON, Ethereum). Ödeme, satıcıya ödeme ve iade her zaman alıcının seçtiği ağda yapılır.",
+      "reAuthNote": "Steam ile yeniden doğrulamanız istenecek — yeni bir ağdaki ilk adres için de geçerlidir."
     },
     "quickLinks": {
       "title": "Hızlı Linkler",

@@ -1,4 +1,4 @@
-import { BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
+import { BlockchainNetwork, BuyerIdentificationMethod, StablecoinType } from "@/types/enums";
 import type { SteamInventoryItem } from "@/lib/api/steam";
 
 /**
@@ -35,6 +35,13 @@ export interface WizardDraft {
   paymentTimeoutHours: number;
   method: BuyerIdentificationMethod;
   buyerSteamId: string;
+  /**
+   * T156 — the networks the seller ticked. Optional on purpose: absent means
+   * "untouched" (the form then accepts every selectable network), and a v2
+   * draft written before T156 stays readable instead of being thrown away. The
+   * form re-intersects it with today's selectable networks on every render.
+   */
+  acceptedNetworks?: BlockchainNetwork[];
 }
 
 /**
@@ -93,7 +100,17 @@ function isWizardDraft(value: unknown): value is WizardDraft {
     Number.isFinite(d.paymentTimeoutHours) &&
     typeof d.method === "string" &&
     Object.values(BuyerIdentificationMethod).includes(d.method as BuyerIdentificationMethod) &&
-    typeof d.buyerSteamId === "string"
+    typeof d.buyerSteamId === "string" &&
+    (d.acceptedNetworks === undefined || isNetworkList(d.acceptedNetworks))
+  );
+}
+
+function isNetworkList(value: unknown): value is BlockchainNetwork[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (n) => typeof n === "string" && (Object.values(BlockchainNetwork) as string[]).includes(n),
+    )
   );
 }
 
