@@ -6,6 +6,7 @@ import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { TransferDeferredError } from '../transfer/FeePolicy.js';
 import type { TransferService } from '../transfer/TransferService.js';
+import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 
 /**
  * T152 — the HTTP answers of the send endpoints and what each means to the
@@ -41,6 +42,8 @@ beforeAll(async () => {
     wallet: new EthereumHdWallet(`${'abandon '.repeat(11)}about`),
     finality: () => ({ state: 'ok', snapshot: null, ageSeconds: null, lastError: null }),
     transfers: fake,
+    // T154 — covered by feeHandlers.test.ts; never reached here.
+    feeEstimator: {} as EthFeeEstimationService,
   });
   server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));

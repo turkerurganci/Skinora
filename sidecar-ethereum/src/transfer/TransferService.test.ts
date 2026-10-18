@@ -5,7 +5,7 @@ import { Transaction } from 'ethers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { canonicalAddress } from '../address/canonicalAddress.js';
 import { RpcError } from '../rpc/RpcClient.js';
-import { FakeEthereumChain } from '../testing/FakeEthereumChain.js';
+import { FakeSendChain } from '../testing/FakeEthereumChain.js';
 import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { MAINNET_TOKEN_CONTRACTS } from '../network.js';
 import { decodeTransferCall } from './erc20.js';
@@ -37,13 +37,13 @@ const ETH_USD = 2_364_480_000n; // 2,364.48 $ in micro-dollars (T142's price)
 const ID = (n: number) => `00000000-0000-0000-0000-${n.toString().padStart(12, '0')}`;
 
 let dir: string;
-let chain: FakeEthereumChain;
+let chain: FakeSendChain;
 let clock: number;
 let price: bigint | null;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'eth-transfer-'));
-  chain = new FakeEthereumChain(USDT, USDC);
+  chain = new FakeSendChain(USDT, USDC);
   chain.setToken(USDT, HOT.address, 1_000_000_000_000n);
   chain.setEth(HOT.address, 10n ** 18n);
   clock = 1_800_000_000_000;

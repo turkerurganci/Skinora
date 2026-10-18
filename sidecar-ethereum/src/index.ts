@@ -5,14 +5,11 @@ import { SERVICE_NETWORK } from './network.js';
 import { EthereumHdWallet } from './wallet/HdWalletService.js';
 import { checkWalletKeys, type WalletKeyAddresses } from './wallet/walletKeys.js';
 import { EthereumRpcClient } from './rpc/RpcClient.js';
-import { FinalityTracker } from './finality/FinalityTracker.js';
 import { createApp } from './api/routes.js';
 import { TxJournal } from './transfer/TxJournal.js';
-import { FEE_CAP_WAIT_REASONS, FeeWaitTracker } from './transfer/FeeWaitTracker.js';
-import { TransferGuard } from './transfer/TransferGuard.js';
-import { TransferService } from './transfer/TransferService.js';
-import { NO_ETH_PRICE } from './transfer/FeePolicy.js';
+import { FEE_CAP_WAIT_REASONS } from './transfer/FeeWaitTracker.js';
 import { setTransferWaitSource, transferWaitAlarmSeconds } from './metrics.js';
+import { buildOutbound, buildServices } from './wiring.js';
 
 /**
  * Entry point of the Ethereum service (T150 — 05 §3.3a, 08 §3.7).
@@ -57,12 +54,8 @@ function main(): void {
     timeoutMs: config.rpc.timeoutMs,
     failoverCooldownMs: config.rpc.failoverCooldownMs,
   });
-  const finality = new FinalityTracker({
-    rpc,
-    primaryProvider: config.rpc.providers[0].name,
-    pollIntervalMs: config.finality.pollIntervalMs,
-    stallThresholdSeconds: config.finality.stallThresholdSeconds,
-  });
+  const services = buildServices(config, rpc);
+  const { finality, registry, reader, readiness } = services;
 
   if (config.rpc.providers.length < 2) {
     logger.warn(
@@ -109,37 +102,34 @@ function main(): void {
     'Ethereum service configured',
   );
 
-  // T152 — outbound sends (08 §3.7.6, §3.7.7).
-  const feeWaits = new FeeWaitTracker(config.transfers.journalDir);
-  const tokens = config.tokenContracts;
-  const transfers = new TransferService({
+  // T151 — payment monitor, USDT status, balance reconciliation (08 §3.7.4).
+  const allowlist = config.tokenContracts;
+  if (config.webhookHmacKey === '') {
+    logger.error(
+      'WEBHOOK_SECRET is not set — payments cannot be reported; /health declares acceptsPayments=false (T151).',
+    );
+  }
+  logger.info(
+    {
+      monitorTickMs: config.monitor.tickIntervalMs,
+      restartLookbackBlocks: config.monitor.restartLookbackBlocks,
+      reconciliationIntervalMs: config.reconciliation.intervalMs,
+      reconciliationCuPerSecond: config.reconciliation.cuPerSecond,
+      reconciliationMaxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
+      reconciliationCuPerDeposit: reader.costPerAddress(),
+    },
+    'Ethereum payment monitor configured',
+  );
+
+  // T152 sends (08 §3.7.6, §3.7.7) and T154's fee estimate, over ONE ETH
+  // price service: the fee cap and the estimate use the same price.
+  const { feeEstimator, feeWaits, transfers } = buildOutbound(config, {
     rpc,
     journal,
-    feeWaits,
-    guard: new TransferGuard({
-      rpc,
-      hotWalletAddress: config.hotWalletAddress,
-      coldWalletAddress: config.coldWalletAddress,
-      tokenContracts: [tokens.USDT, tokens.USDC].filter((c) => c !== ''),
-      maxSingleTransferUnits: config.transfers.maxSingleTransferUnits,
-      maxDailyOutflowUnits: config.transfers.maxDailyOutflowUnits,
-    }),
     wallet,
-    policy: {
-      chainId: BigInt(config.chainId),
-      paymentToken: tokens.USDT,
-      wrongTokenRefundToken: tokens.USDC,
-      maxTokenGasLimit: 150_000n,
-    },
-    hotWalletKey: config.hotWalletKey,
-    hotWalletAddress: config.hotWalletKey ? config.hotWalletAddress : null,
-    tokenContracts: tokens,
-    // T154 brings the ETH/USD price; until then every capped send waits
-    // (ETH_PRICE_UNAVAILABLE, 08 §3.7.7 "kur yoksa bekler").
-    prices: NO_ETH_PRICE,
     finalizedHead: () => finality.status().snapshot?.number ?? null,
-    bumpAfterMs: config.transfers.bumpAfterSeconds * 1000,
-    conflictConfirmMs: config.transfers.keeperIntervalMs,
+    // The configured address prices a payout even before the key is mounted.
+    feeHotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
   });
   transferWaitAlarmSeconds.set(config.transfers.waitAlarmSeconds);
   setTransferWaitSource({
@@ -164,16 +154,24 @@ function main(): void {
     wallet,
     finality: () => finality.status(),
     transfers,
+    payments: {
+      registry,
+      allowlist,
+      reader,
+      maxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
+      readiness,
+    },
+    feeEstimator,
   });
 
   const server = app.listen(config.port, '0.0.0.0', () => {
     logger.info({ port: config.port, network: SERVICE_NETWORK }, 'Ethereum service listening');
-    finality.start();
+    services.start();
   });
 
   const shutdown = (signal: string): void => {
     logger.info({ signal }, 'Graceful shutdown started');
-    finality.stop();
+    services.stop();
     clearInterval(keeper);
     server.close(() => logger.info('HTTP server closed'));
     const forceTimer = setTimeout(() => {

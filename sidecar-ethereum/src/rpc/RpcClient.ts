@@ -87,7 +87,12 @@ export interface BlockHeader {
 }
 
 export interface LogFilter {
-  readonly address: string | readonly string[];
+  /**
+   * Emitting contract(s). Omitted = any contract (T151: the payment monitor
+   * reads every ERC-20 Transfer TO a deposit, whichever token sent it — the
+   * wrong-token and spam sweep of 08 §3.7.4).
+   */
+  readonly address?: string | readonly string[];
   readonly topics: ReadonlyArray<string | readonly string[] | null>;
   readonly fromBlock: bigint;
   readonly toBlock: bigint;
@@ -287,6 +292,59 @@ export class EthereumRpcClient {
   }
 
   /**
+   * `eth_estimateGas` of a call, evaluated at an explicit block (T154). No
+   * gas price is sent, so the node does not check the sender's ETH balance —
+   * a deposit is priced before the fuel wallet has funded it (08 §3.7.5).
+   * A revert is an `rpc` error (an answer about the request, not failed over).
+   * T152's send simulation calls it too (08 §3.7.6); `value` is sent only
+   * when given.
+   */
+  async estimateGas(
+    tx: { from: string; to: string; data: string; value?: bigint },
+    blockNumber: bigint,
+  ): Promise<bigint> {
+    assertBlockNumber(blockNumber, 'estimateGas block');
+    const call: Record<string, string> = { from: tx.from, to: tx.to, data: tx.data };
+    if (tx.value !== undefined) call.value = '0x' + tx.value.toString(16);
+    return this.withFailover('eth_estimateGas', async (ep) =>
+      parseQuantity(
+        await ep.request<string>('eth_estimateGas', [call, hexBlock(blockNumber)]),
+        'eth_estimateGas',
+        ep.name,
+      ),
+    );
+  }
+
+  /**
+   * `eth_feeHistory` ending at an explicit block (T154). `baseFeePerGas` has
+   * `blockCount + 1` entries — the last is the base fee of the block after
+   * `newestBlock`; `reward[i][j]` is block i's priority fee at percentile j.
+   */
+  async feeHistory(
+    blockCount: number,
+    newestBlock: bigint,
+    rewardPercentiles: readonly number[],
+  ): Promise<FeeHistory> {
+    assertBlockNumber(newestBlock, 'feeHistory newestBlock');
+    return this.withFailover('eth_feeHistory', async (ep) => {
+      const raw = await ep.request<{ baseFeePerGas?: unknown; reward?: unknown } | null>(
+        'eth_feeHistory',
+        ['0x' + blockCount.toString(16), hexBlock(newestBlock), rewardPercentiles],
+      );
+      if (!raw || !Array.isArray(raw.baseFeePerGas) || raw.baseFeePerGas.length === 0) {
+        throw new RpcError('eth_feeHistory returned no baseFeePerGas', 'transport', ep.name);
+      }
+      const reward = Array.isArray(raw.reward) ? raw.reward : [];
+      return {
+        baseFeePerGas: raw.baseFeePerGas.map((v) => parseQuantity(v, 'eth_feeHistory', ep.name)),
+        reward: reward.map((row: unknown) =>
+          (Array.isArray(row) ? row : []).map((v) => parseQuantity(v, 'eth_feeHistory', ep.name)),
+        ),
+      };
+    });
+  }
+
+  /**
    * `eth_getLogs` over an explicit, inclusive block range. Split so that no
    * single request exceeds the answering provider's block range or its
    * per-position list limit (08 §3.7.4: Alchemy Free 10 blocks, Chainstack
@@ -327,19 +385,6 @@ export class EthereumRpcClient {
           await ep.request<string>('eth_getTransactionCount', [address, hexBlock(blockNumber)]),
         ),
       ),
-    );
-  }
-
-  /** `eth_estimateGas` against the state of an explicit block. A revert is an `rpc` answer. */
-  async estimateGas(
-    tx: { from: string; to: string; data: string; value?: bigint },
-    blockNumber: bigint,
-  ): Promise<bigint> {
-    assertBlockNumber(blockNumber, 'estimateGas block');
-    const call: Record<string, string> = { from: tx.from, to: tx.to, data: tx.data };
-    if (tx.value !== undefined) call.value = '0x' + tx.value.toString(16);
-    return this.withFailover('eth_estimateGas', async (ep) =>
-      BigInt(await ep.request<string>('eth_estimateGas', [call, hexBlock(blockNumber)])),
     );
   }
 
@@ -413,7 +458,7 @@ export class EthereumRpcClient {
 
   private async logsChunk(
     ep: ProviderEndpoint,
-    part: { address: string | readonly string[]; topics: LogFilter['topics'] },
+    part: { address?: string | readonly string[]; topics: LogFilter['topics'] },
     from: bigint,
     to: bigint,
   ): Promise<{ batch: RpcLog[]; end: bigint }> {
@@ -423,7 +468,9 @@ export class EthereumRpcClient {
       try {
         const raw = await ep.request<RawLog[]>('eth_getLogs', [
           {
-            address: part.address,
+            // An absent `address` is left out of the request, not sent as
+            // null: some providers reject a null address.
+            ...(part.address === undefined ? {} : { address: part.address }),
             topics: part.topics,
             fromBlock: hexBlock(from),
             toBlock: hexBlock(end),
@@ -564,6 +611,28 @@ function parseLog(raw: RawLog): RpcLog {
   };
 }
 
+/** `eth_feeHistory`, decoded to bigints (T154). */
+export interface FeeHistory {
+  readonly baseFeePerGas: readonly bigint[];
+  readonly reward: ReadonlyArray<readonly bigint[]>;
+}
+
+/**
+ * A JSON-RPC quantity (`0x`-prefixed hex) → bigint. Anything else is a
+ * malformed answer from that provider (transport kind, so the backup is
+ * asked) — never a number that silently became 0 or lost precision.
+ */
+function parseQuantity(value: unknown, method: string, provider: string): bigint {
+  if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) {
+    throw new RpcError(
+      `${method} returned a malformed quantity ${JSON.stringify(value)}`,
+      'transport',
+      provider,
+    );
+  }
+  return BigInt(value);
+}
+
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
@@ -579,12 +648,12 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 function splitLists(
   filter: LogFilter,
   limit: number,
-): Array<{ address: string | readonly string[]; topics: LogFilter['topics'] }> {
+): Array<{ address?: string | readonly string[]; topics: LogFilter['topics'] }> {
   const addressParts =
     Array.isArray(filter.address) && filter.address.length > limit
       ? chunk(filter.address as readonly string[], limit)
       : [filter.address];
-  let combos: Array<{ address: string | readonly string[]; topics: LogFilter['topics'] }> =
+  let combos: Array<{ address?: string | readonly string[]; topics: LogFilter['topics'] }> =
     addressParts.map((address) => ({ address, topics: [] as LogFilter['topics'] }));
   filter.topics.forEach((position) => {
     const parts =

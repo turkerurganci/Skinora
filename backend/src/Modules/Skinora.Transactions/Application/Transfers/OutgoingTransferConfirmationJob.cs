@@ -168,6 +168,11 @@ public sealed class OutgoingTransferConfirmationJob
                     row.EnergyUsageTotal = status.EnergyUsageTotal;
                     row.OriginEnergyUsage = status.OriginEnergyUsage;
                 }
+                // T154 — Ethereum's realized fee, wei, exact.
+                if (policy.ReportsFeeInWei)
+                {
+                    row.RealizedFeeWei = status.RealizedFeeWei;
+                }
 
                 // WP1 — a confirmed SELLER_PAYOUT means the seller is paid on
                 // chain (03 §2.4 step 6). Publish PayoutCompletedEvent in the
@@ -188,9 +193,10 @@ public sealed class OutgoingTransferConfirmationJob
 
                 await _db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation(
-                    "Outbound transfer CONFIRMED — row {Id} ({Type}) tx {TxHash} @ block {Block}; charged {Charged} USDT, realized {RealizedSun} SUN (energy {Energy}, owner-paid {OwnerEnergy})",
-                    row.Id, row.Type, row.TxHash, status.BlockNumber,
-                    row.GasFee, status.RealizedFeeSun, status.EnergyUsageTotal, status.OriginEnergyUsage);
+                    "Outbound transfer CONFIRMED — row {Id} ({Type}) on {Network} tx {TxHash} @ block {Block}; charged {Charged} USDT, realized {RealizedSun} SUN (energy {Energy}, owner-paid {OwnerEnergy}) / {RealizedWei} wei",
+                    row.Id, row.Type, row.Network, row.TxHash, status.BlockNumber,
+                    row.GasFee, status.RealizedFeeSun, status.EnergyUsageTotal, status.OriginEnergyUsage,
+                    status.RealizedFeeWei);
                 return false;
 
             case TransferStatusOutcome.Failed:

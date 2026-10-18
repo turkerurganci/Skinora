@@ -81,14 +81,28 @@ public sealed class SidecarHealthClient : ISidecarHealthClient
 
             if (network is { } expected)
             {
-                var reported = await ReadReportedNetworkAsync(response, cancellationToken);
-                if (reported is not null
-                    && !string.Equals(reported, expected.ToString(), StringComparison.Ordinal))
+                var body = await ReadHealthBodyAsync(response, cancellationToken);
+                if (body.Network is not null
+                    && !string.Equals(body.Network, expected.ToString(), StringComparison.Ordinal))
                 {
                     _logger.LogError(
                         "Health probe for {Component} reached a service that reports network '{Reported}' — "
                         + "the {Expected} service address points at the wrong service. Reporting unhealthy.",
-                        component, reported, expected);
+                        component, body.Network, expected);
+                    return false;
+                }
+
+                // T151 (kod düzeyi kapı) — a network whose service must say it
+                // can see payments is unhealthy without an explicit
+                // `acceptsPayments: true`: absent (a service from before the
+                // monitor, e.g. the T150 skeleton), false (USDT paused /
+                // deprecated / fee on, webhook secret missing) or unreadable.
+                if (PlatformComponents.RequiresPaymentCapability(expected) && body.AcceptsPayments != true)
+                {
+                    _logger.LogWarning(
+                        "Health probe for {Component}: the service does not declare acceptsPayments=true "
+                        + "(reported: {AcceptsPayments}) — reporting unhealthy; {Network} stays closed for new transactions.",
+                        component, body.AcceptsPayments?.ToString() ?? "absent", expected);
                     return false;
                 }
             }
@@ -106,26 +120,33 @@ public sealed class SidecarHealthClient : ISidecarHealthClient
     }
 
     /// <summary>
-    /// The <c>network</c> field of a <c>/health</c> body, or <c>null</c> when the
-    /// body has none or is not JSON — a service predating the field is not
-    /// penalised for it.
+    /// The <c>network</c> and <c>acceptsPayments</c> fields of a <c>/health</c>
+    /// body; each <c>null</c> when absent, of another JSON type, or when the body
+    /// is not JSON. A missing <c>network</c> does not penalise a service that
+    /// predates the field; a missing <c>acceptsPayments</c> does, for a network
+    /// that requires it (T151).
     /// </summary>
-    private static async Task<string?> ReadReportedNetworkAsync(
+    private static async Task<(string? Network, bool? AcceptsPayments)> ReadHealthBodyAsync(
         HttpResponseMessage response, CancellationToken cancellationToken)
     {
         try
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("network", out var value)
-                && value.ValueKind == JsonValueKind.String
-                    ? value.GetString()
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return (null, null);
+            string? network = root.TryGetProperty("network", out var n) && n.ValueKind == JsonValueKind.String
+                ? n.GetString()
+                : null;
+            bool? accepts = root.TryGetProperty("acceptsPayments", out var a)
+                && a.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? a.GetBoolean()
                     : null;
+            return (network, accepts);
         }
         catch (JsonException)
         {
-            return null;
+            return (null, null);
         }
     }
 }

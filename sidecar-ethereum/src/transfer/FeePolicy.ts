@@ -1,5 +1,6 @@
 import { SidecarError } from '../errors/SidecarError.js';
 import type { BlockHeader, EthereumRpcClient } from '../rpc/RpcClient.js';
+import type { FeePriceSource } from '../fee/FeeEstimationService.js';
 import { WEI_PER_ETH } from './units.js';
 
 /**
@@ -24,18 +25,30 @@ import { WEI_PER_ETH } from './units.js';
  * </list>
  */
 
-/** Source of the ETH/USD price in micro-dollars per ETH (T154 supplies the real one). */
+/** Source of the ETH/USD price in micro-dollars per ETH (T154's EthPriceService, via {@link ethUsdFromPriceService}). */
 export interface EthUsdPriceSource {
   ethUsdMicros(): Promise<bigint | null>;
 }
 
 /**
- * Until T154 wires the ETH price, there is none: every capped send waits with
- * `ETH_PRICE_UNAVAILABLE` (08 §3.7.7 "kur yoksa bekler").
+ * The fee cap's price, read from T154's ETH/USDT price service — the SAME
+ * instance the fee estimate uses (wiring.ts `buildOutbound`), so the cap and
+ * the estimate never price ETH differently. Micro-USDT per ETH is taken as
+ * micro-USD (the cap is a USD figure; T154 prices against USDT). Any failure
+ * of the price service (`ETH_PRICE_UNAVAILABLE` or otherwise) is "no price":
+ * the capped send waits (08 §3.7.7 "kur yoksa bekler", fail closed).
  */
-export const NO_ETH_PRICE: EthUsdPriceSource = {
-  ethUsdMicros: () => Promise.resolve(null),
-};
+export function ethUsdFromPriceService(prices: FeePriceSource): EthUsdPriceSource {
+  return {
+    ethUsdMicros: async () => {
+      try {
+        return (await prices.getPrice()).priceMicroUsdt;
+      } catch {
+        return null;
+      }
+    },
+  };
+}
 
 /** Reference gas the cap is spread over (08 §3.7.7). */
 export const CAP_REFERENCE_GAS = {

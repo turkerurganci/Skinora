@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createApp } from './routes.js';
+import { PAYMENT_ENDPOINTS, createApp } from './routes.js';
 import { NOT_YET_IMPLEMENTED } from './notImplemented.js';
 import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
 import type { TransferService } from '../transfer/TransferService.js';
+import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 
 const KEY = 'i'.repeat(64);
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
@@ -27,6 +28,8 @@ beforeAll(async () => {
     finality: () => finality,
     // Sends have their own route tests (transferHandlers.test.ts).
     transfers: {} as TransferService,
+    // T154 — covered by feeHandlers.test.ts; never reached here.
+    feeEstimator: {} as EthFeeEstimationService,
   });
   server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -94,18 +97,18 @@ describe('POST /api/wallet/derive', () => {
 });
 
 describe('endpoints of the contract this skeleton does not serve yet', () => {
-  it.each(NOT_YET_IMPLEMENTED.map((e) => [e.method.toUpperCase(), e.path, e.task]))(
-    '%s %s → 501 NOT_IMPLEMENTED (%s)',
-    async (method, path, task) => {
-      const url = base + '/api' + path.replace(':txHash', '0x' + 'a'.repeat(64));
-      const res = await fetch(url, {
-        method,
-        headers: { 'content-type': 'application/json', 'x-internal-key': KEY },
-        body: method === 'POST' ? JSON.stringify({ network: 'ETHEREUM' }) : undefined,
-      });
+  it('none is left: T151, T152 and T154 serve every endpoint of the contract', () => {
+    expect(NOT_YET_IMPLEMENTED).toEqual([]);
+  });
+
+  // This app is built without `payments` (the T150 skeleton shape): the
+  // monitor endpoints answer 501 rather than pretending to watch.
+  it.each(PAYMENT_ENDPOINTS.map((path) => [path]))(
+    'POST %s → 501 NOT_IMPLEMENTED without payment deps',
+    async (path) => {
+      const res = await post('/api' + path, { network: 'ETHEREUM' });
       expect(res.status).toBe(501);
       expect(await res.json()).toMatchObject({ error: 'NOT_IMPLEMENTED', retryable: true });
-      expect(task).toMatch(/^T15[1-4]$/);
     },
   );
 

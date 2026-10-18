@@ -14,6 +14,15 @@ public interface IBlockchainNetworkHealth
     /// (the probe crossed its failure threshold and has not seen it recover).
     /// </summary>
     bool IsDegraded(BlockchainNetwork network);
+
+    /// <summary>
+    /// True when <paramref name="network"/>'s service may be offered for a NEW
+    /// transaction (07 §7.4 <c>supportedNetworks</c>). Defaults to "not
+    /// degraded"; the probe-backed implementation also asks a network whose
+    /// service must declare it can see payments for a positive last probe
+    /// (T151 kod düzeyi kapı — Ethereum's <c>acceptsPayments</c>).
+    /// </summary>
+    bool AcceptsNewTransactions(BlockchainNetwork network) => !IsDegraded(network);
 }
 
 /// <summary>
@@ -50,7 +59,7 @@ public sealed class BlockchainNetworkAvailability : IBlockchainNetworkAvailabili
         Enum.GetValues<BlockchainNetwork>().Where(IsOpenForNewTransactions).ToList();
 
     public bool IsOpenForNewTransactions(BlockchainNetwork network) =>
-        _services.IsConfigured(network) && !_health.IsDegraded(network);
+        _services.IsConfigured(network) && _health.AcceptsNewTransactions(network);
 }
 
 /// <summary>

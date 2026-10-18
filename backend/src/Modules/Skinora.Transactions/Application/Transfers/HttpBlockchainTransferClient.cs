@@ -257,7 +257,8 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                     tronResources ? payload.RealizedFeeSun : null,
                     tronResources ? payload.EnergyUsageTotal : null,
                     tronResources ? payload.OriginEnergyUsage : null,
-                    string.IsNullOrWhiteSpace(payload.TxHash) ? null : payload.TxHash);
+                    TxHash: string.IsNullOrWhiteSpace(payload.TxHash) ? null : payload.TxHash,
+                    RealizedFeeWei: _policy.ReportsFeeInWei ? ReadRealizedFeeWei(payload.RealizedFeeWei, txHash) : null);
             }
             return new TransferStatusResult(
                 TransferStatusOutcome.Pending,
@@ -277,6 +278,24 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             && code is not HttpStatusCode.Forbidden
             && code is not HttpStatusCode.RequestTimeout
             && code is not HttpStatusCode.TooManyRequests;
+    }
+
+    // T154 — the realized fee is measurement, never a gate: a missing or
+    // malformed value (a JSON number, a hex string, more digits than decimal
+    // holds exactly) is logged and recorded as NULL ("not measured"); it never
+    // turns a final transfer into an unreadable status.
+    private decimal? ReadRealizedFeeWei(JsonElement? raw, string txHash)
+    {
+        if (raw is not { } value || value.ValueKind == JsonValueKind.Null) return null;
+        if (value.ValueKind == JsonValueKind.String
+            && WeiAmount.TryParse(value.GetString(), out var wei))
+        {
+            return wei;
+        }
+        _logger.LogWarning(
+            "{Network} status for {TxHash} carries an unusable realizedFeeWei {Raw} (a decimal string of at most {MaxDigits} digits is expected) — not recorded.",
+            _policy.Network, txHash, value.GetRawText(), WeiAmount.MaxDigits);
+        return null;
     }
 
     private void ApplyAuth(HttpRequestMessage request)
@@ -382,7 +401,10 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("finalized")] bool? Finalized = null,
         [property: JsonPropertyName("realizedFeeSun")] long? RealizedFeeSun = null,
         [property: JsonPropertyName("energyUsageTotal")] long? EnergyUsageTotal = null,
-        [property: JsonPropertyName("originEnergyUsage")] long? OriginEnergyUsage = null);
+        [property: JsonPropertyName("originEnergyUsage")] long? OriginEnergyUsage = null,
+        // T154 — Ethereum; a decimal string (sidecar-ethereum/contracts/transfer-status/).
+        // Read as an element so a wrong JSON type is a logged NULL, not an unreadable status.
+        [property: JsonPropertyName("realizedFeeWei")] JsonElement? RealizedFeeWei = null);
 
     private sealed record ErrorEnvelope(
         [property: JsonPropertyName("error")] string? Error,

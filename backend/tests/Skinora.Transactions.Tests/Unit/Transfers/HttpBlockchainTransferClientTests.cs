@@ -398,6 +398,65 @@ public class HttpBlockchainTransferClientTests
         Assert.Equal(64_285L, tron.EnergyUsageTotal);
     }
 
+    // -------------------- T154 — realizedFeeWei --------------------
+
+    [Theory]
+    [InlineData("\"9007282507774707\"", "9007282507774707")] // > 2^53: exact
+    [InlineData("\"0\"", "0")]
+    [InlineData("\"9999999999999999999999999999\"", "9999999999999999999999999999")] // 28 digits
+    [InlineData("9007282507774707", null)]   // a JSON number — refused, not rounded
+    [InlineData("\"0x1fffffffffffff\"", null)] // hex — refused
+    [InlineData("\"-1\"", null)]
+    [InlineData("\"1.5\"", null)]
+    [InlineData("\"007\"", null)]
+    [InlineData("\"99999999999999999999999999999\"", null)] // 29 digits
+    [InlineData("null", null)]
+    public async Task GetStatus_Ethereum_Reads_RealizedFeeWei_From_A_Decimal_String_Only(
+        string rawJson, string? expected)
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"txHash\":\"0xhash\",\"blockNumber\":1000,\"contractRet\":\"SUCCESS\",\"finalized\":true,\"realizedFeeWei\":"
+                    + rawJson + "}",
+                    System.Text.Encoding.UTF8,
+                    "application/json"),
+            }));
+
+        var eth = await BuildClient(handler, network: BlockchainNetwork.ETHEREUM)
+            .GetStatusAsync("0xhash", CancellationToken.None);
+
+        // A bad fee value never makes a final transfer unreadable.
+        Assert.Equal(TransferStatusOutcome.Confirmed, eth.Outcome);
+        Assert.Equal(
+            expected is null ? null : decimal.Parse(expected, System.Globalization.CultureInfo.InvariantCulture),
+            eth.RealizedFeeWei);
+    }
+
+    [Fact]
+    public async Task GetStatus_Tron_Ignores_RealizedFeeWei()
+    {
+        var handler = new RecordingHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    txHash = "abc",
+                    blockNumber = 1_000L,
+                    contractRet = "SUCCESS",
+                    confirmations = 25,
+                    realizedFeeWei = "123",
+                }),
+            }));
+
+        var tron = await BuildClient(handler, network: BlockchainNetwork.TRON)
+            .GetStatusAsync("abc", CancellationToken.None);
+
+        Assert.Equal(TransferStatusOutcome.Confirmed, tron.Outcome);
+        Assert.Null(tron.RealizedFeeWei);
+    }
+
     [Theory]
     [InlineData(BlockchainNetwork.TRON, "TRON")]
     [InlineData(BlockchainNetwork.ETHEREUM, "ETHEREUM")]

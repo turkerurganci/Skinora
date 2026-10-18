@@ -1,0 +1,18 @@
+{
+  "event": "payment.detected",
+  "network": "ETHEREUM",
+  "timestamp": "2026-10-18T09:30:00.000Z",
+  "data": {
+    "paymentAddressId": "aaaaaaaa-1111-2222-3333-444444444444",
+    "transactionId": "bbbbbbbb-1111-2222-3333-444444444444",
+    "txHash": "0xabababababababababababababababababababababababababababababababab",
+    "eventIndex": 2,
+    "fromAddress": "0xb0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0",
+    "toAddress": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+    "contractAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "tokenSymbol": "USDT",
+    "amount": "20.400000",
+    "blockTimestampMs": 1792315800000,
+    "detectedAt": "2026-10-18T09:30:00.000Z"
+  }
+}

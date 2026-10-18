@@ -2,16 +2,18 @@ import type { Request, Response } from 'express';
 
 /**
  * The per-network contract's endpoints this skeleton does not serve yet
- * (05 §3.3a "Uçlar"), and the task that brings each (11 §F8 P3).
+ * (05 §3.3a "Uçlar"), and the task that brings each (11 §F8 P3). T151's
+ * monitor and balance endpoints are served by routes.ts (`PAYMENT_ENDPOINTS`).
  */
-export const NOT_YET_IMPLEMENTED = [
-  { method: 'post', path: '/wallet/balances', task: 'T151' },
-  { method: 'post', path: '/monitor/start', task: 'T151' },
-  { method: 'post', path: '/monitor/stop', task: 'T151' },
-  { method: 'post', path: '/monitor/post-cancel-start', task: 'T151' },
-  { method: 'post', path: '/monitor/post-cancel-stop', task: 'T151' },
-  { method: 'post', path: '/transfer/estimate-fee', task: 'T154' },
-] as const;
+export const NOT_YET_IMPLEMENTED: readonly {
+  readonly method: 'get' | 'post';
+  readonly path: string;
+  readonly task: string;
+}[] = [
+  // Empty since T151 + T152 + T154 joined on main: every endpoint of the
+  // contract is served. The 501 handler below still answers T151's monitor
+  // endpoints when routes.ts gets no `payments` deps (the skeleton shape).
+];
 
 /**
  * 501 `NOT_IMPLEMENTED`, with no side effect: nothing is read, signed, sent

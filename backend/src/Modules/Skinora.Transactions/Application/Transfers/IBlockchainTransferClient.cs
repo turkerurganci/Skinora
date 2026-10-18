@@ -95,6 +95,12 @@ public enum TransferBroadcastStatus
 /// another hash than the one the row stored at broadcast; the confirmation job
 /// records the reported one. Null when the service did not send one.
 /// </param>
+/// <param name="RealizedFeeWei">
+/// T154 — Ethereum: what the transfer paid, in wei (receipt
+/// <c>gasUsed × effectiveGasPrice</c>), parsed exactly from the service's
+/// <c>realizedFeeWei</c> decimal string. NULL for TRON, and when the service
+/// did not report a well-formed value.
+/// </param>
 public sealed record TransferStatusResult(
     TransferStatusOutcome Outcome,
     long? BlockNumber,
@@ -104,7 +110,8 @@ public sealed record TransferStatusResult(
     long? RealizedFeeSun = null,
     long? EnergyUsageTotal = null,
     long? OriginEnergyUsage = null,
-    string? TxHash = null);
+    string? TxHash = null,
+    decimal? RealizedFeeWei = null);
 
 public enum TransferStatusOutcome
 {
