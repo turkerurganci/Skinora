@@ -300,6 +300,30 @@ describe('keeper — fee bump, finality, conflicts', () => {
     });
   });
 
+  it('when the OLD attempt is the one mined, every hash of the record reports it and the record settles', async () => {
+    const { service, journal } = build();
+    const first = await service.payout(payout());
+    chain.baseFee = 1_300_000_000n;
+    clock += 300_000;
+    chain.sendFailures.push(new RpcError('fake transport failure', 'transport', 'fake'));
+    await service.keepAll(); // bump signed, its broadcast lost
+    const bumpHash = journal.get(`transfer:${ID(1)}`)!.attempts[1].hash;
+    chain.mine(); // only the first attempt is in the mempool
+    finalizeAll();
+
+    expect(await service.status(bumpHash)).toMatchObject({
+      txHash: first.txHash,
+      finalized: true,
+      contractRet: 'SUCCESS',
+    });
+    await service.keepAll();
+    expect(journal.get(`transfer:${ID(1)}`)?.mined).toMatchObject({
+      hash: first.txHash,
+      final: true,
+    });
+    expect(chain.token(USDT, SELLER)).toBe(12_345_678n);
+  });
+
   it('a capped send is never bumped above its cap — it waits instead', async () => {
     const { service, journal } = build();
     await service.payout(payout());
@@ -505,6 +529,14 @@ describe('fee cap and wait (08 §3.7.7)', () => {
     clock += 60_000;
     await restarted.service.payout(payout());
     expect(chain.sent).toHaveLength(1);
+  });
+
+  it('base + tip under the cap but 2 × base + tip over it → signed with maxFeePerGas exactly the cap', async () => {
+    chain.baseFee = 2_000_000_000n; // 2 × 2 + 0.05 = 4.05 gwei > cap 3.30; 2.05 < cap
+    const { service, journal } = build();
+    await service.payout(payout());
+    const record = journal.get(`transfer:${ID(1)}`)!;
+    expect(record.attempts[0].maxFeePerGas).toBe(record.feeCapWeiPerGas);
   });
 
   it('no ETH price → ETH_PRICE_UNAVAILABLE (fail closed)', async () => {
