@@ -342,7 +342,7 @@
 | T153 | Yakıt cüzdanı | ⬚ Bekliyor |
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ⬚ Bekliyor |
 | T155 | sidecar-fake Ethereum desteği + E2E | ⬚ Bekliyor |
-| T156 | Kullanıcı arayüzü — ağ seçimi | ⬚ Bekliyor |
+| T156 | Kullanıcı arayüzü — ağ seçimi | ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor ([rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
 | T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ⬚ Bekliyor |
 | T159 | Sepolia canlı provası + TRON regresyonu | ⬚ Bekliyor |
