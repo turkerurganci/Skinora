@@ -85,7 +85,12 @@ export interface BlockHeader {
 }
 
 export interface LogFilter {
-  readonly address: string | readonly string[];
+  /**
+   * Emitting contract(s). Omitted = any contract (T151: the payment monitor
+   * reads every ERC-20 Transfer TO a deposit, whichever token sent it — the
+   * wrong-token and spam sweep of 08 §3.7.4).
+   */
+  readonly address?: string | readonly string[];
   readonly topics: ReadonlyArray<string | readonly string[] | null>;
   readonly fromBlock: bigint;
   readonly toBlock: bigint;
@@ -365,7 +370,7 @@ export class EthereumRpcClient {
 
   private async logsChunk(
     ep: ProviderEndpoint,
-    part: { address: string | readonly string[]; topics: LogFilter['topics'] },
+    part: { address?: string | readonly string[]; topics: LogFilter['topics'] },
     from: bigint,
     to: bigint,
   ): Promise<{ batch: RpcLog[]; end: bigint }> {
@@ -375,7 +380,9 @@ export class EthereumRpcClient {
       try {
         const raw = await ep.request<RawLog[]>('eth_getLogs', [
           {
-            address: part.address,
+            // An absent `address` is left out of the request, not sent as
+            // null: some providers reject a null address.
+            ...(part.address === undefined ? {} : { address: part.address }),
             topics: part.topics,
             fromBlock: hexBlock(from),
             toBlock: hexBlock(end),
@@ -528,12 +535,12 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 function splitLists(
   filter: LogFilter,
   limit: number,
-): Array<{ address: string | readonly string[]; topics: LogFilter['topics'] }> {
+): Array<{ address?: string | readonly string[]; topics: LogFilter['topics'] }> {
   const addressParts =
     Array.isArray(filter.address) && filter.address.length > limit
       ? chunk(filter.address as readonly string[], limit)
       : [filter.address];
-  let combos: Array<{ address: string | readonly string[]; topics: LogFilter['topics'] }> =
+  let combos: Array<{ address?: string | readonly string[]; topics: LogFilter['topics'] }> =
     addressParts.map((address) => ({ address, topics: [] as LogFilter['topics'] }));
   filter.topics.forEach((position) => {
     const parts =

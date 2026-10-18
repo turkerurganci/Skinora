@@ -172,6 +172,100 @@ groups:
             and closes Ethereum for new transactions. TRON is unaffected.
             Check skinora_ethereum_rpc_failover_total and the providers.
 
+      # T151 (08 §3.7.4, §3.7.8) — bir depozitin token bakiyesi, izleyicinin
+      # gördüğü transferlerle uyuşmuyor: sağlayıcı bir log'u hata vermeden
+      # atlamış olabilir (T142'de Tenderly'de ölçüldü). Ödeme görülmemiş
+      # olabilir. Sayaç artışı 2 saat görünür kalır (saatlik mutabakat).
+      - uid: ethereum-deposit-balance-mismatch
+        title: Ethereum Deposit Balance Mismatch
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 7200
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_ethereum_reconciliation_mismatch_total[2h])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 7200
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: An Ethereum deposit's balance does not match the transfers the monitor saw
+          description: >-
+            The hourly reconciliation found a deposit whose USDT/USDC balance at the
+            finalized block moved differently from the Transfer logs the payment
+            monitor received — a transfer was missed (a provider that answers
+            eth_getLogs incompletely without an error). A buyer's payment may be
+            on the deposit unseen. The Ethereum service's error log names the
+            address, the asset and the expected / actual amounts; compare with
+            the backend's records before acting.
+
+      # T151 (08 §3.7.1) — USDT ücret anahtarı açıldı, kontrat durduruldu ya da
+      # kullanımdan kaldırıldı: servis acceptsPayments=false yayınlar, backend
+      # Ethereum'u yeni işlemlere kapatır. USDT sözleşmesi tanımsızken seri yok.
+      - uid: ethereum-usdt-status
+        title: Ethereum USDT Contract Not Usable
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: min(skinora_ethereum_usdt_status_ok) or vector(1)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: The Ethereum USDT contract is paused, deprecated or charging a fee
+          description: >-
+            The Ethereum service read Tether's switches at the finalized block and
+            one of them is on (fee rate / maximum fee, paused, deprecated) — or it
+            has not been able to read them since start. It declares
+            acceptsPayments=false; the backend reports BLOCKCHAIN_ETHEREUM
+            unhealthy and keeps Ethereum out of supportedNetworks. TRON is
+            unaffected. The service log names the switch.
+
   - orgId: 1
     name: Skinora Warning Alerts
     folder: Skinora Alerts
@@ -466,3 +560,95 @@ groups:
             Check skinora_blockchain_active_monitors and the per-endpoint rate,
             then raise the plan (and TRONGRID_DAILY_REQUEST_BUDGET) or lengthen
             PAYMENT_HOLDING_POLLING_INTERVAL_MS (DEPLOY_RUNBOOK §B, §D).
+
+      # T151 (08 §3.7.4 "Yerel ETH") — bir depozite yakıt olmayan ETH geldi.
+      # Transfer log'u olmadığı için yalnız bakiye mutabakatı görür; otomatik
+      # iade yok, karar admin'in.
+      - uid: ethereum-deposit-native-eth
+        title: Native ETH On An Ethereum Deposit
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 7200
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_ethereum_native_eth_received_total[2h])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 7200
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: Native ETH reached an Ethereum deposit and is not fuel
+          description: >-
+            The hourly reconciliation saw a deposit's ETH balance rise by more than
+            the fuel the fuel wallet recorded for those blocks. An ETH payment
+            leaves no Transfer log, so nothing reached the backend and nothing is
+            refunded automatically (08 §3.7.4). The Ethereum service's error log
+            names the deposit, the transaction and the amount in wei.
+
+      # T151 (08 §3.7.4) — mutabakat sessiz kalmaz: `finalized` 25 dakikadan
+      # eskiyse (arşiv derinliği) ya da okuma düşerse tur atlanır ve sayılır;
+      # 2,5 aralık boyunca hiç tur tamamlanmazsa bu kural çalar.
+      - uid: ethereum-reconciliation-stale
+        title: Ethereum Reconciliation Not Running
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: ((time() - max(skinora_ethereum_reconciliation_last_success_timestamp_seconds)) / max(skinora_ethereum_reconciliation_interval_seconds)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [2.5]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The Ethereum balance reconciliation has not completed for 2.5 intervals
+          description: >-
+            No reconciliation round finished for more than 2.5 times
+            ETHEREUM_RECONCILIATION_INTERVAL_MS. Rounds are skipped — and counted in
+            skinora_ethereum_reconciliation_skipped_total{reason} — when the
+            finalized block is older than 25 min (reading state that deep may need
+            archive access: 2 RU per request on Chainstack, impossible on
+            PublicNode) or when a balance read fails. Missed payments are not
+            caught by the second path meanwhile.

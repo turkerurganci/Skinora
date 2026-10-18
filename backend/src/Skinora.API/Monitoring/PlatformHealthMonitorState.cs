@@ -8,6 +8,16 @@ namespace Skinora.API.Monitoring;
 /// (T148): a network is degraded while its blockchain component is in a
 /// detected outage.
 /// </summary>
+/// <remarks>
+/// T151 (kod düzeyi kapı): a network whose service must declare that it can
+/// see payments (<see cref="PlatformComponents.RequiresPaymentCapability"/> —
+/// Ethereum) is open for new transactions only while the LAST probe found it
+/// healthy, which for such a network includes <c>acceptsPayments: true</c> in
+/// its <c>/health</c> body (<see cref="SidecarHealthClient"/>). Before the
+/// first probe, after a failed one, or while the service says it cannot see
+/// payments, it stays out of <c>supportedNetworks</c> — the outage threshold
+/// (which freezes timeouts and alerts) is not waited for.
+/// </remarks>
 public sealed class ProbeBlockchainNetworkHealth : IBlockchainNetworkHealth
 {
     private readonly PlatformHealthMonitorState _state;
@@ -19,6 +29,14 @@ public sealed class ProbeBlockchainNetworkHealth : IBlockchainNetworkHealth
 
     public bool IsDegraded(BlockchainNetwork network) =>
         _state.IsInOutage(PlatformComponents.BlockchainFor(network));
+
+    public bool AcceptsNewTransactions(BlockchainNetwork network)
+    {
+        var component = PlatformComponents.BlockchainFor(network);
+        if (_state.IsInOutage(component)) return false;
+        return !PlatformComponents.RequiresPaymentCapability(network)
+            || _state.LastProbeHealthy(component) == true;
+    }
 }
 
 /// <summary>Stable component identifiers probed by the WP16 health monitor.</summary>
@@ -46,6 +64,18 @@ public static class PlatformComponents
         BlockchainNetwork.ETHEREUM => BlockchainEthereum,
         _ => throw new ArgumentOutOfRangeException(nameof(network), network, "No health component for this network."),
     };
+
+    /// <summary>
+    /// T151 (kod düzeyi kapı) — networks whose service must publish
+    /// <c>acceptsPayments: true</c> in its <c>/health</c> body to count as
+    /// healthy and to be offered for new transactions. Ethereum: its service
+    /// grew in steps (T150 skeleton answered <c>monitor/start</c> with 501), and
+    /// a backend pointed at a service that cannot see payments would show
+    /// deposit addresses nobody watches. TRON's service predates the flag and is
+    /// complete, so it is not asked for it.
+    /// </summary>
+    public static bool RequiresPaymentCapability(BlockchainNetwork network) =>
+        network == BlockchainNetwork.ETHEREUM;
 
     /// <summary>The network a blockchain component stands for; <c>false</c> for <see cref="Steam"/>.</summary>
     public static bool TryGetNetwork(string component, out BlockchainNetwork network)
@@ -111,6 +141,7 @@ public sealed class PlatformHealthMonitorState
                 _state[component] = health;
             }
 
+            health.LastHealthy = healthy;
             if (healthy)
             {
                 var wasOutage = health.InOutage;
@@ -178,9 +209,22 @@ public sealed class PlatformHealthMonitorState
         }
     }
 
+    /// <summary>
+    /// The result of the most recent probe of <paramref name="component"/>, or
+    /// <c>null</c> when it has not been probed since the backend started (T151).
+    /// </summary>
+    public bool? LastProbeHealthy(string component)
+    {
+        lock (_lock)
+        {
+            return _state.TryGetValue(component, out var health) ? health.LastHealthy : null;
+        }
+    }
+
     private sealed class ComponentHealth
     {
         public int ConsecutiveFailures;
         public bool InOutage;
+        public bool? LastHealthy;
     }
 }

@@ -5,8 +5,8 @@ import { SERVICE_NETWORK } from './network.js';
 import { EthereumHdWallet } from './wallet/HdWalletService.js';
 import { checkWalletKeys, type WalletKeyAddresses } from './wallet/walletKeys.js';
 import { EthereumRpcClient } from './rpc/RpcClient.js';
-import { FinalityTracker } from './finality/FinalityTracker.js';
 import { createApp } from './api/routes.js';
+import { buildServices } from './wiring.js';
 import { EthPriceService } from './price/EthPriceService.js';
 import { EthFeeEstimationService } from './fee/FeeEstimationService.js';
 
@@ -50,12 +50,8 @@ function main(): void {
     timeoutMs: config.rpc.timeoutMs,
     failoverCooldownMs: config.rpc.failoverCooldownMs,
   });
-  const finality = new FinalityTracker({
-    rpc,
-    primaryProvider: config.rpc.providers[0].name,
-    pollIntervalMs: config.finality.pollIntervalMs,
-    stallThresholdSeconds: config.finality.stallThresholdSeconds,
-  });
+  const services = buildServices(config, rpc);
+  const { finality, registry, reader, readiness } = services;
 
   if (config.rpc.providers.length < 2) {
     logger.warn(
@@ -94,11 +90,37 @@ function main(): void {
     'Ethereum service configured',
   );
 
+  // T151 — payment monitor, USDT status, balance reconciliation (08 §3.7.4).
+  const allowlist = config.tokenContracts;
+  if (config.webhookHmacKey === '') {
+    logger.error(
+      'WEBHOOK_SECRET is not set — payments cannot be reported; /health declares acceptsPayments=false (T151).',
+    );
+  }
+  logger.info(
+    {
+      monitorTickMs: config.monitor.tickIntervalMs,
+      restartLookbackBlocks: config.monitor.restartLookbackBlocks,
+      reconciliationIntervalMs: config.reconciliation.intervalMs,
+      reconciliationCuPerSecond: config.reconciliation.cuPerSecond,
+      reconciliationMaxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
+      reconciliationCuPerDeposit: reader.costPerAddress(),
+    },
+    'Ethereum payment monitor configured',
+  );
+
   const app = createApp({
     internalKey: config.internalKey,
     chainId: config.chainId,
     wallet,
     finality: () => finality.status(),
+    payments: {
+      registry,
+      allowlist,
+      reader,
+      maxFinalizedAgeSeconds: config.reconciliation.maxFinalizedAgeSeconds,
+      readiness,
+    },
     feeEstimator: new EthFeeEstimationService({
       rpc,
       prices: new EthPriceService(),
@@ -110,12 +132,12 @@ function main(): void {
 
   const server = app.listen(config.port, '0.0.0.0', () => {
     logger.info({ port: config.port, network: SERVICE_NETWORK }, 'Ethereum service listening');
-    finality.start();
+    services.start();
   });
 
   const shutdown = (signal: string): void => {
     logger.info({ signal }, 'Graceful shutdown started');
-    finality.stop();
+    services.stop();
     server.close(() => logger.info('HTTP server closed'));
     const forceTimer = setTimeout(() => {
       logger.error('Forced shutdown — timeout exceeded');
