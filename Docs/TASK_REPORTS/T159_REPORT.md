@@ -227,8 +227,8 @@ Yok (repo). Yerel ortam: şema 59 migration'a çıktı; `escrow_skinora-ethereum
 
 - Dal: `task/T159-sepolia-provasi` (`origin/main` `92154a6d`'den)
 - Kod commit'i: `7feb25d2` (B2)
-- PR: #PR_NO
-- CI: CI_RUN
+- PR: #355
+- CI: `39194736989` ✓ success (HEAD `9300db1a`; bu satırı ekleyen commit için yeni koşu PR sayfasında)
 
 ## Known Limitations / Açık sorular
 
