@@ -346,6 +346,7 @@
 | T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (merge yöneticide) ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
 | T159 | Sepolia canlı provası + TRON regresyonu | ⬚ Bekliyor |
+| T159a | Ethereum gas tarifesine uyum (T159 B1, ⚠ PARA) [ÇOK RİSKLİ] | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T159a_REPORT.md)) |
 | T160 | F8 Gate Check | ⬚ Bekliyor |
 
 ---
