@@ -383,6 +383,38 @@ function json(body: unknown): Response {
 }
 
 /**
+ * T159a — what a send costs in gas on a chain, by the recipient's state
+ * (`estimate` = what `eth_estimateGas` answers, `used` = the receipt).
+ */
+export interface GasTariff {
+  /** A plain ETH send with value to an address that is not an account yet (no balance, no nonce). */
+  readonly ethToNewAccount: { readonly estimate: bigint; readonly used: bigint };
+  /** A plain ETH send to an existing account (or of no value). */
+  readonly ethToExistingAccount: bigint;
+  /** A token transfer to an address holding none of that token; null = the suite's `estimate` / `receiptGasUsed`. */
+  readonly tokenToFirstTimeHolder: { readonly estimate: bigint; readonly used: bigint } | null;
+}
+
+/** Mainnet, measured 2026-10-19 (T159: `eth_estimateGas` 0x5208 to an empty account; T142's receipts). */
+export const MAINNET_GAS_TARIFF: GasTariff = {
+  ethToNewAccount: { estimate: 21_000n, used: 21_000n },
+  ethToExistingAccount: 21_000n,
+  tokenToFirstTimeHolder: null,
+};
+
+/**
+ * Sepolia, measured in the T159 rehearsal (2026-10-19, PublicNode
+ * `reth/v2.7.0`): ETH to a new account 207,391 estimated / 204,600 used; the
+ * USDT copy to an address that never held it ~153,000 (receipts
+ * 152,393–152,417). The service's fixed 21,000-gas fuel reverted on it.
+ */
+export const SEPOLIA_T159_GAS_TARIFF: GasTariff = {
+  ethToNewAccount: { estimate: 207_391n, used: 204_600n },
+  ethToExistingAccount: 21_000n,
+  tokenToFirstTimeHolder: { estimate: 153_000n, used: 152_405n },
+};
+
+/**
  * An in-memory Ethereum for the send tests (T152) — {@link FakeEthereumChain}'s
  * sibling: that one answers JSON-RPC over `fetch` for the payment monitor
  * (T151); this one is the RpcClient surface the send path calls directly: accounts with nonces, ETH
@@ -439,6 +471,16 @@ export class FakeSendChain {
   chargeGas = false;
   /** T153 — a plain ETH send to one of these addresses reverts (status 0, nothing moves). */
   readonly revertEthTo = new Set<string>();
+  /**
+   * T159a — the chain's gas tariff: what a plain ETH send and a token
+   * transfer cost by the recipient's state, at estimate and at execution. A
+   * transaction whose gas limit is below what it needs runs out of gas: status
+   * 0, the whole limit is charged, nothing moves. Default: mainnet today
+   * (every pre-T159a suite).
+   */
+  tariff: GasTariff = MAINNET_GAS_TARIFF;
+  /** T159a — errors the next plain-ETH (fuel) `eth_estimateGas` calls throw. */
+  readonly ethEstimateFailures: Error[] = [];
   private readonly blockHashes = new Map<bigint, string>();
 
   constructor(
@@ -530,18 +572,49 @@ export class FakeSendChain {
     return tx.value + tx.gasLimit * (tx.maxFeePerGas ?? 0n);
   }
 
+  /** EIP-161: an account exists once it has a balance or a nonce (a token balance does not make one). */
+  accountExists(address: string): boolean {
+    return this.ethOf(address) > 0n || this.nonce(address) > 0;
+  }
+
+  /** T159a — gas a plain ETH send to `to` needs under the tariff, at estimate (`estimate`) or execution (`used`). */
+  private ethGas(to: string, value: bigint, at: 'estimate' | 'used'): bigint {
+    if (value === 0n || this.accountExists(to)) return this.tariff.ethToExistingAccount;
+    return this.tariff.ethToNewAccount[at];
+  }
+
+  /** T159a — gas of a token transfer under the tariff; null = the suite's `estimate` / `receiptGasUsed`. */
+  private tokenGas(contract: string, recipient: string, at: 'estimate' | 'used'): bigint | null {
+    const first = this.tariff.tokenToFirstTimeHolder;
+    if (first === null || this.token(contract, recipient) > 0n) return null;
+    return first[at];
+  }
+
   private execute(tx: Transaction, block: bigint): string {
     const hash = (tx.hash ?? '').toLowerCase();
     const from = canonicalAddress(tx.from ?? '');
     const to = canonicalAddress(tx.to ?? '');
     const plainEth = tx.data === '0x';
-    const gasUsed = plainEth ? 21_000n : this.receiptGasUsed;
+    const call = decodeTransferCall(tx.data);
+    const tokenCall = call !== null && (to === this.usdt || to === this.usdc);
+    // T159a: below what the tariff says it needs, a transaction runs out of
+    // gas — status 0, the whole limit is burnt, nothing moves (the T159
+    // rehearsal's fuel). A token transfer the tariff does not price uses the
+    // suite's `receiptGasUsed`, as before T159a.
+    const tariffGas = plainEth
+      ? this.ethGas(to, tx.value, 'used')
+      : tokenCall
+        ? this.tokenGas(to, call.to, 'used')
+        : null;
+    const outOfGas = tariffGas !== null && tx.gasLimit < tariffGas;
+    const gasUsed = outOfGas ? tx.gasLimit : (tariffGas ?? this.receiptGasUsed);
     const price = this.receiptEffectiveGasPrice ?? this.baseFee + this.tip;
     if (this.chargeGas) this.setEth(from, this.ethOf(from) - gasUsed * price);
     const logs: RpcLog[] = [];
     let status = 1;
-    const call = decodeTransferCall(tx.data);
-    if (call && (to === this.usdt || to === this.usdc)) {
+    if (outOfGas) {
+      status = 0;
+    } else if (call && tokenCall) {
       const balance = this.token(to, from);
       const blocked = to === this.usdt && (this.blacklist.has(from) || this.usdtState.paused);
       if (blocked || balance < call.amountUnits) {
@@ -654,14 +727,26 @@ export class FakeSendChain {
         : '0x';
     },
     estimateGas: async (
-      tx: { from: string; to: string; data: string },
+      tx: { from: string; to: string; data: string; value?: bigint },
       _block: bigint,
     ): Promise<bigint> => {
       this.guard();
+      if (tx.data === '0x') {
+        // T159a — a plain ETH send (the fuel's probe): the tariff by the
+        // recipient's account state; the node checks the sender holds `value`.
+        const failure = this.ethEstimateFailures.shift();
+        if (failure) throw failure;
+        const value = tx.value ?? 0n;
+        if (this.chargeGas && this.ethOf(tx.from) < value) {
+          throw new RpcError('insufficient funds for transfer', 'rpc', 'fake', -32000);
+        }
+        return this.ethGas(canonicalAddress(tx.to), value, 'estimate');
+      }
       const failure = this.simulationFailures.shift();
       if (failure) throw failure;
       this.revertIfBlocked(tx.from, tx.to, tx.data);
-      return this.estimate;
+      const call = decodeTransferCall(tx.data);
+      return (call && this.tokenGas(canonicalAddress(tx.to), call.to, 'estimate')) ?? this.estimate;
     },
     getTransactionCount: async (address: string, _block: bigint): Promise<number> => {
       this.guard();

@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_GAS_ESTIMATE,
+  MAX_SIGNABLE_GAS_LIMIT,
+  MIN_PRIORITY_FEE_WEI,
+  NATIVE_TRANSFER_GAS,
   feeCapPerGasWei,
   formatCents,
   formatScaled,
+  isPlausibleGasEstimate,
   medianOf,
   parseScaled,
   realizedFeeWei,
+  signingTip,
+  tokenGasLimit,
   weiToUsdtCentsCeil,
 } from './feeMath.js';
 
@@ -114,5 +121,42 @@ describe('medianOf', () => {
     expect(medianOf([4n, 1n, 3n, 2n])).toBe(2n);
     expect(medianOf([7n])).toBe(7n);
     expect(() => medianOf([])).toThrow(RangeError);
+  });
+});
+
+describe('T159a — gas limits come from estimates, within a plausible range', () => {
+  it('a token send is signed at ⌈estimate × 110 %⌉', () => {
+    expect(tokenGasLimit(46_201n)).toBe(50_822n);
+    expect(tokenGasLimit(153_000n)).toBe(168_300n);
+    expect(tokenGasLimit(136_000n)).toBe(149_600n);
+    expect(tokenGasLimit(1n)).toBe(2n);
+  });
+
+  it('plausible = 21,000 … 1,000,000 inclusive; the signable ceiling is 1,000,000 + 10 %', () => {
+    expect(MAX_GAS_ESTIMATE).toBe(1_000_000n);
+    expect(NATIVE_TRANSFER_GAS).toBe(21_000n);
+    expect(isPlausibleGasEstimate(21_000n)).toBe(true);
+    expect(isPlausibleGasEstimate(207_391n)).toBe(true);
+    expect(isPlausibleGasEstimate(1_000_000n)).toBe(true);
+    expect(isPlausibleGasEstimate(20_999n)).toBe(false);
+    expect(isPlausibleGasEstimate(1_000_001n)).toBe(false);
+    expect(isPlausibleGasEstimate(0n)).toBe(false);
+    expect(MAX_SIGNABLE_GAS_LIMIT).toBe(1_100_000n);
+  });
+});
+
+describe('T159a — signingTip: the tip the signer pays, for the estimate too', () => {
+  it('the upper middle of the per-block medians (RpcClient.medianPriorityFee’s pick)', () => {
+    expect(signingTip([10_000_000n, 40_000_000n, 30_000_000n, 20_000_000n])).toBe(30_000_000n);
+    expect(signingTip([50_000_000n, 30_000_000n, 200_000_000n])).toBe(50_000_000n);
+  });
+
+  it('never below 0.01 gwei — an empty or zero list gives the floor', () => {
+    expect(signingTip([])).toBe(MIN_PRIORITY_FEE_WEI);
+    expect(signingTip([0n, 0n, 1n])).toBe(10_000_000n);
+  });
+
+  it('Sepolia 2026-10-19: every block’s median is 1 gwei − base (16 wei) — the market’s, not a floor', () => {
+    expect(signingTip(Array.from({ length: 20 }, () => 999_999_984n))).toBe(999_999_984n);
   });
 });

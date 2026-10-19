@@ -20,13 +20,18 @@ const PRICE: EthPriceQuote = {
 };
 
 interface Seen {
-  estimateGas: Array<{ tx: { from: string; to: string; data: string }; block: bigint }>;
+  estimateGas: Array<{
+    tx: { from: string; to: string; data: string; value?: bigint };
+    block: bigint;
+  }>;
   feeHistory: Array<{ count: number; newest: bigint; percentiles: readonly number[] }>;
 }
 
 function rpc(
   opts: {
     gas?: bigint | Error;
+    /** T159a — the fuel probe's answer (a plain ETH send); mainnet: 21,000. */
+    fuelGas?: bigint | Error;
     history?: FeeHistory | Error;
   } = {},
 ): FeeRpc & { seen: Seen } {
@@ -38,7 +43,7 @@ function rpc(
     },
     async estimateGas(tx, block) {
       seen.estimateGas.push({ tx, block });
-      const gas = opts.gas ?? 46_201n;
+      const gas = tx.data === '0x' ? (opts.fuelGas ?? 21_000n) : (opts.gas ?? 46_201n);
       if (gas instanceof Error) throw gas;
       return gas;
     },
@@ -64,7 +69,14 @@ function rpc(
   };
 }
 
-function service(r: FeeRpc, price: EthPriceQuote | Error = PRICE, hot: string | null = HOT) {
+const FUEL = '0x7e5f4552091a69125d5dfcb7b8c2659029395bdf';
+
+function service(
+  r: FeeRpc,
+  price: EthPriceQuote | Error = PRICE,
+  hot: string | null = HOT,
+  fuel: string | null = FUEL,
+) {
   return new EthFeeEstimationService({
     rpc: r,
     prices: {
@@ -75,6 +87,7 @@ function service(r: FeeRpc, price: EthPriceQuote | Error = PRICE, hot: string | 
     },
     tokenContracts: { ...MAINNET_TOKEN_CONTRACTS },
     hotWalletAddress: hot,
+    fuelWalletAddress: fuel,
   });
 }
 
@@ -144,18 +157,70 @@ describe('EthFeeEstimationService — cost model (08 §3.7.5, §3.7.7)', () => {
     expect(result.feeUsdt).toBe('0.04');
   });
 
-  it('deposit sender: the whole fuel (gas × (2 × base + tip)) + the fuel send at the expected price', async () => {
+  it('deposit sender: the whole fuel (the signer’s gas limit × (2 × base + tip)) + the fuel send’s estimated gas at the expected price', async () => {
     const result = await service(rpc()).estimate({
       fromAddress: DEPOSIT,
       toAddress: BUYER,
       amount: '10.2',
       token: 'USDT',
     });
-    const wei = 46_201n * 384_000_000n + 21_000n * 217_000_000n;
+    // T159a: the fuel is sized from the gas LIMIT the signer uses (46,201 + 10 %),
+    // and the fuel send's gas is its own estimate (21,000 on mainnet).
+    const wei = 50_822n * 384_000_000n + 21_000n * 217_000_000n;
     expect(result.sender).toBe('DEPOSIT');
+    expect(result.gasLimit).toBe('50822');
     expect(result.fuelGasLimit).toBe('21000');
     expect(result.feeWei).toBe(wei.toString());
-    expect(result.feeUsdt).toBe('0.06'); // 0.0527… $ rounded up
+    expect(result.feeUsdt).toBe('0.06'); // 0.0569… $ rounded up
+  });
+
+  it('T159a — Sepolia tariff: the fuel’s gas is ESTIMATED (207,391 to a new account), a first receipt 153,000 → the deduction prices both', async () => {
+    const r = rpc({ gas: 153_000n, fuelGas: 207_391n });
+    const result = await service(r).estimate({
+      fromAddress: DEPOSIT,
+      toAddress: BUYER,
+      amount: '10.2',
+      token: 'USDT',
+    });
+    const probe = r.seen.estimateGas.find((c) => c.tx.data === '0x')!;
+    // A plain ETH send of 1 wei from the fuel wallet to this deposit, at the same block.
+    expect(probe.tx.from).toBe(FUEL);
+    expect(probe.tx.to).toBe(DEPOSIT);
+    expect(probe.tx.value).toBe(1n);
+    expect(probe.block).toBe(LATEST);
+    expect(result.gasLimit).toBe('168300');
+    expect(result.fuelGasLimit).toBe('207391');
+    expect(result.feeWei).toBe((168_300n * 384_000_000n + 207_391n * 217_000_000n).toString());
+    expect(result.feeUsdt).toBe('0.26');
+  });
+
+  it('no fuel wallet configured: the fuel probe is sent from the hot wallet (a plain send’s gas depends on the recipient only)', async () => {
+    const r = rpc();
+    await service(r, PRICE, HOT, null).estimate({
+      fromAddress: DEPOSIT,
+      toAddress: BUYER,
+      amount: '1',
+      token: 'USDT',
+    });
+    expect(r.seen.estimateGas.find((c) => c.tx.data === '0x')!.tx.from).toBe(HOT);
+  });
+
+  it('a hot-wallet transfer makes no fuel probe', async () => {
+    const r = rpc();
+    await service(r).estimate({ toAddress: BUYER, amount: '1', token: 'USDT' });
+    expect(r.seen.estimateGas.filter((c) => c.tx.data === '0x')).toHaveLength(0);
+  });
+
+  it('T159a — the tip is the signer’s: the upper middle of an even list (not the lower)', async () => {
+    const result = await service(
+      rpc({
+        history: {
+          baseFeePerGas: [1n, 100_000_000n],
+          reward: [[10_000_000n], [20_000_000n], [30_000_000n], [40_000_000n]],
+        },
+      }),
+    ).estimate({ toAddress: BUYER, amount: '1', token: 'USDT' });
+    expect(result.maxPriorityFeePerGasWei).toBe('30000000');
   });
 
   it('a deposit address equal to the hot wallet (any casing) is priced as the hot wallet', async () => {
@@ -173,18 +238,18 @@ describe('EthFeeEstimationService — cost model (08 §3.7.5, §3.7.7)', () => {
       rpc({ history: { baseFeePerGas: [360n * GWEI], reward: [[2n * GWEI]] } }),
       { ...PRICE, priceMicroUsdt: 3_950_000_000n, priceUsdt: '3950.000000' },
     ).estimate({ fromAddress: DEPOSIT, toAddress: BUYER, amount: '1', token: 'USDT' });
-    const wei = 46_201n * 722n * GWEI + 21_000n * 362n * GWEI;
+    const wei = 50_822n * 722n * GWEI + 21_000n * 362n * GWEI;
     expect(result.feeWei).toBe(wei.toString());
-    // 0.040959… ETH × 3950 = 161.78… $ — the backend's 10 USDT ceiling refuses it, not this service.
-    expect(result.feeUsdt).toBe('161.79');
+    // 0.044295… ETH × 3950 = 174.96… $ — the backend's 10 USDT ceiling refuses it, not this service.
+    expect(result.feeUsdt).toBe('174.97');
   });
 
-  it('no tip data (empty reward) → tip 0', async () => {
+  it('no tip data (empty reward) → the signer’s 0.01 gwei floor (T159a; was 0 — below what the signer pays)', async () => {
     const result = await service(
       rpc({ history: { baseFeePerGas: [1n, 100_000_000n], reward: [] } }),
     ).estimate({ toAddress: BUYER, amount: '1', token: 'USDT' });
-    expect(result.maxPriorityFeePerGasWei).toBe('0');
-    expect(result.feeWei).toBe((46_201n * 100_000_000n).toString());
+    expect(result.maxPriorityFeePerGasWei).toBe('10000000');
+    expect(result.feeWei).toBe((46_201n * 110_000_000n).toString());
   });
 
   it('every integer leaves as a decimal string — none as a JS number', async () => {
@@ -230,6 +295,35 @@ describe('EthFeeEstimationService — failures', () => {
       true,
     );
   });
+
+  it('T159a — the fuel probe failing is a failed simulation too (the backend charges its fallback)', async () => {
+    const r = rpc({ fuelGas: new RpcError('eth_estimateGas: block not found', 'rpc', 'alchemy') });
+    await failsWith(
+      service(r).estimate({ fromAddress: DEPOSIT, toAddress: BUYER, amount: '1', token: 'USDT' }),
+      'FEE_ESTIMATE_SIMULATION_FAILED',
+      true,
+    );
+  });
+
+  it.each([
+    ['token', { gas: 1_000_001n }],
+    ['token below 21,000', { gas: 20_999n }],
+    ['fuel', { fuelGas: 1_000_001n }],
+  ])(
+    'T159a — an implausible %s estimate is not believed: GAS_ESTIMATE_ABNORMAL (retryable)',
+    async (_label, opts) => {
+      await failsWith(
+        service(rpc(opts)).estimate({
+          fromAddress: DEPOSIT,
+          toAddress: BUYER,
+          amount: '1',
+          token: 'USDT',
+        }),
+        'GAS_ESTIMATE_ABNORMAL',
+        true,
+      );
+    },
+  );
 
   it('both providers down propagates as RPC_ALL_PROVIDERS_FAILED (retryable)', async () => {
     const r = rpc({ history: new AllProvidersFailedError('eth_feeHistory', []) });

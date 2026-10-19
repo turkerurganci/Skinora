@@ -8,6 +8,7 @@ import {
   webhookRejectedTotal,
   finalizedBlockAgeSeconds,
   finalizedStallThresholdSeconds,
+  gasEstimateAbnormalTotal,
   journalAckAheadOfChain,
   journalBehindChain,
   nativeEthReceivedTotal,
@@ -160,6 +161,14 @@ describe('T158 — the new Ethereum alarms read the series the service exports',
   it('(g) ethereum-transfer-status-unverified fires on any UNKNOWN answer, critical, at once', async () => {
     const block = ruleBlock('ethereum-transfer-status-unverified');
     expect(block).toContain(`increase(${(await transferStatusUnverifiedTotal.get()).name}[1h])`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/for: 0m/);
+    expect(block).toMatch(/severity: critical/);
+  });
+
+  it('T159a — ethereum-gas-estimate-abnormal fires on any implausible estimate, critical, at once', async () => {
+    const block = ruleBlock('ethereum-gas-estimate-abnormal');
+    expect(block).toContain(`increase(${(await gasEstimateAbnormalTotal.get()).name}[1h])`);
     expect(block).toMatch(/type: gt\s+params: \[0\]/);
     expect(block).toMatch(/for: 0m/);
     expect(block).toMatch(/severity: critical/);

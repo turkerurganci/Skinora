@@ -4,8 +4,9 @@ import { join, resolve } from 'node:path';
 import { Transaction } from 'ethers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { canonicalAddress } from '../address/canonicalAddress.js';
+import { MAX_SIGNABLE_GAS_LIMIT } from '../fee/feeMath.js';
 import { RpcError } from '../rpc/RpcClient.js';
-import { FakeSendChain } from '../testing/FakeEthereumChain.js';
+import { FakeSendChain, SEPOLIA_T159_GAS_TARIFF } from '../testing/FakeEthereumChain.js';
 import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { MAINNET_TOKEN_CONTRACTS } from '../network.js';
 import { decodeTransferCall } from './erc20.js';
@@ -85,7 +86,7 @@ function build(
       chainId: 11_155_111n,
       paymentToken: USDT,
       wrongTokenRefundToken: USDC,
-      maxTokenGasLimit: 150_000n,
+      maxGasLimit: MAX_SIGNABLE_GAS_LIMIT,
     },
     hotWalletKey: 'hotKey' in overrides ? overrides.hotKey! : HOT.privateKey,
     hotWalletAddress: hotAddress,
@@ -700,6 +701,30 @@ describe('fee cap and wait (08 §3.7.7)', () => {
     expect((149_600n * 2_050_000_000n * ETH_USD) / 10n ** 18n).toBe(725_138n);
   });
 
+  it('T159a — a payout to a seller who never held USDT on the Sepolia tariff (153,000 estimated → limit 168,300) signs and lands; the old 150,000 bound refused it', async () => {
+    chain.tariff = SEPOLIA_T159_GAS_TARIFF;
+    const { service, journal } = build();
+    await service.payout(payout());
+    const record = journal.get(`transfer:${ID(1)}`)!;
+    expect(record.gasLimit).toBe('168300');
+    expect(BigInt(record.gasLimit) * BigInt(record.attempts[0].maxFeePerGas)).toBeLessThanOrEqual(
+      PAYOUT_CAP_WEI,
+    );
+    chain.mine();
+    expect(chain.receipts.get(record.attempts[0].hash)!.status).toBe(1);
+    expect(chain.token(USDT, SELLER)).toBe(12_345_678n);
+  });
+
+  it('T159a — a payout whose estimate is implausible (1,000,001) waits GAS_ESTIMATE_ABNORMAL, nothing signed', async () => {
+    chain.estimate = 1_000_001n;
+    const { service } = build();
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      reason: 'GAS_ESTIMATE_ABNORMAL',
+      retryable: true,
+    });
+    expect(chain.sent).toHaveLength(0);
+  });
+
   it('a fee bump stays within the same per-transaction cap', async () => {
     const { service, journal } = build();
     await service.payout(payout());
@@ -716,7 +741,7 @@ describe('fee cap and wait (08 §3.7.7)', () => {
     expect(BigInt(record.attempts[1].maxFeePerGas)).toBe(CEILING_50822);
   });
 
-  it('a sweep keeps the fuel send’s share of the cap: its own transaction gets 46,201 / 67,201 of 0.50 $', async () => {
+  it('a sweep keeps the fuel send’s share of the cap: its own transaction gets its gas limit / (its + the fuel’s) of 0.50 $ (T159a)', async () => {
     chain.setToken(USDT, DEPOSIT.address, 50_000_000n);
     chain.setEth(DEPOSIT.address, 10n ** 16n);
     const { service, journal } = build();
@@ -729,7 +754,12 @@ describe('fee cap and wait (08 §3.7.7)', () => {
       token: 'USDT',
       feeCapUsd: '0.50',
     });
-    expect(journal.get(`transfer:${ID(30)}`)?.feeCapWei).toBe('145381785895507');
+    // T159a: shared by ESTIMATED gas — the sweep's limit 50,822 and (no fuel
+    // wallet in this suite) the intrinsic 21,000 — no longer 46,201 / 67,201.
+    expect(journal.get(`transfer:${ID(30)}`)?.feeCapWei).toBe(
+      ((500_000n * 10n ** 18n * 50_822n) / (71_822n * ETH_USD)).toString(),
+    );
+    expect(journal.get(`transfer:${ID(30)}`)?.feeCapWei).toBe('149633424995786');
   });
 
   it('no ETH price → ETH_PRICE_UNAVAILABLE (fail closed)', async () => {
@@ -764,9 +794,9 @@ describe('fee cap and wait (08 §3.7.7)', () => {
 
     price = ETH_USD;
     await service.refund(refund);
-    // 0.50 $ / 2,364.48 $ × 64,031 / 85,031 — the fuel send (21,000 of the
-    // 85,031 reference) keeps its share; the refund transaction gets the rest.
-    expect(journal.get(`transfer:${ID(8)}`)?.feeCapWei).toBe('159238235770107');
+    // T159a: 0.50 $ / 2,364.48 $ × 50,822 / (50,822 + 21,000) — the fuel send
+    // keeps its share by its own gas; the refund transaction gets the rest.
+    expect(journal.get(`transfer:${ID(8)}`)?.feeCapWei).toBe('149633424995786');
     const tx = Transaction.from(chain.sent[0]);
     expect(canonicalAddress(tx.from!)).toBe(canonicalAddress(DEPOSIT.address));
     expect(decodeTransferCall(tx.data)).toEqual({ to: BUYER, amountUnits: 49_500_000n });
@@ -1163,20 +1193,41 @@ describe('a node error is not a refusal (bulgu 2)', () => {
     ['revision id 3 cannot be reverted', -32000],
     ['upstream block reverted (reorg)', -32000],
   ])(
-    'simulation answered "%s" → transient RPC_UNAVAILABLE (502), nothing signed; the retry signs',
+    'the gas estimate answered "%s" → the send WAITS (GAS_ESTIMATE_UNAVAILABLE, 503 deferred — T159a, proje sahibi kararı), nothing signed; the retry signs',
     async (message, code) => {
       chain.simulationFailures.push(
         new RpcError(`eth_estimateGas: ${message}`, 'rpc', 'fake', code),
       );
       const { service } = build();
-      await expect(service.payout(payout())).rejects.toMatchObject({
-        code: 'RPC_UNAVAILABLE',
-        retryable: true,
-      });
+      const err = await service.payout(payout()).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(TransferDeferredError);
+      expect(err).toMatchObject({ reason: 'GAS_ESTIMATE_UNAVAILABLE', retryable: true });
       expect(chain.sent).toHaveLength(0);
       expect((await service.payout(payout())).replayed).toBe(false);
     },
   );
+
+  it('the eth_call simulation answered "header not found" → transient RPC_UNAVAILABLE (502), nothing signed', async () => {
+    // The estimate succeeds; the second simulation read (eth_call) fails.
+    const estimate = chain.rpc.estimateGas;
+    let calls = 0;
+    chain.rpc.estimateGas = async (tx, block) => {
+      calls++;
+      return estimate(tx, block);
+    };
+    const callFrom = chain.rpc.callFrom;
+    chain.rpc.callFrom = async () => {
+      chain.rpc.callFrom = callFrom;
+      throw new RpcError('eth_call: header not found', 'rpc', 'fake', -32000);
+    };
+    const { service } = build();
+    await expect(service.payout(payout())).rejects.toMatchObject({
+      code: 'RPC_UNAVAILABLE',
+      retryable: true,
+    });
+    expect(calls).toBe(1);
+    expect(chain.sent).toHaveLength(0);
+  });
 
   it('USDT state read answered "header not found" → transient, not TOKEN_CONTRACT_UNSAFE / RPC_ERROR', async () => {
     chain.stateReadFailures.push(new RpcError('eth_call: header not found', 'rpc', 'fake', -32000));

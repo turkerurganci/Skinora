@@ -3,12 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FeeWaitTracker, STALE_AFTER_MS } from './FeeWaitTracker.js';
-import {
-  CAP_REFERENCE_GAS,
-  capWeiPerGas,
-  capWeiPerTransaction,
-  feeCeilingPerGas,
-} from './FeePolicy.js';
+import { capShareWei, feeCeilingPerGas } from './FeePolicy.js';
 import { TxJournal, isJournalId, recordFeeCapWei, type JournalRecord } from './TxJournal.js';
 import { formatTokenUnits, parseLimit, toTokenUnits, usdToMicros } from './units.js';
 
@@ -130,35 +125,52 @@ describe('FeeWaitTracker (3-hour wait clock, 08 §3.7.7)', () => {
   });
 });
 
-describe('fee cap arithmetic (08 §3.7.7)', () => {
-  // T142's worked example: 0.50 $, ETH 2,364.48 $ → sweep ~3.1 gwei, payout ~3.3 gwei.
-  it.each([
-    ['SWEEP', 3_146_723_791n],
-    ['PAYOUT', 3_302_509_495n],
-  ] as const)('%s cap at 0.50 $ and 2,364.48 $/ETH = %s wei/gas', (flow, expected) => {
-    expect(capWeiPerGas(500_000n, CAP_REFERENCE_GAS[flow], 2_364_480_000n)).toBe(expected);
+describe('fee cap arithmetic (08 §3.7.7; T159a — shared by estimated gas)', () => {
+  const WHOLE_CAP = 211_462_985_519_014n; // 0.50 $ ÷ 2,364.48 $/ETH, wei (T142's price)
+
+  it('a transaction with no fuel leg gets the whole cap, whatever its gas', () => {
+    for (const gas of [21_000n, 50_822n, 70_434n, 168_300n, 1_100_000n]) {
+      expect(capShareWei(500_000n, 2_364_480_000n, gas, gas)).toBe(WHOLE_CAP);
+    }
   });
 
-  it('a missing price or cap gives a zero cap (nothing passes)', () => {
-    expect(capWeiPerGas(500_000n, 64_031n, 0n)).toBe(0n);
-    expect(capWeiPerGas(0n, 64_031n, 2_364_480_000n)).toBe(0n);
-    expect(capWeiPerTransaction(500_000n, 'PAYOUT', 0n)).toBe(0n);
-    expect(capWeiPerTransaction(0n, 'PAYOUT', 2_364_480_000n)).toBe(0n);
+  it('a missing price, cap or gas gives a zero share (nothing passes)', () => {
+    expect(capShareWei(500_000n, 0n, 50_822n, 50_822n)).toBe(0n);
+    expect(capShareWei(0n, 2_364_480_000n, 50_822n, 50_822n)).toBe(0n);
+    expect(capShareWei(500_000n, 2_364_480_000n, 0n, 50_822n)).toBe(0n);
+    // A flow cannot be smaller than one of its own transactions.
+    expect(capShareWei(500_000n, 2_364_480_000n, 50_822n, 50_821n)).toBe(0n);
   });
 
-  // T152 düzeltme turu 2 — per transaction (yönetici kararı): 0.50 $ ÷ 2,364.48 $,
-  // the deposit flows keep the fuel send's share of the reference gas.
   it.each([
-    ['PAYOUT', 211_462_985_519_014n],
-    ['COLD', 211_462_985_519_014n],
-    ['SWEEP', 145_381_785_895_507n],
-    ['REFUND', 159_238_235_770_107n],
-  ] as const)(
-    '%s budget at 0.50 $ and 2,364.48 $/ETH = %s wei per transaction',
-    (flow, expected) => {
-      expect(capWeiPerTransaction(500_000n, flow, 2_364_480_000n)).toBe(expected);
+    // Mainnet tariff: sweep 46,201 → limit 50,822, fuel to a new account 21,000.
+    ['mainnet sweep', 50_822n, 21_000n],
+    // Mainnet refund to a first-time recipient: 64,031 → 70,435 + fuel 21,000.
+    ['mainnet first-time refund', 70_435n, 21_000n],
+    // Sepolia 2026-10-19: sweep ~48,000 → 52,800; fuel to a new account 207,391.
+    ['Sepolia sweep', 52_800n, 207_391n],
+    // Sepolia: first USDT receipt 153,000 → 168,300; fuel 207,391.
+    ['Sepolia first-time refund', 168_300n, 207_391n],
+  ])(
+    '%s: token and fuel shares are the one cap split by their estimated gas, never more than it',
+    (_label, token, fuel) => {
+      const tokenShare = capShareWei(500_000n, 2_364_480_000n, token, token + fuel);
+      const fuelShare = capShareWei(500_000n, 2_364_480_000n, fuel, token + fuel);
+      expect(tokenShare + fuelShare).toBeLessThanOrEqual(WHOLE_CAP);
+      // Both priced at the flow's one ceiling per gas, rounded down.
+      const perGas = WHOLE_CAP / (token + fuel);
+      expect(feeCeilingPerGas(tokenShare, token)).toBeGreaterThanOrEqual(perGas - 1n);
+      expect(feeCeilingPerGas(fuelShare, fuel)).toBeGreaterThanOrEqual(perGas - 1n);
+      expect(token * feeCeilingPerGas(tokenShare, token)).toBeLessThanOrEqual(tokenShare);
+      expect(fuel * feeCeilingPerGas(fuelShare, fuel)).toBeLessThanOrEqual(fuelShare);
     },
   );
+
+  it('the worked example: 0.50 $ over a mainnet sweep flow (50,822 + 21,000 gas) at 2,364.48 $ is ~2.94 gwei per gas', () => {
+    const tokenShare = capShareWei(500_000n, 2_364_480_000n, 50_822n, 71_822n);
+    expect(tokenShare).toBe(149_633_424_995_786n);
+    expect(feeCeilingPerGas(tokenShare, 50_822n)).toBe(2_944_264_786n);
+  });
 
   it('the per-gas ceiling is the budget divided by the gas limit, rounded down', () => {
     expect(feeCeilingPerGas(211_462_985_519_014n, 50_822n)).toBe(4_160_855_250n);
