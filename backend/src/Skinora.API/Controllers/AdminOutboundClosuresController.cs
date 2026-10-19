@@ -107,6 +107,8 @@ public sealed class AdminOutboundClosuresController : ControllerBase
             ClosureError.HashNotSuccessful => (StatusCodes.Status422UnprocessableEntity, "HASH_NOT_SUCCESSFUL"),
             ClosureError.HashNotFound => (StatusCodes.Status422UnprocessableEntity, "HASH_NOT_FOUND"),
             ClosureError.HashDoesNotMatchRow => (StatusCodes.Status422UnprocessableEntity, "HASH_DOES_NOT_MATCH_ROW"),
+            ClosureError.RowTransferUnresolved => (StatusCodes.Status422UnprocessableEntity, "ROW_TRANSFER_UNRESOLVED"),
+            ClosureError.AmbiguousRowMatch => (StatusCodes.Status409Conflict, "AMBIGUOUS_ROW_MATCH"),
             ClosureError.RowNotOpen => (StatusCodes.Status409Conflict, "ROW_NOT_OPEN"),
             ClosureError.ClosureNotOpen => (StatusCodes.Status409Conflict, "CLOSURE_NOT_OPEN"),
             ClosureError.HashAlreadyBound => (StatusCodes.Status409Conflict, "HASH_ALREADY_BOUND"),

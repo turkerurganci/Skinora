@@ -358,29 +358,27 @@ public sealed class OutgoingTransferDispatchJob
         // hold — the refund could never broadcast. Translate the stored
         // contract back to its symbol instead; the sidecar's allowlist means
         // it is always USDT or USDC (AmountValidationService §wrong-token).
-        var broadcastToken = row.Token;
-        if (row.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND)
+        // T157 düzeltme turu — one rule (OutboundTransferExpectation) shared
+        // with the confirmation job and the closure tool.
+        var chainToken = OutboundTransferExpectation.ChainToken(row, _contracts);
+        if (chainToken is null)
         {
-            var actualToken = _contracts.ResolveByContract(row.Network, row.ActualTokenAddress);
-            if (actualToken is null)
-            {
-                // Unresolvable contract cannot be broadcast under any symbol.
-                // Fail terminally rather than send the expected token and let
-                // the chain reject it: same admin alert, no wasted attempts.
-                await HandleFailureAsync(
-                    row,
-                    new TransferBroadcastResult(
-                        TransferBroadcastStatus.InvalidRequest,
-                        null,
-                        "WRONG_TOKEN_CONTRACT_UNRESOLVED",
-                        $"ActualTokenAddress '{row.ActualTokenAddress}' does not match a configured stablecoin contract."),
-                    terminal: true,
-                    cancellationToken);
-                return false;
-            }
-
-            broadcastToken = actualToken.Value;
+            // Only a wrong-token refund can fail here. Unresolvable contract
+            // cannot be broadcast under any symbol. Fail terminally rather
+            // than send the expected token and let the chain reject it: same
+            // admin alert, no wasted attempts.
+            await HandleFailureAsync(
+                row,
+                new TransferBroadcastResult(
+                    TransferBroadcastStatus.InvalidRequest,
+                    null,
+                    "WRONG_TOKEN_CONTRACT_UNRESOLVED",
+                    $"ActualTokenAddress '{row.ActualTokenAddress}' does not match a configured stablecoin contract."),
+                terminal: true,
+                cancellationToken);
+            return false;
         }
+        var broadcastToken = chainToken.Value;
 
         // T152 — on a network with a fee cap (Ethereum, 08 §3.7.7) every
         // outbound send carries the admin setting and the signer refuses above

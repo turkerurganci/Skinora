@@ -62,20 +62,44 @@ public class OutboundRowClosureTests : IntegrationTestBase
         var registry = new FakeBlockchainServiceRegistry()
             .With(BlockchainNetwork.TRON, transfers: new ChainStub())
             .With(BlockchainNetwork.ETHEREUM, transfers: _chain);
+        return new OutboundRowClosureService(
+            ctx, registry, Wallets(), Contracts, _clock, NullLogger<OutboundRowClosureService>.Instance);
+    }
+
+    private static StubPlatformWalletAddressProvider Wallets()
+    {
         var wallets = new StubPlatformWalletAddressProvider();
         wallets.Pairs[BlockchainNetwork.ETHEREUM] =
             new PlatformWalletAddresses(BlockchainNetwork.ETHEREUM, HotWallet, EvmLower2);
-        return new OutboundRowClosureService(
-            ctx, registry, wallets, _clock, NullLogger<OutboundRowClosureService>.Instance);
+        return wallets;
     }
 
+    private static readonly IStablecoinContractRegistry Contracts =
+        StablecoinContractRegistry.FromOptions(new StablecoinContractOptions());
+
+    private static readonly string UsdtContract =
+        Contracts.ResolveContractAddress(BlockchainNetwork.ETHEREUM, StablecoinType.USDT);
+
+    private static readonly string UsdcContract =
+        Contracts.ResolveContractAddress(BlockchainNetwork.ETHEREUM, StablecoinType.USDC);
+
     private const string HotWallet = "0x1111111111111111111111111111111111111111";
+    private const string Buyer = "0x2222222222222222222222222222222222222222";
+
+    // Every seeded row gets its own amount unless a test says otherwise: two
+    // rows with the same recipient, token and amount are a look-alike pair the
+    // tool refuses (AMBIGUOUS_ROW_MATCH), which only the tests about that rule want.
+    private int _seq;
 
     private async Task<BlockchainTransaction> SeedRowAsync(
         BlockchainNetwork network = BlockchainNetwork.ETHEREUM,
         BlockchainTransactionStatus status = BlockchainTransactionStatus.PENDING,
         BlockchainTransactionType type = BlockchainTransactionType.SELLER_PAYOUT,
-        string? txHash = null)
+        string? txHash = null,
+        decimal? amount = null,
+        string? toAddress = null,
+        string? fromAddress = null,
+        string? actualTokenAddress = null)
     {
         await using var ctx = CreateContext();
         var tx = NewTransaction(_seller.Id, network: network);
@@ -99,10 +123,16 @@ public class OutboundRowClosureTests : IntegrationTestBase
             Type = type,
             TxHash = txHash,
             EventIndex = type == BlockchainTransactionType.BUYER_PAYMENT ? 0 : null,
-            FromAddress = network == BlockchainNetwork.TRON ? TronAddress : EvmChecksummed2,
-            ToAddress = network == BlockchainNetwork.TRON ? SellerWallet : EvmLower,
-            Amount = 50m,
+            // A payout never records its sender (the hot wallet signs it); every
+            // other outbound row carries what the dispatcher wrote before it signed.
+            FromAddress = fromAddress
+                ?? (network == BlockchainNetwork.TRON ? TronAddress
+                    : type == BlockchainTransactionType.SELLER_PAYOUT ? string.Empty
+                    : EvmLower2),
+            ToAddress = toAddress ?? (network == BlockchainNetwork.TRON ? SellerWallet : EvmLower),
+            Amount = amount ?? 50m + (++_seq),
             Token = StablecoinType.USDT,
+            ActualTokenAddress = actualTokenAddress,
             Status = status,
             ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? Start.UtcDateTime : null,
             ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED && network == BlockchainNetwork.TRON ? 20 : 0,
@@ -420,6 +450,7 @@ public class OutboundRowClosureTests : IntegrationTestBase
     [InlineData(TransferStatusOutcome.Failed, ClosureError.HashNotSuccessful)]
     [InlineData(TransferStatusOutcome.Rejected, ClosureError.HashNotFound)]
     [InlineData(TransferStatusOutcome.Unavailable, ClosureError.ChainUnavailable)]
+    [InlineData(TransferStatusOutcome.Unverified, ClosureError.HashDoesNotMatchRow)]
     public async Task Approve_UnlessTheChainShowsTheHashFinalAndSuccessful_RefusesAndChangesNothing(
         TransferStatusOutcome outcome, ClosureError expected)
     {
@@ -447,6 +478,10 @@ public class OutboundRowClosureTests : IntegrationTestBase
 
         Assert.Null((await ApproveAsync(closure.Id, _bob.Id)).Error);
 
+        // The status read itself carries what the row moves (T158 (g)).
+        Assert.Equal(
+            new TransferStatusExpectation(UsdtContract, HotWallet, row.ToAddress, row.Amount),
+            Assert.Single(_chain.StatusExpectations));
         var asked = Assert.Single(_chain.VerifyReads);
         Assert.Equal(Hash, asked.TxHash);
         Assert.Equal(StablecoinType.USDT, asked.Token);
@@ -665,38 +700,295 @@ public class OutboundRowClosureTests : IntegrationTestBase
     public async Task AClosedRow_IsNotSignedAgain_ByTheDispatcher_AndTheConfirmationJobFinishesIt()
     {
         var row = await SeedRowAsync();
+        // The hash really is this payout: from the hot wallet, USDT, to the seller.
+        _chain.OnChain = new TransferStatusExpectation(UsdtContract, HotWallet, row.ToAddress, row.Amount);
         var closure = await ProposeOkAsync(row.Id);
         _chain.Status = Final();
         Assert.Null((await ApproveAsync(closure.Id, _bob.Id)).Error);
         _chain.StatusReads.Clear();
+        _chain.StatusExpectations.Clear();
 
-        var registry = new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, transfers: _chain);
-        await using (var ctx = CreateContext())
-        {
-            var dispatch = new OutgoingTransferDispatchJob(
-                ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new OneMinuteRetryPolicy(),
-                new OutboxService(ctx),
-                StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
-                new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
-                new StubPlatformWalletAddressProvider(),
-                _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
-            await dispatch.ExecuteAsync();
-        }
+        await DispatchAsync();
         Assert.Empty(_chain.Broadcasts); // never signed again — this is the whole point
 
-        await using (var ctx = CreateContext())
-        {
-            var confirm = new OutgoingTransferConfirmationJob(
-                ctx, registry, AlwaysHealthyBlockchainNetworks.Instance,
-                new OutboxService(ctx),
-                StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
-                new StubPlatformWalletAddressProvider(),
-                _clock, NullLogger<OutgoingTransferConfirmationJob>.Instance);
-            await confirm.ExecuteAsync();
-        }
+        await ConfirmAsync();
         var after = await ReloadRowAsync(row.Id);
         Assert.Equal(BlockchainTransactionStatus.CONFIRMED, after.Status);
         Assert.Equal(Hash, after.TxHash);
+        // The confirmation job's read carried the payout's expectation (T158 (g)).
+        var expectation = Assert.Single(_chain.StatusExpectations);
+        Assert.Equal(_chain.OnChain, expectation);
+    }
+
+    // =================================================================
+    // T157 düzeltme turu — what the row moves on chain (⚠ PARA)
+    // =================================================================
+
+    [Fact]
+    public async Task AWrongTokenRefund_IsVerifiedAgainstTheTokenThatArrived_AndTheConfirmationJobConfirmsIt()
+    {
+        // The buyer sent USDC to a USDT transaction; the refund returns USDC.
+        var row = await SeedRowAsync(
+            type: BlockchainTransactionType.WRONG_TOKEN_REFUND,
+            toAddress: Buyer,
+            actualTokenAddress: UsdcContract);
+        _chain.OnChain = new TransferStatusExpectation(UsdcContract, EvmLower2, Buyer, row.Amount);
+        _chain.Status = Final();
+
+        await using (var ctx = CreateContext())
+        {
+            // The candidate list and the approval window show the token that moves.
+            var candidate = Assert.Single(await Service(ctx).ListCandidatesAsync(CancellationToken.None));
+            Assert.Equal(StablecoinType.USDT, candidate.Token);
+            Assert.Equal(StablecoinType.USDC, candidate.ChainToken);
+        }
+        var closure = await ProposeOkAsync(row.Id);
+        Assert.Equal(StablecoinType.USDC, closure.ChainToken);
+
+        var approved = await ApproveAsync(closure.Id, _bob.Id);
+
+        Assert.Null(approved.Error);
+        Assert.Equal(StablecoinType.USDC, Assert.Single(_chain.VerifyReads).Token);
+        Assert.Equal(UsdcContract, Assert.Single(_chain.StatusExpectations)!.Contract);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, (await ReloadRowAsync(row.Id)).Status);
+        var audit = (await AuditAsync(AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED)).Single();
+        Assert.Contains("\"chainToken\":\"USDC\"", audit.NewValue);
+
+        _chain.StatusExpectations.Clear();
+        await ConfirmAsync();
+
+        var after = await ReloadRowAsync(row.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, after.Status);
+        Assert.Equal(UsdcContract, Assert.Single(_chain.StatusExpectations)!.Contract);
+    }
+
+    [Fact]
+    public async Task ARefundAfterTheSweep_IsVerifiedFromTheHotWallet_AndTheConfirmationJobConfirmsIt()
+    {
+        // T158 (f): the deposit was swept, the dispatcher wrote the hot wallet as sender before it signed.
+        var row = await SeedRowAsync(
+            type: BlockchainTransactionType.BUYER_REFUND, toAddress: Buyer, fromAddress: HotWallet);
+        _chain.OnChain = new TransferStatusExpectation(UsdtContract, HotWallet, Buyer, row.Amount);
+        _chain.Status = Final();
+        var closure = await ProposeOkAsync(row.Id);
+
+        Assert.Null((await ApproveAsync(closure.Id, _bob.Id)).Error);
+        Assert.Equal(HotWallet, Assert.Single(_chain.VerifyReads).From, ignoreCase: true);
+
+        _chain.StatusExpectations.Clear();
+        await ConfirmAsync();
+
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, (await ReloadRowAsync(row.Id)).Status);
+        Assert.Equal(HotWallet, Assert.Single(_chain.StatusExpectations)!.FromAddress, ignoreCase: true);
+    }
+
+    [Fact]
+    public async Task AHashThatMovedTheExpectedTokenInsteadOfTheArrivedOne_DoesNotCloseAWrongTokenRefund()
+    {
+        var row = await SeedRowAsync(
+            type: BlockchainTransactionType.WRONG_TOKEN_REFUND,
+            toAddress: Buyer,
+            actualTokenAddress: UsdcContract);
+        // On chain the hash moved USDT — not what this refund returns.
+        _chain.OnChain = new TransferStatusExpectation(UsdtContract, EvmLower2, Buyer, row.Amount);
+        _chain.Status = Final();
+        var closure = await ProposeOkAsync(row.Id);
+
+        var result = await ApproveAsync(closure.Id, _bob.Id);
+
+        Assert.Equal(ClosureError.HashDoesNotMatchRow, result.Error);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, (await ReloadRowAsync(row.Id)).Status);
+    }
+
+    [Fact]
+    public async Task AWrongTokenRefundWhoseTokenIsNotAllowlisted_IsRefused_FailClosed()
+    {
+        var row = await SeedRowAsync(
+            type: BlockchainTransactionType.WRONG_TOKEN_REFUND,
+            toAddress: Buyer,
+            actualTokenAddress: "0x9999999999999999999999999999999999999999");
+
+        await using var ctx = CreateContext();
+        var candidate = Assert.Single(await Service(ctx).ListCandidatesAsync(CancellationToken.None));
+        Assert.Null(candidate.ChainToken);
+        var result = await Service(ctx).ProposeAsync(
+            _alice.Id, row.Id, Hash, GoodReason, null, CancellationToken.None);
+
+        Assert.Equal(ClosureError.RowTransferUnresolved, result.Error);
+        Assert.Equal(0, await ctx.Set<OutboundRowClosure>().CountAsync());
+    }
+
+    [Fact]
+    public async Task ARefundWithoutARecordedSender_IsRefused_FailClosed()
+    {
+        // The confirmation job could never confirm it (no expectation → UNKNOWN), so the tool does not close it.
+        var row = await SeedRowAsync(type: BlockchainTransactionType.BUYER_REFUND, fromAddress: string.Empty);
+
+        await using var ctx = CreateContext();
+        var result = await Service(ctx).ProposeAsync(
+            _alice.Id, row.Id, Hash, GoodReason, null, CancellationToken.None);
+
+        Assert.Equal(ClosureError.RowTransferUnresolved, result.Error);
+    }
+
+    [Fact]
+    public async Task Approve_RefusesARowWhoseSenderWasLostSinceTheProposal_AndLogsIt()
+    {
+        var row = await SeedRowAsync(type: BlockchainTransactionType.BUYER_REFUND);
+        var closure = await ProposeOkAsync(row.Id);
+        _chain.Status = Final();
+        await using (var ctx = CreateContext())
+        {
+            var tracked = await ctx.Set<BlockchainTransaction>().SingleAsync(b => b.Id == row.Id);
+            tracked.FromAddress = string.Empty;
+            await ctx.SaveChangesAsync();
+        }
+
+        var result = await ApproveAsync(closure.Id, _bob.Id);
+
+        Assert.Equal(ClosureError.RowTransferUnresolved, result.Error);
+        Assert.Empty(_chain.StatusReads);
+        Assert.Contains("ROW_TRANSFER_UNRESOLVED",
+            Assert.Single(await AuditAsync(AuditAction.OUTBOUND_ROW_CLOSURE_REFUSED)).NewValue);
+    }
+
+    // =================================================================
+    // T157 düzeltme turu — look-alike rows (yönetici kararı, ⚠ PARA)
+    // =================================================================
+
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.PENDING)]
+    [InlineData(BlockchainTransactionStatus.DETECTED)]
+    public async Task Propose_IsRefused_WhileAnotherOpenRowHasTheSameRecipientTokenAndAmount(
+        BlockchainTransactionStatus otherStatus)
+    {
+        var row = await SeedRowAsync(amount: 75m);
+        await SeedRowAsync(status: otherStatus, amount: 75m,
+            txHash: otherStatus == BlockchainTransactionStatus.DETECTED ? Hash2 : null);
+
+        await using var ctx = CreateContext();
+        var result = await Service(ctx).ProposeAsync(
+            _alice.Id, row.Id, Hash, GoodReason, null, CancellationToken.None);
+
+        Assert.Equal(ClosureError.AmbiguousRowMatch, result.Error);
+        Assert.Equal(0, await ctx.Set<OutboundRowClosure>().CountAsync());
+    }
+
+    [Fact]
+    public async Task Propose_ALookAlikeOfAnotherKind_StillCounts_ARefundToTheSameAddress()
+    {
+        var row = await SeedRowAsync(amount: 75m, toAddress: Buyer);
+        await SeedRowAsync(type: BlockchainTransactionType.BUYER_REFUND, amount: 75m, toAddress: Buyer.ToUpperInvariant().Replace("0X", "0x"));
+
+        await using var ctx = CreateContext();
+        var result = await Service(ctx).ProposeAsync(
+            _alice.Id, row.Id, Hash, GoodReason, null, CancellationToken.None);
+
+        Assert.Equal(ClosureError.AmbiguousRowMatch, result.Error);
+    }
+
+    [Fact]
+    public async Task Propose_IsAllowed_WhenTheOtherRowDiffersOrIsSettled()
+    {
+        var row = await SeedRowAsync(amount: 75m);
+        await SeedRowAsync(amount: 75.000001m);                                                    // another amount
+        await SeedRowAsync(amount: 75m, toAddress: Buyer);                                          // another recipient
+        await SeedRowAsync(amount: 75m, status: BlockchainTransactionStatus.CONFIRMED, txHash: Hash2); // settled
+        await SeedRowAsync(amount: 75m, status: BlockchainTransactionStatus.FAILED);                 // given up
+        await SeedRowAsync(network: BlockchainNetwork.TRON, amount: 75m);                           // other network
+        await SeedRowAsync(type: BlockchainTransactionType.WRONG_TOKEN_REFUND, amount: 75m,        // another token
+            actualTokenAddress: UsdcContract);
+        await SeedRowAsync(type: BlockchainTransactionType.BUYER_PAYMENT, amount: 75m,             // inbound
+            status: BlockchainTransactionStatus.DETECTED, txHash: "0x" + new string('c', 64));
+
+        await ProposeOkAsync(row.Id);
+    }
+
+    [Fact]
+    public async Task Approve_IsRefused_WhenALookAlikeRowWasQueuedAfterTheProposal_AndLogsIt()
+    {
+        var row = await SeedRowAsync(amount: 75m);
+        var closure = await ProposeOkAsync(row.Id);
+        _chain.Status = Final();
+        await SeedRowAsync(amount: 75m);
+
+        var result = await ApproveAsync(closure.Id, _bob.Id);
+
+        Assert.Equal(ClosureError.AmbiguousRowMatch, result.Error);
+        var after = await ReloadRowAsync(row.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, after.Status);
+        Assert.Null(after.TxHash);
+        Assert.Empty(_chain.StatusReads);
+        Assert.Contains("AMBIGUOUS_ROW_MATCH",
+            Assert.Single(await AuditAsync(AuditAction.OUTBOUND_ROW_CLOSURE_REFUSED)).NewValue);
+    }
+
+    // =================================================================
+    // Test gaps closed in the düzeltme turu (B28, B5)
+    // =================================================================
+
+    [Fact]
+    public async Task Reject_AnApprovedClosure_IsRefused_AndTheApprovalStands()
+    {
+        var row = await SeedRowAsync();
+        var closure = await ProposeOkAsync(row.Id);
+        _chain.Status = Final();
+        Assert.Null((await ApproveAsync(closure.Id, _bob.Id)).Error);
+
+        await using (var ctx = CreateContext())
+        {
+            var result = await Service(ctx).RejectAsync(
+                _alice.Id, closure.Id, "Changed my mind after the approval.", null, CancellationToken.None);
+            Assert.Equal(ClosureError.ClosureNotOpen, result.Error);
+        }
+
+        await using var verify = CreateContext();
+        var stored = await verify.Set<OutboundRowClosure>().AsNoTracking().SingleAsync();
+        Assert.Equal(OutboundRowClosureStatus.APPROVED, stored.Status);
+        Assert.Equal(_bob.Id, stored.DecidedByAdminId);
+        Assert.Null(stored.DecisionNote);
+        Assert.Empty(await AuditAsync(AuditAction.OUTBOUND_ROW_CLOSURE_REJECTED));
+        Assert.Equal(Hash, (await ReloadRowAsync(row.Id)).TxHash);
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.FAILED)]
+    [InlineData(BlockchainTransactionStatus.DETECTED)]
+    public async Task Propose_ForARowThatIsNotPending_IsRefused_EvenWithoutAHash(BlockchainTransactionStatus status)
+    {
+        // A FAILED row has no hash: only its status says it is not open.
+        var row = await SeedRowAsync(status: status);
+
+        await using var ctx = CreateContext();
+        var result = await Service(ctx).ProposeAsync(
+            _alice.Id, row.Id, Hash, GoodReason, null, CancellationToken.None);
+
+        Assert.Equal(ClosureError.RowNotOpen, result.Error);
+        Assert.Equal(0, await ctx.Set<OutboundRowClosure>().CountAsync());
+    }
+
+    private async Task DispatchAsync()
+    {
+        var registry = new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, transfers: _chain);
+        await using var ctx = CreateContext();
+        var dispatch = new OutgoingTransferDispatchJob(
+            ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new OneMinuteRetryPolicy(),
+            new OutboxService(ctx), Contracts,
+            new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
+            Wallets(), _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
+        await dispatch.ExecuteAsync();
+    }
+
+    /// <summary>The real confirmation job, with the same wallets and contracts as production wiring.</summary>
+    private async Task ConfirmAsync()
+    {
+        var registry = new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, transfers: _chain);
+        await using var ctx = CreateContext();
+        var confirm = new OutgoingTransferConfirmationJob(
+            ctx, registry, AlwaysHealthyBlockchainNetworks.Instance,
+            new OutboxService(ctx), Contracts, Wallets(),
+            _clock, NullLogger<OutgoingTransferConfirmationJob>.Instance);
+        await confirm.ExecuteAsync();
     }
 
     // =================================================================
@@ -776,6 +1068,15 @@ public class OutboundRowClosureTests : IntegrationTestBase
             TransferVerifyRequest request, CancellationToken cancellationToken)
         {
             VerifyReads.Add(request);
+            if (OnChain is not null)
+            {
+                var asked = new TransferStatusExpectation(
+                    Contracts.ResolveContractAddress(BlockchainNetwork.ETHEREUM, request.Token),
+                    request.From ?? string.Empty, request.To, request.Amount);
+                return Task.FromResult(new TransferVerifyResult(
+                    SameTransfer(asked, OnChain) ? TransferVerifyOutcome.Match : TransferVerifyOutcome.NoMatchingTransfer,
+                    123));
+            }
             return Task.FromResult(Verify);
         }
 
@@ -786,11 +1087,41 @@ public class OutboundRowClosureTests : IntegrationTestBase
             return Task.FromResult(new TransferBroadcastResult(TransferBroadcastStatus.Success, "0xsent", null, null));
         }
 
-        public Task<TransferStatusResult> GetStatusAsync(string txHash, CancellationToken cancellationToken)
+        /// <summary>What every status read carried (T158 (g)).</summary>
+        public List<TransferStatusExpectation?> StatusExpectations { get; } = [];
+
+        /// <summary>
+        /// The transfer the hash really carries on chain, like the Ethereum
+        /// service sees it for a hash its journal does not hold: when set, a
+        /// final status read answers UNKNOWN (<see cref="TransferStatusOutcome.Unverified"/>)
+        /// unless the expectation sent with it matches, and the verify read
+        /// answers MATCH only for it. Null: answer <see cref="Status"/> / <see cref="Verify"/> as set.
+        /// </summary>
+        public TransferStatusExpectation? OnChain { get; set; }
+
+        public Task<TransferStatusResult> GetStatusAsync(string txHash, CancellationToken cancellationToken) =>
+            GetStatusAsync(txHash, null, cancellationToken);
+
+        public Task<TransferStatusResult> GetStatusAsync(
+            string txHash, TransferStatusExpectation? expected, CancellationToken cancellationToken)
         {
             StatusReads.Add(txHash);
+            StatusExpectations.Add(expected);
+            if (OnChain is not null && Status.Outcome == TransferStatusOutcome.Confirmed
+                && !SameTransfer(expected, OnChain))
+            {
+                return Task.FromResult(new TransferStatusResult(
+                    TransferStatusOutcome.Unverified, Status.BlockNumber, null, "UNKNOWN", null));
+            }
             return Task.FromResult(Status);
         }
+
+        private static bool SameTransfer(TransferStatusExpectation? a, TransferStatusExpectation b) =>
+            a is not null
+            && string.Equals(a.Contract, b.Contract, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.FromAddress, b.FromAddress, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.ToAddress, b.ToAddress, StringComparison.OrdinalIgnoreCase)
+            && a.Amount == b.Amount;
     }
 
     private sealed class OneMinuteRetryPolicy : ITransferRetryPolicy
