@@ -15,7 +15,13 @@ import { useOutboundClosureCandidates, useOutboundClosures } from "@/lib/hooks/u
 import { explorerTxUrl, networkMeta } from "@/lib/utils/blockchain";
 import { formatDateTime } from "@/lib/utils/format";
 import { BlockchainNetwork } from "@/types/enums";
-import { ApproveClosureModal, ProposeClosureModal, RejectClosureModal } from "./ClosureModals";
+import {
+  ApproveClosureModal,
+  ChainTokenNote,
+  ProposeClosureModal,
+  RejectClosureModal,
+  movedToken,
+} from "./ClosureModals";
 
 const STATUSES: readonly OutboundClosureStatus[] = ["PROPOSED", "APPROVED", "REJECTED"];
 const EXPLORER = networkMeta(BlockchainNetwork.ETHEREUM).explorerName;
@@ -76,7 +82,8 @@ function CandidatesTable({
             >
               <td className="px-3 py-2">{tDynamic(tType, c.type, c.type)}</td>
               <td className="px-3 py-2 tabular-nums">
-                {c.amount} {c.token}
+                {c.amount} {movedToken(c)}
+                <ChainTokenNote row={c} />
               </td>
               <td className="break-all px-3 py-2 font-mono text-xs">{c.toAddress}</td>
               <td className="px-3 py-2">
@@ -138,7 +145,7 @@ function ClosureCard({
           {tDynamic(tType, closure.rowType, closure.rowType)}
         </span>
         <span className="text-sm tabular-nums text-gray-900">
-          {closure.amount} {closure.token}
+          {closure.amount} {movedToken(closure)}
         </span>
       </div>
 

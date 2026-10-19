@@ -213,6 +213,11 @@ public sealed class EthereumSidecarAdminContractTests
     [InlineData("{\"outcome\":\"SOMETHING_NEW\",\"matches\":true}", TransferVerifyOutcome.Unavailable)]
     [InlineData("{}", TransferVerifyOutcome.Unavailable)]
     [InlineData("not json", TransferVerifyOutcome.Unavailable)]
+    // T157 düzeltme turu (S12) — the service's error bodies, should one ever
+    // arrive with 200 (its error code turned into 200): not an answer, not a pass.
+    [InlineData("{\"error\":\"RPC_UNAVAILABLE\",\"message\":\"The node could not answer.\"}", TransferVerifyOutcome.Unavailable)]
+    [InlineData("{\"error\":\"RPC_RATE_LIMITED\",\"message\":\"x\",\"matches\":true}", TransferVerifyOutcome.Unavailable)]
+    [InlineData("{\"error\":\"INVALID_VERIFY_REQUEST\",\"outcome\":\"MATCH\"}", TransferVerifyOutcome.Unavailable)]
     public async Task VerifyAnswer_OnlyAnExactMatchIsAMatch(string body, TransferVerifyOutcome expected)
     {
         var client = TransferClient(BlockchainNetwork.ETHEREUM, (_, _) =>

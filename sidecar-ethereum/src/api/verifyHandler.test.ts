@@ -10,6 +10,7 @@ import { TRANSFER_TOPIC, addressTopic } from '../transfer/erc20.js';
 import type { TransferService } from '../transfer/TransferService.js';
 import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 import type { TransactionReceipt } from '../rpc/RpcClient.js';
+import { SidecarError } from '../errors/SidecarError.js';
 
 /**
  * T157 — `POST /api/transfer/verify` over HTTP. The request is the backend's
@@ -33,13 +34,15 @@ const response = JSON.parse(readFileSync(resolve(CONTRACTS, 'response.json'), 'u
 const USDT = '0xdac17f958d2ee523a2206206994597c13d831ec7';
 const USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 
-let node: 'match' | 'unknown' | 'down' = 'match';
+let node: 'match' | 'unknown' | 'down' | 'busy' | 'refused' = 'match';
 const reads: string[] = [];
 
 const rpc = {
   getTransactionReceipt: async (hash: string): Promise<TransactionReceipt | null> => {
     reads.push(hash);
     if (node === 'down') throw new Error('node down');
+    if (node === 'busy') throw new SidecarError('rate limited', 'RPC_RATE_LIMITED', true);
+    if (node === 'refused') throw new SidecarError('bad request', 'RPC_BAD_REQUEST', false);
     if (node === 'unknown') return null;
     return {
       transactionHash: hash,
@@ -139,6 +142,23 @@ describe('POST /api/transfer/verify', () => {
 
     expect(res.status).toBe(502);
     expect(((await res.json()) as { matches?: boolean }).matches).toBeUndefined();
+  });
+
+  // T157 düzeltme turu (S12) — an error is never a 200: the backend reads only
+  // a 200 body as an answer, so an error turned into 200 must not pass silently.
+  it.each([
+    ['busy', 502, 'RPC_RATE_LIMITED'],
+    ['refused', 400, 'RPC_BAD_REQUEST'],
+  ] as const)('answers a %s service error with %i, never 200', async (mode, status, code) => {
+    node = mode;
+    const res = await post(request);
+    node = 'match';
+
+    expect(res.status).toBe(status);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ error: code });
+    expect(body.matches).toBeUndefined();
+    expect(body.outcome).toBeUndefined();
   });
 
   it.each([

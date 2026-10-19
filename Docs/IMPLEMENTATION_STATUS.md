@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-19 — **T158 ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme turu → tur 2 ✓ PASS** (Ethereum kurulumu; rapor [`T158_REPORT.md`](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353), doğrulanan HEAD `527cd680`, CI `39180296572` ✓; tur 1 HEAD `22c75eb6`, CI `39171417610`). Kapanışta yönetici kararı (⚠ PARA): yayınlanmış (`DETECTED`) sweep alıcı iadesinde "çalışmış" sayılır, TRON ağ ücreti satırı geri verilmez (11 §F8 "T158 düzeltme turu" (g)). Merge yöneticide.
+**Son güncelleme:** 2026-10-19 — **T157 ⏳ doğrulama tur 1 ✗ FAIL → düzeltme turu yapıldı, hedefli yeniden doğrulama bekliyor** (admin ekranları ağ başına + ⚠ PARA kapatma aracı; rapor [`T157_REPORT.md`](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)): main (T158 `92154a6d`) birleştirildi; zincirdeki token ortak kuraldan (yanlış token iadesi gerçek token'la doğrulanır), kapatma aracının durum sorgusu T158 beklentisini taşır, yönetici kararıyla `AMBIGUOUS_ROW_MATCH` reddi, soğuk aktarım `SIDECAR_UNAVAILABLE` metni "gönderilmiş olabilir", belgeler ve test boşlukları. Merge yok.
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -343,7 +343,7 @@
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T149 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
 | T155 | sidecar-fake Ethereum desteği + E2E | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T155_REPORT.md)) |
 | T156 | Kullanıcı arayüzü — ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
-| T157 | Admin ekranları ağ başına | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)) |
+| T157 | Admin ekranları ağ başına | ⏳ Devam ediyor — tur 1 ✗ FAIL → düzeltme turu yapıldı, yeniden doğrulama bekliyor ([rapor](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)) |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (merge yöneticide) ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
 | T159 | Sepolia canlı provası + TRON regresyonu | ⬚ Bekliyor |
 | T160 | F8 Gate Check | ⬚ Bekliyor |

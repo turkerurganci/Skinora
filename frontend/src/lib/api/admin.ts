@@ -1157,7 +1157,14 @@ export interface OutboundClosureCandidate {
   blockchainTransactionId: string;
   transactionId: string;
   type: string;
+  /** The stablecoin the transaction expected. */
   token: string;
+  /**
+   * T157 düzeltme turu — the stablecoin the row moves on chain (a wrong-token
+   * refund returns the token that arrived); null when it cannot be resolved,
+   * and then the tool refuses the row.
+   */
+  chainToken: string | null;
   amount: number;
   fromAddress: string;
   toAddress: string;
@@ -1173,6 +1180,8 @@ export interface OutboundClosure {
   transactionId: string;
   rowType: string;
   token: string;
+  /** See {@link OutboundClosureCandidate.chainToken}. */
+  chainToken: string | null;
   amount: number;
   fromAddress: string;
   toAddress: string;

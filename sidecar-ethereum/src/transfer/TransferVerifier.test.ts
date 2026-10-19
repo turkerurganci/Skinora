@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { id } from 'ethers';
 import { TransferVerifier, type VerifyRequest } from './TransferVerifier.js';
 import { TRANSFER_TOPIC, addressTopic } from './erc20.js';
 import type { RpcLog, TransactionReceipt } from '../rpc/RpcClient.js';
@@ -129,6 +130,21 @@ describe('TransferVerifier', () => {
 
     expect((await v.verify({ ...BASE, from: null })).outcome).toBe('MATCH');
     expect((await v.verify(BASE)).outcome).toBe('NO_MATCHING_TRANSFER');
+  });
+
+  it('does not count an Approval event of the same shape as a transfer (T157 düzeltme turu, S7)', async () => {
+    // Approval(owner, spender, value) has three topics and one data word, like
+    // Transfer — only the event topic tells them apart. The owner approving the
+    // seller for the exact amount moves nothing.
+    const approval = log({
+      topics: [id('Approval(address,address,uint256)'), addressTopic(HOT), addressTopic(SELLER)],
+    });
+    const { v } = verifier(receipt([approval]));
+
+    const result = await v.verify(BASE);
+
+    expect(result.outcome).toBe('NO_MATCHING_TRANSFER');
+    expect(result.matchingTransfers).toBe(0);
   });
 
   it('reads the contract of the token asked for — a USDC log does not satisfy a USDT row', async () => {

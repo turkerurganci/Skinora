@@ -1,6 +1,6 @@
 # T157 — Admin ekranları ağ başına
 
-**Faz:** F8 | **Durum:** ⏳ Yapım bitti, doğrulama bekliyor | **Tarih:** 2026-10-19
+**Faz:** F8 | **Durum:** ⏳ Doğrulama tur 1 ✗ FAIL → düzeltme turu yapıldı, yeniden doğrulama bekliyor | **Tarih:** 2026-10-19
 
 ---
 
@@ -69,7 +69,7 @@
 ## Known Limitations / Follow-up
 
 - **Açık sorular (yöneticiye)** — 11 §F8 "T157 kararları": (1) ayrı `MANAGE_WALLETS` izni; (2) servisin `JOURNAL BEHIND CHAIN` nonce aralığını verip aracın onayı "hash'in nonce'u aralıkta" şartına bağlaması; (3) Ethereum sıcak cüzdan stablecoin üst-limit izleyicisi.
-- `verify` aynı alıcıya aynı tutarı ödeyen iki özdeş açık satırı ayıramaz (para etkisi aynı).
+- ~~`verify` aynı alıcıya aynı tutarı ödeyen iki özdeş açık satırı ayıramaz.~~ Düzeltme turunda yönetici kararıyla ret kuralı oldu (`AMBIGUOUS_ROW_MATCH`).
 - Cevabı kaybolan Ethereum soğuk aktarımında yeniden deneme ikinci aktarım yapabilir (kayıp yok, mutabakat fazlayı gösterir) — runbook §D adım 8.6.
 - sidecar-fake'te `/api/wallet/platform` ve `/api/transfer/verify` yok: e2e'de cüzdan ekranı Ethereum için UNAVAILABLE gösterir (kapsam dışı).
 - Araç sonrası `ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES` (adım 5) hâlâ elle.
@@ -79,3 +79,41 @@
 - Working tree: temiz (dal `origin/main` `99b808cf`'ten). Main CI son 3 run: `39164777560`, `39164777570`, `39153430245` hepsi success.
 - Dış varsayımlar: Ethereum servisinin durum ucu günlüksüz hash için alıcı/tutarı denetlemez → kodla doğrulandı (`TransferService.status` → `contractRetOf(null, …)` yalnız `status === 1`), bu yüzden `verify` ucu eklendi. Sepolia/mainnet'e canlı çağrı yapılmadı (RPC anahtarı yok); doğrulayıcı makbuz biçimi birim testlerinde sahte makbuzla sınandı.
 - Frontend yapımı alt ajanla yapıldı (aynı dal, ayrı dizin).
+
+---
+
+## Düzeltme turu (2026-10-19)
+
+Bağımsız doğrulama tur 1 ✗ FAIL verdi (HEAD `47842493`). Arada main'e T158 (`92154a6d`) girdi. Bu tur: main birleştirmesi + bulguların düzeltilmesi. Merge yok; hedefli yeniden doğrulama bekleniyor.
+
+### Main birleştirmesi
+
+- Çakışmalar: MEMORY, 06, 08, 11, DEPLOY_RUNBOOK, IMPLEMENTATION_STATUS (iki tarafın kayıtları korundu; 06 v6.33, 08 v3.38, 11 v1.18), `IBlockchainTransferClient.cs` (T158'in beklentili `GetStatusAsync` aşırı yüklemesi + T157 `VerifyTransferAsync` birlikte), `sidecar-ethereum/src/api/routes.ts` (finality'li `wallet/derive` + `wallet/platform`).
+- İki testte T158'in yeni kurucu parametreleri (sıcak cüzdan sağlayıcısı, kontrat kaydı, ikinci `HttpClient`).
+- Snapshot iki migration'ı da içeriyor (`T157_OutboundRowClosures`, `T158_PaymentAddressMonitorFromBlock`); `dotnet ef migrations has-pending-model-changes` → değişiklik yok.
+- **Anlamca çakışma (⚠ PARA):** T158 (g)'den sonra Ethereum servisi günlüğünde olmayan bir hash'e beklentisiz durum sorgusunda `UNKNOWN` döner. Kapatma aracının durum sorgusu beklentisizdi; birleştirmeden sonra araç **hiçbir satırı onaylayamazdı** (her onay `CHAIN_SERVICE_UNAVAILABLE`). Düzeltildi: sorgu satırın beklentisini taşır, `Unverified` → `HASH_DOES_NOT_MATCH_ROW`.
+
+### Bulgular
+
+| # | Bulgu | Ne yapıldı | Bozma kanıtı |
+|---|---|---|---|
+| a | 🟠 PARA — `verify` `row.Token` gönderiyordu; yanlış token iadesinde zincirde giden token `ActualTokenAddress`'teki token | Yeni ortak kural `OutboundTransferExpectation` (token, gönderen, kontrat). Gönderim işi, onay işinin durum sorgusu ve kapatma aracı aynı kuralı kullanır. Çözülemezse öneri/onay reddedilir (`ROW_TRANSFER_UNRESOLVED`). Aday listesi ve onay penceresi `chainToken`'ı gösterir | D01, D02, D08, D10, D15 |
+| T158 | Kapatılan satırın onay işiyle `CONFIRMED` olması | Gerçek SQL'de iki uçtan uca test: USDC'li yanlış token iadesi ve sweep sonrası iade (gönderen sıcak cüzdan) — öneri → onay → **gerçek onay işi** → `CONFIRMED`. Zincir sahtesi beklentiyi denetler (uymazsa `UNKNOWN`). Ödeme testi de aynı sahteyle | D03, D10 |
+| b | 🟡 `SIDECAR_UNAVAILABLE` "Hiçbir şey gönderilmedi" diyordu | 4 dilde "gönderilmiş olabilir; yeniden denemeden önce Etherscan/Tronscan'de kontrol edin"; 07 §9.34 hata satırı; FE testi | D16 |
+| c | 🟡 Belgeler koddan geride | 07 §9.32 kurallar + hata listesi (`HASH_DOES_NOT_MATCH_ROW`, `ROW_TRANSFER_UNRESOLVED`, `AMBIGUOUS_ROW_MATCH`), "Bilinen sınır" notu değişti; 08 §3.7.6 uç listesi + "Admin aracı" (b); DEPLOY_RUNBOOK §D 7.4 (makine denetimi, benzer satır, elle yol) ve §J.5 | — |
+| d | 🟢 Test boşlukları | B28 `Reject_AnApprovedClosure_IsRefused…`; S7 `Approval` olayı (sidecar); B5 hash'siz `FAILED`/`DETECTED` satıra öneri; S12 servis hata kodu 502/400 (sidecar) + 200 ile gelen hata gövdesi backend'de `Unavailable` | D11, D12, D13, D14 |
+| e | Yönetici kararı (⚠ PARA) — benzer açık satır | Aynı ağda aynı alıcı + aynı (zincirdeki) token + aynı tutarda başka açık (`PENDING`/`DETECTED`) giden satır varsa öneri ve onay reddedilir (409 `AMBIGUOUS_ROW_MATCH`, onayda reddedilme audit'li). 07, runbook (elle yol), 11 §F8 | D04, D05, D06, D07 |
+
+**Bozma:** 16 bozma / 16 yakalandı (ayrıntı 11 §F8 "T157 düzeltme turu" (g)). Her biri tek değişiklik, test koşturuldu, geri alındı.
+
+### Düzeltme turu testleri
+
+- Backend: `OutboundRowClosureTests` 69/69 (gerçek SQL Server, Testcontainers); tüm çözüm yeşil — API 878, Transactions 1690, Shared 592, Platform 235, Notifications 193, Auth 132, Fraud 101, Disputes 83, Steam 59, Users 49, Realtime 44, Admin 22, Payments 6 (entegrasyon dahil, Docker açık). `dotnet format --verify-no-changes` temiz. `has-pending-model-changes` temiz.
+- sidecar-ethereum: `npm test` 828/828, `tsc --noEmit` temiz, `eslint src` temiz, prettier (satır sonu yok sayılarak) temiz.
+- Frontend: vitest 391/391, `tsc --noEmit` temiz, `npm run lint` temiz, `i18n:check` 1578 anahtar × 4 dil eşit, prettier temiz.
+- Gerçek ağa işlem gönderilmedi.
+
+### Açık noktalar (yöneticiye)
+
+- **Elle yolun ayrıntısı benim önerim (⚠ PARA):** runbook §D 7.4'te `AMBIGUOUS_ROW_MATCH` / `ROW_TRANSFER_UNRESOLVED` için yazdığım yol — hangi satırın imzalandığını eski günlük yedeğinden ya da servis log'undan kanıtla; kanıt varsa yönetici kararı + iki kişi + audit notuyla veritabanında bağla; kanıt yoksa satırlar `PENDING` kalır ve o hesabın günlük onayı (alt adım 5) verilmez. Onayınız gerekir.
+- Eski açık sorular (ayrı izin, nonce aralığı, Ethereum sıcak cüzdan üst-limit izleyicisi) aynen duruyor.

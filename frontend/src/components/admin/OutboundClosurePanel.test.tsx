@@ -116,6 +116,71 @@ describe("OutboundClosurePanel — propose", () => {
   });
 });
 
+describe("OutboundClosurePanel — the token a row moves on chain (T157 düzeltme turu)", () => {
+  it("shows the token a wrong-token refund returns, not the one the transaction expected", async () => {
+    setup({
+      candidates: [candidate({ type: "WRONG_TOKEN_REFUND", token: "USDT", chainToken: "USDC" })],
+      closures: [closure({ rowType: "WRONG_TOKEN_REFUND", token: "USDT", chainToken: "USDC" })],
+    });
+
+    const propose = await screen.findByRole("button", { name: "Propose closure" });
+    const row = propose.closest("tr")!;
+    expect(within(row).getByText("42.5 USDC")).toBeInTheDocument();
+    expect(within(row).queryByText("42.5 USDT")).toBeNull();
+    expect(within(row).getByTestId("chain-token-note")).toHaveTextContent(
+      "The transaction expected USDT; this row moves USDC on chain",
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog", { name: "Approve closure" });
+    expect(within(dialog).getByText("42.5 USDC")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("chain-token-note")).toHaveTextContent("moves USDC");
+  });
+
+  it("says so when the token cannot be resolved, and shows no note when it is the expected one", async () => {
+    setup({
+      candidates: [
+        candidate({ type: "WRONG_TOKEN_REFUND", chainToken: null }),
+        candidate({ blockchainTransactionId: "row-2" }),
+      ],
+    });
+
+    await screen.findAllByRole("button", { name: "Propose closure" });
+    const notes = screen.getAllByTestId("chain-token-note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toHaveTextContent(/cannot be determined/i);
+    expect(screen.getByText("42.5 ?")).toBeInTheDocument();
+  });
+
+  it("maps AMBIGUOUS_ROW_MATCH and ROW_TRANSFER_UNRESOLVED to the manual path", async () => {
+    api.proposeOutboundClosure
+      .mockRejectedValueOnce(
+        new ApiError({ code: "AMBIGUOUS_ROW_MATCH", message: "raw", details: null }, "t", 409),
+      )
+      .mockRejectedValueOnce(
+        new ApiError({ code: "ROW_TRANSFER_UNRESOLVED", message: "raw", details: null }, "t", 422),
+      );
+    setup({ candidates: [candidate()] });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Propose closure" }));
+    const dialog = await screen.findByRole("dialog", { name: "Propose closure" });
+    fireEvent.change(within(dialog).getByLabelText("On-chain transaction hash"), {
+      target: { value: HASH_A },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "x".repeat(25) },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Propose closure" }));
+    expect(
+      await within(dialog).findByText(/same recipient, token and amount/i),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Propose closure" }));
+    expect(await within(dialog).findByText(/cannot be determined/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText("raw")).toBeNull();
+  });
+});
+
 describe("OutboundClosurePanel — approve", () => {
   it("never offers Approve on the current admin's own proposal", async () => {
     setup({

@@ -2177,7 +2177,9 @@
         "decidedBy": "Decided by {name} on {date}",
         "decisionNote": "Decision note",
         "ownProposal": "You proposed this closure. A different admin must approve it.",
-        "rowStatus": "Row status"
+        "rowStatus": "Row status",
+        "tokenDiffers": "The transaction expected {expected}; this row moves {actual} on chain (wrong-token refund).",
+        "tokenUnresolved": "The token this row moves on chain cannot be determined; the tool cannot close it."
       },
       "actions": {
         "approve": "Approve",
@@ -2236,6 +2238,8 @@
       "HASH_NOT_SUCCESSFUL": "That transaction did not succeed on-chain.",
       "HASH_NOT_FOUND": "That transaction hash was not found on-chain.",
       "HASH_DOES_NOT_MATCH_ROW": "This transaction does not pay this row (wrong recipient, wrong amount, wrong token or it failed on chain). It cannot close this row. Check the hash on the explorer or reject the proposal.",
+      "ROW_TRANSFER_UNRESOLVED": "What this row moves on chain cannot be determined (unknown token or no recorded sender). The tool cannot close it; follow the manual path in the runbook.",
+      "AMBIGUOUS_ROW_MATCH": "Another open row on this network has the same recipient, token and amount. A chain hash cannot tell which one it paid, so the tool refuses. Follow the manual path in the runbook.",
       "ROW_NOT_OPEN": "The row is no longer open.",
       "CLOSURE_NOT_OPEN": "The closure has already been decided.",
       "HASH_ALREADY_BOUND": "That hash is already bound to another row.",
@@ -2248,7 +2252,7 @@
       "INVALID_NETWORK": "The network is not valid.",
       "HOT_WALLET_NOT_CONFIGURED": "The hot wallet is not configured.",
       "COLD_WALLET_NOT_CONFIGURED": "The cold wallet is not configured.",
-      "SIDECAR_UNAVAILABLE": "The signing service is unavailable. Nothing was sent.",
+      "SIDECAR_UNAVAILABLE": "The signing service did not answer. The transfer may have been signed and sent. Before trying again, check the hot wallet's latest outgoing transaction on the explorer (Etherscan / Tronscan).",
       "NETWORK_UNAVAILABLE": "The network is unavailable. Nothing was sent.",
       "TRANSFER_DEFERRED": "The transfer was deferred (for example the fee is above the cap). Nothing was sent. Try again later."
     }

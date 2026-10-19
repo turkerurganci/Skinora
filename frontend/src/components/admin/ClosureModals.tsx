@@ -41,6 +41,33 @@ function ExplorerLink({ hash, label }: { hash: string; label: string }) {
   );
 }
 
+interface TokenedRow {
+  token: string;
+  chainToken: string | null;
+}
+
+/**
+ * The token a row moves on chain (T157 düzeltme turu) — for a wrong-token
+ * refund the token that arrived, not the one the transaction expected. "?"
+ * when it cannot be resolved (the backend then refuses the row).
+ */
+export function movedToken(row: TokenedRow): string {
+  return row.chainToken ?? "?";
+}
+
+/** Says so when the row moves another token than the transaction expected, or none resolves. */
+export function ChainTokenNote({ row }: { row: TokenedRow }) {
+  const tr = useTranslations("adminWallets.closures.row");
+  if (row.chainToken === row.token) return null;
+  return (
+    <p data-testid="chain-token-note" className="text-xs font-medium text-amber-800">
+      {row.chainToken === null
+        ? tr("tokenUnresolved")
+        : tr("tokenDiffers", { expected: row.token, actual: row.chainToken })}
+    </p>
+  );
+}
+
 // ── Propose ─────────────────────────────────────────────────────────────────
 
 export interface ProposeClosureModalProps {
@@ -96,10 +123,11 @@ function ProposeForm({
         {tp("row", {
           type: tDynamic(tt, candidate.type, candidate.type),
           amount: candidate.amount,
-          token: candidate.token,
+          token: movedToken(candidate),
           to: candidate.toAddress,
         })}
       </p>
+      <ChainTokenNote row={candidate} />
 
       <div className="flex flex-col gap-1 text-sm">
         <label htmlFor={`${uid}-hash`} className="font-medium text-gray-700">
@@ -218,8 +246,9 @@ function ApproveForm({ closure, onClose }: { closure: OutboundClosure; onClose: 
           <div>
             <dt className="text-xs text-gray-500">{tr("amount")}</dt>
             <dd className="font-semibold tabular-nums text-gray-900">
-              {closure.amount} {closure.token}
+              {closure.amount} {movedToken(closure)}
             </dd>
+            <ChainTokenNote row={closure} />
           </div>
           <div>
             <dt className="text-xs text-gray-500">{ta("hashProposed")}</dt>

@@ -2177,7 +2177,9 @@
         "decidedBy": "{name} 于 {date} 决定",
         "decisionNote": "决定备注",
         "ownProposal": "此关闭申请由您提议，必须由另一名管理员批准。",
-        "rowStatus": "记录状态"
+        "rowStatus": "记录状态",
+        "tokenDiffers": "该交易预期的代币是 {expected}；此记录在链上转移的是 {actual}（错误代币退款）。",
+        "tokenUnresolved": "无法确定此记录在链上转移的代币；该工具无法关闭它。"
       },
       "actions": {
         "approve": "批准",
@@ -2236,6 +2238,8 @@
       "HASH_NOT_SUCCESSFUL": "该交易在链上未成功。",
       "HASH_NOT_FOUND": "在链上未找到该交易哈希。",
       "HASH_DOES_NOT_MATCH_ROW": "此交易并未支付该记录（收款方、金额或代币错误，或在链上失败）。它无法关闭该记录。请在区块浏览器上检查哈希，或拒绝该提议。",
+      "ROW_TRANSFER_UNRESOLVED": "无法确定该记录在链上转移的内容（未知代币或没有记录的发送方）。该工具无法关闭它；请按运行手册中的手动流程处理。",
+      "AMBIGUOUS_ROW_MATCH": "该网络上还有另一条收款方、代币和金额都相同的未结记录。链上哈希无法说明它支付的是哪一条，因此该工具拒绝。请按运行手册中的手动流程处理。",
       "ROW_NOT_OPEN": "该记录已不再处于未关闭状态。",
       "CLOSURE_NOT_OPEN": "该关闭申请已被决定。",
       "HASH_ALREADY_BOUND": "该哈希已绑定到另一条记录。",
@@ -2248,7 +2252,7 @@
       "INVALID_NETWORK": "网络无效。",
       "HOT_WALLET_NOT_CONFIGURED": "热钱包未配置。",
       "COLD_WALLET_NOT_CONFIGURED": "冷钱包未配置。",
-      "SIDECAR_UNAVAILABLE": "签名服务不可用。未发送任何资金。",
+      "SIDECAR_UNAVAILABLE": "签名服务没有响应。该转账可能已被签名并发出。重试之前，请在区块浏览器（Etherscan / Tronscan）上检查热钱包最近的一笔转出。",
       "NETWORK_UNAVAILABLE": "网络不可用。未发送任何资金。",
       "TRANSFER_DEFERRED": "转账已被推迟（例如手续费高于上限）。未发送任何资金。请稍后再试。"
     }

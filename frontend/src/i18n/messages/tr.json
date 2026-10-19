@@ -2177,7 +2177,9 @@
         "decidedBy": "{name} tarafından {date} tarihinde karara bağlandı",
         "decisionNote": "Karar notu",
         "ownProposal": "Bu kapatmayı siz önerdiniz. Farklı bir yönetici onaylamalı.",
-        "rowStatus": "Satır durumu"
+        "rowStatus": "Satır durumu",
+        "tokenDiffers": "İşlemin beklediği token {expected}; bu satır zincirde {actual} taşır (yanlış token iadesi).",
+        "tokenUnresolved": "Bu satırın zincirde taşıdığı token belirlenemiyor; araç bu satırı kapatamaz."
       },
       "actions": {
         "approve": "Onayla",
@@ -2236,6 +2238,8 @@
       "HASH_NOT_SUCCESSFUL": "Bu işlem zincirde başarılı olmadı.",
       "HASH_NOT_FOUND": "Bu işlem hash'i zincirde bulunamadı.",
       "HASH_DOES_NOT_MATCH_ROW": "Bu işlem bu satırı ödemiyor (alıcı, tutar veya token yanlış ya da zincirde başarısız oldu). Bu satırı kapatamaz. Hash'i gezginde kontrol edin veya öneriyi reddedin.",
+      "ROW_TRANSFER_UNRESOLVED": "Bu satırın zincirde ne taşıdığı belirlenemiyor (bilinmeyen token ya da kayıtlı gönderen yok). Araç bu satırı kapatamaz; runbook'taki elle yolu izleyin.",
+      "AMBIGUOUS_ROW_MATCH": "Bu ağda aynı alıcıya, aynı token'la ve aynı tutarda açık başka bir satır var. Zincirdeki hash hangisini ödediğini söyleyemez, bu yüzden araç reddeder. Runbook'taki elle yolu izleyin.",
       "ROW_NOT_OPEN": "Satır artık açık değil.",
       "CLOSURE_NOT_OPEN": "Kapatma için zaten karar verilmiş.",
       "HASH_ALREADY_BOUND": "Bu hash başka bir satıra bağlı.",
@@ -2248,7 +2252,7 @@
       "INVALID_NETWORK": "Ağ geçerli değil.",
       "HOT_WALLET_NOT_CONFIGURED": "Sıcak cüzdan yapılandırılmamış.",
       "COLD_WALLET_NOT_CONFIGURED": "Soğuk cüzdan yapılandırılmamış.",
-      "SIDECAR_UNAVAILABLE": "İmzalama servisi kullanılamıyor. Hiçbir şey gönderilmedi.",
+      "SIDECAR_UNAVAILABLE": "İmzalama servisi cevap vermedi. Aktarım imzalanıp gönderilmiş olabilir. Yeniden denemeden önce sıcak cüzdanın son çıkışını gezginde (Etherscan / Tronscan) kontrol edin.",
       "NETWORK_UNAVAILABLE": "Ağ kullanılamıyor. Hiçbir şey gönderilmedi.",
       "TRANSFER_DEFERRED": "Transfer ertelendi (örneğin ücret üst sınırın üstünde). Hiçbir şey gönderilmedi. Daha sonra tekrar deneyin."
     }

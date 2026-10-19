@@ -268,4 +268,22 @@ describe("ColdTransferForm — confirmation before money moves", () => {
     expect(within(dialog).getByText(new RegExp(TRON_HOT))).toBeInTheDocument();
     expect(within(dialog).getByText(new RegExp(TRON_COLD))).toBeInTheDocument();
   });
+
+  it("SIDECAR_UNAVAILABLE: may have been sent, check the explorer (T157 düzeltme turu)", async () => {
+    // A timeout or an unreadable 200 reaches the screen as SIDECAR_UNAVAILABLE —
+    // the service may have signed and broadcast the transfer (07 §9.34).
+    api.hotToColdTransfer.mockRejectedValue(
+      new ApiError({ code: "SIDECAR_UNAVAILABLE", message: "raw", details: null }, "trace", 502),
+    );
+    await renderOverview();
+
+    fireEvent.change(eth().getByLabelText("Amount"), { target: { value: "10" } });
+    fireEvent.click(eth().getByRole("button", { name: "Review transfer" }));
+    const dialog = await screen.findByRole("dialog", { name: "Confirm hot → cold transfer" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send 10 USDT" }));
+
+    const message = await within(dialog).findByText(/may have been signed and sent/i);
+    expect(message).toHaveTextContent(/before trying again, check/i);
+    expect(within(dialog).queryByText(/nothing was sent/i)).toBeNull();
+  });
 });

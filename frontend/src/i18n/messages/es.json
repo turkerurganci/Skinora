@@ -2177,7 +2177,9 @@
         "decidedBy": "Decidido por {name} el {date}",
         "decisionNote": "Nota de decisión",
         "ownProposal": "Usted propuso este cierre. Debe aprobarlo otro administrador.",
-        "rowStatus": "Estado de la fila"
+        "rowStatus": "Estado de la fila",
+        "tokenDiffers": "La transacción esperaba {expected}; esta fila mueve {actual} en la cadena (reembolso de token incorrecto).",
+        "tokenUnresolved": "No se puede determinar el token que esta fila mueve en la cadena; la herramienta no puede cerrarla."
       },
       "actions": {
         "approve": "Aprobar",
@@ -2236,6 +2238,8 @@
       "HASH_NOT_SUCCESSFUL": "Esa transacción no tuvo éxito en la cadena.",
       "HASH_NOT_FOUND": "No se encontró ese hash de transacción en la cadena.",
       "HASH_DOES_NOT_MATCH_ROW": "Esta transacción no paga esta fila (destinatario, importe o token incorrectos, o falló en la cadena). No puede cerrar esta fila. Compruebe el hash en el explorador o rechace la propuesta.",
+      "ROW_TRANSFER_UNRESOLVED": "No se puede determinar qué mueve esta fila en la cadena (token desconocido o sin remitente registrado). La herramienta no puede cerrarla; siga el procedimiento manual del runbook.",
+      "AMBIGUOUS_ROW_MATCH": "Otra fila abierta en esta red tiene el mismo destinatario, token e importe. Un hash de la cadena no puede indicar cuál de ellas pagó, por lo que la herramienta lo rechaza. Siga el procedimiento manual del runbook.",
       "ROW_NOT_OPEN": "La fila ya no está abierta.",
       "CLOSURE_NOT_OPEN": "El cierre ya fue decidido.",
       "HASH_ALREADY_BOUND": "Ese hash ya está vinculado a otra fila.",
@@ -2248,7 +2252,7 @@
       "INVALID_NETWORK": "La red no es válida.",
       "HOT_WALLET_NOT_CONFIGURED": "La cartera caliente no está configurada.",
       "COLD_WALLET_NOT_CONFIGURED": "La cartera fría no está configurada.",
-      "SIDECAR_UNAVAILABLE": "El servicio de firma no está disponible. No se envió nada.",
+      "SIDECAR_UNAVAILABLE": "El servicio de firma no respondió. Es posible que la transferencia se haya firmado y enviado. Antes de reintentar, compruebe la última salida de la billetera caliente en el explorador (Etherscan / Tronscan).",
       "NETWORK_UNAVAILABLE": "La red no está disponible. No se envió nada.",
       "TRANSFER_DEFERRED": "La transferencia se aplazó (por ejemplo, la comisión supera el límite). No se envió nada. Inténtelo más tarde."
     }
