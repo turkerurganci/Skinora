@@ -179,9 +179,9 @@ Backend değişmedi (yeni bekleme sebepleri genel `deferred` yolundan geçiyor; 
 ## Commit & PR
 
 - Dal: `task/T159a-ethereum-gas-tarifesi` (`origin/main` `92154a6d`'den)
-- Kod commit'i: `1dba9f87`
-- PR: (aşağıda, PR açılınca)
-- CI: (aşağıda)
+- Kod commit'i: `1dba9f87`; belgeler `ab842186`; main birleştirmesi `202478f2` (T159 #355 sonrası; secret-guard yanlış pozitifi BYPASS_LOG'da, `d0e0ab22`)
+- PR: [#356](https://github.com/turkerurganci/Skinora/pull/356)
+- CI: `39201495741` ✓ success (HEAD `d0e0ab22`; Lint, Build, Unit, Integration, Contract, Migration dry-run, JS test, Docker build sidecar-ethereum yeşil). Bu satırı ekleyen commit için yeni koşu PR sayfasında.
 
 ## Known Limitations / Açık sorular
 
