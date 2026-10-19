@@ -73,6 +73,55 @@ public class AlwaysFailingTestEventHandler : INotificationHandler<AlwaysFailingT
         => throw new InvalidOperationException("intentional test failure");
 }
 
+/// <summary>T158 (b) — a fresh event; its handler writes to the shared dispatch-order log.</summary>
+public record OrderedFreshTestEvent(
+    Guid EventId,
+    DateTime OccurredAt) : IDomainEvent;
+
+/// <summary>T158 (b) — fails on its first delivery, succeeds (and logs its order) on the retry.</summary>
+public record FlakyOnceTestEvent(
+    Guid EventId,
+    DateTime OccurredAt) : IDomainEvent;
+
+public static class DispatchOrderLog
+{
+    public static readonly List<string> Entries = new();
+    public static readonly HashSet<Guid> FailedOnce = new();
+    public static readonly object Sync = new();
+
+    public static void Reset()
+    {
+        lock (Sync)
+        {
+            Entries.Clear();
+            FailedOnce.Clear();
+        }
+    }
+}
+
+public class OrderedFreshTestEventHandler : INotificationHandler<OrderedFreshTestEvent>
+{
+    public Task Handle(OrderedFreshTestEvent notification, CancellationToken cancellationToken)
+    {
+        lock (DispatchOrderLog.Sync) DispatchOrderLog.Entries.Add("fresh");
+        return Task.CompletedTask;
+    }
+}
+
+public class FlakyOnceTestEventHandler : INotificationHandler<FlakyOnceTestEvent>
+{
+    public Task Handle(FlakyOnceTestEvent notification, CancellationToken cancellationToken)
+    {
+        lock (DispatchOrderLog.Sync)
+        {
+            if (DispatchOrderLog.FailedOnce.Add(notification.EventId))
+                throw new InvalidOperationException("intentional first-delivery failure");
+            DispatchOrderLog.Entries.Add("retry");
+        }
+        return Task.CompletedTask;
+    }
+}
+
 #endregion
 
 #region Spy implementations
@@ -492,6 +541,31 @@ public class OutboxTests : IDisposable
 
         var rows = await AllOutboxAsync();
         Assert.All(rows, r => Assert.Equal(1, r.RetryCount));
+    }
+
+    [Fact]
+    public async Task T158b_Fresh_Events_Are_Dispatched_Before_Due_Retries_In_The_Same_Poll()
+    {
+        // T158 (b) — 11 §F8 T150 doğrulamasından: the dispatcher works the
+        // batch as "fresh first, then the due retries" (OutboxDispatcher,
+        // fresh.Concat(due)). A due.Concat(fresh) mutation kept every count the
+        // other tests look at; only the ORDER inside one poll shows it.
+        DispatchOrderLog.Reset();
+        try
+        {
+            await PublishAsync(new FlakyOnceTestEvent(Guid.NewGuid(), DateTime.UtcNow));
+            await RunDispatcherAsync(); // first delivery fails → FAILED with a backoff
+            _clock.Advance(OutboxDispatcher.RetryDelay(_options, 1)); // the retry is due
+
+            await PublishAsync(new OrderedFreshTestEvent(Guid.NewGuid(), DateTime.UtcNow));
+            await RunDispatcherAsync(); // one poll: the fresh row and the due retry
+
+            Assert.Equal(new[] { "fresh", "retry" }, DispatchOrderLog.Entries);
+        }
+        finally
+        {
+            DispatchOrderLog.Reset();
+        }
     }
 
     [Fact]

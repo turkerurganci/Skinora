@@ -91,7 +91,9 @@ public sealed class PostCancelMonitorStartDispatcher
             TransactionId: notification.TransactionId,
             ExpectedContract: notification.ExpectedContractAddress,
             ExpectedSymbol: notification.ExpectedToken.ToString(),
-            CancelledAt: notification.CancelledAt);
+            CancelledAt: notification.CancelledAt,
+            // T158 (h) — the persisted start block (Ethereum).
+            WatchFromBlock: notification.WatchFromBlock);
 
         var status = await sidecar.StartPostCancelMonitoringAsync(request, cancellationToken);
         switch (status)

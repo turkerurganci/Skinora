@@ -39,9 +39,11 @@ public sealed class BlockchainSidecarMonitorStartContractTests
             sentBody = await request.Content!.ReadAsStringAsync();
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
+        var http = new HttpClient(handler) { BaseAddress = new Uri(SidecarBaseUrl) };
         var client = new HttpBlockchainSidecarClient(
             Enum.Parse<BlockchainNetwork>(Text(expected, "network")),
-            new HttpClient(handler) { BaseAddress = new Uri(SidecarBaseUrl) },
+            http,
+            http,
             new BlockchainSidecarOptions { BaseUrl = SidecarBaseUrl },
             NullLogger<HttpBlockchainSidecarClient>.Instance);
 

@@ -336,6 +336,9 @@ public static class TransactionsModule
         services.AddScoped<ITransferRetryPolicy, SystemSettingsTransferRetryPolicy>();
         services.AddScoped<OutgoingTransferDispatchJob>();
         // T152 — per-network outbound queue gauges (outbound-transfer-stuck).
+        // T158 (a) — and the row-count threshold of outbound-transfer-backlog.
+        services.Configure<Skinora.API.Monitoring.OutboundQueueAlarmOptions>(
+            configuration.GetSection(Skinora.API.Monitoring.OutboundQueueAlarmOptions.SectionName));
         services.AddSingleton<IOutboundQueueObserver, Skinora.API.Monitoring.PrometheusOutboundQueueObserver>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
         services.AddScoped<SellerPayoutQueueJob>();
@@ -389,6 +392,8 @@ public static class TransactionsModule
         // sidecar batch-snapshot endpoint, the Hangfire recurring job, and
         // the registrar that reads the cron from SystemSettings at startup.
         services.AddScoped<IReconciliationService, ReconciliationService>();
+        // T158 (i) — per-network round outcome for the reconciliation-network-failed alarm.
+        services.AddSingleton<IReconciliationRunObserver, Skinora.API.Monitoring.PrometheusReconciliationRunObserver>();
         services.AddScoped<ReconciliationJob>();
         // WP14 — the registrar is also an ICronJobReconfigurer so an admin
         // change to reconciliation.schedule_cron re-registers the recurring job
@@ -426,9 +431,10 @@ public static class TransactionsModule
     }
 
     /// <summary>
-    /// T148 — the three named HTTP clients of one network's service, each with
-    /// its own budget (05 §3.3, #323): wallet / monitor calls are quick, an
-    /// estimate or status read is a chain read, a broadcast waits for blocks.
+    /// T148 — the named HTTP clients of one network's service, each with its
+    /// own budget (05 §3.3, #323): wallet / monitor calls are quick, an
+    /// estimate, status read or balance snapshot is a chain read, a broadcast
+    /// waits for blocks.
     /// TRON keeps the pre-F8 client names (<see cref="BlockchainHttpClientNames"/>).
     /// A network without a BaseUrl gets clients with no base address; the
     /// registry never hands them out (<see cref="UnconfiguredBlockchainService"/>).
@@ -454,6 +460,18 @@ public static class TransactionsModule
             SetBaseAddress(client, options);
             client.Timeout = TimeSpan.FromSeconds(
                 options.TimeoutSeconds <= 0 ? 10 : options.TimeoutSeconds);
+        });
+
+        services.AddHttpClient(BlockchainHttpClientNames.SidecarChainRead(network), (provider, client) =>
+        {
+            var options = ResolveOptions(provider);
+            SetBaseAddress(client, options);
+            // T158 doğrulaması (i) — the balance snapshot. On Ethereum one
+            // chunk is paced on the service through the RPC budget it shares
+            // with the payment scanner (≈ 16.5 s worst case for 10 addresses,
+            // HttpBlockchainSidecarClient.GetWalletBalancesAsync) — a chain
+            // read, not a 10-s wallet call.
+            client.Timeout = options.ResolveChainReadTimeout();
         });
 
         services.AddHttpClient(BlockchainHttpClientNames.GasFee(network), (provider, client) =>

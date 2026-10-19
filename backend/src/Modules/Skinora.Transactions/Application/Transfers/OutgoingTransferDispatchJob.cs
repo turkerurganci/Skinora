@@ -2,6 +2,7 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -93,6 +94,7 @@ public sealed class OutgoingTransferDispatchJob
     private readonly IStablecoinContractRegistry _contracts;
     private readonly IBlockchainNetworkSettingsProvider _networkSettings;
     private readonly IOutboundQueueObserver _queueObserver;
+    private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
@@ -105,6 +107,7 @@ public sealed class OutgoingTransferDispatchJob
         IStablecoinContractRegistry contracts,
         IBlockchainNetworkSettingsProvider networkSettings,
         IOutboundQueueObserver queueObserver,
+        IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
@@ -116,6 +119,7 @@ public sealed class OutgoingTransferDispatchJob
         _contracts = contracts;
         _networkSettings = networkSettings;
         _queueObserver = queueObserver;
+        _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
     }
@@ -262,12 +266,56 @@ public sealed class OutgoingTransferDispatchJob
             return false;
         }
 
+        // T158 (f) — a buyer refund on a network that signs hot-wallet refunds
+        // (Ethereum) leaves the hot wallet once the deposit was swept, and
+        // waits while the sweep is in flight (RefundSourceResolver; 08 §3.7.6
+        // "Kaynaklar"). Every other row keeps its deposit / hot-wallet sender.
+        var refundSource = RefundSource.Deposit;
+        if (row.Type is not (BlockchainTransactionType.SELLER_PAYOUT or BlockchainTransactionType.SWEEP))
+        {
+            refundSource = await RefundSourceResolver.ResolveAsync(
+                _db, row.Network, row.Type, row.TransactionId, cancellationToken);
+        }
+        if (refundSource == RefundSource.WaitForSweep)
+        {
+            // Nothing signed: the money may be leaving the deposit right now.
+            await HandleDeferredAsync(
+                row,
+                new TransferBroadcastResult(
+                    TransferBroadcastStatus.Deferred, null, "SWEEP_IN_FLIGHT",
+                    "The deposit's sweep is not final yet — the refund waits for it (confirmed → hot wallet, failed → deposit)."),
+                cancellationToken);
+            return false;
+        }
+
         // For refund/sweep flows the deposit address is the PaymentAddress
         // that owns the original BUYER_PAYMENT row. Resolve it via the
         // sibling row so we never derive the wrong index.
         int? depositIndex = null;
         string? depositAddress = null;
-        if (row.Type != BlockchainTransactionType.SELLER_PAYOUT)
+        if (refundSource == RefundSource.HotWallet)
+        {
+            var hotWallet = _walletAddresses.For(row.Network).HotWalletAddress;
+            if (string.IsNullOrWhiteSpace(hotWallet))
+            {
+                // Deployment configuration, not a payment outcome: the row
+                // waits (no retry spent, never FAILED) until the hot wallet
+                // address is configured again.
+                _logger.LogError(
+                    "Refund row {Id} ({Type}) on {Network} leaves the hot wallet (its deposit was swept) but the {Network} hot wallet address is unconfigured — the row waits.",
+                    row.Id, row.Type, row.Network, row.Network);
+                await HandleDeferredAsync(
+                    row,
+                    new TransferBroadcastResult(
+                        TransferBroadcastStatus.Deferred, null, "HOT_WALLET_NOT_CONFIGURED",
+                        "The refund leaves the hot wallet after the sweep, and the hot wallet address is unconfigured."),
+                    cancellationToken);
+                return false;
+            }
+            // The reconciliation counts the row as hot-wallet outflow (FromAddress).
+            row.FromAddress = BlockchainAddress.Canonicalize(hotWallet);
+        }
+        else if (row.Type != BlockchainTransactionType.SELLER_PAYOUT)
         {
             var sourcePayment = await _db.Set<BlockchainTransaction>()
                 .AsNoTracking()
@@ -350,7 +398,8 @@ public sealed class OutgoingTransferDispatchJob
             ToAddress: row.ToAddress,
             DepositIndex: depositIndex,
             DepositAddress: depositAddress,
-            FeeCapUsd: feeCapUsd);
+            FeeCapUsd: feeCapUsd,
+            FromHotWallet: refundSource == RefundSource.HotWallet);
 
         // Same-network rule (11 §F8 K3): the row's own network's service.
         var result = await _services.Transfers(row.Network).BroadcastAsync(request, cancellationToken);

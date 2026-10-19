@@ -68,7 +68,9 @@ public sealed class PaymentMonitorStartDispatcher
             // Published on ACCEPTED → SELLER_CONFIRMED: the payment is now
             // awaited. EnsurePaymentMonitorJob moves the address to Holding
             // once the payment is in (08 §3.4).
-            Cadence: PaymentMonitorCadence.Payment);
+            Cadence: PaymentMonitorCadence.Payment,
+            // T158 (h) — the persisted start block (Ethereum).
+            WatchFromBlock: notification.WatchFromBlock);
 
         // T148 — the deposit address's own network's service (05 §3.3a).
         var status = await _services.Sidecar(notification.Network)

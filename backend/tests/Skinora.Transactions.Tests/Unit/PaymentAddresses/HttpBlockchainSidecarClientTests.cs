@@ -435,7 +435,10 @@ public class HttpBlockchainSidecarClientTests
             InternalKey = internalKey,
             TimeoutSeconds = 5,
         };
-        return new HttpBlockchainSidecarClient(network, http, options, NullLogger<HttpBlockchainSidecarClient>.Instance);
+        // One client for both budgets: these tests pin the wire format; which
+        // budget each call runs under is pinned where the container builds the
+        // clients (BlockchainServiceRegistryWiringTests.T158i_*).
+        return new HttpBlockchainSidecarClient(network, http, http, options, NullLogger<HttpBlockchainSidecarClient>.Instance);
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

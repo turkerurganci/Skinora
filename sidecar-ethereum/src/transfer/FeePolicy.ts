@@ -64,6 +64,12 @@ export const CAP_REFERENCE_GAS = {
   PAYOUT: 64_031n,
   COLD: 64_031n,
   REFUND: 85_031n,
+  /**
+   * T158 (f) — a refund after the sweep leaves the HOT wallet (08 §3.7.6
+   * "Kaynaklar"): payout-shaped (first USDT to the buyer's address, 64,031),
+   * no fuel, so the transaction takes the whole cap.
+   */
+  HOT_REFUND: 64_031n,
 } as const;
 
 export type CappedFlow = keyof typeof CAP_REFERENCE_GAS;
@@ -77,6 +83,7 @@ export const CAP_TRANSFER_GAS: Readonly<Record<CappedFlow, bigint>> = {
   PAYOUT: CAP_REFERENCE_GAS.PAYOUT,
   COLD: CAP_REFERENCE_GAS.COLD,
   REFUND: CAP_REFERENCE_GAS.REFUND - FUEL_SEND_GAS,
+  HOT_REFUND: CAP_REFERENCE_GAS.HOT_REFUND,
 };
 
 /** Floor on the tip — 0.01 gwei; a keyless provider answered `eth_maxPriorityFeePerGas` with 0. */

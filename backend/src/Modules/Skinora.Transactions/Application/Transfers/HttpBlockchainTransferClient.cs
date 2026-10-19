@@ -49,6 +49,13 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
     /// </summary>
     public const string TransportFailureCode = "TRANSPORT_FAILURE";
 
+    /// <summary>
+    /// T158 (g) — the Ethereum service's <c>contractRet</c> for a mined hash
+    /// its journal does not hold whose Transfer log does not match the row
+    /// (<c>sidecar-ethereum/contracts/transfer-status/unknown.response.json</c>).
+    /// </summary>
+    public const string UnverifiedContractRet = "UNKNOWN";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly BlockchainNetworkPolicy _policy;
@@ -176,11 +183,27 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         }
     }
 
+    public Task<TransferStatusResult> GetStatusAsync(
+        string txHash,
+        CancellationToken cancellationToken) =>
+        GetStatusAsync(txHash, expected: null, cancellationToken);
+
     public async Task<TransferStatusResult> GetStatusAsync(
         string txHash,
+        TransferStatusExpectation? expected,
         CancellationToken cancellationToken)
     {
         var path = $"api/transfer/status/{Uri.EscapeDataString(txHash)}";
+        // T158 (g) — only for a network whose service verifies a hash its
+        // journal does not hold (Ethereum); TRON's request is unchanged.
+        if (expected is not null && _policy.VerifiesUnjournalledTransferStatus)
+        {
+            path += "?contract=" + Uri.EscapeDataString(expected.Contract)
+                + "&from=" + Uri.EscapeDataString(expected.FromAddress)
+                + "&to=" + Uri.EscapeDataString(expected.ToAddress)
+                + "&amount=" + Uri.EscapeDataString(
+                    expected.Amount.ToString("0.######", CultureInfo.InvariantCulture));
+        }
         using var httpRequest = new HttpRequestMessage(HttpMethod.Get, path);
         ApplyAuth(httpRequest);
 
@@ -244,9 +267,13 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             // (a block count alone never qualifies there — 11 §F8 K5).
             if (_policy.IsFinal(payload.Confirmations, payload.Finalized))
             {
+                // T158 (g) — UNKNOWN: final, but not provably this row's
+                // transfer. Neither a success nor a failure (fail closed).
                 var outcome = string.Equals(payload.ContractRet, "SUCCESS", StringComparison.OrdinalIgnoreCase)
                     ? TransferStatusOutcome.Confirmed
-                    : TransferStatusOutcome.Failed;
+                    : string.Equals(payload.ContractRet, UnverifiedContractRet, StringComparison.OrdinalIgnoreCase)
+                        ? TransferStatusOutcome.Unverified
+                        : TransferStatusOutcome.Failed;
                 var tronResources = _policy.ReportsTronResourceUsage;
                 return new TransferStatusResult(
                     outcome,
@@ -409,6 +436,18 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                     amountStr,
                     tokenStr,
                     feeCapStr)),
+            // T158 (f) — a refund after the sweep: the hot wallet signs, no deposit.
+            _ when request.FromHotWallet => (
+                "api/transfer/refund",
+                new HotWalletRefundBody(
+                    network,
+                    idStr,
+                    "HOT_WALLET",
+                    request.ToAddress,
+                    amountStr,
+                    tokenStr,
+                    request.Type.ToString(),
+                    feeCapStr)),
             _ => (
                 "api/transfer/refund",
                 new RefundBody(
@@ -441,6 +480,17 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("blockchainTransactionId")] string BlockchainTransactionId,
         [property: JsonPropertyName("depositIndex")] int DepositIndex,
         [property: JsonPropertyName("depositAddress")] string DepositAddress,
+        [property: JsonPropertyName("toBuyerAddress")] string ToBuyerAddress,
+        [property: JsonPropertyName("amount")] string Amount,
+        [property: JsonPropertyName("token")] string Token,
+        [property: JsonPropertyName("refundType")] string RefundType,
+        [property: JsonPropertyName("feeCapUsd"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeeCapUsd);
+
+    /// <summary>T158 (f) — <c>sidecar-ethereum/contracts/transfer-refund/hot-wallet.request.json</c>.</summary>
+    private sealed record HotWalletRefundBody(
+        [property: JsonPropertyName("network")] string Network,
+        [property: JsonPropertyName("blockchainTransactionId")] string BlockchainTransactionId,
+        [property: JsonPropertyName("source")] string Source,
         [property: JsonPropertyName("toBuyerAddress")] string ToBuyerAddress,
         [property: JsonPropertyName("amount")] string Amount,
         [property: JsonPropertyName("token")] string Token,

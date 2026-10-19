@@ -81,10 +81,11 @@ services:
       # T148 — Ethereum's own service, key, webhook secret, token contracts
       # and wallet pair (05 §3.3a: every network has its own). The service is
       # skinora-ethereum-sidecar below (T150, compose profile "ethereum").
-      # ETHEREUM_SIDECAR_BASE_URL stays EMPTY until that service is complete
-      # (T151–T154; the T150 skeleton only derives addresses): an empty
-      # EthereumSidecar BaseUrl makes every Ethereum call fail closed and
-      # leaves TRON untouched. Then: http://skinora-ethereum-sidecar:5300.
+      # T158 — the service is complete (T151–T154). ETHEREUM_SIDECAR_BASE_URL
+      # is still EMPTY by default: setting it (http://skinora-ethereum-sidecar:5300,
+      # together with --profile ethereum) OPENS Ethereum to new transactions,
+      # which is the launch decision of DEPLOY_RUNBOOK §J, not a default. Empty
+      # makes every Ethereum call fail closed and leaves TRON untouched.
       # The webhook secret MUST differ from TRON's (BLOCKCHAIN_WEBHOOK_SECRET).
       - EthereumSidecar__BaseUrl=${ETHEREUM_SIDECAR_BASE_URL:-}
       - EthereumSidecar__InternalKey=${ETHEREUM_SIDECAR_INTERNAL_KEY:-}
@@ -93,6 +94,9 @@ services:
       - EthereumStablecoinContracts__Usdc=${ETHEREUM_USDC_CONTRACT:-}
       - ETHEREUM_HOT_WALLET_ADDRESS=${ETHEREUM_HOT_WALLET_ADDRESS:-}
       - ETHEREUM_COLD_WALLET_ADDRESS=${ETHEREUM_COLD_WALLET_ADDRESS:-}
+      # T158 (a) — PENDING outbound rows per network above which the
+      # outbound-transfer-backlog alert fires (default 25, DEPLOY_RUNBOOK §J).
+      - OutboundQueueAlarm__PendingRowsThreshold=${OUTBOUND_PENDING_ROWS_ALARM_THRESHOLD:-25}
       # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
       # Default "logging" = fail-open, no outbound call to steamcommunity.com.
       - SteamMarket__Provider=${STEAM_MARKET_PROVIDER:-logging}

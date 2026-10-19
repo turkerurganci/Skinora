@@ -63,6 +63,21 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
             cancellationToken);
     }
 
+    public Task<ResolvedGasFee> ResolveHotWalletRefundFeeAsync(
+        BlockchainNetwork network,
+        string toAddress,
+        decimal amount,
+        StablecoinType token,
+        CancellationToken cancellationToken) =>
+        // No sender in the request = the service prices its hot wallet (05 §3.3a
+        // estimate-fee: "fromAddress absent = hot wallet").
+        ResolveAsync(
+            network,
+            new GasFeeEstimateRequest(FromAddress: null, toAddress, amount, token),
+            static s => s.RefundGasFeeFallbackUsdt,
+            "hot-wallet refund",
+            cancellationToken);
+
     public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
         BlockchainNetwork network,
         string toAddress,

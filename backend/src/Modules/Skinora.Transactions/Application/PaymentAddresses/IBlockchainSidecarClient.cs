@@ -174,7 +174,9 @@ public sealed record PaymentMonitorStartRequest(
     Guid TransactionId,
     string ExpectedContract,
     string ExpectedSymbol,
-    PaymentMonitorCadence Cadence);
+    PaymentMonitorCadence Cadence,
+    /// <summary>T158 (h) — <c>PaymentAddress.MonitorFromBlock</c>; null on TRON / pre-T158 rows (not sent).</summary>
+    long? WatchFromBlock = null);
 
 /// <summary>
 /// How often the sidecar polls one deposit address (T139-ActiveMonitorQuotaAlarm,
@@ -212,7 +214,9 @@ public sealed record PostCancelMonitorStartRequest(
     /// at the same state instead of recomputing from <c>cancelledAt</c>.
     /// </summary>
     string? InitialState = null,
-    DateTime? InitialStateExpiresAt = null);
+    DateTime? InitialStateExpiresAt = null,
+    /// <summary>T158 (h) — <c>PaymentAddress.MonitorFromBlock</c>; null on TRON / pre-T158 rows (not sent).</summary>
+    long? WatchFromBlock = null);
 
 /// <summary>
 /// Discriminated outcome — distinguishes a successful derivation (200) from
@@ -221,7 +225,13 @@ public sealed record PostCancelMonitorStartRequest(
 public sealed record BlockchainSidecarDeriveResult(
     BlockchainSidecarStatus Status,
     string? Address,
-    string? DerivationPath);
+    string? DerivationPath,
+    /// <summary>
+    /// T158 (h) — the block the service says the new deposit is watched from
+    /// (its last finalized head); always set on a successful Ethereum derive,
+    /// null on TRON.
+    /// </summary>
+    long? WatchFromBlock = null);
 
 public enum BlockchainSidecarStatus
 {

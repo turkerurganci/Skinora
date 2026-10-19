@@ -90,7 +90,7 @@ export function createApp(deps: AppDeps): Express {
   const api = Router();
   api.use(internalKeyAuth(deps.internalKey));
   api.use(networkGuard);
-  api.post('/wallet/derive', deriveAddressHandler(deps.wallet));
+  api.post('/wallet/derive', deriveAddressHandler(deps.wallet, deps.finality));
   // T157 — the service's own wallets (the fuel wallet's address is nowhere else).
   api.post(
     '/wallet/platform',

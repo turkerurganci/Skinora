@@ -678,6 +678,7 @@ public class OutboundRowClosureTests : IntegrationTestBase
                 new OutboxService(ctx),
                 StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
                 new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
+                new StubPlatformWalletAddressProvider(),
                 _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
             await dispatch.ExecuteAsync();
         }
@@ -687,8 +688,10 @@ public class OutboundRowClosureTests : IntegrationTestBase
         {
             var confirm = new OutgoingTransferConfirmationJob(
                 ctx, registry, AlwaysHealthyBlockchainNetworks.Instance,
-                new OutboxService(ctx), _clock,
-                NullLogger<OutgoingTransferConfirmationJob>.Instance);
+                new OutboxService(ctx),
+                StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
+                new StubPlatformWalletAddressProvider(),
+                _clock, NullLogger<OutgoingTransferConfirmationJob>.Instance);
             await confirm.ExecuteAsync();
         }
         var after = await ReloadRowAsync(row.Id);

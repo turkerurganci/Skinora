@@ -294,9 +294,11 @@ public sealed class EthereumSidecarAdminContractTests
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond)
     {
         const string baseUrl = "http://sidecar.test/";
+        var http = new HttpClient(new Handler(respond)) { BaseAddress = new Uri(baseUrl) };
         return new HttpBlockchainSidecarClient(
             network,
-            new HttpClient(new Handler(respond)) { BaseAddress = new Uri(baseUrl) },
+            http,
+            http,
             new BlockchainSidecarOptions { BaseUrl = baseUrl, InternalKey = "k" },
             NullLogger<HttpBlockchainSidecarClient>.Instance);
     }

@@ -2,7 +2,7 @@ import { SigningKey, Transaction, computeAddress } from 'ethers';
 import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { logger } from '../logger.js';
-import { fuelSendsTotal } from '../metrics.js';
+import { fuelSendsTotal, transferStatusUnverifiedTotal } from '../metrics.js';
 import {
   RpcError,
   isExecutionRevert,
@@ -132,10 +132,20 @@ export interface PayoutRequest {
   feeCapUsd: string;
 }
 
+/**
+ * T158 (f) — where a refund leaves from (08 §3.7.6 "Kaynaklar"): the deposit
+ * before the sweep, the HOT wallet after it (the deposit is empty then). The
+ * backend decides it from its sweep row; absent = `DEPOSIT` (the pre-T158 body).
+ */
+export type RefundSource = 'DEPOSIT' | 'HOT_WALLET';
+
 export interface RefundRequest {
   blockchainTransactionId: string;
-  depositIndex: number;
-  depositAddress: string;
+  /** T158 (f) — default `DEPOSIT`. */
+  source?: RefundSource;
+  /** Required for a `DEPOSIT` refund; must be absent (null) for a `HOT_WALLET` one. */
+  depositIndex: number | null;
+  depositAddress: string | null;
   toBuyerAddress: string;
   amount: string;
   token: TokenSymbol;
@@ -169,10 +179,32 @@ export interface SendResult {
   readonly replayed: boolean;
 }
 
+/**
+ * T158 (g) — what the backend's row says the transfer is, sent with every
+ * status read (`?contract=&from=&to=&amount=`). Used only for a hash this
+ * service's journal does not hold (a lost or restored journal): the receipt's
+ * `Transfer` log must then match it, or the answer is `UNKNOWN`.
+ */
+export interface TransferExpectation {
+  /** Canonical token contract (must be one of this service's). */
+  readonly contract: string;
+  /** Canonical sender (the deposit or the hot wallet). */
+  readonly from: string;
+  /** Canonical recipient. */
+  readonly to: string;
+  /** Raw token units (6 decimals). */
+  readonly amountUnits: bigint;
+}
+
 export interface TransferStatus {
   readonly txHash: string;
   readonly blockNumber: number | null;
-  /** `SUCCESS`, `REVERT`, `NO_TRANSFER_LOG`; null while not mined. */
+  /**
+   * `SUCCESS`, `REVERT`, `NO_TRANSFER_LOG`; `UNKNOWN` (T158 (g)) for a mined
+   * hash the journal does not hold whose `Transfer` log does not match the
+   * backend's expectation (or no expectation was sent) — fail closed: the
+   * backend never confirms it. Null while not mined.
+   */
   readonly contractRet: string | null;
   /** Blocks from the transaction's block to `finalized`; -1 while not mined. */
   readonly confirmations: number;
@@ -281,6 +313,8 @@ interface RequestIdentity {
   /** Canonical deposit (the sender of a deposit flow), null for hot-wallet flows. */
   readonly depositAddress: string | null;
   readonly refundType: RefundType | null;
+  /** T158 (f) — which key signs: a deposit refund and a hot-wallet refund are different requests. */
+  readonly signer: SignerRole;
 }
 
 /** An account whose chain nonce is ahead of what the journal knows (journal-behind-chain). */
@@ -377,6 +411,7 @@ export class TransferService {
       depositIndex: null,
       depositAddress: null,
       refundType: null,
+      signer: 'HOT',
     };
     return this.submit(`transfer:${request.blockchainTransactionId}`, identity, (id) => {
       const hot = this.requireHotWallet();
@@ -400,15 +435,26 @@ export class TransferService {
   }
 
   async refund(request: RefundRequest): Promise<SendResult> {
+    if ((request.source ?? 'DEPOSIT') === 'HOT_WALLET') return this.hotWalletRefund(request);
+    if (request.depositIndex === null || request.depositAddress === null) {
+      throw new SidecarError(
+        'A deposit refund needs depositIndex and depositAddress.',
+        'INVALID_TRANSFER_REQUEST',
+        false,
+      );
+    }
+    const depositIndex = request.depositIndex;
+    const depositAddress = request.depositAddress;
     const units = toTokenUnits(request.amount);
     const identity: RequestIdentity = {
       purpose: 'REFUND',
       token: request.token,
       recipient: canonicalAddress(request.toBuyerAddress),
       amountUnits: units,
-      depositIndex: request.depositIndex,
-      depositAddress: canonicalAddress(request.depositAddress),
+      depositIndex,
+      depositAddress: canonicalAddress(depositAddress),
       refundType: request.refundType,
+      signer: 'DEPOSIT',
     };
     return this.submit(`transfer:${request.blockchainTransactionId}`, identity, (id) => {
       const wrongToken = request.refundType === 'WRONG_TOKEN_REFUND';
@@ -420,19 +466,75 @@ export class TransferService {
         );
       }
       this.deps.guard.assertSingleTransferLimit(units);
-      const deposit = this.depositOf(request.depositIndex, request.depositAddress);
+      const deposit = this.depositOf(depositIndex, depositAddress);
       return {
         id,
         purpose: 'REFUND',
         refundType: request.refundType,
         signer: 'DEPOSIT',
-        depositIndex: request.depositIndex,
+        depositIndex,
         from: deposit,
         contract: this.contractOf(request.token),
         token: request.token,
         recipient: this.recipient(request.toBuyerAddress, deposit),
         amountUnits: units,
         capFlow: 'REFUND',
+        capUsdMicros: this.capOf(request.feeCapUsd),
+      };
+    });
+  }
+
+  /**
+   * T158 (f) — a refund after the sweep (08 §3.7.6 "Kaynaklar"): the deposit
+   * is empty, the money is in the hot wallet, so the hot key signs it —
+   * payout-shaped: USDT only (a wrong token is never swept, it is refunded
+   * from the deposit), the single-transfer cap, the hot wallet's daily cap
+   * (it is hot-wallet outflow), the whole fee cap (no fuel), the hot wallet's
+   * own ETH for gas. A different request than a deposit refund under the
+   * same id (`IDEMPOTENCY_CONFLICT`): the source is part of what was signed.
+   */
+  private async hotWalletRefund(request: RefundRequest): Promise<SendResult> {
+    if (request.depositIndex !== null || request.depositAddress !== null) {
+      throw new SidecarError(
+        'A HOT_WALLET refund names no deposit (depositIndex / depositAddress must be absent).',
+        'INVALID_TRANSFER_REQUEST',
+        false,
+      );
+    }
+    const units = toTokenUnits(request.amount);
+    const identity: RequestIdentity = {
+      purpose: 'REFUND',
+      token: request.token,
+      recipient: canonicalAddress(request.toBuyerAddress),
+      amountUnits: units,
+      depositIndex: null,
+      depositAddress: null,
+      refundType: request.refundType,
+      signer: 'HOT',
+    };
+    return this.submit(`transfer:${request.blockchainTransactionId}`, identity, (id) => {
+      const hot = this.requireHotWallet();
+      if (request.refundType === 'WRONG_TOKEN_REFUND') {
+        throw new SidecarError(
+          'A wrong token is never swept — its refund leaves the deposit, not the hot wallet (08 §3.7.6).',
+          'TOKEN_NOT_ALLOWED',
+          false,
+        );
+      }
+      this.requireToken(request.token, 'USDT', 'hot-wallet refund');
+      this.deps.guard.assertSingleTransferLimit(units);
+      return {
+        id,
+        purpose: 'REFUND',
+        refundType: request.refundType,
+        signer: 'HOT',
+        depositIndex: null,
+        from: hot,
+        contract: this.contractOf('USDT'),
+        token: 'USDT',
+        recipient: this.recipient(request.toBuyerAddress, hot),
+        amountUnits: units,
+        capFlow: 'HOT_REFUND',
         capUsdMicros: this.capOf(request.feeCapUsd),
       };
     });
@@ -448,6 +550,7 @@ export class TransferService {
       depositIndex: request.depositIndex,
       depositAddress: canonicalAddress(request.depositAddress),
       refundType: null,
+      signer: 'DEPOSIT',
     };
     return this.submit(`transfer:${request.blockchainTransactionId}`, identity, (id) => {
       this.requireToken(request.token, 'USDT', 'sweep');
@@ -480,6 +583,7 @@ export class TransferService {
       depositIndex: null,
       depositAddress: null,
       refundType: null,
+      signer: 'HOT',
     };
     return this.submit(`cold:${request.coldTransferId}`, identity, (id) => {
       const hot = this.requireHotWallet();
@@ -504,7 +608,10 @@ export class TransferService {
 
   // ---- Status (GET /api/transfer/status/:txHash) -----------------------------
 
-  async status(txHash: string): Promise<TransferStatus> {
+  async status(
+    txHash: string,
+    expected: TransferExpectation | null = null,
+  ): Promise<TransferStatus> {
     const record = this.deps.journal.findByHash(txHash);
     if (record?.conflict) {
       throw new SidecarError(
@@ -538,7 +645,9 @@ export class TransferService {
     return {
       txHash: receipt.transactionHash,
       blockNumber: Number(receipt.blockNumber),
-      contractRet: contractRetOf(record ?? null, receipt),
+      contractRet: record
+        ? contractRetOf(record, receipt)
+        : this.unjournalledContractRet(txHash, receipt, expected),
       confirmations: final && finalized !== null ? Number(finalized - receipt.blockNumber + 1n) : 0,
       finalized: final,
       realizedFeeWei:
@@ -546,6 +655,61 @@ export class TransferService {
           ? (receipt.gasUsed * receipt.effectiveGasPrice).toString()
           : null,
     };
+  }
+
+  /**
+   * T158 (g) — a mined hash the journal does not hold (lost or restored
+   * journal; 08 §3.7.6 "Kesinleşme"). Nothing this service knows says what
+   * it was meant to move, so status 1 alone is not a success: the receipt
+   * must carry the `Transfer` log the backend's row expects — from one of
+   * this service's token contracts, from the expected sender, to the expected
+   * recipient, for the exact amount, not removed. Otherwise `UNKNOWN`: the
+   * backend leaves the row unconfirmed (never CONFIRMED, never FAILED) and the
+   * `ethereum-transfer-status-unverified` alarm fires. A revert stays REVERT
+   * (the chain says the transfer did not happen).
+   */
+  private unjournalledContractRet(
+    txHash: string,
+    receipt: TransactionReceipt,
+    expected: TransferExpectation | null,
+  ): string {
+    if (receipt.status !== 1) return 'REVERT';
+    const known =
+      expected !== null &&
+      (sameAddress(expected.contract, this.deps.tokenContracts.USDT) ||
+        (this.deps.tokenContracts.USDC !== '' &&
+          sameAddress(expected.contract, this.deps.tokenContracts.USDC)));
+    const verified =
+      expected !== null &&
+      known &&
+      hasTransferLog(receipt, expected.contract, expected.from, expected.to, expected.amountUnits);
+    if (verified) {
+      logger.warn(
+        { txHash, from: expected.from, to: expected.to },
+        'Status of a hash the journal does not hold — its Transfer log matches the backend row; SUCCESS',
+      );
+      return 'SUCCESS';
+    }
+    const reason =
+      expected === null ? 'no_expectation' : known ? 'no_matching_log' : 'unknown_contract';
+    transferStatusUnverifiedTotal.inc({ reason });
+    logger.error(
+      {
+        txHash,
+        reason,
+        expected:
+          expected === null
+            ? null
+            : {
+                contract: expected.contract,
+                from: expected.from,
+                to: expected.to,
+                amountUnits: expected.amountUnits.toString(),
+              },
+      },
+      'UNVERIFIED TRANSFER — a mined hash the journal does not hold does not carry the Transfer the backend expects; UNKNOWN (the row is not confirmed; investigate, DEPLOY_RUNBOOK §J)',
+    );
+    return 'UNKNOWN';
   }
 
   // ---- Keeper (re-broadcast, fee bump, finality, conflicts) -------------------
@@ -723,7 +887,8 @@ export class TransferService {
     if (sameAddress(plan.contract, this.deps.tokenContracts.USDT)) {
       await assertUsdtSendable(rpc, plan.contract, plan.recipient, head.number);
     }
-    if (plan.purpose === 'PAYOUT') {
+    // Hot-wallet outflow: payouts and (T158 (f)) refunds after the sweep.
+    if (plan.purpose === 'PAYOUT' || (plan.purpose === 'REFUND' && plan.signer === 'HOT')) {
       await this.deps.guard.assertHotWalletDailyLimit(
         plan.amountUnits,
         head.number,
@@ -963,7 +1128,8 @@ export class TransferService {
       existing.amountUnits === identity.amountUnits.toString() &&
       existing.depositIndex === identity.depositIndex &&
       (identity.depositAddress === null || existing.from === identity.depositAddress) &&
-      existing.refundType === identity.refundType;
+      existing.refundType === identity.refundType &&
+      existing.signer === identity.signer;
     if (!same) {
       throw this.idempotencyConflict(
         id,
@@ -1708,17 +1874,38 @@ export class TransferService {
  * without moving anything) the money did not arrive: `NO_TRANSFER_LOG`, which
  * the backend records as `FAILED` — never `CONFIRMED`.
  */
-function contractRetOf(record: JournalRecord | null, receipt: TransactionReceipt): string {
+function contractRetOf(record: JournalRecord, receipt: TransactionReceipt): string {
   if (receipt.status !== 1) return 'REVERT';
-  if (record === null || record.contract === null) return 'SUCCESS';
-  const moved = receipt.logs.some(
-    (log) =>
-      !log.removed &&
-      sameAddress(log.address, record.contract) &&
-      log.topics[0]?.toLowerCase() === TRANSFER_TOPIC &&
-      log.topics[1]?.toLowerCase() === addressTopic(record.from) &&
-      log.topics[2]?.toLowerCase() === addressTopic(record.recipient) &&
-      BigInt(log.data === '0x' ? 0 : log.data) === BigInt(record.amountUnits),
-  );
-  return moved ? 'SUCCESS' : 'NO_TRANSFER_LOG';
+  if (record.contract === null) return 'SUCCESS';
+  return hasTransferLog(
+    receipt,
+    record.contract,
+    record.from,
+    record.recipient,
+    BigInt(record.amountUnits),
+  )
+    ? 'SUCCESS'
+    : 'NO_TRANSFER_LOG';
+}
+
+/** The receipt carries `Transfer(from, to, amount)` from `contract`, not removed. */
+function hasTransferLog(
+  receipt: TransactionReceipt,
+  contract: string,
+  from: string,
+  to: string,
+  amountUnits: bigint,
+): boolean {
+  return receipt.logs.some((log) => {
+    if (log.removed || !sameAddress(log.address, contract)) return false;
+    if (log.topics.length !== 3) return false;
+    if (log.topics[0]?.toLowerCase() !== TRANSFER_TOPIC) return false;
+    if (log.topics[1]?.toLowerCase() !== addressTopic(from)) return false;
+    if (log.topics[2]?.toLowerCase() !== addressTopic(to)) return false;
+    try {
+      return BigInt(log.data === '0x' ? 0 : log.data) === amountUnits;
+    } catch {
+      return false;
+    }
+  });
 }

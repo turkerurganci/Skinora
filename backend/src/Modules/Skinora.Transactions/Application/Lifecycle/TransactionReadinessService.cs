@@ -368,7 +368,8 @@ public sealed class TransactionReadinessService : ITransactionReadinessService
                     ExpectedContractAddress: _contracts
                         .ResolveContractAddress(paymentAddress.Network, paymentAddress.ExpectedToken),
                     OccurredAt: nowUtc,
-                    Network: paymentAddress.Network),
+                    Network: paymentAddress.Network,
+                    WatchFromBlock: paymentAddress.MonitorFromBlock),
                 cancellationToken);
         }
         else

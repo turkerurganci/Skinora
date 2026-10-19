@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { logger } from '../logger.js';
+import { webhookRejectedTotal } from '../metrics.js';
 import {
   WEBHOOK_ENDPOINTS,
   buildWebhookEnvelope,
@@ -23,12 +24,26 @@ export class WebhookDeliveryError extends Error {
   }
 
   /**
-   * 5xx, 408, 429 and transport failures (status 0) are retried by
+   * 5xx, 408, 429, 401 and transport failures (status 0) are retried by
    * re-scanning; any other 4xx is the backend refusing the payload for good
    * (e.g. 409 `WEBHOOK_NETWORK_MISMATCH`) — re-sending cannot change that.
+   *
+   * T158 (j): 401 is the backend refusing the SIGNATURE — the two sides hold
+   * different webhook secrets (a rotation done on one side, a typo). That is
+   * not about the payment and is fixed by the operator; treating it as final
+   * would drop every payment event sent until then, for good. The range is
+   * read again until the secrets agree; the monitor's scan-failure alarm
+   * (`ethereum-monitor-scan-failing`) and `skinora_ethereum_webhook_rejected_total{status="401"}`
+   * show it meanwhile.
    */
   get retryable(): boolean {
-    return this.status === 0 || this.status >= 500 || this.status === 408 || this.status === 429;
+    return (
+      this.status === 0 ||
+      this.status >= 500 ||
+      this.status === 401 ||
+      this.status === 408 ||
+      this.status === 429
+    );
   }
 }
 
@@ -83,7 +98,15 @@ export function createWebhookSender(deps: WebhookSenderDeps): SendWebhook {
       throw new WebhookDeliveryError(0, event);
     }
     if (!response.ok) {
-      logger.error({ event, status: response.status, correlationId }, 'Webhook callback failed');
+      webhookRejectedTotal.inc({ status: String(response.status) });
+      if (response.status === 401) {
+        logger.error(
+          { event, status: response.status, correlationId },
+          'WEBHOOK SIGNATURE REFUSED (401) — the backend does not accept the webhook secret of this service (WEBHOOK_SECRET vs ETHEREUM_WEBHOOK_SECRET); the event is kept and sent again until the secrets agree',
+        );
+      } else {
+        logger.error({ event, status: response.status, correlationId }, 'Webhook callback failed');
+      }
       throw new WebhookDeliveryError(response.status, event);
     }
     logger.info({ event, correlationId }, 'Webhook callback sent');

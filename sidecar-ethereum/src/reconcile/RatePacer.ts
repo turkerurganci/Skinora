@@ -12,6 +12,14 @@
  * T142 recorded it; a provider that bills per request (Chainstack) is slower
  * still, never faster.
  * </para>
+ *
+ * <para>
+ * <b>One call, one reservation</b> (T158 düzeltme turu). Callers acquire per
+ * RPC call, never a whole batch at once: a reservation is paid later by
+ * whoever acquires next, so a batch reserved in one piece (a 500-block scan
+ * range ≈ 6,000 CU ≈ 30 s) would make a concurrent balance request wait all of
+ * it. Per call, concurrent callers interleave and each gets a fair share.
+ * </para>
  */
 
 /** Alchemy compute units per method (T142_REPORT §1.4). */

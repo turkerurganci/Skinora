@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  monitorScanFailuresTotal,
+  rpcRequestDuration,
+  transferStatusUnverifiedTotal,
+  webhookRejectedTotal,
   finalizedBlockAgeSeconds,
   finalizedStallThresholdSeconds,
   journalAckAheadOfChain,
@@ -134,5 +138,38 @@ describe('T153 — ethereum-wallet-eth-low reads the series the service exports'
     expect(block).toContain('or vector(1)');
     expect(block).toMatch(/type: lt\s+params: \[1\]/);
     expect(block).toMatch(/severity: warning/);
+  });
+});
+
+describe('T158 — the new Ethereum alarms read the series the service exports', () => {
+  it('(k) ethereum-monitor-scan-failing counts the scan failures over 15 min, critical above 20', async () => {
+    const block = ruleBlock('ethereum-monitor-scan-failing');
+    expect(block).toContain(`sum(increase(${(await monitorScanFailuresTotal.get()).name}[15m]))`);
+    expect(block).toMatch(/type: gt\s+params: \[20\]/);
+    expect(block).toMatch(/severity: critical/);
+  });
+
+  it('(j) ethereum-webhook-signature-refused fires on any 401, critical, at once', async () => {
+    const block = ruleBlock('ethereum-webhook-signature-refused');
+    expect(block).toContain(`${(await webhookRejectedTotal.get()).name}{status="401"}`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/for: 0m/);
+    expect(block).toMatch(/severity: critical/);
+  });
+
+  it('(g) ethereum-transfer-status-unverified fires on any UNKNOWN answer, critical, at once', async () => {
+    const block = ruleBlock('ethereum-transfer-status-unverified');
+    expect(block).toContain(`increase(${(await transferStatusUnverifiedTotal.get()).name}[1h])`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/for: 0m/);
+    expect(block).toMatch(/severity: critical/);
+  });
+
+  it('RPC latency: p95 of the request histogram above 3 s for 15 min', async () => {
+    const block = ruleBlock('ethereum-rpc-latency-high');
+    const name = (await rpcRequestDuration.get()).name;
+    expect(block).toContain(`histogram_quantile(0.95, sum by (le) (rate(${name}_bucket[10m])))`);
+    expect(block).toMatch(/type: gt\s+params: \[3\]/);
+    expect(block).toMatch(/for: 15m/);
   });
 });
