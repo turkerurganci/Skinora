@@ -87,6 +87,13 @@ describe('derive', () => {
     expect(r.body.derivationPath).toBe("m/44'/60'/0'/0/7");
   });
 
+  it('T158 (h): Ethereum names the start block (watchFromBlock, decimal string); TRON does not', async () => {
+    const eth = await post('ETHEREUM', '/api/wallet/derive', { network: 'ETHEREUM', index: 3 });
+    expect(eth.body.watchFromBlock).toMatch(/^\d+$/);
+    const tron = await post('TRON', '/api/wallet/derive', { network: 'TRON', index: 3 });
+    expect(tron.body.watchFromBlock).toBeUndefined();
+  });
+
   it('TRON keeps its base58 address and coin type 195', async () => {
     const r = await post('TRON', '/api/wallet/derive', { network: 'TRON', index: 7 });
     expect(r.body.address).toBe(TRON.depositAddress(7));
@@ -135,6 +142,39 @@ describe('transfers', () => {
     });
     expect(r.status).toBe(400);
     expect(r.body.error).toBe('INVALID_ADDRESS');
+  });
+
+  it('T158 (f): an Ethereum refund after the sweep (source HOT_WALLET, no deposit) is accepted; deposit fields with it, or the source on TRON, are refused', async () => {
+    const hot = {
+      network: 'ETHEREUM',
+      blockchainTransactionId: 'hot-1',
+      source: 'HOT_WALLET',
+      toBuyerAddress: ETH_ADDR,
+      amount: '10',
+      token: 'USDT',
+    };
+    expect((await post('ETHEREUM', '/api/transfer/refund', hot)).status).toBe(200);
+    const withDeposit = await post('ETHEREUM', '/api/transfer/refund', {
+      ...hot,
+      depositAddress: ETHEREUM.depositAddress(1),
+    });
+    expect(withDeposit.status).toBe(400);
+    // T158 düzeltme turu (F02) — either deposit field, even null, like the real service.
+    for (const depositField of [
+      { depositIndex: 1 },
+      { depositIndex: null },
+      { depositAddress: null },
+    ]) {
+      const r = await post('ETHEREUM', '/api/transfer/refund', { ...hot, ...depositField });
+      expect(r.status).toBe(400);
+      expect(r.body.error).toBe('INVALID_TRANSFER_REQUEST');
+    }
+    const onTron = await post('TRON', '/api/transfer/refund', {
+      ...hot,
+      network: 'TRON',
+      toBuyerAddress: TRON.depositAddress(2),
+    });
+    expect(onTron.status).toBe(400);
   });
 
   it('TRON keeps the pre-T155 hash for the same transfer id', async () => {

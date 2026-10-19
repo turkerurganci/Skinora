@@ -47,6 +47,15 @@ public class PaymentAddressConfiguration : IEntityTypeConfiguration<PaymentAddre
         builder.Property(p => p.MonitoringStatus)
             .IsRequired();
 
+        // T158 (h) — the block the deposit is watched from (the network
+        // service's finalized head when it derived the address). NULL for a
+        // network that does not report one (TRON) and for rows that predate
+        // T158.
+        builder.Property(p => p.MonitorFromBlock);
+        builder.ToTable(t => t.HasCheckConstraint(
+            "CK_PaymentAddresses_MonitorFromBlock",
+            "[MonitorFromBlock] IS NULL OR [MonitorFromBlock] >= 0"));
+
         // --- ISoftDeletable ---
         builder.Property(p => p.IsDeleted)
             .IsRequired()

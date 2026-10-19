@@ -199,6 +199,31 @@ export const journalAckAheadOfChain = getOrCreateGauge({
   },
 });
 
+/**
+ * T158 (g) — status reads of a mined hash the journal does not hold whose
+ * receipt did not carry the Transfer the backend expects (`reason`:
+ * `no_expectation` | `no_matching_log` | `unknown_contract`). Answered
+ * `UNKNOWN`; the backend never confirms the row. Alert
+ * `ethereum-transfer-status-unverified` (critical).
+ */
+export const transferStatusUnverifiedTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_transfer_status_unverified_total',
+  help: 'Status reads of an unjournalled Ethereum transfer whose Transfer log did not match the expectation (answered UNKNOWN)',
+  labelNames: ['reason'] as const,
+});
+
+/**
+ * T158 (j) — webhook deliveries the backend refused, by HTTP status. A 401
+ * (signature / secret mismatch) is retried — the range is read again until
+ * the secrets agree, the event is never dropped; the scan-failure alarm
+ * (`ethereum-monitor-scan-failing`) sees it.
+ */
+export const webhookRejectedTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_webhook_rejected_total',
+  help: 'Webhook deliveries the backend answered with a non-2xx status, by status',
+  labelNames: ['status'] as const,
+});
+
 // ---- Platform wallet ETH (T153 — 08 §3.7.5) -------------------------------
 
 /**
@@ -257,6 +282,12 @@ export const monitorScannedBlock = getOrCreateGauge({
 export const monitorCatchUpDeposits = getOrCreateGauge({
   name: 'skinora_ethereum_monitor_catch_up_deposits',
   help: 'Ethereum deposits whose past blocks the monitor is still reading',
+});
+
+/** T158 düzeltme turu — deposits whose history lane (start block → live lane) is still being read in the background. */
+export const monitorHistoryDeposits = getOrCreateGauge({
+  name: 'skinora_ethereum_monitor_history_deposits',
+  help: 'Ethereum deposits whose history (from their start block to the live lane) is still being read',
 });
 
 /** Events delivered to the backend, by webhook event name. */

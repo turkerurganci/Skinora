@@ -1,0 +1,10 @@
+{
+  "network": "ETHEREUM",
+  "address": "0x9858effd232b4033e47d90003d41ec34ecaeda94",
+  "paymentAddressId": "aaaaaaaa-1111-2222-3333-444444444444",
+  "transactionId": "bbbbbbbb-1111-2222-3333-444444444444",
+  "expectedContract": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+  "expectedSymbol": "USDT",
+  "cadence": "HOLDING",
+  "watchFromBlock": "26214908"
+}

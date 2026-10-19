@@ -160,6 +160,9 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
                 ExpectedAmount = transaction.TotalAmount,
                 ExpectedToken = transaction.StablecoinType,
                 MonitoringStatus = MonitoringStatus.ACTIVE,
+                // T158 (h) — the service's finalized head at derive time
+                // (Ethereum; null on TRON): the block the deposit is watched from.
+                MonitorFromBlock = deriveResult.WatchFromBlock,
             };
             _db.Set<PaymentAddress>().Add(paymentAddress);
 

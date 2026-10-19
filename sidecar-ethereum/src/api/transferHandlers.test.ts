@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -15,6 +17,14 @@ import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
  * 409 are row-specific (the confirmation job keeps going), 502 is the network.
  */
 
+/** T158 — an example body both sides of the contract test against (sidecar-ethereum/contracts/). */
+function example(path: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(resolve(__dirname, '../../contracts', path), 'utf8')) as Record<
+    string,
+    unknown
+  >;
+}
+
 const KEY = 'i'.repeat(64);
 const ID = '00000000-0000-0000-0000-000000000001';
 const SELLER = '0x1111111111111111111111111111111111111111';
@@ -29,7 +39,10 @@ const fake = {
   refund: (request: unknown) => (calls.push({ method: 'refund', request }), next()),
   sweep: (request: unknown) => (calls.push({ method: 'sweep', request }), next()),
   coldWalletTransfer: (request: unknown) => (calls.push({ method: 'cold', request }), next()),
-  status: (hash: unknown) => (calls.push({ method: 'status', request: hash }), next()),
+  status: (hash: unknown, expected: unknown) => (
+    calls.push({ method: 'status', request: { hash, expected } }),
+    next()
+  ),
 } as unknown as TransferService;
 
 let server: Server;
@@ -178,6 +191,52 @@ describe('POST /api/transfer/refund, /sweep, /cold-wallet', () => {
     expect(calls.map((c) => c.method)).toEqual(['refund']);
   });
 
+  it('T158 (f): a HOT_WALLET refund body reaches the service with no deposit; deposit fields or an unknown source are 400', async () => {
+    const body = {
+      network: 'ETHEREUM',
+      blockchainTransactionId: ID,
+      source: 'HOT_WALLET',
+      toBuyerAddress: SELLER,
+      amount: '20.4',
+      token: 'USDT',
+      refundType: 'BUYER_REFUND',
+      feeCapUsd: '0.5',
+    };
+    expect((await post('/transfer/refund', body)).status).toBe(200);
+    expect(calls[0]).toEqual({
+      method: 'refund',
+      request: {
+        blockchainTransactionId: ID,
+        source: 'HOT_WALLET',
+        depositIndex: null,
+        depositAddress: null,
+        toBuyerAddress: SELLER,
+        amount: '20.4',
+        token: 'USDT',
+        refundType: 'BUYER_REFUND',
+        feeCapUsd: '0.5',
+      },
+    });
+    expect((await post('/transfer/refund', { ...body, depositIndex: 0 })).status).toBe(400);
+    expect((await post('/transfer/refund', { ...body, depositAddress: DEPOSIT })).status).toBe(400);
+    expect((await post('/transfer/refund', { ...body, source: 'COLD' })).status).toBe(400);
+    expect((await post('/transfer/refund', { ...body, feeCapUsd: undefined })).status).toBe(400);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('T158 (f): the hot-wallet refund body the backend sends (contracts/transfer-refund/hot-wallet.request.json) is accepted', async () => {
+    const sample = example('transfer-refund/hot-wallet.request.json');
+    expect((await post('/transfer/refund', sample)).status).toBe(200);
+    expect(calls[0].request).toMatchObject({
+      blockchainTransactionId: sample.blockchainTransactionId,
+      source: 'HOT_WALLET',
+      depositIndex: null,
+      depositAddress: null,
+      toBuyerAddress: sample.toBuyerAddress,
+      amount: sample.amount,
+    });
+  });
+
   it('sweep and cold-wallet need feeCapUsd', async () => {
     const sweep = {
       network: 'ETHEREUM',
@@ -257,6 +316,42 @@ describe('GET /api/transfer/status/:txHash', () => {
 
   it('a malformed hash is 400 without asking the service', async () => {
     expect((await get('0x1234')).status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  const USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
+  const query = (q: Record<string, string>) => `${HASH}?${new URLSearchParams(q).toString()}`;
+  const FULL = { contract: USDT, from: DEPOSIT, to: SELLER, amount: '20.4' };
+
+  it('T158 (g): the expectation (contract, from, to, amount) reaches the service canonical, in raw units', async () => {
+    next = () => Promise.resolve({ txHash: HASH, contractRet: 'SUCCESS', finalized: true });
+    expect((await get(query(FULL))).status).toBe(200);
+    expect(calls[0].request).toEqual({
+      hash: HASH,
+      expected: {
+        contract: USDT.toLowerCase(),
+        from: DEPOSIT.toLowerCase(),
+        to: SELLER,
+        amountUnits: 20_400_000n,
+      },
+    });
+  });
+
+  it('T158 (g): no query = no expectation (null)', async () => {
+    next = () => Promise.resolve({ txHash: HASH });
+    await get(HASH);
+    expect(calls[0].request).toEqual({ hash: HASH, expected: null });
+  });
+
+  it.each([
+    ['a partial set', { contract: USDT, from: DEPOSIT, to: SELLER }],
+    ['a TRON address', { ...FULL, to: 'TD5gsCwxykWsLN9aPrq2TAfNjByuZKYp4E' }],
+    ['a zero amount', { ...FULL, amount: '0' }],
+    ['seven decimals', { ...FULL, amount: '1.0000001' }],
+  ])('T158 (g): %s is 400 INVALID_STATUS_EXPECTATION without asking the service', async (_l, q) => {
+    const res = await get(query(q));
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('INVALID_STATUS_EXPECTATION');
     expect(calls).toHaveLength(0);
   });
 });

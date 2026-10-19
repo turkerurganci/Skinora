@@ -50,6 +50,20 @@ export interface Baseline {
 export interface ScanState {
   /** Highest block whose logs for this address are processed; null = not picked up yet. */
   scannedThrough: bigint | null;
+  /**
+   * The block after which this address is (being) read — its persisted start
+   * block, or the read-back floor for a deposit without one; null = not
+   * picked up yet. A later, EARLIER start block from the backend extends the
+   * read down to it (T158 düzeltme turu).
+   */
+  coveredFrom: bigint | null;
+  /**
+   * T158 düzeltme turu — the history lane: blocks [next, through] of this
+   * address still to be read in the background. The live lane
+   * ({@link scannedThrough}) starts at `through` and is read every tick, so a
+   * long history never delays a fresh payment. Null = nothing left.
+   */
+  history: { next: bigint; through: bigint } | null;
   /** A fresh deposit: its whole history is inside the scanned range (balance known to start at 0). */
   assumeEmptyStart: boolean;
   /** `${txHash}:${logIndex}` delivered to the backend. */
@@ -58,6 +72,17 @@ export interface ScanState {
   readonly flowKeys: Set<string>;
   flows: Flow[];
   baseline: Baseline | null;
+}
+
+/**
+ * Highest block up to which EVERY block since {@link ScanState.coveredFrom}
+ * has been read for this address — the live lane's progress once the history
+ * lane is done, the history lane's otherwise. The reconciliation compares
+ * only up to it (a zero baseline needs every flow since the start block).
+ */
+export function contiguousThrough(scan: ScanState): bigint | null {
+  if (scan.scannedThrough === null) return null;
+  return scan.history !== null ? scan.history.next - 1n : scan.scannedThrough;
 }
 
 export interface WatchEntry {
@@ -72,6 +97,15 @@ export interface WatchEntry {
   readonly correlationId: string;
   /** Epoch ms the entry was registered. */
   readonly armedAt: number;
+  /**
+   * T158 (h) — the block the backend persisted for this deposit
+   * (`PaymentAddress.MonitorFromBlock`: the finalized head when the address
+   * was derived). Nothing can have reached the address at or before it, so
+   * the deposit is read from the next block on with a zero balance baseline,
+   * however long the service was down. Null for a deposit allocated before
+   * T158 (the restart read-back rules apply).
+   */
+  watchFromBlock: bigint | null;
   cadence: MonitorCadence;
   /** Post-cancel only. */
   postCancel?: {
@@ -89,6 +123,8 @@ export interface ActiveStartOptions {
   expectedContract: string;
   expectedSymbol: StablecoinSymbol;
   cadence?: MonitorCadence;
+  /** T158 (h) — see {@link WatchEntry.watchFromBlock}. */
+  watchFromBlock?: bigint | null;
 }
 
 export interface PostCancelStartOptions extends Omit<ActiveStartOptions, 'cadence'> {
@@ -119,6 +155,8 @@ export interface DepositRegistryDeps {
 function newScanState(): ScanState {
   return {
     scannedThrough: null,
+    coveredFrom: null,
+    history: null,
     assumeEmptyStart: false,
     reported: new Set(),
     flowKeys: new Set(),
@@ -137,13 +175,19 @@ export class DepositRegistry {
     this.clock = deps.clock ?? (() => new Date());
   }
 
-  /** `POST /api/monitor/start`. Idempotent; a re-start only updates the cadence. */
+  /**
+   * `POST /api/monitor/start`. Idempotent; a re-start updates the cadence and
+   * — T158 düzeltme turu — an EARLIER start block (or the first one, when the
+   * entry was set up without it): the scanner then reads the address down to
+   * it. A later block never moves the start forward (that could skip blocks).
+   */
   startActive(options: ActiveStartOptions): { started: boolean; cadence: MonitorCadence } {
     const key = canonicalAddress(options.address);
     const cadence = options.cadence ?? 'PAYMENT';
     const existing = this.active.get(key);
     if (existing) {
       existing.cadence = cadence;
+      lowerStartBlock(existing, options.watchFromBlock);
       return { started: false, cadence };
     }
     const entry = this.newEntry('active', options, cadence, this.takeOver(key));
@@ -168,7 +212,10 @@ export class DepositRegistry {
   } {
     const key = canonicalAddress(options.address);
     const existing = this.postCancel.get(key);
-    if (existing?.postCancel) return { started: false, state: existing.postCancel.state };
+    if (existing?.postCancel) {
+      lowerStartBlock(existing, options.watchFromBlock);
+      return { started: false, state: existing.postCancel.state };
+    }
 
     const now = this.clock();
     const state = options.initialState ?? stateFromElapsed(now, options.cancelledAt);
@@ -286,6 +333,7 @@ export class DepositRegistry {
       expectedSymbol: options.expectedSymbol,
       correlationId: crypto.randomUUID(),
       armedAt: this.clock().getTime(),
+      watchFromBlock: options.watchFromBlock ?? null,
       cadence,
       scan: inherited ?? newScanState(),
     };
@@ -316,6 +364,21 @@ export class DepositRegistry {
     watchedDeposits.set({ kind: 'active' }, this.active.size);
     watchedDeposits.set({ kind: 'post_cancel' }, this.postCancel.size);
   }
+}
+
+/** Takes <c>block</c> as the entry's start block when it is the first one or earlier than the one held. */
+function lowerStartBlock(entry: WatchEntry, block: bigint | null | undefined): void {
+  if (block === null || block === undefined) return;
+  if (entry.watchFromBlock !== null && block >= entry.watchFromBlock) return;
+  logger.info(
+    {
+      address: entry.address,
+      previous: entry.watchFromBlock === null ? null : String(entry.watchFromBlock),
+      watchFromBlock: String(block),
+    },
+    'Ethereum monitor re-start carries an earlier start block — the address is read down to it',
+  );
+  entry.watchFromBlock = block;
 }
 
 function stateFromElapsed(now: Date, cancelledAt: Date): PostCancelMonitorState {

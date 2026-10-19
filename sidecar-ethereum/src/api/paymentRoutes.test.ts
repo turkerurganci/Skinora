@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -14,6 +16,14 @@ import type { TransferService } from '../transfer/TransferService.js';
  * T151 endpoints over HTTP: `/api/monitor/*`, `/api/wallet/balances` and the
  * `acceptsPayments` flag of `/health` (05 §3.3a, 11 §F8 T151 kod düzeyi kapı).
  */
+
+/** T158 — an example body both sides of the contract test against (sidecar-ethereum/contracts/). */
+function example(path: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(resolve(__dirname, '../../contracts', path), 'utf8')) as Record<
+    string,
+    unknown
+  >;
+}
 
 const KEY = 'i'.repeat(64);
 const USDT = '0xdac17f958d2ee523a2206206994597c13d831ec7';
@@ -140,6 +150,58 @@ describe('/api/monitor/* — the TRON contract, Ethereum rules', () => {
     const res = await post('/api/monitor/start', { ...START, ...patch });
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe(code);
+  });
+
+  it('T158 (h): start and post-cancel-start carry the persisted watchFromBlock (string or number) into the registry', async () => {
+    const a = '0x' + '2'.repeat(40);
+    const b = '0x' + '3'.repeat(40);
+    expect(
+      (await post('/api/monitor/start', { ...START, address: a, watchFromBlock: '20999000' }))
+        .status,
+    ).toBe(200);
+    expect(
+      (
+        await post('/api/monitor/post-cancel-start', {
+          ...START,
+          address: b,
+          cancelledAt: new Date().toISOString(),
+          watchFromBlock: 20_998_000,
+        })
+      ).status,
+    ).toBe(200);
+    const byKey = new Map(registry.entries().map((e) => [e.key, e.watchFromBlock]));
+    expect(byKey.get(a)).toBe(20_999_000n);
+    expect(byKey.get(b)).toBe(20_998_000n);
+    registry.stopActive(a);
+    registry.stopPostCancel(b);
+  });
+
+  it.each([['-1'], ['0x10'], ['1.5'], [''], [-3], [true]])(
+    'T158 (h): refuses a garbled watchFromBlock %s with 400 — following it could skip the payment',
+    async (value) => {
+      const res = await post('/api/monitor/start', {
+        ...START,
+        address: '0x' + '4'.repeat(40),
+        watchFromBlock: value,
+      });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: string }).error).toBe('INVALID_MONITOR_REQUEST');
+    },
+  );
+
+  it('T158 (h): the start body the backend sends (contracts/monitor/start.request.json) arms the deposit from its persisted block', async () => {
+    const sample = example('monitor/start.request.json');
+    registry.stopActive(sample.address as string); // an earlier test armed the same deposit
+    const res = await fetch(base + '/api/monitor/start', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-internal-key': KEY },
+      body: JSON.stringify(sample),
+    });
+    expect(res.status).toBe(200);
+    const entry = registry.entries().find((e) => e.key === sample.address);
+    expect(entry?.watchFromBlock).toBe(BigInt(sample.watchFromBlock as string));
+    expect(entry?.cadence).toBe(sample.cadence);
+    // Left armed: the next test stops this deposit.
   });
 
   it('stop answers 200 either way', async () => {

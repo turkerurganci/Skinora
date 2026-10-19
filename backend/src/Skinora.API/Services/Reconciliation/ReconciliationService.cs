@@ -126,6 +126,7 @@ public sealed class ReconciliationService : IReconciliationService
     private readonly IBlockchainServiceRegistry _services;
     private readonly INotificationRealtimePublisher _realtime;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
+    private readonly IReconciliationRunObserver _runObserver;
     private readonly TimeProvider _clock;
     private readonly ILogger<ReconciliationService> _logger;
 
@@ -134,6 +135,7 @@ public sealed class ReconciliationService : IReconciliationService
         IBlockchainServiceRegistry services,
         INotificationRealtimePublisher realtime,
         IPlatformWalletAddressProvider walletAddresses,
+        IReconciliationRunObserver runObserver,
         TimeProvider clock,
         ILogger<ReconciliationService> logger)
     {
@@ -141,6 +143,7 @@ public sealed class ReconciliationService : IReconciliationService
         _services = services;
         _realtime = realtime;
         _walletAddresses = walletAddresses;
+        _runObserver = runObserver;
         _clock = clock;
         _logger = logger;
     }
@@ -235,13 +238,18 @@ public sealed class ReconciliationService : IReconciliationService
             return new ReconciliationOutcome(0, false, false, 0, null);
         }
 
-        var snapshot = await _services.Sidecar(network).GetWalletBalancesAsync(addresses, cancellationToken);
+        var snapshot = await ReadBalancesAsync(network, addresses, cancellationToken);
         if (snapshot.Status != BlockchainSidecarStatus.Success || snapshot.Balances is null)
         {
-            _logger.LogWarning(
-                "Reconciliation of {Network} aborted: its service returned {Status}.", network, snapshot.Status);
+            // T158 (i) — not a mismatch, but the network's books went unchecked
+            // this round: the admin alarm (reconciliation-network-failed) sees it.
+            _logger.LogError(
+                "Reconciliation of {Network} aborted: its service returned {Status} — this round did not check the network's balances (admin alarm).",
+                network, snapshot.Status);
+            _runObserver.Report(network, succeeded: false);
             return new ReconciliationOutcome(0, false, false, 0, null);
         }
+        _runObserver.Report(network, succeeded: true);
 
         // Canonical comparer (06 §1.4, T145): the sidecar may echo an EVM
         // address in a different letter case than the one stored/configured.
@@ -304,6 +312,53 @@ public sealed class ReconciliationService : IReconciliationService
             coldChecked,
             totalMismatches,
             snapshot.BlockNumber);
+    }
+
+    /// <summary>
+    /// T158 (i) — the balance snapshot in chunks of the network's
+    /// <see cref="BlockchainNetworkPolicy.BalanceSnapshotChunkSize"/> (Ethereum
+    /// 10; TRON one request). The Ethereum service paces its reads through a
+    /// 200 CU/s pacer it shares with the payment scanner and its hourly
+    /// reconciliation, interleaved per call: an address is 3 calls (72 CU),
+    /// each waiting at most one scanner <c>eth_getLogs</c> (60 CU) and one
+    /// reconciliation call (≤ 26 CU), so 3 × (60 + 26) + 72 = 330 CU = 1.65 s
+    /// worst case per address — so 1 request for every deposit cannot finish
+    /// in any fixed budget. A 10-address chunk takes up to ≈ 16.5 s (12.5 s
+    /// measured with the scanner only), and each request runs under the 30-s
+    /// chain-read budget, not the 10-s wallet one
+    /// (<see cref="HttpBlockchainSidecarClient.GetWalletBalancesAsync"/>); the
+    /// T158 chunk of 20 (≈ 33 s worst case) ran on the 10-s client (T158
+    /// doğrulaması, bulgu (i)). Any failed chunk fails the round — a partial
+    /// snapshot would leave the missing addresses unchecked without saying so.
+    /// The block reported is
+    /// the lowest chunk's (each chunk is read at its own finalized head).
+    /// </summary>
+    private async Task<BlockchainSidecarBalancesResult> ReadBalancesAsync(
+        BlockchainNetwork network, IReadOnlyList<string> addresses, CancellationToken cancellationToken)
+    {
+        var chunkSize = BlockchainNetworkPolicy.For(network).BalanceSnapshotChunkSize;
+        var sidecar = _services.Sidecar(network);
+        if (chunkSize is not { } size || addresses.Count <= size)
+        {
+            return await sidecar.GetWalletBalancesAsync(addresses, cancellationToken);
+        }
+
+        var balances = new List<BlockchainSidecarAddressBalances>(addresses.Count);
+        long? block = null;
+        foreach (var chunk in addresses.Chunk(size))
+        {
+            var part = await sidecar.GetWalletBalancesAsync(chunk, cancellationToken);
+            if (part.Status != BlockchainSidecarStatus.Success || part.Balances is null)
+            {
+                _logger.LogWarning(
+                    "Reconciliation of {Network}: a balance chunk of {Count} address(es) returned {Status} — the round is abandoned.",
+                    network, chunk.Length, part.Status);
+                return new BlockchainSidecarBalancesResult(part.Status, null, null);
+            }
+            balances.AddRange(part.Balances);
+            if (part.BlockNumber is { } number && (block is null || number < block)) block = number;
+        }
+        return new BlockchainSidecarBalancesResult(BlockchainSidecarStatus.Success, block, balances);
     }
 
     private static string HotWalletKeyFor(BlockchainNetwork network) =>

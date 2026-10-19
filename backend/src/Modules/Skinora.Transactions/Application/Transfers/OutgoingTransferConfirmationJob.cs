@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Blockchain;
 using Skinora.Transactions.Application.Networks;
+using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Application.Transfers;
@@ -52,6 +54,8 @@ public sealed class OutgoingTransferConfirmationJob
     private readonly IBlockchainServiceRegistry _services;
     private readonly IBlockchainNetworkHealth _health;
     private readonly IOutboxService _outbox;
+    private readonly IStablecoinContractRegistry _contracts;
+    private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferConfirmationJob> _logger;
 
@@ -60,6 +64,8 @@ public sealed class OutgoingTransferConfirmationJob
         IBlockchainServiceRegistry services,
         IBlockchainNetworkHealth health,
         IOutboxService outbox,
+        IStablecoinContractRegistry contracts,
+        IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
         ILogger<OutgoingTransferConfirmationJob> logger)
     {
@@ -67,6 +73,8 @@ public sealed class OutgoingTransferConfirmationJob
         _services = services;
         _health = health;
         _outbox = outbox;
+        _contracts = contracts;
+        _walletAddresses = walletAddresses;
         _clock = clock;
         _logger = logger;
     }
@@ -144,7 +152,8 @@ public sealed class OutgoingTransferConfirmationJob
         // T148 — the row's own network's service answers, and the network's
         // policy (not a TRON constant) fills in what the answer left out.
         var policy = BlockchainNetworkPolicy.For(row.Network);
-        var status = await _services.Transfers(row.Network).GetStatusAsync(row.TxHash, cancellationToken);
+        var status = await _services.Transfers(row.Network)
+            .GetStatusAsync(row.TxHash, ExpectationFor(row, policy), cancellationToken);
         switch (status.Outcome)
         {
             case TransferStatusOutcome.Confirmed:
@@ -212,6 +221,22 @@ public sealed class OutgoingTransferConfirmationJob
                     row.Id, row.Type, row.TxHash, status.ContractRet);
                 return false;
 
+            case TransferStatusOutcome.Unverified:
+                // T158 (g) — final on chain but the service cannot tie it to
+                // this row (its journal does not hold the hash and the
+                // Transfer log does not match). Fail closed: never CONFIRMED
+                // (the money may not have reached the recipient), never
+                // FAILED (it may have — a FAILED row invites a re-send).
+                // The row stays DETECTED, visible with its reason; the
+                // service's ethereum-transfer-status-unverified alarm fires.
+                row.ErrorMessage = TruncateError(
+                    $"TRANSFER_UNVERIFIED: tx {row.TxHash} is final but its Transfer log does not match this row — not confirmed; investigate (DEPLOY_RUNBOOK §J).");
+                _logger.LogError(
+                    "Outbound transfer UNVERIFIED — row {Id} ({Type}) on {Network} tx {TxHash}: final on chain, but the service could not match its Transfer log to the row; left DETECTED (not confirmed, not failed)",
+                    row.Id, row.Type, row.Network, row.TxHash);
+                await StampAskedAsync(row, cancellationToken);
+                return false;
+
             case TransferStatusOutcome.Unavailable:
                 _logger.LogWarning(
                     "Outbound transfer status unavailable — row {Id} tx {TxHash}: {Message}",
@@ -231,6 +256,36 @@ public sealed class OutgoingTransferConfirmationJob
                 await StampAskedAsync(row, cancellationToken);
                 return false;
         }
+    }
+
+    /// <summary>
+    /// T158 (g) — what this row expects on chain, sent with the status read on
+    /// a network whose service verifies a hash its journal does not hold
+    /// (Ethereum). The contract is the row's token's (a wrong-token refund
+    /// moves the token that arrived); the sender is the row's
+    /// <c>FromAddress</c> (deposit, or the hot wallet for a post-sweep refund)
+    /// and, for a payout — which never records one — the network's hot wallet.
+    /// Null when something is unknown: the service then answers UNKNOWN for an
+    /// unjournalled hash (fail closed), a journalled one is unaffected.
+    /// </summary>
+    private TransferStatusExpectation? ExpectationFor(BlockchainTransaction row, BlockchainNetworkPolicy policy)
+    {
+        if (!policy.VerifiesUnjournalledTransferStatus) return null;
+
+        var contract = row.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND
+            ? row.ActualTokenAddress
+            : _contracts.ResolveContractAddress(row.Network, row.Token);
+        var from = !string.IsNullOrWhiteSpace(row.FromAddress)
+            ? row.FromAddress
+            : row.Type == BlockchainTransactionType.SELLER_PAYOUT
+                ? _walletAddresses.For(row.Network).HotWalletAddress
+                : null;
+        if (string.IsNullOrWhiteSpace(contract) || string.IsNullOrWhiteSpace(from)
+            || string.IsNullOrWhiteSpace(row.ToAddress))
+        {
+            return null;
+        }
+        return new TransferStatusExpectation(contract, from, row.ToAddress, row.Amount);
     }
 
     /// <summary>T152 — send the row to the back of its network's rotation.</summary>

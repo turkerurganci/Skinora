@@ -65,6 +65,63 @@ describe('loadConfig — refuses to start without what the service needs', () =>
     expect(config.hdMnemonic).toBe(MNEMONIC);
   });
 
+  // T158 (c) — the seed and the signing keys come from the mounted secret
+  // files only (K7, 05 §3.5). An env fallback (`docker inspect` shows env) is
+  // the mutation this pins: every plausible variable name carries a valid
+  // seed / key here, the files are absent, and nothing may be picked up.
+  const ENV_LOOKALIKES = (secret: string) =>
+    Object.fromEntries(
+      [
+        'ETHEREUM_HD_MNEMONIC',
+        'ETHEREUM_MNEMONIC',
+        'HD_WALLET_MNEMONIC',
+        'MNEMONIC',
+        'ETHEREUM_SEED',
+        'ETHEREUM_HOT_WALLET_PRIVATE_KEY',
+        'ETHEREUM_FUEL_WALLET_PRIVATE_KEY',
+        'HOT_WALLET_PRIVATE_KEY',
+        'FUEL_WALLET_PRIVATE_KEY',
+      ].map((name) => [name, secret]),
+    );
+
+  it('T158 (c): never reads the seed from the environment — only from the secret file', () => {
+    expect(
+      errorOf(() =>
+        loadConfig(
+          { ...baseEnv, ...ENV_LOOKALIKES(MNEMONIC) },
+          secrets({ [DEFAULT_SECRET_PATHS.hdMnemonic]: null }),
+        ),
+      ).code,
+    ).toBe('HD_WALLET_NOT_CONFIGURED');
+  });
+
+  it('T158 (c): never reads a signing key from the environment — without the files both keys are absent', () => {
+    const config = loadConfig({ ...baseEnv, ...ENV_LOOKALIKES(signer.privateKey) }, secrets());
+    expect(config.hotWalletKey).toBeNull();
+    expect(config.fuelWalletKey).toBeNull();
+  });
+
+  it('T158 (c): code level — the config reads no environment variable holding a seed or key, only *_FILE paths', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const source = readFileSync(resolve(__dirname, 'index.ts'), 'utf8');
+    const envNames = [...source.matchAll(/value\(env, '([A-Z0-9_]+)'\)/g)].map((m) => m[1]);
+    const direct = [...source.matchAll(/env\[['"]([A-Z0-9_]+)['"]\]|env\.([A-Z0-9_]+)/g)].map(
+      (m) => m[1] ?? m[2],
+    );
+    const riskyName = /MNEMONIC|SEED|PRIVATE_KEY/;
+    expect(envNames.filter((n) => riskyName.test(n) && !n.endsWith('_FILE'))).toEqual([]);
+    expect(direct.filter((n) => riskyName.test(n))).toEqual([]);
+    // The three *_FILE paths: read through the file reader, nothing else.
+    expect(envNames).toEqual(
+      expect.arrayContaining([
+        'ETHEREUM_HD_MNEMONIC_FILE',
+        'ETHEREUM_HOT_WALLET_PRIVATE_KEY_FILE',
+        'ETHEREUM_FUEL_WALLET_PRIVATE_KEY_FILE',
+      ]),
+    );
+  });
+
   it('without a primary RPC provider', () => {
     expect(
       errorOf(() => loadConfig({ ...baseEnv, ETHEREUM_RPC_PRIMARY_URL: '' }, secrets())).code,

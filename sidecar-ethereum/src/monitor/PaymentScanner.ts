@@ -1,6 +1,7 @@
 import { logger } from '../logger.js';
 import {
   monitorCatchUpDeposits,
+  monitorHistoryDeposits,
   monitorScanFailuresTotal,
   monitorScannedBlock,
   paymentEventsTotal,
@@ -19,7 +20,7 @@ import {
   type WrongTokenIncomingData,
 } from '../webhook/WebhookPayloads.js';
 import { WebhookDeliveryError, type SendWebhook } from '../webhook/WebhookClient.js';
-import type { DepositRegistry, WatchEntry } from './DepositRegistry.js';
+import type { DepositRegistry, ScanState, WatchEntry } from './DepositRegistry.js';
 import {
   TRANSFER_TOPIC,
   addressWord,
@@ -84,7 +85,55 @@ import {
  * A transfer older than the lookback is not reported by the log path; the
  * balance reconciliation is the second path for it (08 §3.7.8).
  * </para>
+ *
+ * <para>
+ * <b>T158 (h) — the persisted start block wins.</b> A deposit the backend
+ * arms with `watchFromBlock` (its `PaymentAddress.MonitorFromBlock`, the
+ * finalized head when the address was derived) is read from the block after
+ * it with a zero baseline, whatever the restart or the outage.
+ * </para>
+ *
+ * <para>
+ * <b>Two lanes (T158 düzeltme turu, yönetici kararı).</b> After a restart the
+ * backend re-arms every deposit from the block it was derived at — up to 30
+ * days back for a post-cancel deposit. Read oldest-first in one lane, that
+ * history held a fresh payment back until it was done (measured: ~1.8 h behind
+ * a 30-day deposit → payment timeout → wrong cancel). So each deposit's blocks
+ * are split:
+ * <list type="bullet">
+ *   <item><b>live lane</b> ({@link ScanState.scannedThrough}) — from the block
+ *     the pre-T158 rules above would start it at (the read-back floor of a
+ *     re-armed deposit; a fresh deposit's own start block), never earlier than
+ *     its start block. Read every tick with the normal catch-up budget (and
+ *     within {@link LIVE_TICK_SHARE} of the tick), the gaps that fit the
+ *     budget first: a fresh payment is reported as fast as before T158
+ *     however long the history behind it is;</item>
+ *   <item><b>history lane</b> ({@link ScanState.history}) — from the start
+ *     block up to where the live lane begins, read in the background with what
+ *     is left of the tick's block budget and only within the first
+ *     {@link HISTORY_TICK_SHARE} of the tick, so it never makes the next head
+ *     read wait.</item>
+ * </list>
+ * Both lanes deliver through the same `(txHash, logIndex)` set (no double
+ * report) and record the same flows; the zero baseline stays at the start
+ * block, and the reconciliation compares a deposit only once its history is
+ * read ({@link contiguousThrough}).
+ * </para>
  */
+
+/**
+ * Share of the tick interval the live lane's catch-up may run for: the tick
+ * then ends before the next one is due, so the head is read every tick (a
+ * catch-up that overran made the next head read wait, T158 düzeltme turu).
+ */
+export const LIVE_TICK_SHARE = 0.9;
+
+/**
+ * Share of the tick interval after which the history lane stops: whatever
+ * the live lane leaves of the first half. The other half of the rate budget
+ * stays free for the hourly reconciliation and the backend's balance requests.
+ */
+export const HISTORY_TICK_SHARE = 0.5;
 
 export interface PaymentScannerDeps {
   rpc: Pick<EthereumRpcClient, 'getLogs' | 'getBlockHeader'>;
@@ -149,6 +198,7 @@ export class PaymentScanner {
   async tick(): Promise<void> {
     if (this.scanning) return;
     this.scanning = true;
+    const startedAt = this.now();
     try {
       const head = this.deps.finality().snapshot;
       if (!head) return;
@@ -163,8 +213,17 @@ export class PaymentScanner {
         );
       }
       await this.pickUpNewEntries(finalized);
+      this.extendToEarlierStarts(finalized);
       if (finalized > this.cursor) await this.scanHead(finalized);
-      await this.catchUp(finalized);
+      const used = await this.catchUp(
+        finalized,
+        startedAt + this.deps.tickIntervalMs * LIVE_TICK_SHARE,
+      );
+      await this.readHistory(
+        finalized,
+        BigInt(this.deps.catchUpBlocksPerTick) - used,
+        startedAt + this.deps.tickIntervalMs * HISTORY_TICK_SHARE,
+      );
       await this.deps.registry.advancePostCancelStates((data, correlationId) =>
         this.deliver(BlockchainWebhookEvents.PostCancelMonitorStateChanged, data, correlationId),
       );
@@ -180,6 +239,7 @@ export class PaymentScanner {
     } finally {
       this.scanning = false;
       monitorCatchUpDeposits.set(this.behind().length);
+      monitorHistoryDeposits.set(this.withHistory().length);
     }
   }
 
@@ -191,6 +251,10 @@ export class PaymentScanner {
       .filter((e) => e.scan.scannedThrough !== null && e.scan.scannedThrough < cursor);
   }
 
+  private withHistory(): WatchEntry[] {
+    return this.deps.registry.entries().filter((e) => e.scan.history !== null);
+  }
+
   private async pickUpNewEntries(finalized: bigint): Promise<void> {
     const lookback = BigInt(this.deps.restartLookbackBlocks);
     const floor = (b: bigint) => (b > lookback ? b - lookback : 0n);
@@ -198,6 +262,33 @@ export class PaymentScanner {
       const scan = entry.scan;
       if (scan.scannedThrough !== null) continue;
       const rearmed = entry.armedAt - this.bootAt < this.deps.rearmWindowMs;
+      if (entry.watchFromBlock !== null) {
+        // T158 (h) — the backend persisted the finalized head of the moment
+        // the address was derived: nothing can have reached it at or before
+        // that block, so it is read from the next one on — however long this
+        // service was down, past any restart read-back — and its balance
+        // there is zero by construction (the reconciliation compares from it).
+        const start = entry.watchFromBlock < finalized ? entry.watchFromBlock : finalized;
+        // Two lanes: the live lane starts where the pre-T158 rules would
+        // (never before the start block); the rest is the history lane.
+        const near = floor(rearmed ? (this.bootBlock ?? finalized) : (this.cursor ?? finalized));
+        const live = start > near ? start : near;
+        scan.scannedThrough = live;
+        scan.coveredFrom = start;
+        scan.history = start < live ? { next: start + 1n, through: live } : null;
+        scan.assumeEmptyStart = true;
+        scan.baseline = { block: start, eth: 0n, tokens: this.zeroTokens() };
+        logger.info(
+          {
+            address: entry.address,
+            kind: entry.kind,
+            fromBlock: String(start + 1n),
+            liveFromBlock: String(live + 1n),
+          },
+          'Ethereum deposit picked up — read from the block the backend persisted',
+        );
+        continue;
+      }
       if (entry.kind === 'active' && entry.cadence === 'PAYMENT' && !rearmed) {
         // A fresh deposit: if nothing is on it at the finalized head, nothing
         // ever arrived (nothing leaves a deposit before something arrives).
@@ -215,6 +306,7 @@ export class PaymentScanner {
         }
         const start = empty ? finalized : floor(finalized);
         scan.scannedThrough = start;
+        scan.coveredFrom = start;
         scan.assumeEmptyStart = true;
         scan.baseline = { block: start, eth: 0n, tokens: this.zeroTokens() };
         logger.info(
@@ -226,6 +318,7 @@ export class PaymentScanner {
         // read it back; its first reconciliation reading is its baseline.
         const base = rearmed ? (this.bootBlock ?? finalized) : (this.cursor ?? finalized);
         scan.scannedThrough = floor(base);
+        scan.coveredFrom = scan.scannedThrough;
         scan.assumeEmptyStart = false;
         scan.baseline = null;
         logger.info(
@@ -233,6 +326,38 @@ export class PaymentScanner {
           'Ethereum deposit picked up — reading back its past blocks',
         );
       }
+    }
+  }
+
+  /**
+   * A re-start that brought an EARLIER start block than the one the address
+   * is read from (it was set up without one; DepositRegistry keeps the
+   * earliest): the history lane is extended down to it. The zero baseline
+   * moves with it unless a reconciliation reading already replaced it — a
+   * reading stays a valid baseline, and the flows before it are gone.
+   */
+  private extendToEarlierStarts(finalized: bigint): void {
+    for (const entry of this.deps.registry.entries()) {
+      const scan = entry.scan;
+      if (scan.scannedThrough === null || scan.coveredFrom === null) continue;
+      if (entry.watchFromBlock === null) continue;
+      const start = entry.watchFromBlock < finalized ? entry.watchFromBlock : finalized;
+      if (start >= scan.coveredFrom) continue;
+      const previous = scan.coveredFrom;
+      scan.history = { next: start + 1n, through: scan.history?.through ?? previous };
+      scan.coveredFrom = start;
+      if (scan.baseline === null || (scan.assumeEmptyStart && scan.baseline.block === previous)) {
+        scan.assumeEmptyStart = true;
+        scan.baseline = { block: start, eth: 0n, tokens: this.zeroTokens() };
+      }
+      logger.info(
+        {
+          address: entry.address,
+          fromBlock: String(start + 1n),
+          previousFromBlock: String(previous + 1n),
+        },
+        'Ethereum deposit start block moved earlier — its history is read down to it',
+      );
     }
   }
 
@@ -270,23 +395,91 @@ export class PaymentScanner {
     monitorScannedBlock.set(Number(block));
   }
 
-  private async catchUp(finalized: bigint): Promise<void> {
-    let budget = BigInt(this.deps.catchUpBlocksPerTick);
-    while (budget > 0n) {
+  /**
+   * The live lane's catch-up: deposits whose live progress is behind the
+   * cursor (at most the restart read-back). The gaps that fit the tick's
+   * remaining block budget go first — a fresh deposit's few blocks are never
+   * queued behind a re-armed deposit's day of read-back — then the rest
+   * oldest-first. Read in chunks of about a second of the rate budget and
+   * stopped at <c>deadline</c>, so the tick ends before the next one is due
+   * and the head is read every tick — one chunk always runs, so a slow head
+   * read cannot stall the catch-up for good. Returns the blocks spent.
+   */
+  private async catchUp(finalized: bigint, deadline: number): Promise<bigint> {
+    const total = BigInt(this.deps.catchUpBlocksPerTick);
+    const chunk = this.chunkBlocks(this.behind().length);
+    let budget = total;
+    let first = true;
+    while (budget > 0n && (first || this.now() < deadline)) {
+      first = false;
       const behind = this.behind();
-      if (behind.length === 0) return;
+      if (behind.length === 0) break;
       const cursor = this.cursor!;
+      const short = behind.filter((e) => cursor - e.scan.scannedThrough! <= budget);
+      const candidates = short.length > 0 ? short : behind;
       const from =
-        behind.reduce((m, e) => (e.scan.scannedThrough! < m ? e.scan.scannedThrough! : m), cursor) +
-        1n;
-      const to = from + budget - 1n < cursor ? from + budget - 1n : cursor;
-      const group = behind.filter((e) => e.scan.scannedThrough! < to);
+        candidates.reduce(
+          (m, e) => (e.scan.scannedThrough! < m ? e.scan.scannedThrough! : m),
+          cursor,
+        ) + 1n;
+      const step = budget < chunk ? budget : chunk;
+      const to = from + step - 1n < cursor ? from + step - 1n : cursor;
+      const group = candidates.filter((e) => e.scan.scannedThrough! < to);
       await this.scanRange(from, to, group, finalized);
       for (const e of group) {
         if (e.scan.scannedThrough! < to) e.scan.scannedThrough = to;
       }
       budget -= to - from + 1n;
     }
+    return total - budget;
+  }
+
+  /**
+   * The history lane: what lies between a deposit's start block and its live
+   * lane, oldest first, with what is left of the tick's block budget and only
+   * until <c>deadline</c> ({@link HISTORY_TICK_SHARE} of the tick) — the rest
+   * of the tick's rate budget stays free for the next head read, the hourly
+   * reconciliation and the backend's balance requests. When the live lane
+   * has nothing to catch up one chunk always runs, so slow head reads cannot
+   * stall the history for good.
+   */
+  private async readHistory(
+    finalized: bigint,
+    blocksLeft: bigint,
+    deadline: number,
+  ): Promise<void> {
+    const pending = this.withHistory();
+    if (pending.length === 0) return;
+    const chunk = this.chunkBlocks(pending.length);
+    let budget = blocksLeft;
+    let first = this.behind().length === 0;
+    while (budget > 0n && (first || this.now() < deadline)) {
+      first = false;
+      const open = this.withHistory();
+      if (open.length === 0) return;
+      const lead = open.reduce((m, e) => (e.scan.history!.next < m.scan.history!.next ? e : m));
+      const from = lead.scan.history!.next;
+      const end = lead.scan.history!.through;
+      const step = budget < chunk ? budget : chunk;
+      const to = from + step - 1n < end ? from + step - 1n : end;
+      const group = open.filter((e) => e.scan.history!.next <= to);
+      await this.scanRange(from, to, group, finalized);
+      for (const e of group) advanceHistory(e, to);
+      budget -= to - from + 1n;
+    }
+  }
+
+  /** Blocks whose two `eth_getLogs` queries cost about one second of the rate budget (at least one provider range). */
+  private chunkBlocks(addresses: number): bigint {
+    const queries = this.tokenContracts().length > 0 ? 2 : 1;
+    const costPerRange = Math.max(1, Math.ceil(addresses / 1000)) * queries * CU_COST.eth_getLogs;
+    const ranges = Math.max(1, Math.floor(this.deps.pacer.cuPerSecond / costPerRange));
+    const blocks = ranges * Math.max(1, this.deps.minProviderBlockRange);
+    return BigInt(Math.min(blocks, Number.MAX_SAFE_INTEGER));
+  }
+
+  private tokenContracts(): string[] {
+    return (['USDT', 'USDC'] as const).map((s) => this.deps.allowlist[s]).filter((c) => c !== '');
   }
 
   /** Reads [from, to] for <c>entries</c> and delivers what arrived. Throws to have the range read again. */
@@ -298,9 +491,7 @@ export class PaymentScanner {
   ): Promise<void> {
     const byKey = new Map(entries.map((e) => [e.key, e]));
     const recipients = [...byKey.keys()].map(addressWord);
-    const tokens = (['USDT', 'USDC'] as const)
-      .map((s) => this.deps.allowlist[s])
-      .filter((c) => c !== '');
+    const tokens = this.tokenContracts();
 
     await this.pace(from, to, recipients.length, tokens.length > 0 ? 2 : 1);
     const incoming = await this.incomingLogs(from, to, recipients, tokens);
@@ -527,14 +718,33 @@ export class PaymentScanner {
     paymentEventsTotal.inc({ event });
   }
 
-  /** Waits for the RPC budget the two `eth_getLogs` queries of a range will spend. */
+  /**
+   * Waits for the RPC budget the two `eth_getLogs` queries of a range will
+   * spend — one reservation per call (RatePacer "one call, one reservation"),
+   * so a concurrent balance request is not queued behind the whole range.
+   */
   private async pace(from: bigint, to: bigint, addresses: number, queries: number): Promise<void> {
     const blocks = Number(to - from + 1n);
     const calls =
       Math.ceil(blocks / Math.max(1, this.deps.minProviderBlockRange)) *
       Math.max(1, Math.ceil(addresses / 1000)) *
       queries;
-    await this.deps.pacer.acquire(calls * CU_COST.eth_getLogs);
+    for (let i = 0; i < calls; i++) await this.deps.pacer.acquire(CU_COST.eth_getLogs);
+  }
+}
+
+/** Marks the history lane read through <c>to</c>; done once it meets the live lane. */
+function advanceHistory(entry: WatchEntry, to: bigint): void {
+  const scan: ScanState = entry.scan;
+  const h = scan.history;
+  if (h === null) return;
+  if (h.next <= to) h.next = to + 1n;
+  if (h.next > h.through) {
+    scan.history = null;
+    logger.info(
+      { address: entry.address, through: String(h.through) },
+      'Ethereum deposit history read — the reconciliation compares it from its start block',
+    );
   }
 }
 

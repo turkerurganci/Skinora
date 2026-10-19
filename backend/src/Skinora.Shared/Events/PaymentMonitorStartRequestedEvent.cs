@@ -29,6 +29,9 @@ namespace Skinora.Shared.Events;
 /// <param name="Network">The deposit address's network (T148 — the dispatcher
 /// asks that network's service). Defaults to TRON so an outbox row written
 /// before the field existed still routes to the only network it could mean.</param>
+/// <param name="WatchFromBlock">T158 (h) — <c>PaymentAddress.MonitorFromBlock</c>
+/// (the block the deposit is watched from); null on TRON and for rows written
+/// before the field existed — the per-minute re-arm sends it anyway.</param>
 public record PaymentMonitorStartRequestedEvent(
     Guid EventId,
     Guid TransactionId,
@@ -37,4 +40,5 @@ public record PaymentMonitorStartRequestedEvent(
     StablecoinType ExpectedToken,
     string ExpectedContractAddress,
     DateTime OccurredAt,
-    BlockchainNetwork Network = BlockchainNetwork.TRON) : IDomainEvent;
+    BlockchainNetwork Network = BlockchainNetwork.TRON,
+    long? WatchFromBlock = null) : IDomainEvent;

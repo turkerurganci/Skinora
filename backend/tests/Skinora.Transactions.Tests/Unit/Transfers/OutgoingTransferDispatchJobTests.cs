@@ -1,3 +1,4 @@
+using Skinora.Platform.Application.Wallets;
 using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Data.Sqlite;
@@ -76,12 +77,14 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
             _settings,
             _observer,
+            _walletAddresses,
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
     }
 
     private readonly SeededNetworkSettings _settings = new();
     private readonly CapturingQueueObserver _observer = new();
+    private readonly StubWalletAddresses _walletAddresses = new();
 
     public void Dispose()
     {
@@ -746,6 +749,20 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Null(tron.Alarm);
     }
 
+    /// <summary>T158 (f) — the Ethereum hot wallet a post-sweep refund leaves from.</summary>
+    private sealed class StubWalletAddresses : IPlatformWalletAddressProvider
+    {
+        public string? HotWalletAddress { get; set; }
+        public string? ColdWalletAddress { get; set; }
+        public string? EthereumHotWalletAddress { get; set; }
+
+        public PlatformWalletAddresses For(BlockchainNetwork network) => network switch
+        {
+            BlockchainNetwork.TRON => new(network, HotWalletAddress, ColdWalletAddress),
+            _ => new(network, EthereumHotWalletAddress, null),
+        };
+    }
+
     private sealed class CapturingQueueObserver : IOutboundQueueObserver
     {
         public Dictionary<BlockchainNetwork, (int Rows, double Oldest, double? Alarm)> Last { get; } = new();
@@ -766,6 +783,192 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
                 : defaults);
         }
     }
+
+    // ---- T158 (f) — refund after the sweep leaves the hot wallet (08 §3.7.6 "Kaynaklar") ----
+
+    private const string EthereumHot = "0x7070707070707070707070707070707070707070";
+
+    /// <summary>An Ethereum refund row of <paramref name="type"/> whose transaction has a SWEEP row in <paramref name="sweepStatus"/> (null = no sweep).</summary>
+    private async Task<RefundFixture> SeedEthereumRefundAfterSweepAsync(
+        BlockchainTransactionType type, BlockchainTransactionStatus? sweepStatus)
+    {
+        var fixture = await SeedRefundAsync(type, amount: 99m);
+        fixture.RefundRow.Network = BlockchainNetwork.ETHEREUM;
+        fixture.PaymentAddress.Network = BlockchainNetwork.ETHEREUM;
+        if (sweepStatus is { } status)
+        {
+            _db.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = fixture.Transaction.Id,
+                PaymentAddressId = fixture.PaymentAddress.Id,
+                Network = BlockchainNetwork.ETHEREUM,
+                Type = BlockchainTransactionType.SWEEP,
+                TxHash = status == BlockchainTransactionStatus.PENDING ? null : "0xsweep" + Guid.NewGuid().ToString("N"),
+                FromAddress = fixture.PaymentAddress.Address,
+                ToAddress = EthereumHot,
+                Amount = 100m,
+                Token = StablecoinType.USDT,
+                Status = status,
+                BlockNumber = status == BlockchainTransactionStatus.CONFIRMED ? 26_215_000L : null,
+                ConfirmationCount = 0,
+                ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? _clock.GetUtcNow().UtcDateTime : null,
+                CreatedAt = _clock.GetUtcNow().UtcDateTime,
+            });
+        }
+        await _db.SaveChangesAsync();
+        return fixture;
+    }
+
+    [Fact]
+    public async Task T158f_Ethereum_BuyerRefund_After_A_Confirmed_Sweep_Leaves_The_Hot_Wallet()
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _walletAddresses.EthereumHotWalletAddress = EthereumHot.ToUpperInvariant().Replace("0X", "0x");
+        var fixture = await SeedEthereumRefundAfterSweepAsync(
+            BlockchainTransactionType.BUYER_REFUND, BlockchainTransactionStatus.CONFIRMED);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(ethereum.Calls);
+        Assert.True(call.FromHotWallet);
+        Assert.Null(call.DepositIndex);
+        Assert.Null(call.DepositAddress);
+        var row = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == fixture.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, row.Status);
+        // Canonical hot wallet: the reconciliation counts the row as hot-wallet outflow.
+        Assert.Equal(EthereumHot, row.FromAddress);
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.PENDING)]
+    [InlineData(BlockchainTransactionStatus.DETECTED)]
+    public async Task T158f_Ethereum_BuyerRefund_While_The_Sweep_Is_In_Flight_Waits_Nothing_Sent_No_Retry_Spent(
+        BlockchainTransactionStatus sweepStatus)
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _walletAddresses.EthereumHotWalletAddress = EthereumHot;
+        var fixture = await SeedEthereumRefundAfterSweepAsync(BlockchainTransactionType.BUYER_REFUND, sweepStatus);
+
+        await _sut.ExecuteAsync();
+
+        // (A PENDING sweep is itself dispatched in the same run; the refund is not.)
+        Assert.DoesNotContain(ethereum.Calls, c => c.BlockchainTransactionId == fixture.RefundRow.Id);
+        var row = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == fixture.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, row.Status);
+        Assert.Equal(0, row.RetryCount);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime.Add(OutgoingTransferDispatchJob.DeferredRetryDelay), row.NextAttemptAt);
+        Assert.StartsWith("SWEEP_IN_FLIGHT", row.ErrorMessage);
+        Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+    }
+
+    [Fact]
+    public async Task T158f_Ethereum_BuyerRefund_After_A_Failed_Sweep_Or_Without_One_Stays_On_The_Deposit()
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _walletAddresses.EthereumHotWalletAddress = EthereumHot;
+        var failed = await SeedEthereumRefundAfterSweepAsync(
+            BlockchainTransactionType.BUYER_REFUND, BlockchainTransactionStatus.FAILED);
+        var none = await SeedEthereumRefundAfterSweepAsync(BlockchainTransactionType.BUYER_REFUND, null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(2, ethereum.Calls.Count);
+        Assert.All(ethereum.Calls, c =>
+        {
+            Assert.False(c.FromHotWallet);
+            Assert.NotNull(c.DepositIndex);
+        });
+        Assert.Contains(ethereum.Calls, c => c.DepositAddress == failed.PaymentAddress.Address);
+        Assert.Contains(ethereum.Calls, c => c.DepositAddress == none.PaymentAddress.Address);
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionType.EXCESS_REFUND)]
+    [InlineData(BlockchainTransactionType.WRONG_TOKEN_REFUND)]
+    [InlineData(BlockchainTransactionType.LATE_PAYMENT_REFUND)]
+    public async Task T158f_Ethereum_Other_Refund_Types_Stay_On_The_Deposit_After_The_Sweep(
+        BlockchainTransactionType type)
+    {
+        // The sweep moves the escrowed total only; an excess, a wrong token or
+        // a late payment is still on the deposit after it.
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _walletAddresses.EthereumHotWalletAddress = EthereumHot;
+        var fixture = await SeedEthereumRefundAfterSweepAsync(type, BlockchainTransactionStatus.CONFIRMED);
+        if (type == BlockchainTransactionType.WRONG_TOKEN_REFUND)
+        {
+            fixture.RefundRow.ActualTokenAddress = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+            await _db.SaveChangesAsync();
+        }
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(ethereum.Calls);
+        Assert.False(call.FromHotWallet);
+        Assert.Equal(fixture.PaymentAddress.Address, call.DepositAddress);
+    }
+
+    [Fact]
+    public async Task T158f_Tron_BuyerRefund_After_A_Confirmed_Sweep_Is_Unchanged_Deposit_Sourced()
+    {
+        var fixture = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 99m);
+        _db.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = fixture.Transaction.Id,
+            PaymentAddressId = fixture.PaymentAddress.Id,
+            Type = BlockchainTransactionType.SWEEP,
+            TxHash = "tron-sweep-confirmed",
+            FromAddress = fixture.PaymentAddress.Address,
+            ToAddress = "THotWallet0000000000000000000000000",
+            Amount = 100m,
+            Token = StablecoinType.USDT,
+            Status = BlockchainTransactionStatus.CONFIRMED,
+            BlockNumber = 1_600_000L,
+            ConfirmationCount = 20,
+            ConfirmedAt = _clock.GetUtcNow().UtcDateTime,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        });
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_client.Calls);
+        Assert.False(call.FromHotWallet);
+        Assert.Equal(fixture.PaymentAddress.Address, call.DepositAddress);
+    }
+
+    [Fact]
+    public async Task T158f_Hot_Wallet_Refund_Without_A_Configured_Hot_Wallet_Waits_Never_Failed()
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _walletAddresses.EthereumHotWalletAddress = null;
+        var fixture = await SeedEthereumRefundAfterSweepAsync(
+            BlockchainTransactionType.BUYER_REFUND, BlockchainTransactionStatus.CONFIRMED);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(ethereum.Calls);
+        var row = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == fixture.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, row.Status);
+        Assert.Equal(0, row.RetryCount);
+        Assert.StartsWith("HOT_WALLET_NOT_CONFIGURED", row.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData(new[] { BlockchainTransactionStatus.CONFIRMED }, RefundSource.HotWallet)]
+    [InlineData(new[] { BlockchainTransactionStatus.PENDING }, RefundSource.WaitForSweep)]
+    [InlineData(new[] { BlockchainTransactionStatus.DETECTED }, RefundSource.WaitForSweep)]
+    [InlineData(new[] { BlockchainTransactionStatus.FAILED }, RefundSource.Deposit)]
+    [InlineData(new BlockchainTransactionStatus[0], RefundSource.Deposit)]
+    [InlineData(new[] { BlockchainTransactionStatus.FAILED, BlockchainTransactionStatus.CONFIRMED }, RefundSource.HotWallet)]
+    public void T158f_RefundSource_Rule(BlockchainTransactionStatus[] sweeps, RefundSource expected) =>
+        Assert.Equal(expected, RefundSourceResolver.Decide(sweeps));
 
     private async Task<SweepFixture> SeedSweepAsync(decimal amount, string hotWallet)
     {

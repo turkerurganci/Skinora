@@ -25,6 +25,8 @@ namespace Skinora.Shared.Events;
 /// <param name="Network">The deposit address's network (T148 — the dispatcher
 /// asks that network's service). Defaults to TRON so an outbox row written
 /// before the field existed still routes to the only network it could mean.</param>
+/// <param name="WatchFromBlock">T158 (h) — <c>PaymentAddress.MonitorFromBlock</c>;
+/// null on TRON and for rows written before the field existed.</param>
 public record PostCancelMonitorStartRequestedEvent(
     Guid EventId,
     Guid TransactionId,
@@ -34,4 +36,5 @@ public record PostCancelMonitorStartRequestedEvent(
     string ExpectedContractAddress,
     DateTime CancelledAt,
     DateTime OccurredAt,
-    BlockchainNetwork Network = BlockchainNetwork.TRON) : IDomainEvent;
+    BlockchainNetwork Network = BlockchainNetwork.TRON,
+    long? WatchFromBlock = null) : IDomainEvent;

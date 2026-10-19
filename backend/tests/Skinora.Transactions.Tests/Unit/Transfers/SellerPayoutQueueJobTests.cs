@@ -980,6 +980,11 @@ public sealed class SellerPayoutQueueJobTests : IDisposable
             StablecoinType token, CancellationToken cancellationToken) =>
             Task.FromResult(new ResolvedGasFee(RefundFee, Source));
 
+        public Task<ResolvedGasFee> ResolveHotWalletRefundFeeAsync(
+            BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new ResolvedGasFee(RefundFee, Source));
+
         public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
             BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
             CancellationToken cancellationToken)

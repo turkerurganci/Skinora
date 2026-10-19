@@ -112,7 +112,7 @@ export class TransferGuard {
   }
 
   /**
-   * Hot-wallet payouts: chain outflow of the last 7,200 blocks up to
+   * Hot-wallet payouts and (T158 (f)) refunds after the sweep: chain outflow of the last 7,200 blocks up to
    * <c>headNumber</c> + journal payouts the chain does not show yet + this
    * amount must stay within the daily cap.
    */
@@ -145,7 +145,11 @@ export class TransferGuard {
     const since = this.now() - OUTFLOW_WINDOW_MS;
     let sum = 0n;
     for (const record of journal) {
-      if (record.purpose !== 'PAYOUT' || record.createdAt < since) continue;
+      // Hot-wallet outflow signed but not yet seen on chain: payouts and
+      // (T158 (f)) refunds the hot key signed after a sweep.
+      const hotOutflow =
+        record.purpose === 'PAYOUT' || (record.purpose === 'REFUND' && record.signer === 'HOT');
+      if (!hotOutflow || record.createdAt < since) continue;
       if (record.conflict !== null) continue;
       if (record.mined?.status === 0) continue;
       if (record.attempts.some((a) => seen.has(a.hash.toLowerCase()))) continue;

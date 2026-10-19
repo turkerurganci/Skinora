@@ -321,7 +321,12 @@ public sealed class EnsurePaymentMonitorJob
                             TransactionId: candidate.Address.TransactionId,
                             ExpectedContract: contract,
                             ExpectedSymbol: candidate.Address.ExpectedToken.ToString(),
-                            Cadence: CadenceFor(candidate.Status)),
+                            Cadence: CadenceFor(candidate.Status),
+                            // T158 (h) — every re-arm carries the persisted
+                            // start block: a service that lost its memory
+                            // (restart, outage longer than its read-back)
+                            // reads the deposit from there.
+                            WatchFromBlock: candidate.Address.MonitorFromBlock),
                         cancellationToken);
 
                     if (startStatus == BlockchainSidecarStatus.Success)

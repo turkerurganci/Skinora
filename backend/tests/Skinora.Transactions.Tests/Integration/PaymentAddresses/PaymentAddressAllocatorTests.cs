@@ -319,6 +319,24 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task T158h_The_Start_Block_The_Service_Named_At_Derive_Is_Persisted()
+    {
+        var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        _sidecar.Responses.Enqueue(new BlockchainSidecarDeriveResult(
+            BlockchainSidecarStatus.Success,
+            StubBlockchainSidecarClient.DeterministicAddress(0),
+            "m/44'/195'/0'/0/0",
+            WatchFromBlock: 26_214_908L));
+
+        var result = await BuildSut().AllocateAsync(transaction.Id, CancellationToken.None);
+
+        Assert.Equal(PaymentAddressAllocationStatus.Created, result.Status);
+        await using var verify = CreateContext();
+        var row = await verify.Set<PaymentAddress>().SingleAsync(p => p.TransactionId == transaction.Id);
+        Assert.Equal(26_214_908L, row.MonitorFromBlock);
+    }
+
+    [Fact]
     public async Task Allocated_Row_Carries_The_Transaction_Network()
     {
         var transaction = await SeedTransactionAsync(TransactionStatus.ACCEPTED);

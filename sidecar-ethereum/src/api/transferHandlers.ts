@@ -8,8 +8,11 @@ import {
   type RefundType,
   type SendResult,
   type TokenSymbol,
+  type TransferExpectation,
   type TransferService,
 } from '../transfer/TransferService.js';
+import { canonicalAddress } from '../address/canonicalAddress.js';
+import { toTokenUnits } from '../transfer/units.js';
 
 /**
  * HTTP surface of the Ethereum sends (05 §3.3a "Uçlar" — same paths and
@@ -141,10 +144,57 @@ export function payoutHandler(service: TransferService) {
   };
 }
 
-/** POST /api/transfer/refund { network, blockchainTransactionId, depositIndex, depositAddress, toBuyerAddress, amount, token, refundType, feeCapUsd } */
+/**
+ * POST /api/transfer/refund { network, blockchainTransactionId, depositIndex, depositAddress, toBuyerAddress, amount, token, refundType, feeCapUsd }
+ *   or (T158 (f), after the sweep) { network, blockchainTransactionId, source: "HOT_WALLET", toBuyerAddress, amount, token, refundType, feeCapUsd }
+ *   — no deposit fields: the hot wallet signs.
+ */
 export function refundHandler(service: TransferService) {
   return async (req: Request, res: Response): Promise<void> => {
     const b = (req.body ?? {}) as Body;
+    if (b.source !== undefined && b.source !== 'DEPOSIT' && b.source !== 'HOT_WALLET') {
+      invalid(res, 'source, when sent, must be DEPOSIT or HOT_WALLET.');
+      return;
+    }
+    if (b.source === 'HOT_WALLET') {
+      const hid = guid(b, 'blockchainTransactionId');
+      const hto = address(b, 'toBuyerAddress');
+      const hamount = str(b, 'amount');
+      const htok = token(b);
+      const hrefundType = str(b, 'refundType');
+      const hcap = str(b, 'feeCapUsd');
+      if (
+        !hid ||
+        b.depositIndex !== undefined ||
+        b.depositAddress !== undefined ||
+        !hto ||
+        !hamount ||
+        !htok ||
+        !hrefundType ||
+        !hcap ||
+        !(REFUND_TYPES as readonly string[]).includes(hrefundType)
+      ) {
+        invalid(
+          res,
+          'A HOT_WALLET refund needs {blockchainTransactionId (GUID), toBuyerAddress, amount, token, refundType, feeCapUsd} and no depositIndex / depositAddress.',
+        );
+        return;
+      }
+      await respond(req, res, 'refund', () =>
+        service.refund({
+          blockchainTransactionId: hid,
+          source: 'HOT_WALLET',
+          depositIndex: null,
+          depositAddress: null,
+          toBuyerAddress: hto,
+          amount: hamount,
+          token: htok,
+          refundType: hrefundType as RefundType,
+          feeCapUsd: hcap,
+        }),
+      );
+      return;
+    }
     const id = guid(b, 'blockchainTransactionId');
     const depositIndex = index(b, 'depositIndex');
     const deposit = address(b, 'depositAddress');
@@ -246,7 +296,36 @@ export function coldWalletTransferHandler(service: TransferService) {
 }
 
 /**
- * GET /api/transfer/status/:txHash →
+ * T158 (g) — `?contract=&from=&to=&amount=`: the backend row's transfer. All
+ * four or none; a partial or malformed set is a bad request (the backend
+ * keeps the row unconfirmed and logs it). None = no expectation: a hash the
+ * journal does not hold then answers `UNKNOWN`.
+ */
+function expectationOf(query: Record<string, unknown>): TransferExpectation | null | 'invalid' {
+  const fields = ['contract', 'from', 'to', 'amount'] as const;
+  const present = fields.filter((f) => query[f] !== undefined);
+  if (present.length === 0) return null;
+  if (present.length !== fields.length) return 'invalid';
+  const values = fields.map((f) => query[f]);
+  if (values.some((v) => typeof v !== 'string')) return 'invalid';
+  const [contract, from, to, amount] = values as string[];
+  if ([contract, from, to].some((a) => checksummedEvmAddress(a) === null)) return 'invalid';
+  let amountUnits: bigint;
+  try {
+    amountUnits = toTokenUnits(amount);
+  } catch {
+    return 'invalid';
+  }
+  return {
+    contract: canonicalAddress(contract),
+    from: canonicalAddress(from),
+    to: canonicalAddress(to),
+    amountUnits,
+  };
+}
+
+/**
+ * GET /api/transfer/status/:txHash[?contract=&from=&to=&amount=] →
  *   200 `{ txHash, blockNumber, contractRet, confirmations, finalized, realizedFeeWei }` —
  *       `txHash` is the attempt that is in a block (a fee bump changes it); `realizedFeeWei`
  *       (gasUsed × effectiveGasPrice) once final, else null;
@@ -263,8 +342,17 @@ export function transferStatusHandler(service: TransferService) {
         .json({ error: 'INVALID_TX_HASH', message: 'Path parameter :txHash must be 0x + 64 hex.' });
       return;
     }
+    const expected = expectationOf(req.query as Record<string, unknown>);
+    if (expected === 'invalid') {
+      res.status(400).json({
+        error: 'INVALID_STATUS_EXPECTATION',
+        message:
+          'Query {contract, from, to (0x addresses), amount (positive, at most 6 decimals)} must be sent together and well formed.',
+      });
+      return;
+    }
     try {
-      res.status(200).json(await service.status(hash));
+      res.status(200).json(await service.status(hash, expected));
     } catch (err) {
       if (err instanceof SidecarError) {
         const status =

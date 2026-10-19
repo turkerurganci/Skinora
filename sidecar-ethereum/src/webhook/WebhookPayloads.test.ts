@@ -102,6 +102,9 @@ describe('createWebhookSender — signed with this service’s own secret (05 §
     [503, true],
     [429, true],
     [0, true],
+    // T158 (j): a refused signature (secret mismatch) is not about the payment — kept and resent.
+    [401, true],
+    [403, false],
     [409, false],
     [400, false],
   ])('HTTP %i → retryable %s', (status, retryable) => {

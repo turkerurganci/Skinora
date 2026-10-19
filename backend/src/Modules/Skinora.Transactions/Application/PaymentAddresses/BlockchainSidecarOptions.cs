@@ -97,7 +97,8 @@ public sealed class BlockchainSidecarOptions
 
     /// <summary>
     /// Budget for a call that only reads the chain through the sidecar
-    /// (transfer status, gas fee estimate): three times
+    /// (transfer status, gas fee estimate, balance snapshot — T158
+    /// doğrulaması (i)): three times
     /// <see cref="TimeoutSeconds"/>, 30 s when that is unset. Kept apart from
     /// <see cref="ResolveTransferTimeout"/> so a stuck status read cannot hold
     /// the confirmation job for a broadcast's budget.

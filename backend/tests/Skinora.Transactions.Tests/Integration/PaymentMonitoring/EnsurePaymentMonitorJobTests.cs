@@ -105,6 +105,23 @@ public class EnsurePaymentMonitorJobTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task T158h_Every_Arm_Carries_The_Persisted_Start_Block_And_None_When_The_Row_Has_None()
+    {
+        // T158 (h) — a service that lost its memory (restart, an outage longer
+        // than its read-back) reads the deposit from the persisted block on the
+        // next re-arm; a pre-T158 / TRON row sends none (body unchanged).
+        var (_, withBlock) = await SeedAddressAsync(TransactionStatus.PAYMENT_RECEIVED, MonitoringStatus.ACTIVE);
+        withBlock.MonitorFromBlock = 26_214_908L;
+        await SeedAddressAsync(TransactionStatus.SELLER_CONFIRMED, MonitoringStatus.ACTIVE);
+        await Context.SaveChangesAsync();
+
+        await BuildSut().ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(26_214_908L, _sidecar.MonitorStartCalls.Single(c => c.Address == withBlock.Address).WatchFromBlock);
+        Assert.Null(_sidecar.MonitorStartCalls.Single(c => c.Address != withBlock.Address).WatchFromBlock);
+    }
+
+    [Fact]
     public async Task Arming_Is_Repeated_Every_Run_So_A_Sidecar_Restart_Self_Heals()
     {
         // The sidecar registry is in-memory and no backend hook observes a

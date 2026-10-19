@@ -31,7 +31,33 @@ public interface IBlockchainTransferClient
     Task<TransferStatusResult> GetStatusAsync(
         string txHash,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T158 (g) — the status read with what the row says the transfer is
+    /// (<see cref="TransferStatusExpectation"/>). On a network whose service
+    /// verifies a hash its journal does not hold (Ethereum,
+    /// <c>BlockchainNetworkPolicy.VerifiesUnjournalledTransferStatus</c>) the
+    /// expectation travels with the request; the service answers
+    /// <c>UNKNOWN</c> (<see cref="TransferStatusOutcome.Unverified"/>) when the
+    /// receipt's Transfer log does not match it. Other implementations ignore it.
+    /// </summary>
+    Task<TransferStatusResult> GetStatusAsync(
+        string txHash,
+        TransferStatusExpectation? expected,
+        CancellationToken cancellationToken) =>
+        GetStatusAsync(txHash, cancellationToken);
 }
+
+/// <summary>
+/// T158 (g) — the transfer a row expects on chain: the token contract, the
+/// sender (deposit or hot wallet), the recipient and the exact amount
+/// (08 §3.7.6 "Kesinleşme").
+/// </summary>
+public sealed record TransferStatusExpectation(
+    string Contract,
+    string FromAddress,
+    string ToAddress,
+    decimal Amount);
 
 /// <param name="FeeCapUsd">
 /// T152 — the fee cap of the row's network in USD
@@ -43,6 +69,11 @@ public interface IBlockchainTransferClient
 /// transaction — yönetici kararı, T152 doğrulaması) and refuses to sign above
 /// it (the send waits: <see cref="TransferBroadcastStatus.Deferred"/>).
 /// </param>
+/// <param name="FromHotWallet">
+/// T158 (f) — a refund leaving the network's hot wallet (its deposit was swept,
+/// 08 §3.7.6 "Kaynaklar"): the body says <c>source: "HOT_WALLET"</c> and names
+/// no deposit. Only on a network whose policy allows it (Ethereum).
+/// </param>
 public sealed record TransferBroadcastRequest(
     Guid BlockchainTransactionId,
     BlockchainTransactionType Type,
@@ -51,7 +82,8 @@ public sealed record TransferBroadcastRequest(
     string ToAddress,
     int? DepositIndex,
     string? DepositAddress,
-    decimal? FeeCapUsd = null);
+    decimal? FeeCapUsd = null,
+    bool FromHotWallet = false);
 
 public sealed record TransferBroadcastResult(
     TransferBroadcastStatus Status,
@@ -128,6 +160,15 @@ public enum TransferStatusOutcome
 
     /// <summary>Sidecar unreachable / 5xx — caller retries on next tick.</summary>
     Unavailable,
+
+    /// <summary>
+    /// T158 (g) — final on chain, but the service could not tie the receipt to
+    /// the row: a hash its journal does not hold whose Transfer log does not
+    /// match the expectation (contractRet <c>UNKNOWN</c>). Fail closed: the row
+    /// is neither CONFIRMED nor FAILED; it stays DETECTED and the service's
+    /// <c>ethereum-transfer-status-unverified</c> alarm fires (DEPLOY_RUNBOOK §J).
+    /// </summary>
+    Unverified,
 
     /// <summary>
     /// T152 — the service answered about THIS transfer with a 4xx (unknown hash,

@@ -88,7 +88,8 @@ public sealed class PostCancelMonitorStarter : IPostCancelMonitorStarter
                 ExpectedContractAddress: contract,
                 CancelledAt: cancelledAt,
                 OccurredAt: cancelledAt,
-                Network: paymentAddress.Network),
+                Network: paymentAddress.Network,
+                WatchFromBlock: paymentAddress.MonitorFromBlock),
             cancellationToken);
 
         _logger.LogInformation(

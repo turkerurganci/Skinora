@@ -439,6 +439,14 @@ public class NetworkChoiceLifecycleTests : IntegrationTestBase
             return Task.FromResult(new ResolvedGasFee(0.50m, GasFeeSource.RuntimeEstimate));
         }
 
+        public Task<ResolvedGasFee> ResolveHotWalletRefundFeeAsync(
+            BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken)
+        {
+            RefundNetworks.Add(network);
+            return Task.FromResult(new ResolvedGasFee(0.50m, GasFeeSource.RuntimeEstimate));
+        }
+
         public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
             BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
             CancellationToken cancellationToken)

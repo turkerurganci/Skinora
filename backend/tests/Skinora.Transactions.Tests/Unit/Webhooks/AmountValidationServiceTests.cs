@@ -817,6 +817,11 @@ public sealed class AmountValidationServiceTests : IDisposable
             return Task.FromResult(new ResolvedGasFee(RefundFee, Source));
         }
 
+        public Task<ResolvedGasFee> ResolveHotWalletRefundFeeAsync(
+            BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new ResolvedGasFee(RefundFee, Source));
+
         public Task<ResolvedGasFee> ResolvePayoutFeeAsync(
             BlockchainNetwork network, string toAddress, decimal amount, StablecoinType token,
             CancellationToken cancellationToken) =>

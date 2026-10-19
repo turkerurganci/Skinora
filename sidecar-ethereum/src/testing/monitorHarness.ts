@@ -34,6 +34,14 @@ export interface HarnessOptions extends FakeChainOptions {
   restartLookbackBlocks?: number;
   catchUpBlocksPerTick?: number;
   rearmWindowMs?: number;
+  /**
+   * A real rate budget (CU/s) whose waits move the harness clock instead of
+   * sleeping — for timing a tick sequence. Omitted: an unlimited pacer.
+   */
+  cuPerSecond?: number;
+  tickIntervalMs?: number;
+  /** A pacer of the test's own (e.g. on a virtual timeline); wins over {@link cuPerSecond}. */
+  pacer?: RatePacer;
 }
 
 export function monitorHarness(options: HarnessOptions = {}) {
@@ -78,7 +86,17 @@ export function monitorHarness(options: HarnessOptions = {}) {
     ageSeconds: 900,
     lastError: null,
   });
-  const pacer = new RatePacer({ cuPerSecond: 1e12 });
+  const pacer =
+    options.pacer ??
+    (options.cuPerSecond === undefined
+      ? new RatePacer({ cuPerSecond: 1e12 })
+      : new RatePacer({
+          cuPerSecond: options.cuPerSecond,
+          now: () => clock.now,
+          sleep: async (ms) => {
+            clock.now += ms;
+          },
+        }));
   const allowlist = { USDT, USDC };
   const reader = new BalanceReader(rpc, allowlist, pacer);
   const makeScanner = (reg = registry) =>
@@ -90,7 +108,7 @@ export function monitorHarness(options: HarnessOptions = {}) {
       send,
       balances: reader,
       pacer,
-      tickIntervalMs: 15_000,
+      tickIntervalMs: options.tickIntervalMs ?? 15_000,
       restartLookbackBlocks: options.restartLookbackBlocks ?? 200,
       rearmWindowMs: options.rearmWindowMs ?? 300_000,
       catchUpBlocksPerTick: options.catchUpBlocksPerTick ?? 10_000,
