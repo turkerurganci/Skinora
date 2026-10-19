@@ -78,6 +78,7 @@ Sıcak cüzdan TRX 538,64 → 535,32 (sweep için depozite yakma takviyesi + hes
 |---|---|---|
 | Kabul: toplam **10,20** (ağ ücreti satırı 0,00 — Ethereum'da yok, K8) | 02:10:1x | API |
 | Depozit `0x362e8df5…ed8f` (indeks 0), `MonitorFromBlock` 11.945.058 | 02:10:19 | DB |
+| Depozitin ilk fonlaması (doğrulamada eksik bulundu) | — | `0xc30408a8…` (tam hash elde yok) |
 | Ödeme 10,20 USDT kopyası | 02:10:48 | `0x46d53c3b3775a08f1c67d7ba60a017a878c8382c946f94e5d1c5358fd127ca7d`, blok 11.945.126 |
 | Kesinlik → bildirim → `PAYMENT_RECEIVED` (tespit ve onay aynı anda, izleyici yalnız `finalized` okur) | 02:29:30 (**18 dk 42 sn**) | |
 | Sahte takas + alıcı onayı → `ITEM_DELIVERED`; prova kısayolu `PayoutEligibleAt = now` (değer 2026-10-27 02:29'dan) | 02:29:53 / 02:30:02 | |
@@ -244,3 +245,21 @@ Yok (repo). Yerel ortam: şema 59 migration'a çıktı; `escrow_skinora-ethereum
 - **Bağımlılık:** T155, T156, T158 ✓; T157 ⬚ (doğrulamada, PR #354) — T159 admin ekranlarını kullanmadı, yönetici görevi verdi.
 - **Dış varsayımlar:** (1) Sepolia ETH bütçesi — `eth_gasPrice` 15 wei, ölçüldü, yeterli; (2) Tether kaynağı — Sourcify v2 "match", derlenen = mainnet (meta veri hariç); (3) Circle USDC — Uniswap V3 Sepolia'da likidite var (0,001 ETH → 52,8 USDC teklifi); (4) anahtarsız RPC — PublicNode `finalized` ve sınırlı `eth_getLogs` destekliyor (T142/T151); (5) **Sepolia gas tarifesi mainnet ile aynı — KIRIK** (B1).
 - Kullanılan kimlikler: sahte Steam yüzeyi `sidecar-fake` (T137/T155) — `/__e2e/steam/inventory`, `/__e2e/steam/trade`.
+
+## Doğrulama sonucu
+
+**KOŞULLU PASS.** Bağımsız, temiz bağlamlı doğrulayıcı (Sonnet). HEAD `1f1d38ae`, CI `39196090612` ✓.
+
+- 5 senaryonun tüm hash'leri zincirden bağımsız okundu ve raporla uyuştu (Sepolia chainId 11155111, Nile SUCCESS).
+- Tether kopyası mainnet USDT ile aynı uzunlukta (11.075 bayt); fark yalnız sondaki swarm meta veri karmasında.
+- `eth_estimateGas` bağımsız ölçümü: boş adrese 207.391, var olan hesaba 21.000 (rapordaki tarife bulgusu doğrulandı).
+- Elle müdahaleler (depozite dışarıdan ETH, adreslere ön token, `PayoutEligibleAt` kısayolu) kabul edilebilir prova kısayolu: ürün mantığını atlamıyor, B1 tarife bulgusunun engelini aşıyor.
+- Teslimat uyarısı düzeltmesi `7feb25d2` testli (25/25, bozma 6/5, kaçan `>=`→`>` eşdeğer).
+- Sır taraması temiz.
+
+**KOŞUL:** Sepolia giden bacağı (yakıt, sweep, iade) T159a (gas tarifesinden bağımsız tahmin) birleştikten sonra elle ETH/ön token OLMADAN yeniden koşulacak (T159b).
+
+Notlar:
+- TRON payout alıcı ile aynı Nile adresine gitti; iki ayrı taraf kanıtlanmadı.
+- Senaryo 1'de depozitin ilk fonlaması `0xc30408a8…` raporda eksikti (yukarıya eklendi; tam hash elde yok).
+- Kısaltılmış bazı hash'lerin tamamı elde olmadığından raporda kısa kaldı.
