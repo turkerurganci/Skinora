@@ -317,11 +317,20 @@ public sealed class ReconciliationService : IReconciliationService
     /// <summary>
     /// T158 (i) — the balance snapshot in chunks of the network's
     /// <see cref="BlockchainNetworkPolicy.BalanceSnapshotChunkSize"/> (Ethereum
-    /// 20; TRON one request). The Ethereum service paces its reads (~0.36 s per
-    /// address at 200 CU/s), so one request for every deposit outlived the
-    /// client's 10-second timeout past ~27 addresses and the whole round
-    /// failed. Any failed chunk fails the round — a partial snapshot would leave
-    /// the missing addresses unchecked without saying so. The block reported is
+    /// 10; TRON one request). The Ethereum service paces its reads through a
+    /// 200 CU/s pacer it shares with the payment scanner and its hourly
+    /// reconciliation, interleaved per call: an address is 3 calls (72 CU),
+    /// each waiting at most one scanner <c>eth_getLogs</c> (60 CU) and one
+    /// reconciliation call (≤ 26 CU), so 3 × (60 + 26) + 72 = 330 CU = 1.65 s
+    /// worst case per address — so 1 request for every deposit cannot finish
+    /// in any fixed budget. A 10-address chunk takes up to ≈ 16.5 s (12.5 s
+    /// measured with the scanner only), and each request runs under the 30-s
+    /// chain-read budget, not the 10-s wallet one
+    /// (<see cref="HttpBlockchainSidecarClient.GetWalletBalancesAsync"/>); the
+    /// T158 chunk of 20 (≈ 33 s worst case) ran on the 10-s client (T158
+    /// doğrulaması, bulgu (i)). Any failed chunk fails the round — a partial
+    /// snapshot would leave the missing addresses unchecked without saying so.
+    /// The block reported is
     /// the lowest chunk's (each chunk is read at its own finalized head).
     /// </summary>
     private async Task<BlockchainSidecarBalancesResult> ReadBalancesAsync(

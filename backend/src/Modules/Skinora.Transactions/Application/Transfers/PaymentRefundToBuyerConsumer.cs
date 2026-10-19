@@ -151,6 +151,21 @@ public sealed class PaymentRefundToBuyerConsumer
         // T158 (f) — after the sweep (or while it is in flight) an Ethereum
         // refund leaves the hot wallet, so that is the sender priced; the
         // dispatcher asks RefundSourceResolver the same question when it sends.
+        //
+        // ⚠ PARA — the one case the two answers differ (T158 doğrulaması,
+        // yönetici kararı): a refund queued while the sweep is in flight
+        // (WaitForSweep) is priced HERE with the hot-wallet fee, and the row
+        // waits. If that sweep then FAILS, the dispatcher sends from the
+        // deposit instead — a fuel-sponsored send that costs more than the
+        // hot-wallet one. The buyer still receives exactly this row's Amount;
+        // the gas difference is absorbed by the platform (the fuel wallet pays
+        // it). Deliberately not re-priced at dispatch: the dispatcher runs on
+        // every attempt, so a re-price there would also rewrite the amount of
+        // a row the service may already have signed (T152: one request id, one
+        // signed transaction — a timed-out send stays PENDING), a money-amount
+        // mutation on a possibly-attempted row. It happens only when a sweep
+        // fails — a platform-side failure, rare — and the platform bears what
+        // its own failure costs.
         var source = await RefundSourceResolver.ResolveAsync(
             _db, network, BlockchainTransactionType.BUYER_REFUND, transaction.Id, cancellationToken);
         var resolvedGasFee = source == RefundSource.Deposit

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DepositRegistry } from './DepositRegistry.js';
 import { Reconciler } from '../reconcile/Reconciler.js';
 import { FuelLedger } from '../reconcile/FuelLedger.js';
-import { BUYER, USDT, deposit, keysOf, monitorHarness } from '../testing/monitorHarness.js';
+import { BUYER, T0, USDT, deposit, keysOf, monitorHarness } from '../testing/monitorHarness.js';
 
 /**
  * T158 (h) — an outage longer than the restart read-back (08 §3.7.4 "İmleç",
@@ -159,5 +159,84 @@ describe('T158 (h) — outage longer than the 7,200-block read-back', () => {
     });
     await h.scanner.tick();
     expect(h.registry.entries()[0].scan.scannedThrough).toBe(500n);
+  });
+});
+
+describe('T158 düzeltme turu — a re-start brings the start block the first arm lacked', () => {
+  const startBody = (watchFromBlock: bigint | null) => ({
+    address: deposit(45),
+    paymentAddressId: 'pa-late-block',
+    transactionId: 'tx-late-block',
+    expectedContract: USDT,
+    expectedSymbol: 'USDT' as const,
+    watchFromBlock,
+  });
+
+  it('the registry takes the first start block and any earlier one, never a later one', () => {
+    const registry = new DepositRegistry();
+    registry.startActive(startBody(null));
+    expect(registry.entries()[0].watchFromBlock).toBeNull();
+    registry.startActive(startBody(900n));
+    expect(registry.entries()[0].watchFromBlock).toBe(900n);
+    registry.startActive(startBody(950n)); // later: would skip blocks
+    expect(registry.entries()[0].watchFromBlock).toBe(900n);
+    registry.startActive(startBody(null)); // a re-start without one keeps it
+    expect(registry.entries()[0].watchFromBlock).toBe(900n);
+    registry.startActive(startBody(800n));
+    expect(registry.entries()[0].watchFromBlock).toBe(800n);
+  });
+
+  it('the same for a post-cancel entry', () => {
+    const registry = new DepositRegistry({ clock: () => new Date(T0) });
+    const pc = { ...startBody(null), cancelledAt: new Date(T0 - 3600_000) };
+    registry.startPostCancel(pc);
+    registry.startPostCancel({ ...pc, watchFromBlock: 700n });
+    expect(registry.entries()[0].watchFromBlock).toBe(700n);
+    registry.startPostCancel({ ...pc, watchFromBlock: 750n });
+    expect(registry.entries()[0].watchFromBlock).toBe(700n);
+  });
+
+  async function lateBlockStory(withBlockOnRestart: boolean) {
+    const h = monitorHarness({ restartLookbackBlocks: LOOKBACK, providerRange: 100 });
+    h.chain.mineTo(DERIVED_AT);
+    h.chain.finalize(DERIVED_AT);
+    await h.scanner.tick();
+    const d = deposit(45);
+    h.chain.mineTo(DERIVED_AT + 9n);
+    const pay = h.chain.mine([{ contract: USDT, from: BUYER, to: d, value: 9_000_000n }]);
+    h.chain.mineTo(pay.block + OUTAGE_BLOCKS);
+    h.chain.finalize(pay.block + OUTAGE_BLOCKS - 64n);
+    h.clock.now += 36 * 3600_000;
+    const registry = new DepositRegistry({ clock: () => new Date(h.clock.now) });
+    const restarted = h.makeScanner(registry);
+    await restarted.tick();
+    // First arm without the block (e.g. an outbox row written before T158): the read-back applies.
+    registry.startActive({ ...startBody(null), cadence: 'PAYMENT' });
+    for (let i = 0; i < 3; i++) await restarted.tick();
+    expect(h.sent).toEqual([]); // the payment is older than the read-back
+    // The minute re-arm brings the persisted block.
+    registry.startActive({
+      ...startBody(withBlockOnRestart ? DERIVED_AT : null),
+      cadence: 'PAYMENT',
+    });
+    for (let i = 0; i < 5; i++) await restarted.tick();
+    return { h, pay, registry };
+  }
+
+  it('the scanner reads the address down to the new start block: the payment older than the read-back is reported once', async () => {
+    const { h, pay, registry } = await lateBlockStory(true);
+    expect(keysOf(h.sent)).toEqual([
+      `payment.detected:${pay.txHashes[0]}:0`,
+      `payment.confirmed:${pay.txHashes[0]}:0`,
+    ]);
+    const scan = registry.entries()[0].scan;
+    expect(scan.coveredFrom).toBe(DERIVED_AT);
+    expect(scan.history).toBeNull();
+    expect(scan.baseline).toMatchObject({ block: DERIVED_AT, eth: 0n });
+  });
+
+  it('control: a re-start without the block leaves the payment unseen by the log path', async () => {
+    const { h } = await lateBlockStory(false);
+    expect(h.sent).toEqual([]);
   });
 });

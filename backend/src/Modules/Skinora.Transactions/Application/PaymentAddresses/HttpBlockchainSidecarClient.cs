@@ -27,6 +27,12 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
     /// <summary>TRON's named HTTP client (pre-F8 name, kept); see <see cref="Networks.BlockchainHttpClientNames"/>.</summary>
     public const string HttpClientName = "BlockchainSidecar";
 
+    /// <summary>
+    /// TRON's named HTTP client for the balance snapshot (T158 doğrulaması,
+    /// bulgu (i)); see <see cref="Networks.BlockchainHttpClientNames.SidecarChainRead"/>.
+    /// </summary>
+    public const string ChainReadHttpClientName = "BlockchainSidecar.ChainRead";
+
     private const string InternalKeyHeader = "X-Internal-Key";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -34,18 +40,38 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
     private readonly BlockchainNetwork _network;
     private readonly string _networkWire;
     private readonly HttpClient _http;
+    private readonly HttpClient _chainReadHttp;
     private readonly BlockchainSidecarOptions _options;
     private readonly ILogger<HttpBlockchainSidecarClient> _logger;
 
+    /// <param name="network">The network whose service this client talks to.</param>
+    /// <param name="http">
+    /// Wallet / monitor / cold-transfer client — the <see cref="BlockchainSidecarOptions.TimeoutSeconds"/>
+    /// budget (10 s by default): derivation and monitor commands answer from
+    /// the service's memory, so a slow answer means a stuck service.
+    /// </param>
+    /// <param name="chainReadHttp">
+    /// Balance-snapshot client — the <see cref="BlockchainSidecarOptions.ResolveChainReadTimeout"/>
+    /// budget (30 s by default). <c>api/wallet/balances</c> is the one call on
+    /// this client that fans out into chain reads per address, paced on the
+    /// Ethereum service by a rate pacer it shares with the payment scanner
+    /// (<see cref="GetWalletBalancesAsync"/>). A separate client rather than one
+    /// long client narrowed per call, so every other call keeps its short
+    /// budget by construction.
+    /// </param>
+    /// <param name="options">That network's service options (address, key, budgets).</param>
+    /// <param name="logger">Logger.</param>
     public HttpBlockchainSidecarClient(
         BlockchainNetwork network,
         HttpClient http,
+        HttpClient chainReadHttp,
         BlockchainSidecarOptions options,
         ILogger<HttpBlockchainSidecarClient> logger)
     {
         _network = network;
         _networkWire = network.ToString();
         _http = http;
+        _chainReadHttp = chainReadHttp;
         _options = options;
         _logger = logger;
     }
@@ -247,6 +273,19 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
             cancellationToken);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Runs on the chain-read client (<c>chainReadHttp</c>, 30 s by default),
+    /// not on the 10-s wallet/monitor client. On Ethereum one address is 3
+    /// calls, 72 CU (<c>eth_getBalance</c> 20 + <c>eth_call</c> 26 × 2 tokens),
+    /// on a 200 CU/s pacer the service shares, per call, with the payment
+    /// scanner and its hourly reconciliation: each call waits at most one
+    /// scanner <c>eth_getLogs</c> (60 CU) and one reconciliation call
+    /// (≤ 26 CU), so 3 × (60 + 26) + 72 = 330 CU = 1.65 s per address and a
+    /// 10-address chunk (<see cref="BlockchainNetworkPolicy.BalanceSnapshotChunkSize"/>)
+    /// takes up to ≈ 16.5 s (12.5 s measured with the scanner only) — past
+    /// 10 s, inside 30 s (T158 doğrulaması, bulgu (i)).
+    /// </remarks>
     public async Task<BlockchainSidecarBalancesResult> GetWalletBalancesAsync(
         IReadOnlyList<string> addresses,
         CancellationToken cancellationToken)
@@ -274,7 +313,7 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         HttpResponseMessage response;
         try
         {
-            response = await _http.SendAsync(request, cancellationToken);
+            response = await _chainReadHttp.SendAsync(request, cancellationToken);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {

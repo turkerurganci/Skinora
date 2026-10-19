@@ -284,6 +284,12 @@ export const monitorCatchUpDeposits = getOrCreateGauge({
   help: 'Ethereum deposits whose past blocks the monitor is still reading',
 });
 
+/** T158 düzeltme turu — deposits whose history lane (start block → live lane) is still being read in the background. */
+export const monitorHistoryDeposits = getOrCreateGauge({
+  name: 'skinora_ethereum_monitor_history_deposits',
+  help: 'Ethereum deposits whose history (from their start block to the live lane) is still being read',
+});
+
 /** Events delivered to the backend, by webhook event name. */
 export const paymentEventsTotal = getOrCreateCounter({
   name: 'skinora_ethereum_payment_events_total',

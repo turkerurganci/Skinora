@@ -99,13 +99,46 @@ public sealed class BlockchainServiceRegistryWiringTests
             factory.CreateClient(BlockchainHttpClientNames.GasFee(BlockchainNetwork.ETHEREUM)).Timeout);
         Assert.Equal(TimeSpan.FromSeconds(BlockchainSidecarOptions.DefaultTransferTimeoutSeconds),
             factory.CreateClient(BlockchainHttpClientNames.Transfer(BlockchainNetwork.ETHEREUM)).Timeout);
+        // T158 doğrulaması (i) — the balance snapshot runs on the chain-read budget.
+        Assert.Equal(TimeSpan.FromSeconds(21),
+            factory.CreateClient(BlockchainHttpClientNames.SidecarChainRead(BlockchainNetwork.ETHEREUM)).Timeout);
         // TRON keeps its pre-F8 client names.
         Assert.Equal("BlockchainSidecar", BlockchainHttpClientNames.Sidecar(BlockchainNetwork.TRON));
         Assert.Equal("BlockchainSidecar.ETHEREUM", BlockchainHttpClientNames.Sidecar(BlockchainNetwork.ETHEREUM));
+        Assert.Equal("BlockchainSidecar.ChainRead.ETHEREUM",
+            BlockchainHttpClientNames.SidecarChainRead(BlockchainNetwork.ETHEREUM));
+    }
+
+    /// <summary>
+    /// T158 doğrulaması, bulgu (i) — an Ethereum balance chunk is paced on the
+    /// service through the RPC budget it shares with the payment scanner (up to
+    /// ≈ 16.5 s for 10 addresses — <c>EthereumBalanceSnapshotBudgetTests</c>),
+    /// so the balances request must run under the chain-read budget, while
+    /// derive / monitor calls keep the short one. Measured where the container
+    /// builds the clients, against a service that answers late: with
+    /// <c>TimeoutSeconds</c> 1 the wallet budget is 1 s and the chain-read
+    /// budget 3 s, and the service answers after 2 s.
+    /// </summary>
+    [Fact]
+    public async Task T158i_Ethereum_Balances_Run_Under_The_Chain_Read_Budget_And_Monitor_Calls_Keep_The_Short_One()
+    {
+        var slow = new LateAnsweringHandler(TimeSpan.FromSeconds(2));
+        using var provider = Build(slow, ethereum: true, ethereumTimeoutSeconds: "1");
+        using var scope = provider.CreateScope();
+        var sidecar = scope.ServiceProvider.GetRequiredService<IBlockchainServiceRegistry>()
+            .Sidecar(BlockchainNetwork.ETHEREUM);
+
+        var balances = await sidecar.GetWalletBalancesAsync(["0xaddr"], default);
+        var stop = await sidecar.StopMonitoringAsync("0xaddr", default);
+
+        Assert.Equal(BlockchainSidecarStatus.Success, balances.Status);
+        Assert.Equal("0xaddr", Assert.Single(balances.Balances!).Address);
+        Assert.Equal(BlockchainSidecarStatus.Unavailable, stop);
+        Assert.Equal(["/api/wallet/balances", "/api/monitor/stop"], slow.Paths);
     }
 
     private static ServiceProvider Build(
-        CapturingHandler handler, bool ethereum, string ethereumTimeoutSeconds = "10")
+        HttpMessageHandler handler, bool ethereum, string ethereumTimeoutSeconds = "10")
     {
         var settings = new Dictionary<string, string?>
         {
@@ -126,6 +159,7 @@ public sealed class BlockchainServiceRegistryWiringTests
         foreach (var network in Enum.GetValues<BlockchainNetwork>())
         {
             services.AddHttpClient(BlockchainHttpClientNames.Sidecar(network)).ConfigurePrimaryHttpMessageHandler(() => handler);
+            services.AddHttpClient(BlockchainHttpClientNames.SidecarChainRead(network)).ConfigurePrimaryHttpMessageHandler(() => handler);
             services.AddHttpClient(BlockchainHttpClientNames.Transfer(network)).ConfigurePrimaryHttpMessageHandler(() => handler);
             services.AddHttpClient(BlockchainHttpClientNames.GasFee(network)).ConfigurePrimaryHttpMessageHandler(() => handler);
         }
@@ -152,6 +186,30 @@ public sealed class BlockchainServiceRegistryWiringTests
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+            };
+        }
+    }
+
+    /// <summary>
+    /// A service that answers every call after <c>delay</c>. The wait honours
+    /// the request's token, which is how <see cref="HttpClient.Timeout"/>
+    /// reaches the handler — a call whose budget is shorter is cancelled.
+    /// </summary>
+    private sealed class LateAnsweringHandler(TimeSpan delay) : HttpMessageHandler
+    {
+        public List<string> Paths { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Paths.Add(request.RequestUri!.AbsolutePath);
+            await Task.Delay(delay, cancellationToken);
+            var body = request.RequestUri.AbsolutePath == "/api/wallet/balances"
+                ? """{"blockNumber":1000,"balances":[{"address":"0xaddr","tokens":{"USDT":"0","USDC":"0","ETH":"0"}}]}"""
+                : "{}";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
             };
         }
     }

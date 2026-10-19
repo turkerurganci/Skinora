@@ -43,6 +43,7 @@ public sealed class BlockchainServiceRegistry : IBlockchainServiceRegistry
         GetOrCreate(_sidecars, network, options => new HttpBlockchainSidecarClient(
             network,
             _httpClientFactory.CreateClient(BlockchainHttpClientNames.Sidecar(network)),
+            _httpClientFactory.CreateClient(BlockchainHttpClientNames.SidecarChainRead(network)),
             options,
             _loggerFactory.CreateLogger<HttpBlockchainSidecarClient>()));
 

@@ -344,7 +344,7 @@
 | T155 | sidecar-fake Ethereum desteği + E2E | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T155_REPORT.md)) |
 | T156 | Kullanıcı arayüzü — ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
 | T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
-| T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
+| T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ⏳ Devam ediyor — doğrulama ✗ FAIL → düzeltme turu bitti, yeniden doğrulama bekliyor ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
 | T159 | Sepolia canlı provası + TRON regresyonu | ⬚ Bekliyor |
 | T160 | F8 Gate Check | ⬚ Bekliyor |
 

@@ -159,6 +159,16 @@ describe('transfers', () => {
       depositAddress: ETHEREUM.depositAddress(1),
     });
     expect(withDeposit.status).toBe(400);
+    // T158 düzeltme turu (F02) — either deposit field, even null, like the real service.
+    for (const depositField of [
+      { depositIndex: 1 },
+      { depositIndex: null },
+      { depositAddress: null },
+    ]) {
+      const r = await post('ETHEREUM', '/api/transfer/refund', { ...hot, ...depositField });
+      expect(r.status).toBe(400);
+      expect(r.body.error).toBe('INVALID_TRANSFER_REQUEST');
+    }
     const onTron = await post('TRON', '/api/transfer/refund', {
       ...hot,
       network: 'TRON',

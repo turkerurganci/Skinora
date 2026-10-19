@@ -1,6 +1,6 @@
 # T158 — Ethereum kurulumu: ayarlar, sırlar, alarmlar, runbook
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor — yapım bitti, bağımsız doğrulama bekliyor | **Tarih:** 2026-10-19
+**Faz:** F8 | **Durum:** ⏳ Devam ediyor — doğrulama ✗ FAIL → düzeltme turu bitti, yeniden doğrulama bekliyor | **Tarih:** 2026-10-19
 
 ---
 
@@ -115,7 +115,50 @@ Betik URL'leri servisin koduyla aynı (`sidecar-ethereum/src/price/EthPriceServi
 - PR: #353
 - CI: rapor commit'inden sonra izlenir (son run ve sonucu PR'da)
 
+## Düzeltme turu (2026-10-19)
+
+Bağımsız doğrulama ✗ FAIL verdi (HEAD `22c75eb6`). Bulgular aynı dalda, yönetici kararlarıyla düzeltildi (11 §F8 "T158 düzeltme turu — yönetici kararları").
+
+**1. 🟠 ⚠ PARA (bloke edici) — iki şerit.** (h)'nin kuralıyla backend her yeniden başlatmada bütün depozitleri türetildikleri bloktan yeniden kuruyordu; tek şeritte eskiden yeniye okunan geçmiş taze ödemeyi bekletiyordu.
+
+- `PaymentScanner`: her depozitin blokları ikiye ayrılır. **Canlı şerit** (`scannedThrough`) T158 öncesi kuralın başlatacağı yerden (yeniden kurulan depozitte açılış bloğunun 7.200 blok gerisi, taze depozitte kendi başlangıç bloğu; hiçbir zaman başlangıç bloğundan önce değil) her tikte okunur; geri okuması bütçeye sığan kısa boşluklarla başlar ve tik aralığının %90'ında durur (`LIVE_TICK_SHARE`) — tik bir sonrakini atlatmaz, baş her tikte okunur; her tikte en az bir parça yine okunur (yavaş baş okuması geri okumayı sonsuza dek durduramasın). **Tarih şeridi** (`ScanState.history`) başlangıç bloğundan canlı şeride kadar olan geçmişi tikte kalan blok bütçesiyle ve tikin yalnız ilk yarısında (`HISTORY_TICK_SHARE`) okur (canlı şerit boştaysa en az bir parça). İki şerit aynı `(txHash, logIndex)` kümesini ve akış kayıtlarını kullanır; sıfır taban başlangıç bloğunda kalır.
+- `Reconciler`: depozit ancak boşluksuz okunduğu bloğa kadar karşılaştırılır (`contiguousThrough`) — tarih şeridi bitmeden karşılaştırmak yanlış uyuşmazlık verirdi.
+- `RatePacer` / `pace()`: bütçe çağrı başına ayrılır (bir aralığın tamamı tek seferde değil) — bkz. madde 4. Yeni gösterge `skinora_ethereum_monitor_history_deposits`.
+- **Ölçüm** (aynı hikâyeler: eski depozit yeniden kuruluyor, taze depozit açılıştan 5 dk 15 sn sonra, ödeme hemen; 15 sn tik, 500 blok/tik, 7.200 blok geri okuma; "tempolu" = 200 CU/s + 10 blokluk aralık, beklemeler saati ilerletir):
+
+| Durum | Önce (HEAD `22c75eb6`) | T158 öncesi kural (başlangıç bloğu yok) | Sonra |
+|---|---|---|---|
+| 30 günlük iptal sonrası depozit | 6.180 sn (1,7 sa) | 15 sn | **15 sn** |
+| aynı, tempolu | 12.660 sn (3,5 sa) | 30 sn | **15 sn** |
+| 8 günlük HOLDING depozit | 1.425 sn (24 dk) | 15 sn | **15 sn** |
+| aynı, tempolu | 3.135 sn (52 dk) | 30 sn | **15 sn** |
+| 30 günlük, ödeme açılıştan 1 sa sonra, tempolu | 9.390 sn | 15 sn | **15 sn** |
+
+  Bedel arka plana geçti: tarih şeridi 30 günlük depozitte tempolu ~7,4 sa (tempo yokken 1,8 sa), 8 günlükte ~1,9 sa; o sürede o depozitin eski geçmişindeki geç ödeme geç bildirilir (kaybolmaz), depozit mutabakata girmez.
+- **Testler** (`PaymentScanner.lanes.test.ts`, 12): 30 günlük iptal sonrası / 8 günlük HOLDING × tempolu / tempo yok — taze ödeme ≤ 30 sn (T158 öncesi ölçüt) ve tek kez; açılıştan 2 sa önce türetilmiş PAYMENT depoziti (600 blok, bütçeden uzun boşluk) aynı hızda; yeniden kurma penceresinin hemen sonrası (geri okuma sürerken, kısa boşluk önce); **ayrım/kontrol:** taze ödeme bildirildiğinde 30 günlük geçmiş hâlâ okunuyor ve önündeki bloklar tek şeritte ≥ 1,5 sa ekleyecek kadar — geçmiş sonra bitiyor, geçmişin başındaki ve sonundaki eski transfer tek kez bildiriliyor, taze ödeme tekrar bildirilmiyor; tarih şeridi tikin yarısında duruyor, hiçbir tik atlanmıyor; tempolu geri okuma tiki bir sonrakinden önce bitiyor; mutabakat geçmişi okunmamış depoziti dışarıda bırakıp bitince sıfır tabandan karşılaştırıyor; süresi baştan tükenmiş tikte iki şerit de birer parça ilerliyor. Eski kodla (HEAD tarayıcı + mutabakat) yeni dosyalarda 22 testin 11'i kırmızı.
+- **Bozma (14 / 14 yakalandı):** şerit ayrımı yok · kısa boşluk önceliği yok · tarih şeridi okunmuyor · mutabakat tarih şeridini yok sayıyor · tarih şeridi süresini aşıyor · canlı geri okuma süresini aşıyor · aralık tek seferde ayrılıyor · kayıt yeniden kurma bloğunu yok sayıyor · kayıt daha geç bloğu alıyor · tarayıcı erken bloğa uzanmıyor · taban erken bloğa taşınmıyor · tarih şeridi canlı şeride 1.000 blok kala bitiyor (ilk koşuda yeşil kalmıştı → geçmişin sonuna bir transfer eklenip yakalandı) · canlı şeridin / tarih şeridinin güvenceli ilk parçası yok (ilk koşuda yeşil → baş okumasının tiki tükettiği test eklendi).
+
+**2. 🟡 ⚠ PARA test boşluğu.** Backend'in başlangıç bloğunu taşıyan üç yolu testlendi (blok + null): B21 `PostCancelMonitorRecoveryHookTests.T158h_The_Persisted_Start_Block_Reaches_The_Replayed_PostCancel_Start` (servis isteği), B23 `PostCancelMonitorStarterStartBlockTests.T158h_The_Persisted_Start_Block_Rides_The_PostCancel_Event`, B22 `TransactionReadinessStartBlockTests.T158h_The_Persisted_Start_Block_Rides_The_Payment_Monitor_Event` (olay). Üç yolda bloğu düşürmek → üç test kırmızı. `DepositRegistry.startActive` / `startPostCancel` var olan kayıtta gelen blok ilkse ya da daha erkense kaydeder, daha geç bloğu almaz; `PaymentScanner.extendToEarlierStarts` tarih şeridini o bloğa uzatır, mutabakat henüz okuma almadıysa sıfır tabanı taşır. Testler `PaymentScanner.outage.test.ts` (4 yeni: kayıt kuralı aktif / post-cancel; geri okumadan eski ödeme yeni blokla bulunur; kontrol: blok gelmezse görülmez); bozmaları madde 1'deki 14'ün içinde.
+
+**3. 🟡 (j) webhook 401 sayacı.** `WebhookClient.test.ts` (3): gerçek istemci, 401 → `skinora_ethereum_webhook_rejected_total{status="401"}` +1 ve yeniden denenebilir; 409 kendi etiketinde, kalıcı; 200 sayılmaz. `webhookRejectedTotal.inc` silinince 2 test kırmızı.
+
+**4. 🟡 (i) bakiye parçası.** Seçilen: backend'de parça **10** + bakiye ucu için **30 sn** zincir okuma bütçesi (`ResolveChainReadTimeout`; yeni `BlockchainSidecar.ChainRead[.ETHEREUM]` istemcisi — derive / izleme / soğuk aktarım 10 sn'de kalır; TRON'un bakiye isteği de 30 sn'ye geçti) + serviste çağrı başına bütçe ayırma. Gerekçe: öncelik kuyruğu paylaşılan sağlayıcı sınırını ya aşar ya da tarayıcının çoktan ayrılmış payını geri alamaz; çağrı başına ayırmayla bakiye isteğinin her çağrısı en çok bir tarayıcı (60 CU) + bir mutabakat (≤ 26 CU) çağrısı bekler → adres başına en kötü 330 CU ≈ 1,65 sn, 10 adres ≈ 16,5 sn < 30 sn (20 adres ≈ 33 sn > 30 sn). Testler: `PaymentScanner.pacing.test.ts` (sanal zaman: 500 bloklu aralıkla aynı anda başlayan 10 adreslik okuma 12,5 sn'de biter; eski tek ayırmada aralığın 30 sn'sinin arkasında kalırdı — bozma yakalandı); backend `EthereumBalanceSnapshotBudgetTests.T158i_An_Ethereum_Balance_Chunk_Fits_The_Chain_Read_Budget_With_The_Pacer_Shared` (parça 10, 16,5 < 30, 20 > 30, 16,5 > 10) ve `BlockchainServiceRegistryWiringTests.T158i_Ethereum_Balances_Run_Under_The_Chain_Read_Budget_And_Monitor_Calls_Keep_The_Short_One` (gerçek konteynerden: bakiye uzun bütçede başarılı, izleme çağrısı kısa bütçede zaman aşımı). Backend bozmaları 5 / 5 yakalandı (parça 20 · zincir okuma = 1× · bakiye 10 sn istemcide · kayıt kısa istemciyi iki kez veriyor · zincir okuma istemcisi 10 sn).
+
+**5. 🟡 Küçükler.**
+- ⚠ PARA sweep yoldayken fiyatlanan iade — **belgelendi** (yeniden fiyatlama yok). Akış doğrulandı: tüketici sweep'i beklemeden sıcak cüzdan ücretiyle fiyatlar; gönderim işi her denemede kaynağı yeniden sorar, sweep `FAILED` olursa aynı `Amount` ile depozitten gönderir. Gas farkı platformda; gönderimde yeniden fiyat, T152'nin "bir kimlik, bir imza" kuralı altında imzalanmış olabilecek satırın tutarını değiştirirdi; yalnız sweep arızasında olur. Yorum `PaymentRefundToBuyerConsumer.cs`'te; 08 §3.7.6, runbook §J.6, 11.
+- `IChargedGasFeeResolver.cs` XML yorumları her üyenin kendisini anlatacak şekilde düzeltildi.
+- S14: sıcak cüzdan iadesinde `WRONG_TOKEN_REFUND` + **USDT** reddi testi (`TransferService.test.ts`); iade türü denetimi kaldırılınca test kırmızı (eski test USDC kullandığı için token denetimi bunu maskeliyordu).
+- F02: sahte serviste `HOT_WALLET` gövdesinde `depositIndex` (sayı ya da null) ve `depositAddress: null` reddi testli (`sidecar-fake/src/blockchain.test.ts`); `depositIndex` denetimi kaldırılınca test kırmızı.
+
+**6. Belgeler.** Runbook §J.3 (iki şerit, bedel yalnız arka plan okumasında, göstergeler; iptal sonrası yeniden kurma boşluğu backlog'a bağlandı), §J.4 adım 5 (**gelen tutarın tamamı iade, kurtarma gas'ı platformda** — yönetici kararı, ⚠ PARA), §J.2 `reconciliation-network-failed` satırı (10'luk parça, 30 sn), §J.6 (fiyat farkı). 08 v3.37 (§3.0, §3.7.4, §3.7.6). 11 v1.17 ("T158 düzeltme turu — yönetici kararları" (a)–(f); (xi) kapandı, (xii) backlog'a bağlandı). `DEFERRED_BACKLOG` §4: 🟡 `PostCancelRearmOnlyOnBackendStart` (F9 öncesi kapanmalı) ve 🟡 `TronRefundAfterSweepFromDeposit` — **42 aktif / 156 çözülmüş** (dosyanın `awk`'iyle; 40/156 → +2).
+
+**Ek bulgu (düzeltilmedi, kapsam dışı):** tüketicinin `sweepHasRun` denetimi (T149) `CONFIRMED` ve hash'li `PENDING`'i sayıyor, gönderim işinin yayından sonra koyduğu `DETECTED`'ı saymıyor — TRON'da sweep `DETECTED` iken kuyruğa giren iade 2,90'lık ağ ücreti satırını hâlâ taşıyor. Ethereum'da ücret satırı yok, etkilenmez; TRON'da sweep sonrası depozitten iade zaten başarısız (`TronRefundAfterSweepFromDeposit`), para etkisi küçük.
+
+**Düzeltme turu testleri:** sidecar-ethereum `npx vitest run` **788/788** (önce 767) · `tsc --noEmit` temiz · `eslint src` temiz · prettier (değişen dosyalar, satır sonu yok sayılarak) temiz · sidecar-fake **120/120** · backend birim + sözleşme: Transactions 925 · API 132 · Shared 568 · Platform 157 · Auth 92 · Steam 59 · Users 49 · Realtime 44 · Disputes 25 · Fraud 19 yeşil; Notifications 16 kırmızı = Docker gerektiren testler (yerelde Docker kapalı, önceden de) · `dotnet format --verify-no-changes` temiz. Entegrasyon CI'da.
+
 ## Known Limitations / Açık sorular
+
+> Düzeltme turu durumu: 1 → **kapandı** (yönetici kararı: tamamı iade, gas platformda). 2 → `DEFERRED_BACKLOG` 🟡 `PostCancelRearmOnlyOnBackendStart` (F9 öncesi). 3 → bedel artık yalnız arka plan geçmiş okumasında (iki şerit). 4 → `DEFERRED_BACKLOG` 🟡 `TronRefundAfterSweepFromDeposit`.
 
 1. **(⚠ açık soru) Yanlış EVM ağı kurtarma ücreti:** gas'ı kim öder, platform hizmet ücreti alır mı — karar yok. Runbook karara kadar "gelen tutarın tamamı iade, gas platformda" diyor.
 2. **(⚠ açık soru, mevcut boşluk) İptal sonrası izleme yalnız backend açılışında yeniden kurulur** (`PostCancelMonitorRecoveryHook`): Ethereum (ve TRON) servisi tek başına yeniden başlarsa iptal sonrası adresler backend yeniden başlayana kadar izlenmez. Runbook geçici yordamı yazıyor; kalıcı çözüm (dakikalık yeniden kurma) T158 kapsamı dışında bırakıldı.

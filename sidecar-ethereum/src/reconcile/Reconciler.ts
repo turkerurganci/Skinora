@@ -8,7 +8,11 @@ import {
   reconciliationSkippedTotal,
 } from '../metrics.js';
 import type { FinalityStatus } from '../finality/FinalityTracker.js';
-import type { DepositRegistry, WatchEntry } from '../monitor/DepositRegistry.js';
+import {
+  contiguousThrough,
+  type DepositRegistry,
+  type WatchEntry,
+} from '../monitor/DepositRegistry.js';
 import type { AddressBalances, BalanceReader } from './BalanceReader.js';
 import type { FuelLedger } from './FuelLedger.js';
 
@@ -39,7 +43,8 @@ import type { FuelLedger } from './FuelLedger.js';
  * <para>
  * <b>Where it reads.</b> At one block for the whole round: the finalized head,
  * or the monitor's cursor if that is behind (the flows must be complete up to
- * the block). Deposits still being read back are left for the next round.
+ * the block). Deposits still being read back — including a deposit whose
+ * history lane has not reached its live lane yet — are left for a later round.
  * </para>
  *
  * <para>
@@ -129,9 +134,13 @@ export class Reconciler {
       return this.skip('finalized_stale');
     }
     const block = status.snapshot.number < cursor ? status.snapshot.number : cursor;
-    const entries = this.deps.registry
-      .entries()
-      .filter((e) => e.scan.scannedThrough !== null && e.scan.scannedThrough >= block);
+    // Only deposits read without a gap up to the block: one whose history
+    // lane (T158 düzeltme turu) is still running has flows missing between
+    // its start block and the live lane — comparing it would be a false alarm.
+    const entries = this.deps.registry.entries().filter((e) => {
+      const through = contiguousThrough(e.scan);
+      return through !== null && through >= block;
+    });
 
     const started = this.now();
     const readings: Array<[WatchEntry, AddressBalances]> = [];

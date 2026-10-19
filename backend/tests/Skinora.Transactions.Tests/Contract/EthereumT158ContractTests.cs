@@ -244,12 +244,17 @@ public sealed class EthereumT158ContractTests
 
     private static HttpBlockchainSidecarClient SidecarClient(
         BlockchainNetwork network,
-        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) =>
-        new(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond)
+    {
+        // One client for both budgets — the wire format is what is pinned here.
+        var http = new HttpClient(new Handler(respond)) { BaseAddress = new Uri(BaseUrl) };
+        return new(
             network,
-            new HttpClient(new Handler(respond)) { BaseAddress = new Uri(BaseUrl) },
+            http,
+            http,
             new BlockchainSidecarOptions { BaseUrl = BaseUrl },
             NullLogger<HttpBlockchainSidecarClient>.Instance);
+    }
 
     private static HttpBlockchainTransferClient TransferClient(
         BlockchainNetwork network,

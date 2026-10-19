@@ -49,6 +49,10 @@ public sealed class BlockchainSidecarHttpClientWiringTests
         Assert.Equal(TimeSpan.FromSeconds(300), transfer.Timeout);
         Assert.Equal(TimeSpan.FromSeconds(30), estimate.Timeout);
         Assert.Equal(TimeSpan.FromSeconds(10), sidecar.Timeout);
+        // T158 doğrulaması (i) — the balance snapshot is a chain read too.
+        Assert.Equal(
+            TimeSpan.FromSeconds(30),
+            factory.CreateClient(HttpBlockchainSidecarClient.ChainReadHttpClientName).Timeout);
     }
 
     [Fact]

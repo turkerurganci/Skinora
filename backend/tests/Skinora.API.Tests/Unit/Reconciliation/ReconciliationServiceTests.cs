@@ -627,8 +627,10 @@ public sealed class ReconciliationServiceTests : IDisposable
     // ─── T158 (i) — Ethereum balance chunks + failed-round signal ───────
 
     [Fact]
-    public async Task T158_Ethereum_BalanceSnapshot_IsReadInChunksOfTwenty_AndEveryAddressIsChecked()
+    public async Task T158_Ethereum_BalanceSnapshot_IsReadInChunksOfTen_AndEveryAddressIsChecked()
     {
+        // 10 since the T158 doğrulaması (bulgu (i)) — the arithmetic is in
+        // EthereumBalanceSnapshotBudgetTests.
         var eth = new EchoBalancesSidecar();
         var sut = EthereumSut(eth);
         for (var i = 0; i < 45; i++) await SeedEthereumDepositAsync(EthAddress(i));
@@ -636,7 +638,7 @@ public sealed class ReconciliationServiceTests : IDisposable
         var outcome = await sut.RunAsync(CancellationToken.None);
 
         Assert.Equal(45, outcome.DepositAddressesChecked);
-        Assert.Equal(new[] { 20, 20, 5 }, eth.Calls.Select(c => c.Count).ToArray());
+        Assert.Equal(new[] { 10, 10, 10, 10, 5 }, eth.Calls.Select(c => c.Count).ToArray());
         Assert.Equal(45, eth.Calls.SelectMany(c => c).Distinct().Count());
         Assert.All(eth.Calls, c => Assert.True(c.Count <= BlockchainNetworkPolicy.Ethereum.BalanceSnapshotChunkSize));
         Assert.Equal(1_000L, outcome.BlockNumber); // the lowest chunk's block

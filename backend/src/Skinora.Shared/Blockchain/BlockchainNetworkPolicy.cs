@@ -95,7 +95,7 @@ public sealed record BlockchainNetworkPolicy(
         ReportsMonitorStartBlock = true,
         RefundsAfterSweepFromHotWallet = true,
         VerifiesUnjournalledTransferStatus = true,
-        BalanceSnapshotChunkSize = 20,
+        BalanceSnapshotChunkSize = 10,
     };
 
     /// <summary>
@@ -131,9 +131,19 @@ public sealed record BlockchainNetworkPolicy(
     /// <summary>
     /// T158 (i) — most addresses per balance-snapshot request to the network's
     /// service; <c>null</c> = one request. The Ethereum service paces its reads
-    /// (200 CU/s, ~0.36 s per address with ETH + USDT + USDC — 08 §3.7.4), so
-    /// one request for every deposit outlived the backend's 10-second client
-    /// timeout past ~27 addresses; 20 keeps a chunk at ~7 s.
+    /// through ONE rate pacer (200 CU/s — 08 §3.7.4): one address costs 72 CU
+    /// (<c>eth_getBalance</c> 20 + <c>eth_call</c> 26 × 2 tokens), 0.36 s with
+    /// the pacer to itself. The pacer is shared with the payment scanner and
+    /// the service's hourly reconciliation and interleaves per CALL: each of
+    /// an address's 3 calls waits at most one scanner <c>eth_getLogs</c>
+    /// (60 CU) and one reconciliation call (≤ 26 CU) ahead of it, so the worst
+    /// case per address is 3 × (60 + 26) + 72 = 330 CU = 1.65 s, and a chunk
+    /// costs up to <c>size × 1.65</c> s. 10 addresses ≈ 16.5 s (measured with
+    /// the scanner only: 12.5 s), inside the 30-s chain-read budget the
+    /// balances request runs under (<c>BlockchainSidecarOptions.ResolveChainReadTimeout</c>,
+    /// <c>HttpBlockchainSidecarClient.GetWalletBalancesAsync</c>); the T158
+    /// value 20 ≈ 33 s worst case would not fit even that, and it ran on the
+    /// 10-s wallet client (T158 doğrulaması, bulgu (i)).
     /// </summary>
     public int? BalanceSnapshotChunkSize { get; init; }
 

@@ -1516,6 +1516,15 @@ describe('T158 (f) — a refund after the sweep leaves the hot wallet (08 §3.7.
     expect(chain.sent).toHaveLength(0);
   });
 
+  it('T158 düzeltme turu (S14): a WRONG_TOKEN_REFUND naming USDT is refused too — the refund type alone keeps it off the hot wallet', async () => {
+    const { service, journal } = build();
+    await expect(
+      service.refund(hotRefund(68, { refundType: 'WRONG_TOKEN_REFUND', token: 'USDT' })),
+    ).rejects.toMatchObject({ code: 'TOKEN_NOT_ALLOWED' });
+    expect(chain.sent).toHaveLength(0);
+    expect(journal.get(`transfer:${ID(68)}`)).toBeUndefined();
+  });
+
   it('a HOT_WALLET refund naming a deposit is a bad request', async () => {
     const { service } = build();
     await expect(
