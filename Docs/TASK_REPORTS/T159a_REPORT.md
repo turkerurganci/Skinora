@@ -192,7 +192,7 @@ Backend değişmedi (yeni bekleme sebepleri genel `deferred` yolundan geçiyor; 
 5. Yakıt probu yakıt cüzdanında ≥ 1 wei ister: yakıt cüzdanı tamamen boşsa, kendi ETH'si yeten bir depozitin gönderimi de `GAS_ESTIMATE_UNAVAILABLE` ile bekler (önce `ethereum-wallet-eth-low` çalar). Kabul edilebilir kenar durum; istenirse sıcak cüzdandan prob yedeği eklenebilir.
 6. `eth_call` simülasyonunun düğüm hatası 502 geçici kaldı (karar "tahmin başarısızsa" diyor; `eth_call` tahmin değil). Backend 502'de deneme hakkı harcar — istenirse aynı bekleme yoluna alınabilir.
 7. Sepolia bloklarındaki `blockAccessListHash` alanı yeni bir hard fork'a işaret ediyor; fork'un adı ve mainnet tarihi doğrulanmadı (T159'dan) — F9 öncesi bakılmalı. Servis artık tarifeye kendiliğinden uyuyor; açık kalan yalnız maliyetin tavana sığıp sığmadığı.
-8. PR #355 (T159) ile çakışma: `IMPLEMENTATION_STATUS.md`'de T159 satırının hemen altına T159a satırı eklendi; #355 T159 satırını değiştirdiği için birleştirmede küçük bir metin çakışması olabilir.
+8. PR #355 (T159) yapım sırasında main'e girdi (`5306f88e`); dal main ile birleştirildi — `IMPLEMENTATION_STATUS.md` (T159 → T159a → T159b sırası) ve `MEMORY.md` çakışmaları elle çözüldü, 11'de T159a görevi T159b'nin önüne alındı (T159b T159a'ya bağlı). T159b (müdahalesiz Sepolia yeniden provası) bu değişiklikle koşulabilir; tavanın geçici 1,00 yapılması gerekir (madde 4).
 
 ## Notlar
 

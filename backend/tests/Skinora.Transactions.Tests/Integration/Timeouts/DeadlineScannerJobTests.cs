@@ -659,6 +659,35 @@ public class DeadlineScannerJobTests : IntegrationTestBase
         Assert.Contains(tx.Id, warnings.Warned);
     }
 
+    [Theory]
+    [Trait("Category", "Integration")]
+    [InlineData(10, false)] // 10 of 60 minutes gone — below 0.5: not yet
+    [InlineData(29, false)] // just below the ratio
+    [InlineData(31, true)]  // just past the ratio
+    [InlineData(45, true)]
+    public async Task Delivery_Warning_Waits_For_The_Ratio_Of_The_Delivery_Window(
+        int minutesSincePayment, bool expectWarned)
+    {
+        // T159 (Sepolia provası) — the ratio used to be read and then never
+        // applied: every PAYMENT_RECEIVED row was warned on the next sweep,
+        // so a seller with a 60-minute window got "59 minutes left" seconds
+        // after the payment. The window opens at PaymentReceivedAt.
+        await SetWarningRatioAsync("0.5");
+        var nowUtc = _clock.GetUtcNow().UtcDateTime;
+        var buyer = await TimeoutTestFixtures.AddBuyerAsync(Context);
+        var tx = TimeoutTestFixtures.NewTransaction(
+            _seller.Id, TransactionStatus.PAYMENT_RECEIVED, nowUtc, buyerId: buyer.Id);
+        tx.PaymentReceivedAt = nowUtc.AddMinutes(-minutesSincePayment);
+        tx.DeliveryDeadline = tx.PaymentReceivedAt.Value.AddMinutes(60);
+        Context.Set<Transaction>().Add(tx);
+        await Context.SaveChangesAsync();
+
+        var warnings = TimeoutTestFixtures.NoOpWarnings();
+        await CreateSutWithWarnings(warnings).ScanAndRescheduleAsync();
+
+        Assert.Equal(expectWarned, warnings.Warned.Contains(tx.Id));
+    }
+
     [Fact]
     [Trait("Category", "Integration")]
     public async Task Delivery_Warning_Skips_A_Transaction_Already_Warned()
