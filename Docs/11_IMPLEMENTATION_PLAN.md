@@ -4999,6 +4999,13 @@ Task T159: Sepolia canlı provası + TRON regresyonu
   Kabul kriterleri: Sepolia'da mutlu yol, iade ve geç ödeme uçtan uca;
     aynı stack'te Nile'da TRON akışı hâlâ uçtan uca çalışıyor
   Test beklentisi: Canlı prova raporu
+  Durum: doğrulama KOŞULLU PASS — giden bacak T159b ile yeniden koşulacak
+
+Task T159b: Sepolia giden bacağı yeniden provası (müdahalesiz)
+  Bağımlılık: T159a
+  Kabul kriterleri: Sepolia'da yeni depozitle sweep (yakıt dahil), sweep öncesi
+    iade ve yanlış token iadesi elle ETH/ön token olmadan tamamlanır
+  Test beklentisi: Canlı prova raporu
 
 Task T160: F8 Gate Check
   Bağımlılık: T141–T159

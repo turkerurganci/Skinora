@@ -137,7 +137,7 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
         var ratio = await ReadWarningRatioAsync();
         if (ratio is not { } r || r <= 0m || r >= 1m) return;
 
-        var due = await _db.Set<Transaction>()
+        var open = await _db.Set<Transaction>()
             .Where(t => !t.IsDeleted
                         && !t.IsOnHold
                         && t.TimeoutFrozenAt == null
@@ -145,9 +145,23 @@ public sealed class DeadlineScannerJob : IDeadlineScannerJob
                         && t.DeliveryDeadline != null
                         && t.DeliveryDeadline > now
                         && t.TimeoutWarningSentAt == null)
+            .Select(t => new { t.Id, t.PaymentReceivedAt, t.DeliveryDeadline })
+            .ToListAsync();
+
+        // T159 (Sepolia provası) — the ratio must actually gate the warning:
+        // the delivery window opens at PaymentReceivedAt (the transition that
+        // sets DeliveryDeadline) and the warning is due once r of it has
+        // passed. Without this check every sweep warned the seller seconds
+        // after the payment ("59 minutes left" of a 60-minute window). A row
+        // with no PaymentReceivedAt has no measurable window start and is
+        // warned as before rather than never.
+        var due = open
+            .Where(t => t.PaymentReceivedAt is not { } start
+                        || now >= start + TimeSpan.FromTicks(
+                            (long)((t.DeliveryDeadline!.Value - start).Ticks * r)))
             .Select(t => t.Id)
             .Take(_options.DeadlineScannerBatchSize)
-            .ToListAsync();
+            .ToList();
 
         foreach (var id in due)
         {
