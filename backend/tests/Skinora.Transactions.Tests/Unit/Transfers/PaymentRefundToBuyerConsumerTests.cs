@@ -365,6 +365,7 @@ public sealed class PaymentRefundToBuyerConsumerTests : IDisposable
     [Theory]
     [InlineData(BlockchainTransactionStatus.CONFIRMED)]
     [InlineData(BlockchainTransactionStatus.PENDING)]   // broadcast, awaiting confirmation
+    [InlineData(BlockchainTransactionStatus.DETECTED)]  // broadcast and seen on chain, below the confirmation depth (T158 closing: money — the line is already spent)
     public async Task FeeLine_RefundAfterSweep_KeepsTheLine(BlockchainTransactionStatus sweepStatus)
     {
         // The sweep ran, so the line was spent on what it paid for: the refund

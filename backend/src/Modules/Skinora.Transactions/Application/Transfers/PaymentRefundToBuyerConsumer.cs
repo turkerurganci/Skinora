@@ -143,6 +143,7 @@ public sealed class PaymentRefundToBuyerConsumer
                 b => b.TransactionId == transaction.Id
                     && b.Type == BlockchainTransactionType.SWEEP
                     && (b.Status == BlockchainTransactionStatus.CONFIRMED
+                        || b.Status == BlockchainTransactionStatus.DETECTED
                         || (b.Status == BlockchainTransactionStatus.PENDING && b.TxHash != null)),
                 cancellationToken);
         var refundable = FinancialCalculator.CalculateRefundableTotal(

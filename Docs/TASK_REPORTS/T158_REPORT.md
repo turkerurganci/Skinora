@@ -177,3 +177,10 @@ Bağımsız doğrulama ✗ FAIL verdi (HEAD `22c75eb6`). Bulgular aynı dalda, y
 - **Dış varsayımlar:** (1) Binance `api/v3/avgPrice?symbol=ETHUSDT` ve CoinGecko `simple/price` anahtarsız erişilebilir — yerelden ölçüldü (yukarıda); üretim çıkışından doğrulanamadı. (2) `dotnet-ef` 9.0.3 kurulu — migration üretildi. (3) Alchemy/Chainstack anahtarlı sınırlar — doğrulanamadı (anahtar yok, T169). (4) Grafana kural dosyası geçerli YAML — `js-yaml` ile ayrıştırıldı (12 + 14 kural). Gerçek ağa hiçbir işlem gönderilmedi.
 - **Paralel T157:** ortak dosyalarda gereksiz düzenleme yapılmadı; olası çakışma noktaları `AppDbContextModelSnapshot.cs` (migration) ve `OutgoingTransferConfirmationJob` (T157 satır kapatma aracı bu satırlara dokunabilir).
 - Docker açılmadı.
+
+## Doğrulama sonucu
+
+- **Tur 1 ✗ FAIL** (HEAD `22c75eb6`, CI `39171417610`): yeniden başlatma sonrası taze ödeme 1–3,6 sa geç bildiriliyordu (yanlış zaman aşımı); B21–B23 testsizdi; bozma 71/61.
+- **Düzeltme turu** `527cd680`.
+- **Tur 2 ✓ PASS** (CI `39180296572` ✓): taze ödeme her senaryoda <= T158 öncesi kural; 12 tohumlu rastgele senaryo testinde boşluk, çift bildirim ve yanlış alarm yok; tepe 264 CU/s < 300; bozma servis 36/36, backend 7/7.
+- **Kapanış düzeltmesi (yönetici kararı, ⚠ PARA):** `PaymentRefundToBuyerConsumer` `sweepHasRun` sorgusuna `BlockchainTransactionStatus.DETECTED` eklendi; yukarıdaki "Ek bulgu" kapandı. Sweep `DETECTED` iken kuyruğa giren alıcı iadesi artık `TotalAmount − NetworkFeeAmount` döner (TRON ağ ücreti satırı geri verilmez). Test: `FeeLine_RefundAfterSweep_KeepsTheLine(DETECTED)`; koşul geri alınınca kırılır (bozma 1/1). Ethereum'da `NetworkFeeAmount` 0 olduğundan etkisi yok.
