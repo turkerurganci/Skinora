@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-19 — T159 ✓ Tamamlandı, doğrulama KOŞULLU PASS (Sepolia canlı provası; ayrıntı T159_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-20 — T157 ✓ Tamamlandı, yeniden doğrulama PASS (admin ekranları ağ başına + kapatma aracı; ayrıntı T157_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -343,7 +343,7 @@
 | T154 | Ethereum ücret tahmini + ETH fiyatı | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; T149 sonrası main ile bütünleştirildi; [rapor](TASK_REPORTS/T154_REPORT.md), PR [#348](https://github.com/turkerurganci/Skinora/pull/348)) |
 | T155 | sidecar-fake Ethereum desteği + E2E | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T155_REPORT.md)) |
 | T156 | Kullanıcı arayüzü — ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
-| T157 | Admin ekranları ağ başına | ⏳ Devam ediyor — tur 1 ✗ FAIL → düzeltme turu yapıldı, yeniden doğrulama bekliyor ([rapor](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)) |
+| T157 | Admin ekranları ağ başına | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → yeniden doğrulama ✓ PASS (merge yöneticide) ([rapor](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)) |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (merge yöneticide) ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
 | T159 | Sepolia canlı provası + TRON regresyonu | ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak) ([rapor](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355)) |
 | T159b | Sepolia giden bacağı yeniden provası (müdahalesiz) | ⬚ Bekliyor (T159a'ya bağlı) |

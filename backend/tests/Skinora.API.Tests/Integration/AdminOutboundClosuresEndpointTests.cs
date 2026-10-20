@@ -119,6 +119,8 @@ public class AdminOutboundClosuresEndpointTests : IClassFixture<AdminWalletsEndp
     [InlineData(ClosureError.HashNotSuccessful, HttpStatusCode.UnprocessableEntity, "HASH_NOT_SUCCESSFUL")]
     [InlineData(ClosureError.HashNotFound, HttpStatusCode.UnprocessableEntity, "HASH_NOT_FOUND")]
     [InlineData(ClosureError.HashDoesNotMatchRow, HttpStatusCode.UnprocessableEntity, "HASH_DOES_NOT_MATCH_ROW")]
+    [InlineData(ClosureError.RowTransferUnresolved, HttpStatusCode.UnprocessableEntity, "ROW_TRANSFER_UNRESOLVED")]
+    [InlineData(ClosureError.AmbiguousRowMatch, HttpStatusCode.Conflict, "AMBIGUOUS_ROW_MATCH")]
     [InlineData(ClosureError.RowNotOpen, HttpStatusCode.Conflict, "ROW_NOT_OPEN")]
     [InlineData(ClosureError.ClosureNotOpen, HttpStatusCode.Conflict, "CLOSURE_NOT_OPEN")]
     [InlineData(ClosureError.HashAlreadyBound, HttpStatusCode.Conflict, "HASH_ALREADY_BOUND")]
@@ -139,6 +141,20 @@ public class AdminOutboundClosuresEndpointTests : IClassFixture<AdminWalletsEndp
         Assert.Equal(status, response.StatusCode);
         var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
         Assert.Equal(code, json.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public void EveryClosureError_HasARowInTheMappingTable()
+    {
+        // A new refusal without a row here would reach the client as 500 INTERNAL_ERROR.
+        var mapped = typeof(AdminOutboundClosuresEndpointTests)
+            .GetMethod(nameof(EveryRefusal_MapsToItsStatusAndCode))!
+            .GetCustomAttributes(typeof(Xunit.InlineDataAttribute), false)
+            .Cast<Xunit.InlineDataAttribute>()
+            .Select(a => (ClosureError)a.GetData(null!).Single()[0])
+            .ToHashSet();
+
+        Assert.Equal(Enum.GetValues<ClosureError>().ToHashSet(), mapped);
     }
 
     [Fact]

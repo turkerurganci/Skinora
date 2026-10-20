@@ -1,6 +1,6 @@
 # T157 — Admin ekranları ağ başına
 
-**Faz:** F8 | **Durum:** ⏳ Doğrulama tur 1 ✗ FAIL → düzeltme turu yapıldı, yeniden doğrulama bekliyor | **Tarih:** 2026-10-19
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme turu → yeniden doğrulama ✓ PASS (35/31); kapanış 2026-10-20 (merge yöneticide) | **Tarih:** 2026-10-19 (kapanış 2026-10-20)
 
 ---
 
@@ -52,7 +52,7 @@
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı doğrulama chat'i) |
+| Doğrulama durumu | ✓ PASS — tur 1 ✗ FAIL (HEAD `47842493`) → düzeltme turu `03721f96` → yeniden doğrulama ✓ PASS (35/31). Ayrıntı: aşağıda "Doğrulama sonucu" |
 
 ## Altyapı Değişiklikleri
 
@@ -117,3 +117,45 @@ Bağımsız doğrulama tur 1 ✗ FAIL verdi (HEAD `47842493`). Arada main'e T158
 
 - **Elle yolun ayrıntısı benim önerim (⚠ PARA):** runbook §D 7.4'te `AMBIGUOUS_ROW_MATCH` / `ROW_TRANSFER_UNRESOLVED` için yazdığım yol — hangi satırın imzalandığını eski günlük yedeğinden ya da servis log'undan kanıtla; kanıt varsa yönetici kararı + iki kişi + audit notuyla veritabanında bağla; kanıt yoksa satırlar `PENDING` kalır ve o hesabın günlük onayı (alt adım 5) verilmez. Onayınız gerekir.
 - Eski açık sorular (ayrı izin, nonce aralığı, Ethereum sıcak cüzdan üst-limit izleyicisi) aynen duruyor.
+
+---
+
+## Doğrulama sonucu
+
+- **Tur 1 ✗ FAIL** (HEAD `47842493`): yanlış token iadesi (`WRONG_TOKEN_REFUND`) kapatılamıyordu (doğrulama `row.Token` ile yapılıyordu); soğuk aktarımın `SIDECAR_UNAVAILABLE` metni yanlış güven veriyordu; belgeler ve birkaç test eksikti.
+- **Düzeltme turu** `03721f96` (yukarıda "Düzeltme turu").
+- **Yeniden doğrulama ✓ PASS (35/31)** (bağımsız doğrulama alt ajanı, F8 yönetici düzeni; HEAD `03721f96`). Kapanışa bırakılan dört test boşluğu ve iki runbook şartı aşağıda "Kapanış" bölümünde kapandı.
+
+## Kapanış (2026-10-20)
+
+### Main birleştirmesi (#357 belge düzeni, #358 hafıza temizliği, T159)
+
+- Merge (rebase değil), commit `d31bdc4c`. Çakışmalar: 04, 06, 07, 08, DEPLOY_RUNBOOK başlıkları; 11_IMPLEMENTATION_PLAN; IMPLEMENTATION_STATUS; STATUS_CHANGELOG; BYPASS_LOG; repo MEMORY.md.
+- Başlıklar main'in yeni kısa biçimine çekildi (sürüm + tarih + tek cümle; 04 v4.11, 06 v6.33, 07 v4.16, 08 v3.38). T157'nin uzun başlık notları harfiyen `Docs/DOC_CHANGELOG.md`'de ilgili belgenin bölümünün en üstüne taşındı.
+- Plan: main'in bölünmüş hâli alındı; T157'nin plan değişiklikleri `Docs/plan/11_F8.md`'ye taşındı ("T157 kararları" + "T157 düzeltme turu — yönetici kararı ve bulgular" blokları, §7.6'nın iki T157 satırı ✓). 11_F8 v1.19.
+- Hafıza: main'in sade düzeni alındı; T157 ayrıntılı satırları `MEMORY_ARCHIVE.md` "Current Status arşivi 2"ye, kısa ✓ satırı MEMORY.md'ye.
+- BYPASS_LOG: iki tarafın satırı korundu. Merge commit'i main'den gelen `T159_REPORT.md`'deki kamu zinciri hash'i yüzünden secret-guard'a takıldı; main'deki aynı gerekçeli kayıtla `SKINORA_ALLOW_SECRET` bypass'ı kullanıldı (kayıt BYPASS_LOG'da).
+
+### Eklenen testler (yeniden doğrulamanın istediği dört boşluk)
+
+| # | Test | Neyi sabitler |
+|---|---|---|
+| a | `ARecipientWrittenInMixedCase_MatchesTheSameAccountOnChain_AndTheRowIsClosedAndConfirmed`, `ALookAlikeWhoseRecipientDiffersOnlyInLetterCase_IsStillALookAlike` | Satırdaki EIP-55 (karışık harfli) alıcı/gönderen, zincirdeki küçük harfli hesapla eşleşir: öneri → onay → gerçek onay işi → `CONFIRMED`. Benzer satır kuralı harf farkını yok sayar |
+| b | `TheEthereumTool_NeverClosesATronRow_AndClosingAnEthereumRowNeverAsksTheTronService` | Aday listesi yalnız Ethereum; TRON satırına işaret eden (öneri adımı atlanarak yazılmış) kapatma onaylanmaz (`ROW_NOT_OPEN`), zincir sorulmaz; Ethereum satırını kapatmak TRON servisine hiç sormaz, TRON satırı değişmez |
+| c | `Approve_RefusesAWrongTokenRefundWhoseTokenCanNoLongerBeResolved_AndLogsIt` (izinli olmayan kontrat; Ethereum satırında TRON kontratı), `Propose_RefusesAWrongTokenRefundCarryingATronContract` | Token belirlenemezse öneri de onay da reddedilir (`ROW_TRANSFER_UNRESOLVED`), beklenen token'a geri düşülmez, zincir sorulmaz, ret audit'lenir |
+| d | `EveryRefusal_MapsToItsStatusAndCode` + 2 satır (`AMBIGUOUS_ROW_MATCH` 409, `ROW_TRANSFER_UNRESOLVED` 422); yeni `EveryClosureError_HasARowInTheMappingTable` | Her `ClosureError` değerinin eşleme tablosunda satırı var — yeni bir ret istemciye 500 olarak sızamaz |
+
+### Runbook §D adım 7.4 (yönetici kararı, ⚠ PARA)
+
+- Elle yolda hash bağlamadan önce her hash için iki şart: Ethereum servisinin `POST /api/transfer/verify` ucu satırın token/gönderen/alıcı/tutarıyla **`MATCH`** dönmeli; bağlama bir **AuditLog satırıyla** yazılmalı (serbest metin not yetmez).
+- N özdeş satır/işlemde satır başı kanıt yerine toplam sayı + toplam tutar eşleşmesi yeter; tutmazsa satırlar `PENDING` kalır.
+
+### Kapanış testleri
+
+- Backend unit (CI filtresi `FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract`): Shared 571, Platform 161, Users 49, Fraud 19, Auth 92, Steam 59, Disputes 25, Realtime 44, Transactions 892, Notifications 133, API 113 — hepsi geçti.
+- Entegrasyon (gerçek SQL Server, Testcontainers): `OutboundRowClosure*`, `AdminOutboundClosuresEndpointTests`, `AdminWallet*`, `AdminTransactionNetwork*` — 130/130.
+- `dotnet format --verify-no-changes --severity error` (değişen test dosyaları) temiz.
+
+### Commit & PR (kapanış)
+
+- PR: #354 (merge yöneticide).
