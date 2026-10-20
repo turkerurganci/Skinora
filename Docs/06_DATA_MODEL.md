@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.32** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-19 — T158 — Ethereum kurulumu: §3.7 PaymentAddress.MonitorFromBlock (bigint NULL, CHECK ≥ 0). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
+**Versiyon: v6.33** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-20 — T159a — §3.8 GasFee: reddedilen ödeme iadelerinde de düşülen gas snapshot'ı (Amount net). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -909,7 +909,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 | `Amount` | decimal(18,6) | NOT NULL | Transfer tutarı |
 | `Token` | int | NOT NULL | Enum: StablecoinType |
 | `ActualTokenAddress` | string(50) | NULL | Yanlış token senaryosunda gelen/refund edilen token'ın contract adresi. `WRONG_TOKEN_INCOMING` ve `WRONG_TOKEN_REFUND` türlerinde dolu |
-| `GasFee` | decimal(18,6) | NULL | Gas fee tutarı (TRX) |
+| `GasFee` | decimal(18,6) | NULL | Ağ ücreti tahmininin USDT karşılığı (snapshot). `SELLER_PAYOUT`: split'e giren tahmin; `BUYER_REFUND` ve **T159a'dan itibaren** reddedilen ödeme iadeleri (`INCORRECT_AMOUNT_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `LATE_PAYMENT_REFUND`): iade tutarından düşülen tahmin — `Amount` net (alıcının aldığı), `Amount + GasFee` iade tabanı (07 §7.5 `originalAmount`). `SWEEP`'te NULL. T159a öncesi yazılmış reddedilen ödeme iadelerinde NULL (brüt gönderildi) |
 | `RealizedFeeWei` | decimal(38,0) | NULL | **T154 — Ethereum:** transferin zincirde gerçekten ödediği ücret, wei (makbuz `gasUsed × effectiveGasPrice`), onay anında yazılır. Ölçüm içindir, tahsil edilmez (08 §3.1a "Gerçekleşen ücret kaydedilir"). Servisten ondalık **metin** gelir (`realizedFeeWei`), en çok 28 hane (C# `decimal`'a tam sığar), double'dan hiç geçmez; bozuk değer NULL kalır ve uyarı log'lanır, onayı engellemez. TRON satırında her zaman NULL (TRON'un karşılığı `RealizedFeeSun`) |
 | `Status` | int | NOT NULL | Enum: BlockchainTransactionStatus |
 | `BlockNumber` | long | NULL | Blockchain blok numarası |

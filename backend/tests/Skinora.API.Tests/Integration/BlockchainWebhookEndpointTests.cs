@@ -352,7 +352,9 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         Assert.Equal(TransactionStatus.SELLER_CONFIRMED, tx!.Status);
 
         var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
-        Assert.Equal(50m, refund.Amount);
+        // T159a — received 50 minus the refund's own gas (the 2.00 fallback estimate here).
+        Assert.Equal(48m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
         // K9 (T147) — the buyer's refund address fixed at acceptance, not the
         // sender of the rejected transfer.
@@ -404,7 +406,9 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         Assert.Equal(TransactionStatus.PAYMENT_RECEIVED, tx!.Status);
 
         var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.EXCESS_REFUND);
-        Assert.Equal(10m, refund.Amount);
+        // T159a — the excess (10) minus the refund's own gas (2.00).
+        Assert.Equal(8m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
 
         var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
@@ -476,7 +480,9 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
         var tx = await _factory.GetTransactionAsync(ids.TransactionId);
         Assert.Equal(TransactionStatus.SELLER_CONFIRMED, tx!.Status);
         var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
-        Assert.Equal(10.759m, refund.Amount);
+        // T159a — the unrounded received amount minus the refund's own gas (2.00).
+        Assert.Equal(8.759m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         var outbox = await _factory.GetOutboxEventTypesForTransactionAsync(ids.TransactionId);
         Assert.Contains("BuyerPaymentInsufficientEvent", outbox);
         Assert.DoesNotContain("PaymentReceivedEvent", outbox);
@@ -493,7 +499,9 @@ public sealed class BlockchainWebhookEndpointTests : IClassFixture<BlockchainWeb
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var refund = await _factory.GetSingleRefundIntentAsync(ids.TransactionId, BlockchainTransactionType.WRONG_TOKEN_REFUND);
-        Assert.Equal(50m, refund.Amount);
+        // T159a — the received wrong token (50) minus the refund's own gas (2.00).
+        Assert.Equal(48m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
         Assert.Equal(envelope.data.actualContractAddress, refund.ActualTokenAddress);
         // 06 §3.8 — refund row carries the *expected* stablecoin for the txn.

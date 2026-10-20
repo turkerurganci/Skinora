@@ -4,6 +4,7 @@ import {
   backdateDeadline,
   pollPostCancelMonitoring,
   pollBlockchainTxConfirmed,
+  pollChainRowConfirmed,
   pollNotificationRecipients,
   getExpectedAmount,
   closePool,
@@ -26,11 +27,15 @@ import * as api from '../src/api';
  *   3. Wrong token (§5.3)   → WRONG_TOKEN_REFUND, tx stays SELLER_CONFIRMED.
  *   4. Unsupported (§5.3a)  → SPAM_TOKEN_INCOMING audit row, no refund, no state change.
  *   5. Late payment (§5.4)  → LATE_PAYMENT_REFUND after a payment-timeout cancel.
- *   6. Multi-payment (§5.5) → first exact accepted, second refunded in full.
+ *   6. Multi-payment (§5.5) → first exact accepted, second refunded whole (minus gas).
  * Every refund goes to the buyer's refund address fixed at acceptance
  * (seed.buyerRefundAddress — 11 §F8 K9, T147), NOT back to the payment source
  * wallet (fakeBuyerWallet) as the old T110-K1 rule did. Refund amounts are chosen so net > 2× gas
  * (gas estimate 2.0, threshold 4.0) → the refund proceeds rather than blocking.
+ * T159a (owner decision 2026-10-20, 02 §4.7 / 08 §3.4): every one of these
+ * rejected-payment refunds is sent NET of its own network fee — the row's
+ * Amount is what the buyer receives and its GasFee the deducted estimate, so
+ * Amount + GasFee = the refunded base (expectNetOfGas).
  *
  * The P2P rewrite moved ONE thing, and it moved everything with it: the state a
  * payment is legal in. `AmountValidationService` accepts a transfer only in
@@ -98,6 +103,18 @@ async function createAcceptConfirmReady(): Promise<{
   return { txId, sellerToken, buyerToken };
 }
 
+/** T159a — a rejected-payment refund leaves net of its own gas: the stored
+ *  Amount is what arrives, GasFee is the deducted estimate (> 0 on the fake's
+ *  TRON fee), and the two add back up to the refunded base. */
+function expectNetOfGas(
+  refund: { amount: number; gasFee: number | null } | null,
+  base: number,
+): void {
+  expect(refund?.gasFee ?? 0, 'refund GasFee snapshot').toBeGreaterThan(0);
+  expect(Number(refund?.amount)).toBeCloseTo(base - Number(refund?.gasFee), 6);
+  expect(Number(refund?.amount) + Number(refund?.gasFee)).toBeCloseTo(base, 6);
+}
+
 function statusOf(body: unknown): string {
   return String(api.unwrap(body).status);
 }
@@ -113,11 +130,12 @@ test('§5.1 insufficient amount → INCORRECT_AMOUNT_REFUND, tx stays SELLER_CON
   // stays SELLER_CONFIRMED and the payment timeout keeps running (no advance).
   expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('SELLER_CONFIRMED');
 
-  // step 5 — the received amount is refunded to the buyer's source wallet.
-  const refund = await pollBlockchainTxConfirmed(txId, 'INCORRECT_AMOUNT_REFUND');
+  // step 5 — the received amount minus the refund's gas (T159a) is refunded to
+  // the buyer's refund address.
+  const refund = await pollChainRowConfirmed(txId, 'INCORRECT_AMOUNT_REFUND');
   expect(refund, 'INCORRECT_AMOUNT_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
-  expect(Number(refund?.amount)).toBe(10);
+  expectNetOfGas(refund, 10);
   expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
   expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
@@ -147,12 +165,13 @@ test('§5.2 excess amount → accepted (PAYMENT_RECEIVED) + EXCESS_REFUND (exces
   expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('PAYMENT_RECEIVED');
 
   // step 5 — ONLY the excess (received − expected) is refunded to the buyer's
-  // source wallet. The EXCESS_REFUND row carries the gross excess (gas is
-  // deducted at broadcast, not from the stored Amount).
-  const refund = await pollBlockchainTxConfirmed(txId, 'EXCESS_REFUND');
+  // refund address, minus the refund's own gas (T159a): the EXCESS_REFUND row
+  // carries the net amount and snapshots the deducted fee on GasFee.
+  const refund = await pollChainRowConfirmed(txId, 'EXCESS_REFUND');
   expect(refund, 'EXCESS_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
-  expect(Number(refund?.amount)).toBeCloseTo(overpayMargin, 2);
+  expect(Number(refund?.amount) + Number(refund?.gasFee)).toBeCloseTo(overpayMargin, 2);
+  expect(refund?.gasFee ?? 0).toBeGreaterThan(0);
   expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
   expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
@@ -174,11 +193,12 @@ test('§5.3 wrong token (USDC) → WRONG_TOKEN_REFUND, tx stays SELLER_CONFIRMED
   // 03 §5.3 step 4 — payment not accepted; the transaction stays SELLER_CONFIRMED.
   expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('SELLER_CONFIRMED');
 
-  // step 5 — the received token is refunded to the buyer's source wallet.
-  const refund = await pollBlockchainTxConfirmed(txId, 'WRONG_TOKEN_REFUND');
+  // step 5 — the received token minus the refund's gas (T159a) is refunded to
+  // the buyer's refund address.
+  const refund = await pollChainRowConfirmed(txId, 'WRONG_TOKEN_REFUND');
   expect(refund, 'WRONG_TOKEN_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
-  expect(Number(refund?.amount)).toBe(10);
+  expectNetOfGas(refund, 10);
   expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
   expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
@@ -230,11 +250,12 @@ test('§5.4 late payment after timeout → LATE_PAYMENT_REFUND, tx stays CANCELL
   const late = await api.payLateViaFake(txId, { amount: '10.00' });
   expect(late.ok, `late-detected failed: ${JSON.stringify(late.body)}`).toBeTruthy();
 
-  // step 4 — auto-refunded to the buyer's source wallet (gas deducted at broadcast).
-  const refund = await pollBlockchainTxConfirmed(txId, 'LATE_PAYMENT_REFUND');
+  // step 4 — auto-refunded to the buyer's refund address, net of the refund's
+  // own gas (T159a — the row carries the net amount and the deducted fee).
+  const refund = await pollChainRowConfirmed(txId, 'LATE_PAYMENT_REFUND');
   expect(refund, 'LATE_PAYMENT_REFUND not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
-  expect(Number(refund?.amount)).toBe(10);
+  expectNetOfGas(refund, 10);
   expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
   expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 
@@ -246,7 +267,7 @@ test('§5.4 late payment after timeout → LATE_PAYMENT_REFUND, tx stays CANCELL
   expect(recipients).toContain(seed.buyerId.toLowerCase());
 });
 
-test('§5.5 multi-payment → first exact accepted (proceeds), second refunded in full, buyer notified', async () => {
+test('§5.5 multi-payment → first exact accepted (proceeds), second refunded whole minus gas, buyer notified', async () => {
   const { txId, buyerToken } = await createAcceptConfirmReady();
 
   // 03 §5.5 scenario A — the first transfer is the exact expected amount: it is
@@ -256,16 +277,17 @@ test('§5.5 multi-payment → first exact accepted (proceeds), second refunded i
   expect(statusOf((await api.getTransaction(buyerToken, txId)).body)).toBe('PAYMENT_RECEIVED');
 
   // A second distinct on-chain transfer (eventIndex 1) arrives after the tx left
-  // SELLER_CONFIRMED → treated as excess and refunded IN FULL (50, not a delta).
+  // SELLER_CONFIRMED → treated as excess and refunded WHOLE (50, not a delta),
+  // minus the refund's own gas (T159a).
   // This is the branch AmountValidationService selects on state rather than on
   // amount, which is why the setup above must land exactly on SELLER_CONFIRMED.
   const second = await api.payViaFake(txId, { amount: '50.00', eventIndex: 1 });
   expect(second.ok, `second pay failed: ${JSON.stringify(second.body)}`).toBeTruthy();
 
-  const refund = await pollBlockchainTxConfirmed(txId, 'EXCESS_REFUND');
+  const refund = await pollChainRowConfirmed(txId, 'EXCESS_REFUND');
   expect(refund, 'EXCESS_REFUND (multi-payment) not queued').not.toBeNull();
   expect(refund?.status).toBe('CONFIRMED');
-  expect(Number(refund?.amount)).toBe(50);
+  expectNetOfGas(refund, 50);
   expect(refund?.toAddress).toBe(seed.buyerRefundAddress);
   expect(refund?.toAddress).not.toBe(fakeBuyerWallet);
 

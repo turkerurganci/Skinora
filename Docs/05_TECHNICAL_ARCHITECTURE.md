@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.26** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-20 — T159a — §3.3a yeni bekleme sebepleri GAS_ESTIMATE_UNAVAILABLE / GAS_ESTIMATE_ABNORMAL. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.27** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-20 — T159a — §3.3 reddedilen ödeme iadelerinde gas fee her iki ağda düşülür (uygulandı; proje sahibi kararı). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -278,9 +278,9 @@ Bugünkü servis Tron blockchain (TRC-20) ile tüm etkileşimi yönetir. **F8 he
 | Konu | Karar |
 |---|---|
 | İade hedefi | Alıcının işlem kabul ederken **o ağ için** belirlediği iade adresine otomatik iade (02 §12.2). Bu kural F8'de bütün reddedilen ödeme iadelerine genişledi (11 §F8 K9 — T110-K1'in "paranın geldiği adrese" kuralı tersine döndü; 08 §3.4). **Uygulandı (T147):** gecikmeli ödeme dahil bütün reddedilen ödeme iadeleri `Transaction.BuyerRefundAddress`'e gider; adres yoksa iade gönderilmez, admin uyarılır |
-| İade gas fee | İade tutarından düşülür (02 bölüm 4.6 ile tutarlı) |
+| İade gas fee | İade tutarından düşülür (02 bölüm 4.6 ile tutarlı). Reddedilen ödeme iadeleri dahil — eksik tutar, fazla tutarın fazlası, çoklu transfer, yanlış token, gecikmeli ödeme — her iki ağda (proje sahibi kararı 2026-10-20 — ⚠ PARA; 02 §4.4 notu). **Uygulandı (T159a):** `AmountValidationService` iade satırına net tutarı (`gelen − gas`) yazar ve düşülen tahmini `GasFee`'de saklar; tahmin `BUYER_REFUND` ile aynı çözücüden (depozit → iade adresi, gönderilecek token) gelir. Servisler (TRON, Ethereum) backend'in tutarını olduğu gibi gönderir |
 | Minimum iade eşiği | Gas fee iadenin büyük kısmını yutuyorsa (iade < 2× gas fee) → iade yapılmaz, admin alert |
-| Yanlış token | İzleme deposit adresine gelen tüm token transferlerini (TRON: TRC-20, Ethereum: ERC-20) takip eder. Sadece beklenen token (USDT) ödeme onayını tetikler. İzin listesindeki yanlış token (USDC) gelirse → otomatik iade denemesi, başarısızsa admin alert. Desteklenmeyen token/kontrat → otomatik iade garanti edilemez, admin review (02 §4.4). Ethereum'da depozite yerel ETH gelirse admin alarmı (öneriyle kaydedildi — ⚠) (08 §3.7.4) |
+| Yanlış token | İzleme deposit adresine gelen tüm token transferlerini (TRON: TRC-20, Ethereum: ERC-20) takip eder. Sadece beklenen token (USDT) ödeme onayını tetikler. İzin listesindeki yanlış token (USDC) gelirse → otomatik iade denemesi (gas fee düşülerek — T159a), başarısızsa admin alert. Desteklenmeyen token/kontrat → otomatik iade garanti edilemez, admin review (02 §4.4). Ethereum'da depozite yerel ETH gelirse admin alarmı (öneriyle kaydedildi — ⚠) (08 §3.7.4) |
 | Admin konfigürasyonu | İzleme süreleri ve polling aralıkları admin tarafından değiştirilebilir |
 | 30 gün sonra gelen ödeme | Kullanıcı destek ile iletişime geçer → admin manuel iade başlatır |
 
@@ -290,7 +290,7 @@ Bugünkü servis Tron blockchain (TRC-20) ile tüm etkileşimi yönetir. **F8 he
 |---|---|
 | Eksik tutar | Platform kabul etmez, gelen tutar alıcıya iade edilir (gas fee düşülerek). Timeout süresi devam eder — alıcı süre dolmadan doğru tutarı gönderebilir (02 §4.4) |
 | Fazla tutar | Platform doğru tutarı kabul eder, fazla kısmı alıcıya iade eder (gas fee düşülerek). İşlem normal akışla devam eder (02 §4.4) |
-| Yanlış token (izin listesindeki token) | Platform kabul etmez, alıcının iade adresine otomatik iade edilir (02 §4.4, K9) |
+| Yanlış token (izin listesindeki token) | Platform kabul etmez, alıcının iade adresine otomatik iade edilir (gas fee düşülerek; 02 §4.4, K9) |
 | Desteklenmeyen token/kontrat | Platform bu varlığı işleyemez — otomatik iade garanti edilemez, manuel incelemeye (admin review) düşer (02 §4.4) |
 
 **Satıcıya ödeme gönderimi:**
