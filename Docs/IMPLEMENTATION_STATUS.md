@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-19 — T159 ✓ Tamamlandı, doğrulama KOŞULLU PASS (Sepolia canlı provası; ayrıntı T159_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-20 — T159a ⏳ sahip kararı uygulandı: reddedilen ödeme iadelerinde gas iki ağda alıcıdan; doğrulama bekliyor (T159a_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -346,7 +346,7 @@
 | T157 | Admin ekranları ağ başına | ⬚ Bekliyor |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (merge yöneticide) ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
 | T159 | Sepolia canlı provası + TRON regresyonu | ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak) ([rapor](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355)) |
-| T159a | Ethereum gas tarifesine uyum (T159 B1, ⚠ PARA) [ÇOK RİSKLİ] | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T159a_REPORT.md)) |
+| T159a | Ethereum gas tarifesine uyum (T159 B1, ⚠ PARA) [ÇOK RİSKLİ] | ⏳ Devam ediyor — yapım bitti + sahip kararı (2026-10-20: reddedilen ödeme iadelerinde gas iki ağda alıcıdan) uygulandı, doğrulama bekliyor ([rapor](TASK_REPORTS/T159a_REPORT.md), PR [#356](https://github.com/turkerurganci/Skinora/pull/356)) |
 | T159b | Sepolia giden bacağı yeniden provası (müdahalesiz) | ⬚ Bekliyor (T159a'ya bağlı) |
 | T160 | F8 Gate Check | ⬚ Bekliyor |
 

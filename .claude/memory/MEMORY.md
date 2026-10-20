@@ -7,7 +7,7 @@
 
 ## Current Status (2026-10-20)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
-- **F8 (Çok Ağlı Ödeme, T141–T160) ilerleyişi:** T141–T156 ✓ · T157 doğrulama PASS, kapanış bekliyor · T158 ✓ · T159 ✓ (doğrulama KOŞULLU PASS) · T159a doğrulama · T159b ve T160 (F8 Gate Check) sırada. Tek doğru kaynak: `Docs/IMPLEMENTATION_STATUS.md`.
+- **F8 (Çok Ağlı Ödeme, T141–T160) ilerleyişi:** T141–T156 ✓ · T157 doğrulama PASS, kapanış bekliyor · T158 ✓ · T159 ✓ (doğrulama KOŞULLU PASS) · T159a ⏳ sahip kararı uygulandı (2026-10-20: reddedilen ödeme iadelerinde gas iki ağda alıcıdan; PR #356), doğrulama bekliyor · T159b ve T160 (F8 Gate Check) sırada. Tek doğru kaynak: `Docs/IMPLEMENTATION_STATUS.md`.
 - **⚠️ Hâlâ geri alınacak:** `auth.min_steam_account_age_days` = 1 (üretim 30) → F9 T166.
 - **Ayrıntılı task changelog** (T23–T97 + gate-check / validator / tasarım / GPT-review) ve **F8 görev başına eski durum satırları (T141–T159, 2026-10-20'de taşındı)** → [`MEMORY_ARCHIVE.md`](MEMORY_ARCHIVE.md); tek bir görev için arşivi `grep`'le.
 
