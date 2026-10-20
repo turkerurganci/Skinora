@@ -1,7 +1,11 @@
 ---
 name: feedback_resume_after_limit
 description: "Uzun işlerde kullanım limiti dolarsa, limit açılınca işe kendiliğinden devam et (oturum içi cron ile); sahip onayı gereken adımları atlama"
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 5bc45550-db41-49cf-a962-3f298223086e
+  modified: 2026-09-30T21:57:15.818Z
 ---
 
 Çalışma sürerken kullanım limiti dolarsa, limit açılınca işe kaldığı yerden kendiliğinden devam et. Kullanıcının "devam" demesini bekleme.

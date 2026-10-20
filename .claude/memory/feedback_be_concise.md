@@ -1,7 +1,11 @@
 ---
 name: feedback_be_concise
 description: Yanitlari kisa tut; uzun ozet/tablo yerine az yazip soru sor
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: ca62ed2f-4c11-4a9d-a69c-cffdb348e4d2
+  modified: 2026-08-23T10:43:58.635Z
 ---
 
 Kısa yaz. Uzun özetler, çok satırlı tablolar, madde madde gerekçe dökümleri isteme dışı. Sonucu birkaç cümlede söyle, karar gerekiyorsa kısa soru sor.

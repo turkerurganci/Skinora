@@ -1,6 +1,6 @@
 # Skinora — Project Methodology Playbook
 
-**Versiyon: v0.4** | **Bağımlılıklar:** Yok (kök doküman) | **Son güncelleme:** 2026-03-28
+**Versiyon: v0.4** | **Bağımlılıklar:** Yok (kök doküman) | **Son güncelleme:** 2026-03-28 · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#00_project_methodologymd)
 
 > Bu doküman, bir yazılım projesini fikir aşamasından kodlamaya kadar taşımak için izlenen yol haritasını, her aşamadaki yaklaşımı ve öğrenimleri tanımlar.
 > Herhangi bir projede şablon olarak kullanılabilir.

@@ -1,7 +1,11 @@
 ---
 name: feedback_added_latency_check_caller_timeout
 description: "Senkron bir çağrıya bekleme/gecikme eklemeden önce ÇAĞIRANIN zaman aşımını, yeniden deneme davranışını ve eşzamanlılık kilidini oku; \"düzeltme\" yeni bir çift-yürütme açabilir"
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 1def4550-89e3-40d3-838c-817c46d5c188
+  modified: 2026-09-17T12:37:44.245Z
 ---
 
 Bir düzeltme senkron bir çağrının süresini uzatıyorsa (blok bekleme, polling, retry), kodu yazmadan önce **çağıranı** oku: HTTP zaman aşımı kaç sn, zaman aşımında ne yapıyor (yeniden deneme mi, terminal mi), aynı işi iki kez başlatabilecek eşzamanlı bir tetik var mı.

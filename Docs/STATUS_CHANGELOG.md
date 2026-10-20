@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-19 — **T159 ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak)** (Sepolia canlı provası; rapor [`T159_REPORT.md`](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355), doğrulanan HEAD `1f1d38ae`, CI `39196090612` ✓). Merge yöneticide.
+
 **Önceki güncelleme:** 2026-10-19 — **T158 ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme turu → tur 2 ✓ PASS** (Ethereum kurulumu; rapor [`T158_REPORT.md`](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353), doğrulanan HEAD `527cd680`, CI `39180296572` ✓; tur 1 HEAD `22c75eb6`, CI `39171417610`). Kapanışta yönetici kararı (⚠ PARA): yayınlanmış (`DETECTED`) sweep alıcı iadesinde "çalışmış" sayılır, TRON ağ ücreti satırı geri verilmez (11 §F8 "T158 düzeltme turu" (g)). Merge yöneticide.
 
 **Önceki güncelleme:** 2026-10-18 — **T153 ✓ Tamamlandı — bağımsız doğrulama ✓ PASS** (yakıt cüzdanı; rapor [`T153_REPORT.md`](TASK_REPORTS/T153_REPORT.md), PR [#352](https://github.com/turkerurganci/Skinora/pull/352), doğrulanan HEAD `bcc74854`, CI `39156856045` ✓; bozma bağımsız ölçüm 45/34 — yapım raporunun 31/31'i uyuşmuyor). Kapanışta yönetici kararları: yakıtın kendi ücreti günlük tavana sayılır + ücretinden küçük yakıt gönderilmez (⚠ PARA), imzacıya eksik kadar sınır, yalnız yakıt kaydı olan kimlikte `IDEMPOTENCY_CONFLICT`, para test boşlukları; yakıt izleme kaydına bağlanmaz (⚠ PARA), ikinci yakıt yok, ~0,006 $ fark platformda, sıcak cüzdan ETH alarmı bu görevde (11 T153 (xiv)–(xviii)). Merge yöneticide.

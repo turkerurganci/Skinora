@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-19 — **T157 ⏳ doğrulama tur 1 ✗ FAIL → düzeltme turu yapıldı, hedefli yeniden doğrulama bekliyor** (admin ekranları ağ başına + ⚠ PARA kapatma aracı; rapor [`T157_REPORT.md`](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)): main (T158 `92154a6d`) birleştirildi; zincirdeki token ortak kuraldan (yanlış token iadesi gerçek token'la doğrulanır), kapatma aracının durum sorgusu T158 beklentisini taşır, yönetici kararıyla `AMBIGUOUS_ROW_MATCH` reddi, soğuk aktarım `SIDECAR_UNAVAILABLE` metni "gönderilmiş olabilir", belgeler ve test boşlukları. Merge yok.
+**Son güncelleme:** 2026-10-19 — T159 ✓ Tamamlandı, doğrulama KOŞULLU PASS (Sepolia canlı provası; ayrıntı T159_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -345,7 +345,8 @@
 | T156 | Kullanıcı arayüzü — ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
 | T157 | Admin ekranları ağ başına | ⏳ Devam ediyor — tur 1 ✗ FAIL → düzeltme turu yapıldı, yeniden doğrulama bekliyor ([rapor](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)) |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (merge yöneticide) ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
-| T159 | Sepolia canlı provası + TRON regresyonu | ⬚ Bekliyor |
+| T159 | Sepolia canlı provası + TRON regresyonu | ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak) ([rapor](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355)) |
+| T159b | Sepolia giden bacağı yeniden provası (müdahalesiz) | ⬚ Bekliyor (T159a'ya bağlı) |
 | T160 | F8 Gate Check | ⬚ Bekliyor |
 
 ---

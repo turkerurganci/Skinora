@@ -1,7 +1,11 @@
 ---
 name: feedback_scripted_doc_edits_verify_against_head
 description: "Doküman satırlarını betikle değiştirdikten sonra HEAD'e karşı satır sonu normalize edilmiş diff al; perl'e çok satırlı metni ortam değişkeniyle değil dosyadan byte modunda ver"
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: b068d66b-753d-4cd8-b60a-29d555b360ce
+  modified: 2026-09-16T18:08:54.067Z
 ---
 
 Bir doküman dosyasında satırları perl/sed ile değiştirdiğinde, commit'ten önce dosyayı **HEAD'e karşı** satır sonu normalize ederek karşılaştır (`git show HEAD:f | tr -d '\r'` ile `tr -d '\r' < f`) ve yalnız hedeflenen satırların değiştiğini gör.

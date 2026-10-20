@@ -55,7 +55,7 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
 
 **Kanıt zorunluluğu:** Startup check sonucu (3 run ID + conclusion) TXX_REPORT.md'nin "Notlar" bölümüne yazılır. Bu, retrospektif denetim için zorunlu audit trail'dir.
 
-1. **Task tanımını oku:** `Docs/11_IMPLEMENTATION_PLAN.md`'den `hedef` task'ın tanımını bul ve oku:
+1. **Task tanımını oku:** Plan faz başına bölünmüştür (11 v1.18). Okunacak: `Docs/11_IMPLEMENTATION_PLAN.md` başındaki **atıf haritası** (hangi faz hangi dosyada) + ilgili faz dosyası: F0–F7 → `Docs/plan/11_F0-F7_ARCHIVE.md`, F8 → `Docs/plan/11_F8.md`, F9 → `Docs/plan/11_F9.md`. `hedef` task'ın tanımını ilgili **faz dosyasından** bul ve oku; **tüm `11_IMPLEMENTATION_PLAN.md`'yi okuma** (~130 bin token'lık yük). Faz dosyalarında bölüm numaraları ve başlıklar ana dosyadakiyle aynıdır ("11 §F8", "11 T150" atıfları geçerli):
    - Task adı
    - Bağımlılıklar
    - Doküman referansları
@@ -135,6 +135,8 @@ gh run list --branch main --limit 3 --json databaseId,conclusion,status,displayT
 
 15. **Status güncelleme:** `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `⏳ Devam ediyor` olarak işaretle.
     - **Not:** `✓ Tamamlandı` yapma — bu doğrulama chat'inin işi.
+    - **"Son güncelleme" tek satırdır** (tarih + son görev + durum, ≤ ~300 karakter); ayrıntı rapora yazılır. Değiştirdiğin önceki "Son güncelleme" satırını `Docs/STATUS_CHANGELOG.md`'nin en üstüne ("## Güncelleme geçmişi" altına, `**Önceki güncelleme:** ...` biçiminde) taşı.
+    - **Belge başlığı kuralı (Docs/ 00–12, DEPLOY_RUNBOOK vb.):** bir belgeyi güncellediysen başlıkta (3. satır) **yalnız** sürümü, tarihi ve ≤150 karakterlik tek cümleyi değiştir: `**Versiyon: vX.Y** | **Bağımlılıklar:** ... | **Son güncelleme:** YYYY-MM-DD — <tek kısa cümle> · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#<belge-çapası>)`. Ayrıntılı notu `Docs/DOC_CHANGELOG.md`'de **o belgenin bölümünün en üstüne** ekle. Başlığa "Önceki güncelleme" zinciri **EKLENMEZ** (paralel dallar her birleştirmede o satırda çakışıyordu).
 
 16. **Rapor + status commit:** Rapor taslağı ve status değişikliğini commit'le ve push'la.
     - **Neden:** Cloud session'larda (claude.ai/code) session kapandığında local dosyalar kaybolur. Commit+push edilmeyen rapor/status yok olur. PC session'larında da repo'da kalması validator'ın branch'te görmesi için gerekli.

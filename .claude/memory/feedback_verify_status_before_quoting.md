@@ -1,7 +1,8 @@
 ---
 name: Status sorusu — kaynağı oku, kısa cevap ver
 description: "Sırada ne var / hangi task / nerede kaldık" sorularında MEMORY snapshot'a güvenme, Docs/IMPLEMENTATION_STATUS.md'den oku; cevap en fazla 3 kısa satır (neredeyiz + sıradaki adım + tek soru)
-type: feedback
+metadata:
+  type: feedback
 ---
 
 "Sırada ne var?", "hangi task?", "nerede kaldık?", "F1'de kalan ne?" gibi durum sorularına **MEMORY.md "Current Status" / "Next" alanlarına bakarak** cevap verme. Önce [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) dosyasını oku, oradaki tabloyu (✓/⏳/⬚ kolonları) kaynak kabul et.

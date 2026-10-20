@@ -1,7 +1,10 @@
 ---
 name: feedback_run_full_unit_suite_for_enum_changes
-description: Adding an enum value breaks exact-count parity tests in sibling test projects — run the full Unit-filter suite before pushing, not just the touched project
-type: feedback
+description: "Adding an enum value breaks exact-count parity tests in sibling test projects — run the full Unit-filter suite before pushing, not just the touched project"
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: b77515ec-917b-4b32-95ba-8c1fd35e96d0
 ---
 
 In the Skinora backend, adding a value to any `Skinora.Shared.Enums` enum breaks **exact-count + completeness parity tests that live in different test projects than the code**, so running only the touched project's tests passes locally but CI's Unit job fails.

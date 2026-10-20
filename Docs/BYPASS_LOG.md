@@ -83,3 +83,4 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-10-18 10:31 UTC | Türker urgancı | task/T149-ag-ucreti-politikasi | `d2dd6ba` | [ci-failure] ci-failure fix-forward: T149 seed-count tests updated (72->75, eth keys 8->9) |
 | 2026-10-18 11:04 UTC | Türker urgancı | task/T149-ag-ucreti-politikasi | `dc88bc7` | [ci-failure] ci-failure fix-forward: previous run cancelled by advisory E2E infra hang (compose up --wait), report update |
 | 2026-10-18 23:40 UTC | Türker urgancı | task/T157-admin-ag-basina | `bc0d421b` | [ci-failure] ci-failure fix-forward: dotnet format whitespace in new T157 test files |
+| 2026-10-19 03:26 UTC | Türker urgancı | task/T159-sepolia-provasi | `pending` | [secret-guard] T159 raporu: Nile TRON islem hash'leri (64 hex, kamu zinciri) - sir degil |
