@@ -38,7 +38,7 @@
 
 ### 3.1 Task Bazlı İlerleme
 
-- Her task (`11_IMPLEMENTATION_PLAN.md`) ayrı bir chat'te yapılır.
+- Her task (`11_IMPLEMENTATION_PLAN.md` + faz dosyaları `Docs/plan/`) ayrı bir chat'te yapılır.
 - Her task tamamlandığında ayrı bir doğrulama chat'i açılır (yapan ≠ denetleyen).
 - Task sırası plandaki sıraya sadık kalır. Atlama yapılmaz.
 - Her task başlamadan önce şu üç şey net olmalı:
@@ -73,7 +73,7 @@
 
 ### 3.3 Doğrulama Döngüsü
 
-- Her task'ın kabul kriterleri `11_IMPLEMENTATION_PLAN.md`'den gelir.
+- Her task'ın kabul kriterleri ilgili faz dosyasından gelir (`Docs/plan/11_F0-F7_ARCHIVE.md`, `11_F8.md`, `11_F9.md`; hangi faz hangi dosyada → `11_IMPLEMENTATION_PLAN.md` başındaki atıf haritası). Tüm 11'i okuma; faz dosyası + atıf haritası yeter.
 - Doğrulama kuralları `12_VALIDATION_PROTOCOL.md`'de tanımlıdır.
 - **Validator izolasyon kuralları:**
   - Doğrulama chat'i **yapım raporunu (TXX_REPORT taslağını) görmeden** başlar.
@@ -125,7 +125,7 @@ Bir task BLOCKED durumuna düştüğünde:
 3. **Proje sahibine sunulur:** Sorun ve çözüm önerileri ile birlikte
 4. **Karar alınır:** Proje sahibi şunlardan birini seçer:
    - Doküman düzeltmesi → ilgili doküman güncellenir, task tekrar başlar
-   - Plan güncellemesi → `11_IMPLEMENTATION_PLAN.md` güncellenir
+   - Plan güncellemesi → `11_IMPLEMENTATION_PLAN.md` (ya da ilgili `Docs/plan/11_F*.md` faz dosyası) güncellenir
    - Task yeniden tanımlama → kabul kriterleri / bağımlılıklar revize edilir
    - Erteleme → task parklanır, sonraki task'a geçilir (nadiren)
 5. **Güncelleme:** Etkilenen dokümanlar ve plan güncellenir
@@ -174,6 +174,8 @@ Bir task BLOCKED durumuna düştüğünde:
 - Her task sonrası `Docs/IMPLEMENTATION_STATUS.md` güncellenir (özet tablo).
 - **Güncelleme sırası kuralı:** `TXX_REPORT.md` finalize edilmeden `IMPLEMENTATION_STATUS.md` güncellenmiş sayılmaz. Önce rapor, sonra status tablosu. Bu kural drift'i önler.
 - Rapor şablonu §3.8'de tanımlıdır.
+- **Belge başlığı kuralı:** `Docs/` belgesi güncellenirken başlıkta (3. satır) yalnız sürüm + tarih + ≤150 karakterlik tek cümle tutulur: `**Versiyon: vX.Y** | **Bağımlılıklar:** ... | **Son güncelleme:** YYYY-MM-DD — <tek cümle> · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#<belge-çapası>)`. Ayrıntı `Docs/DOC_CHANGELOG.md`'de o belgenin bölümünün en üstüne yazılır. Başlığa "Önceki güncelleme" zinciri EKLENMEZ.
+- **`IMPLEMENTATION_STATUS.md` "Son güncelleme":** tek satır (tarih + son görev + durum); ayrıntı rapora yazılır, değiştirilen eski satır `Docs/STATUS_CHANGELOG.md`'nin en üstüne taşınır.
 
 ### 3.8 Task Rapor Şablonu
 

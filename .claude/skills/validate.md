@@ -69,7 +69,7 @@ grep -E "T${HEDEF_NO}\b|T${HEDEF_NO}\s" .claude/memory/MEMORY.md
   - Düzeltme: Yapım chat'ine geri dön → memory güncelle → `chore: memory — TXX yansıt` commit + push (aynı task PR'ına dahil edilebilir veya ayrı chore PR). Sonra validator yeniden başlatılır.
 - "Sonra ekleriz", "önemsiz" rasyonelizasyonları yasak — Adım 0 CI kuralının memory eşdeğeri.
 
-1. **Task tanımını oku:** `Docs/11_IMPLEMENTATION_PLAN.md`'den `hedef` task'ın tanımını bul:
+1. **Task tanımını oku:** Plan faz başına bölünmüştür (11 v1.18). Okunacak: `Docs/11_IMPLEMENTATION_PLAN.md` başındaki **atıf haritası** (hangi faz hangi dosyada) + ilgili faz dosyası: F0–F7 → `Docs/plan/11_F0-F7_ARCHIVE.md`, F8 → `Docs/plan/11_F8.md`, F9 → `Docs/plan/11_F9.md`. `hedef` task'ın tanımını ilgili **faz dosyasından** bul; **tüm `11_IMPLEMENTATION_PLAN.md`'yi okuma**:
    - Kabul kriterleri
    - Test beklentisi
    - Doğrulama kontrol listesi
@@ -93,7 +93,7 @@ grep -E "T${HEDEF_NO}\b|T${HEDEF_NO}\s" .claude/memory/MEMORY.md
      - `~ Kısmi` — kısmen karşılandı, ne eksik detaylı açıkla
      - `? Doğrulanamadı` — kanıt üretilemedi veya yetersiz (bu FAIL değil, kanıt eksikliği)
 
-6. **Doğrulama kontrol listesini çalıştır:** `11_IMPLEMENTATION_PLAN.md`'deki doğrulama kontrol listesi maddelerini tek tek geç.
+6. **Doğrulama kontrol listesini çalıştır:** İlgili faz dosyasındaki (`Docs/plan/11_F*.md`) doğrulama kontrol listesi maddelerini tek tek geç.
 
 7. **Testleri çalıştır:**
    - `dotnet test` (backend)
@@ -143,6 +143,8 @@ grep -E "T${HEDEF_NO}\b|T${HEDEF_NO}\s" .claude/memory/MEMORY.md
 15. **Status güncelle:** (sadece PASS durumunda)
     - `Docs/IMPLEMENTATION_STATUS.md`'de task durumunu `✓ Tamamlandı` yap
     - **Kural:** Rapor finalize edilmeden status güncellenmiş sayılmaz
+    - **"Son güncelleme" tek satırdır** (tarih + son görev + durum); ayrıntı rapora yazılır, eski satır `Docs/STATUS_CHANGELOG.md`'nin en üstüne taşınır.
+    - **Belge başlığı kuralı:** doğrulamada bir belge değiştiyse başlıkta yalnız sürüm + tarih + ≤150 karakter tek cümle güncellenir; ayrıntı `Docs/DOC_CHANGELOG.md`'de o belgenin bölümünün en üstüne yazılır. Başlığa "Önceki güncelleme" zinciri EKLENMEZ.
 
 16. **Rapor + status commit+push:** Finalize edilmiş rapor ve status değişikliğini commit'le ve push'la.
     - Bu adım merge'den önce yapılmalı — aksi halde squash merge bu değişiklikleri içermez.

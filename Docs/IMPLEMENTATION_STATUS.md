@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-19 — **T159 ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak)** (Sepolia canlı provası; rapor [`T159_REPORT.md`](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355), doğrulanan HEAD `1f1d38ae`, CI `39196090612` ✓). Merge yöneticide.
+**Son güncelleme:** 2026-10-19 — T159 ✓ Tamamlandı, doğrulama KOŞULLU PASS (Sepolia canlı provası; ayrıntı T159_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 

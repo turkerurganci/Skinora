@@ -1,6 +1,6 @@
 # Skinora — Project Vision
 
-**Versiyon: v1.2** | **Bağımlılıklar:** `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-17 (**T141** — §6.1 ödeme ağı ve token: yalnız USDT, TRON + Ethereum; 11 §F8 K1–K3) · 2026-03-15
+**Versiyon: v1.2** | **Bağımlılıklar:** `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-17 — T141 — §6.1 ödeme ağı ve token: yalnız USDT, TRON + Ethereum (11 §F8 K1–K3). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#01_project_visionmd)
 
 ---
 
