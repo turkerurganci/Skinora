@@ -4,6 +4,7 @@ import {
   DisputeResolutionOutcome,
   DisputeStatus,
   DisputeType,
+  BlockchainNetwork,
   StablecoinType,
   TransactionStatus,
 } from "@/types/enums";
@@ -450,6 +451,8 @@ export interface AdminTransactionListItem {
   itemImageUrl: string | null;
   price: number;
   stablecoin: StablecoinType;
+  /** T157 — chosen payment network; `null` until the buyer accepts. */
+  network: BlockchainNetwork | null;
   status: TransactionStatus;
   seller: AdminTransactionParty;
   buyer: AdminTransactionParty | null;
@@ -470,6 +473,8 @@ export interface AdminTransactionListQuery {
   status?: TransactionStatus;
   statusGroup?: AdminTransactionStatusGroup;
   stablecoin?: StablecoinType;
+  /** T157 — filter by payment network. */
+  network?: BlockchainNetwork;
   dateFrom?: string;
   dateTo?: string;
   minAmount?: number;
@@ -560,6 +565,8 @@ export interface AdminTransactionDetail {
   itemInspectLink: string | null;
   price: number;
   stablecoin: StablecoinType;
+  /** T157 — chosen payment network; `null` before the buyer accepts (read as TRON). */
+  network: BlockchainNetwork | null;
   commissionRate: number;
   commissionAmount: number;
   totalAmount: number;
@@ -614,6 +621,7 @@ export function listAdminTransactions(
   if (query.status) params.set("status", query.status);
   if (query.statusGroup) params.set("statusGroup", query.statusGroup);
   if (query.stablecoin) params.set("stablecoin", query.stablecoin);
+  if (query.network) params.set("network", query.network);
   if (query.dateFrom) params.set("dateFrom", query.dateFrom);
   if (query.dateTo) params.set("dateTo", query.dateTo);
   if (query.minAmount !== undefined) params.set("minAmount", String(query.minAmount));
@@ -1028,4 +1036,203 @@ export function listAdminAuditLogs(query: AdminAuditLogQuery): Promise<AdminAudi
   if (query.pageSize !== undefined) params.set("pageSize", String(query.pageSize));
   const qs = params.toString();
   return apiClient<AdminAuditLogResponse>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * AD38 / AD20 — Admin wallets overview + hot→cold transfer (T157).
+ * One entry per network, in enum order. `decimal` money fields on the rows
+ * serialize as JSON numbers; balances carry decimal STRINGS so no precision is
+ * lost. `address: null` = not configured / unknown; `balances: null` =
+ * unavailable (never zero).
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type PlatformWalletRole = "HOT" | "COLD" | "FUEL";
+export type WalletBalancesStatus = "OK" | "UNAVAILABLE" | "NOT_CONFIGURED";
+export type ColdTransferToken = "USDT" | "USDC";
+
+export interface WalletBalance {
+  symbol: string;
+  amount: string;
+}
+
+export interface PlatformWallet {
+  role: PlatformWalletRole;
+  address: string | null;
+  configuredAddress: string | null;
+  /** The configured hot address differs from the one the signing service uses. */
+  addressMismatch: boolean;
+  balances: WalletBalance[] | null;
+  nativeFloor: string | null;
+  belowNativeFloor: boolean | null;
+}
+
+export interface OutboundQueueSummary {
+  pendingCount: number;
+  oldestPendingAt: string | null;
+  inFlightCount: number;
+}
+
+export interface ColdTransfer {
+  id: number;
+  token: ColdTransferToken;
+  amount: number;
+  fromAddress: string;
+  toAddress: string;
+  txHash: string;
+  initiatedBy: string;
+  createdAt: string;
+}
+
+export type OutboundRowStatus = "DETECTED" | "PENDING" | "CONFIRMED" | "FAILED";
+
+export interface OutboundRow {
+  id: string;
+  transactionId: string;
+  /** SELLER_PAYOUT | BUYER_REFUND | EXCESS_REFUND | WRONG_TOKEN_REFUND | INCORRECT_AMOUNT_REFUND | LATE_PAYMENT_REFUND | SWEEP */
+  type: string;
+  status: OutboundRowStatus;
+  token: string;
+  amount: number;
+  toAddress: string;
+  txHash: string | null;
+  retryCount: number;
+  createdAt: string;
+}
+
+export interface NetworkWallets {
+  network: BlockchainNetwork;
+  serviceConfigured: boolean;
+  degraded: boolean;
+  nativeAsset: string;
+  balancesStatus: WalletBalancesStatus;
+  balancesBlock: number | null;
+  wallets: PlatformWallet[];
+  outbound: OutboundQueueSummary;
+  recentColdTransfers: ColdTransfer[];
+  recentOutbound: OutboundRow[];
+}
+
+export interface AdminWalletsResponse {
+  networks: NetworkWallets[];
+}
+
+export interface HotToColdTransferRequest {
+  amount: number;
+  token: ColdTransferToken;
+  network: BlockchainNetwork;
+}
+
+export interface HotToColdTransferResult {
+  coldTransferId: number;
+  txHash: string;
+  amount: string;
+  token: ColdTransferToken;
+  fromAddress: string;
+  toAddress: string;
+  network: BlockchainNetwork;
+}
+
+export function getAdminWallets(): Promise<AdminWalletsResponse> {
+  return apiClient<AdminWalletsResponse>("/admin/wallets");
+}
+
+/** AD20 — move funds from the hot wallet to the fixed cold wallet of one network. */
+export function hotToColdTransfer(
+  request: HotToColdTransferRequest,
+): Promise<HotToColdTransferResult> {
+  return apiClient<HotToColdTransferResult>("/admin/wallets/hot-to-cold-transfer", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Outbound-row closure tool (T157) — two-person tool that binds an on-chain
+ * transaction hash to a stuck Ethereum outbound row. It never sends money.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type OutboundClosureStatus = "PROPOSED" | "APPROVED" | "REJECTED";
+
+export interface OutboundClosureCandidate {
+  blockchainTransactionId: string;
+  transactionId: string;
+  type: string;
+  /** The stablecoin the transaction expected. */
+  token: string;
+  /**
+   * T157 düzeltme turu — the stablecoin the row moves on chain (a wrong-token
+   * refund returns the token that arrived); null when it cannot be resolved,
+   * and then the tool refuses the row.
+   */
+  chainToken: string | null;
+  amount: number;
+  fromAddress: string;
+  toAddress: string;
+  retryCount: number;
+  createdAt: string;
+  hasLiveClosure: boolean;
+}
+
+export interface OutboundClosure {
+  id: string;
+  status: OutboundClosureStatus;
+  blockchainTransactionId: string;
+  transactionId: string;
+  rowType: string;
+  token: string;
+  /** See {@link OutboundClosureCandidate.chainToken}. */
+  chainToken: string | null;
+  amount: number;
+  fromAddress: string;
+  toAddress: string;
+  rowStatus: OutboundRowStatus;
+  txHash: string;
+  reason: string;
+  proposedByAdminId: string;
+  proposedByName: string;
+  proposedAt: string;
+  decidedByAdminId: string | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+}
+
+export interface ProposeOutboundClosureRequest {
+  blockchainTransactionId: string;
+  txHash: string;
+  reason: string;
+}
+
+export function listOutboundClosureCandidates(): Promise<OutboundClosureCandidate[]> {
+  return apiClient<OutboundClosureCandidate[]>("/admin/wallets/outbound-closures/candidates");
+}
+
+export function listOutboundClosures(status?: OutboundClosureStatus): Promise<OutboundClosure[]> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiClient<OutboundClosure[]>(`/admin/wallets/outbound-closures${qs}`);
+}
+
+export function proposeOutboundClosure(
+  request: ProposeOutboundClosureRequest,
+): Promise<OutboundClosure> {
+  return apiClient<OutboundClosure>("/admin/wallets/outbound-closures", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+/** The approver must retype the hash — `txHash` is compared server-side. */
+export function approveOutboundClosure(id: string, txHash: string): Promise<OutboundClosure> {
+  return apiClient<OutboundClosure>(
+    `/admin/wallets/outbound-closures/${encodeURIComponent(id)}/approve`,
+    { method: "POST", body: JSON.stringify({ txHash }) },
+  );
+}
+
+/** Reject, or withdraw one's own proposal. `note` is required. */
+export function rejectOutboundClosure(id: string, note: string): Promise<OutboundClosure> {
+  return apiClient<OutboundClosure>(
+    `/admin/wallets/outbound-closures/${encodeURIComponent(id)}/reject`,
+    { method: "POST", body: JSON.stringify({ note }) },
+  );
 }

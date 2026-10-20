@@ -28,6 +28,9 @@ export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, AdminRoutePermissi
   // AdminController.GetSettings — PolicyManageSettings (there is no read-only
   // settings permission; viewing and changing share one key).
   "/admin/settings": "MANAGE_SETTINGS",
+  // T157 — AdminWalletsController (AD38 overview, AD20 hot→cold transfer) and
+  // AdminOutboundClosuresController share the settings policy.
+  "/admin/wallets": "MANAGE_SETTINGS",
   // AdminController role endpoints — PolicyManageRoles.
   "/admin/roles": "MANAGE_ROLES",
   // AD15 GET /admin/users accepts VIEW_USERS *or* MANAGE_ROLES (07 §9.15).

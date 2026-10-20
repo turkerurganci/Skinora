@@ -66,6 +66,7 @@ public enum AdminTransactionStatusGroup
 /// <see cref="Status"/> when both are supplied — the S15 UI sends only one.
 /// </param>
 /// <param name="Stablecoin">Optional stablecoin filter.</param>
+/// <param name="Network">Optional network filter (T157 — accepted transactions only).</param>
 /// <param name="DateFrom">Optional inclusive lower bound on <c>CreatedAt</c>.</param>
 /// <param name="DateTo">Optional inclusive upper bound on <c>CreatedAt</c>.</param>
 /// <param name="MinAmount">Optional inclusive lower bound on <c>Price</c>.</param>
@@ -90,4 +91,5 @@ public sealed record AdminTransactionListQuery(
     string? SortBy,
     string? SortOrder,
     int Page,
-    int PageSize);
+    int PageSize,
+    BlockchainNetwork? Network = null);

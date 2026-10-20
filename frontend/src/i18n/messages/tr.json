@@ -195,6 +195,7 @@
     "disputes": "İtirazlar",
     "transactions": "İşlemler",
     "settings": "Ayarlar",
+    "wallets": "Cüzdanlar",
     "roles": "Roller",
     "users": "Kullanıcılar",
     "auditLog": "Audit Log"
@@ -494,7 +495,11 @@
       "SANCTIONS_LIST_ADDRESS_REMOVED": "Yaptırım listesinden adres çıkarıldı",
       "MAINTENANCE_MODE_CHANGED": "Bakım modu değiştirildi",
       "TIMEOUT_AUTO_EXTENDED": "Timeout otomatik uzatıldı",
-      "PLATFORM_OUTAGE_DETECTED": "Platform kesintisi tespit edildi"
+      "PLATFORM_OUTAGE_DETECTED": "Platform kesintisi tespit edildi",
+      "OUTBOUND_ROW_CLOSURE_PROPOSED": "Giden satır kapatma önerildi",
+      "OUTBOUND_ROW_CLOSURE_APPROVED": "Giden satır kapatma onaylandı",
+      "OUTBOUND_ROW_CLOSURE_REJECTED": "Giden satır kapatma reddedildi",
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "Giden satır kapatma geri çevrildi"
     }
   },
   "adminTransactions": {
@@ -511,7 +516,8 @@
       "buyer": "Alıcı",
       "status": "Durum",
       "createdAt": "Oluşturulma",
-      "completedAt": "Tamamlanma / İptal"
+      "completedAt": "Tamamlanma / İptal",
+      "network": "Ağ"
     },
     "filters": {
       "status": "Durum",
@@ -523,7 +529,9 @@
       "minAmount": "Min tutar",
       "maxAmount": "Maks tutar",
       "dateFrom": "Başlangıç",
-      "dateTo": "Bitiş"
+      "dateTo": "Bitiş",
+      "network": "Ağ",
+      "allNetworks": "Tümü"
     },
     "statusGroup": {
       "ACTIVE": "Aktif",
@@ -577,7 +585,9 @@
       "heldAt": "Hold zamanı",
       "autoHoldSanctions": "Auto-Hold — Sanctions Match",
       "readOnly": "Bu işlem terminal durumda ve salt okunur.",
-      "loadError": "İşlem detayı yüklenemedi."
+      "loadError": "İşlem detayı yüklenemedi.",
+      "network": "Ağ",
+      "viewOnExplorer": "{explorer} üzerinde görüntüle"
     },
     "actions": {
       "cancelTx": "İşlemi İptal Et",
@@ -2014,6 +2024,237 @@
       "title": "Kullanıcı bulunamadı",
       "browseDescription": "Henüz hiçbir kullanıcıya admin rolü atanmamış. Herhangi bir kullanıcıyı bulmak için Steam ID veya kullanıcı adıyla arayın.",
       "searchDescription": "Bu filtrelerle eşleşen kullanıcı yok."
+    }
+  },
+  "adminWallets": {
+    "title": "Cüzdanlar",
+    "intro": "Platform cüzdanları, bakiyeler, transferler ve giden kuyruk; her ağ için ayrı gösterilir.",
+    "loadError": "Cüzdan özeti yüklenemedi.",
+    "sectionLabel": "{network} cüzdanları",
+    "state": {
+      "notConfigured": "Bu ağ için imzalama servisi yapılandırılmamış. Bakiyeler ve transferler kullanılamıyor.",
+      "degraded": "Bu ağda sorun var. Bakiyeler eski olabilir ve transferler ertelenebilir."
+    },
+    "walletsHeading": "Cüzdanlar",
+    "tableAriaLabel": "{network} cüzdanları",
+    "columns": {
+      "role": "Rol",
+      "address": "Adres",
+      "balances": "Bakiyeler",
+      "nativeFloor": "Asgari {asset}"
+    },
+    "roles": {
+      "HOT": "Sıcak cüzdan",
+      "COLD": "Soğuk cüzdan",
+      "FUEL": "Yakıt cüzdanı"
+    },
+    "addressNotConfigured": "Yapılandırılmamış",
+    "balanceUnavailable": "Kullanılamıyor",
+    "balanceNotConfigured": "Yapılandırılmamış",
+    "balancesStatus": {
+      "UNAVAILABLE": "Bakiyeler okunamıyor: imzalama servisine ulaşılamadı. Bu sıfır bakiye anlamına gelmez.",
+      "NOT_CONFIGURED": "Bu ağ için bakiye yapılandırılmamış. Bu sıfır bakiye anlamına gelmez."
+    },
+    "balancesAtBlock": "Bakiyeler {block}. blok itibarıyla",
+    "floor": {
+      "value": "{amount} {asset}",
+      "none": "—",
+      "below": "{asset} bakiyesi asgari tutarın altında. Takviye edin."
+    },
+    "addressMismatch": "Adres uyuşmazlığı: yapılandırılmış sıcak adres ({configured}) imzalama servisinin kullandığı adresten ({actual}) farklı. Bu çözülene kadar transfer yapmayın.",
+    "outbound": {
+      "heading": "Giden kuyruk",
+      "pending": "Bekleyen: {count}",
+      "oldestPending": "En eski bekleyen: {date}",
+      "noneOldest": "En eski bekleyen: —",
+      "inFlight": "Yolda: {count}"
+    },
+    "coldHistory": {
+      "heading": "Son soğuk transferler",
+      "empty": "Henüz soğuk transfer yok.",
+      "ariaLabel": "{network} soğuk transferleri",
+      "columns": {
+        "date": "Tarih",
+        "amount": "Tutar",
+        "from": "Gönderen",
+        "to": "Alıcı",
+        "tx": "İşlem",
+        "by": "Başlatan"
+      }
+    },
+    "outboundRows": {
+      "heading": "Son giden transferler",
+      "empty": "Henüz giden transfer yok.",
+      "ariaLabel": "{network} giden transferleri",
+      "columns": {
+        "type": "Tür",
+        "status": "Durum",
+        "amount": "Tutar",
+        "to": "Alıcı",
+        "tx": "İşlem",
+        "retries": "Deneme",
+        "created": "Oluşturulma"
+      }
+    },
+    "outboundType": {
+      "SELLER_PAYOUT": "Satıcı ödemesi",
+      "BUYER_REFUND": "Alıcı iadesi",
+      "EXCESS_REFUND": "Fazla ödeme iadesi",
+      "WRONG_TOKEN_REFUND": "Yanlış token iadesi",
+      "INCORRECT_AMOUNT_REFUND": "Hatalı tutar iadesi",
+      "LATE_PAYMENT_REFUND": "Geç ödeme iadesi",
+      "SWEEP": "Toplama (sweep)"
+    },
+    "outboundStatus": {
+      "DETECTED": "Tespit edildi",
+      "PENDING": "Bekliyor",
+      "CONFIRMED": "Onaylandı",
+      "FAILED": "Başarısız"
+    },
+    "noHash": "—",
+    "transfer": {
+      "heading": "Sıcak → soğuk transfer",
+      "description": "{network} ağında sıcak cüzdandaki parayı soğuk cüzdana taşır. Hedef, dağıtım yapılandırmasıyla sabittir.",
+      "from": "Gönderen (sıcak cüzdan)",
+      "to": "Alıcı (soğuk cüzdan, sabit)",
+      "token": "Token",
+      "amount": "Tutar",
+      "amountInvalid": "Sıfırdan büyük bir tutar girin (en fazla 6 ondalık).",
+      "review": "Transferi gözden geçir",
+      "unavailable": "Transfer kullanılamıyor: sıcak veya soğuk cüzdan yapılandırılmamış.",
+      "confirmTitle": "Sıcak → soğuk transferi onayla",
+      "confirmWarning": "Bu işlem zincirde gerçek para gönderir ve geri alınamaz. Aşağıdaki her ayrıntıyı kontrol edin.",
+      "confirmNetwork": "Ağ",
+      "confirmToken": "Token",
+      "confirmAmount": "Tutar",
+      "confirmFrom": "Gönderen",
+      "confirmTo": "Alıcı",
+      "confirmSubmit": "{amount} {token} gönder",
+      "cancel": "Vazgeç",
+      "sending": "Gönderiliyor…",
+      "success": "Transfer gönderildi: {amount} {token} soğuk cüzdana.",
+      "successTx": "İşlem"
+    },
+    "closures": {
+      "heading": "Giden satır kapatma (iki kişilik)",
+      "intro": "Bunu yalnızca Ethereum imzalama servisi kayıt defterini kaybettiğinde ve bir ödeme zincirde çoktan çıkmışken satırı hâlâ bekliyor görünüyorsa kullanın. Bir yönetici zincirdeki işlem hash'ini önerir; farklı bir yönetici hash'i yeniden yazarak onaylar. Bu araç asla para göndermez.",
+      "noMoney": "Bu araç para göndermez.",
+      "candidates": {
+        "heading": "Açık Ethereum giden satırları",
+        "empty": "Açık Ethereum giden satırı yok.",
+        "ariaLabel": "Açık Ethereum giden satırları",
+        "columns": {
+          "type": "Tür",
+          "amount": "Tutar",
+          "to": "Alıcı",
+          "created": "Oluşturulma",
+          "retries": "Deneme",
+          "action": "İşlem"
+        },
+        "live": "Kapatma sürüyor",
+        "propose": "Kapatma öner"
+      },
+      "list": {
+        "heading": "Kapatmalar",
+        "statusFilter": "Durum",
+        "all": "Tümü",
+        "empty": "Bu durumda kapatma yok.",
+        "ariaLabel": "Kapatmalar"
+      },
+      "status": {
+        "PROPOSED": "Önerildi",
+        "APPROVED": "Onaylandı",
+        "REJECTED": "Reddedildi"
+      },
+      "row": {
+        "transaction": "İşlem",
+        "row": "Satır",
+        "recipient": "Alıcı",
+        "amount": "Tutar",
+        "proposedHash": "Önerilen hash",
+        "reason": "Gerekçe",
+        "proposedBy": "{name} tarafından {date} tarihinde önerildi",
+        "decidedBy": "{name} tarafından {date} tarihinde karara bağlandı",
+        "decisionNote": "Karar notu",
+        "ownProposal": "Bu kapatmayı siz önerdiniz. Farklı bir yönetici onaylamalı.",
+        "rowStatus": "Satır durumu",
+        "tokenDiffers": "İşlemin beklediği token {expected}; bu satır zincirde {actual} taşır (yanlış token iadesi).",
+        "tokenUnresolved": "Bu satırın zincirde taşıdığı token belirlenemiyor; araç bu satırı kapatamaz."
+      },
+      "actions": {
+        "approve": "Onayla",
+        "reject": "Reddet",
+        "withdraw": "Geri çek"
+      },
+      "propose": {
+        "title": "Kapatma öner",
+        "warning": "Bu araç para göndermez. Farklı bir yönetici onayladığında satır, girdiğiniz hash ile zincirde zaten ödenmiş sayılır ve platform yeniden denemeyi bırakır.",
+        "row": "Satır: {type}, {amount} {token}, alıcı {to}",
+        "hash": "Zincirdeki işlem hash'i",
+        "hashHelp": "0x ve ardından 64 onaltılık karakter.",
+        "hashInvalid": "Geçerli bir işlem hash'i girin (0x + 64 onaltılık karakter).",
+        "explorer": "Bu hash'i {explorer} üzerinde aç",
+        "reason": "Gerekçe",
+        "reasonHelp": "Hangi nonce/hesap ve zincirde neyle eşleştirdiniz (en az 20 karakter).",
+        "reasonTooShort": "Gerekçe en az 20 karakter olmalı.",
+        "submit": "Kapatma öner",
+        "cancel": "Vazgeç"
+      },
+      "approve": {
+        "title": "Kapatmayı onayla",
+        "warning": "Bu araç para göndermez, ancak onay etkisi geri alınamaz: satır zincirde zaten ödenmiş sayılır ve bir daha denenmez.",
+        "systemCheck": "Sistem işlemi satırın alıcısı ve tutarıyla karşılaştırarak kontrol eder, ancak yine de gezginde kendiniz karşılaştırmalısınız.",
+        "compare": "Onaylamadan önce bunları {explorer} üzerindeki işlemle karşılaştırın.",
+        "proposedBy": "Öneren: {name}",
+        "hashProposed": "Önerilen hash",
+        "explorer": "Önerilen hash'i {explorer} üzerinde aç",
+        "typeHash": "İşlem hash'ini yeniden yazın",
+        "typeHashHelp": "Gezginden okuyup yazın. Bilerek önceden doldurulmaz.",
+        "mismatch": "Yazdığınız hash öneriyle uyuşmuyor.",
+        "submit": "Kapatmayı onayla",
+        "cancel": "Vazgeç"
+      },
+      "reject": {
+        "titleReject": "Kapatmayı reddet",
+        "titleWithdraw": "Kapatmayı geri çek",
+        "note": "Not",
+        "noteHelp": "Zorunlu. Nedenini yazın.",
+        "noteRequired": "Not zorunludur.",
+        "submitReject": "Kapatmayı reddet",
+        "submitWithdraw": "Kapatmayı geri çek",
+        "cancel": "Vazgeç"
+      }
+    },
+    "errors": {
+      "GENERIC": "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
+      "VALIDATION_ERROR": "İstek geçersiz. Alanları kontrol edip tekrar deneyin.",
+      "INVALID_TX_HASH": "İşlem hash'i geçerli değil.",
+      "HASH_CONFIRMATION_MISMATCH": "Yazılan hash önerilen hash ile uyuşmuyor.",
+      "SELF_APPROVAL_FORBIDDEN": "Kendi önerinizi onaylayamazsınız. Farklı bir yönetici onaylamalı.",
+      "ROW_NOT_FOUND": "Giden satır bulunamadı.",
+      "CLOSURE_NOT_FOUND": "Kapatma bulunamadı.",
+      "ROW_NOT_ETHEREUM": "Satır Ethereum ağında değil.",
+      "ROW_NOT_OUTBOUND": "Satır giden bir transfer değil.",
+      "HASH_NOT_SUCCESSFUL": "Bu işlem zincirde başarılı olmadı.",
+      "HASH_NOT_FOUND": "Bu işlem hash'i zincirde bulunamadı.",
+      "HASH_DOES_NOT_MATCH_ROW": "Bu işlem bu satırı ödemiyor (alıcı, tutar veya token yanlış ya da zincirde başarısız oldu). Bu satırı kapatamaz. Hash'i gezginde kontrol edin veya öneriyi reddedin.",
+      "ROW_TRANSFER_UNRESOLVED": "Bu satırın zincirde ne taşıdığı belirlenemiyor (bilinmeyen token ya da kayıtlı gönderen yok). Araç bu satırı kapatamaz; runbook'taki elle yolu izleyin.",
+      "AMBIGUOUS_ROW_MATCH": "Bu ağda aynı alıcıya, aynı token'la ve aynı tutarda açık başka bir satır var. Zincirdeki hash hangisini ödediğini söyleyemez, bu yüzden araç reddeder. Runbook'taki elle yolu izleyin.",
+      "ROW_NOT_OPEN": "Satır artık açık değil.",
+      "CLOSURE_NOT_OPEN": "Kapatma için zaten karar verilmiş.",
+      "HASH_ALREADY_BOUND": "Bu hash başka bir satıra bağlı.",
+      "CLOSURE_ALREADY_PROPOSED": "Bu satır için zaten bir kapatma önerilmiş.",
+      "HASH_NOT_FINAL": "İşlem henüz kesinleşmedi. Daha sonra tekrar deneyin.",
+      "CLOSURE_CONFLICT": "Kapatma bu sırada değişti. Yenileyip tekrar deneyin.",
+      "CHAIN_SERVICE_UNAVAILABLE": "Zincir servisi kullanılamıyor. Daha sonra tekrar deneyin.",
+      "INVALID_AMOUNT": "Tutar geçerli değil.",
+      "INVALID_TOKEN": "Bu token bu ağda desteklenmiyor.",
+      "INVALID_NETWORK": "Ağ geçerli değil.",
+      "HOT_WALLET_NOT_CONFIGURED": "Sıcak cüzdan yapılandırılmamış.",
+      "COLD_WALLET_NOT_CONFIGURED": "Soğuk cüzdan yapılandırılmamış.",
+      "SIDECAR_UNAVAILABLE": "İmzalama servisi cevap vermedi. Aktarım imzalanıp gönderilmiş olabilir. Yeniden denemeden önce sıcak cüzdanın son çıkışını gezginde (Etherscan / Tronscan) kontrol edin.",
+      "NETWORK_UNAVAILABLE": "Ağ kullanılamıyor. Hiçbir şey gönderilmedi.",
+      "TRANSFER_DEFERRED": "Transfer ertelendi (örneğin ücret üst sınırın üstünde). Hiçbir şey gönderilmedi. Daha sonra tekrar deneyin."
     }
   }
 }

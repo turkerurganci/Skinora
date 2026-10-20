@@ -377,6 +377,53 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         }
     }
 
+    public async Task<BlockchainSidecarPlatformWalletsResult> GetPlatformWalletsAsync(
+        CancellationToken cancellationToken)
+    {
+        // Only the Ethereum service has this call (T157); asking the TRON
+        // service would be a 404 for a question it has no answer to.
+        if (_network != BlockchainNetwork.ETHEREUM)
+        {
+            return BlockchainSidecarPlatformWalletsResult.NotAsked;
+        }
+
+        using var http = new HttpRequestMessage(HttpMethod.Post, "api/wallet/platform")
+        {
+            Content = JsonContent.Create(new PlatformWalletsRequestBody(_networkWire), options: JsonOptions),
+        };
+        if (!string.IsNullOrEmpty(_options.InternalKey))
+        {
+            http.Headers.TryAddWithoutValidation(InternalKeyHeader, _options.InternalKey);
+        }
+        http.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        try
+        {
+            using var response = await _http.SendAsync(http, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar platform wallets returned {StatusCode}", (int)response.StatusCode);
+                return BlockchainSidecarPlatformWalletsResult.Unavailable;
+            }
+
+            var payload = await response.Content
+                .ReadFromJsonAsync<PlatformWalletsResponse>(JsonOptions, cancellationToken);
+            return payload is null
+                ? BlockchainSidecarPlatformWalletsResult.Unavailable
+                : new BlockchainSidecarPlatformWalletsResult(
+                    BlockchainSidecarStatus.Success,
+                    payload.HotWalletAddress,
+                    payload.FuelWalletAddress,
+                    payload.ColdWalletAddress);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            _logger.LogWarning(ex, "Blockchain sidecar platform wallets request failed");
+            return BlockchainSidecarPlatformWalletsResult.Unavailable;
+        }
+    }
+
     public async Task<BlockchainSidecarTransferResult> SendHotToColdTransferAsync(
         HotToColdTransferRequest request,
         CancellationToken cancellationToken)
@@ -386,7 +433,8 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
             ColdTransferId: request.ColdTransferId.ToString("D"),
             ToColdAddress: request.ToColdAddress,
             Amount: request.Amount,
-            Token: request.Token);
+            Token: request.Token,
+            FeeCapUsd: request.FeeCapUsd);
 
         using var http = new HttpRequestMessage(HttpMethod.Post, "api/transfer/cold-wallet")
         {
@@ -425,6 +473,21 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
 
             if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
             {
+                // T157 — the Ethereum service answers 503 for "not signed, for
+                // now" (fee above the cap, no ETH price, no gas — `deferred`)
+                // and for a stopped account (`JOURNAL_BEHIND_CHAIN`); nothing
+                // was signed. Any other 503 is the TRON meaning: the hot wallet
+                // is not configured.
+                var deferredReason = await TryReadDeferredReasonAsync(response, cancellationToken);
+                if (deferredReason is not null)
+                {
+                    _logger.LogWarning(
+                        "Blockchain sidecar did not sign the cold-wallet transfer for now: {Reason} (coldTransferId={Id})",
+                        deferredReason, request.ColdTransferId);
+                    return new BlockchainSidecarTransferResult(
+                        BlockchainSidecarStatus.Deferred, null, deferredReason);
+                }
+
                 _logger.LogWarning(
                     "Blockchain sidecar reports hot wallet not configured for cold-wallet transfer (coldTransferId={Id})",
                     request.ColdTransferId);
@@ -598,12 +661,49 @@ public sealed class HttpBlockchainSidecarClient : IBlockchainSidecarClient
         [property: JsonPropertyName("address")] string Address,
         [property: JsonPropertyName("tokens")] Dictionary<string, string>? Tokens);
 
+    /// <summary>
+    /// The reason code of a 503 that means "not signed for now" (T157), or
+    /// <c>null</c> when the body says something else or cannot be read.
+    /// </summary>
+    private static async Task<string?> TryReadDeferredReasonAsync(
+        HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var body = await response.Content
+                .ReadFromJsonAsync<DeferredBody>(JsonOptions, cancellationToken);
+            if (body is null) return null;
+            if (body.Deferred == true || string.Equals(body.Error, "JOURNAL_BEHIND_CHAIN", StringComparison.Ordinal))
+            {
+                return string.IsNullOrWhiteSpace(body.Error) ? "DEFERRED" : body.Error;
+            }
+            return null;
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private sealed record DeferredBody(
+        [property: JsonPropertyName("error")] string? Error,
+        [property: JsonPropertyName("deferred")] bool? Deferred);
+
     private sealed record ColdTransferRequestBody(
         [property: JsonPropertyName("network")] string Network,
         [property: JsonPropertyName("coldTransferId")] string ColdTransferId,
         [property: JsonPropertyName("toColdAddress")] string ToColdAddress,
         [property: JsonPropertyName("amount")] string Amount,
-        [property: JsonPropertyName("token")] string Token);
+        [property: JsonPropertyName("token")] string Token,
+        [property: JsonPropertyName("feeCapUsd"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeeCapUsd);
+
+    private sealed record PlatformWalletsRequestBody(
+        [property: JsonPropertyName("network")] string Network);
+
+    private sealed record PlatformWalletsResponse(
+        [property: JsonPropertyName("hotWalletAddress")] string? HotWalletAddress,
+        [property: JsonPropertyName("fuelWalletAddress")] string? FuelWalletAddress,
+        [property: JsonPropertyName("coldWalletAddress")] string? ColdWalletAddress);
 
     private sealed record ColdTransferResponse(
         [property: JsonPropertyName("txHash")] string? TxHash);

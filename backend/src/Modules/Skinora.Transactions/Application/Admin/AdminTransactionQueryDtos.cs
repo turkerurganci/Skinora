@@ -4,7 +4,10 @@ namespace Skinora.Transactions.Application.Admin;
 
 // ---------- AD6 — GET /admin/transactions (07 §9.6) ----------
 
-/// <summary>One row of the AD6 list (07 §9.6).</summary>
+/// <summary>
+/// One row of the AD6 list (07 §9.6). <c>Network</c> (T157): the network the
+/// accepted transaction pays on; <c>null</c> before acceptance (06 §1.4).
+/// </summary>
 public sealed record AdminTransactionListItemDto(
     Guid Id,
     string ItemName,
@@ -16,7 +19,8 @@ public sealed record AdminTransactionListItemDto(
     AdminTransactionPartyDto? Buyer,
     DateTime CreatedAt,
     DateTime? CompletedAt,
-    DateTime? CancelledAt);
+    DateTime? CancelledAt,
+    BlockchainNetwork? Network = null);
 
 /// <summary>Buyer/seller view used by the AD6 list (07 §9.6) — light snapshot.</summary>
 public sealed record AdminTransactionPartyDto(
@@ -80,7 +84,8 @@ public sealed record AdminTransactionDetailDto(
     IReadOnlyList<AdminTxNotificationDto> NotificationHistory,
     IReadOnlyList<AdminTxDisputeDto> DisputeHistory,
     IReadOnlyList<AdminTxFlagDto> FlagHistory,
-    AdminTxAdminActionsDto AdminActions);
+    AdminTxAdminActionsDto AdminActions,
+    BlockchainNetwork? Network = null);
 
 /// <summary>One row of <c>statusHistory</c> (07 §9.7).</summary>
 public sealed record AdminTxStatusHistoryDto(

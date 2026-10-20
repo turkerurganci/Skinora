@@ -1,0 +1,8 @@
+{
+  "network": "ETHEREUM",
+  "txHash": "0xabababababababababababababababababababababababababababababababab",
+  "token": "USDT",
+  "from": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+  "to": "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+  "amount": "98.2"
+}

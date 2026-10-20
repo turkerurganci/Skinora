@@ -7,6 +7,7 @@ import { checkWalletKeys, type WalletKeyAddresses } from './wallet/walletKeys.js
 import { EthereumRpcClient } from './rpc/RpcClient.js';
 import { createApp } from './api/routes.js';
 import { TxJournal } from './transfer/TxJournal.js';
+import { TransferVerifier } from './transfer/TransferVerifier.js';
 import { FEE_CAP_WAIT_REASONS, GAS_WAIT_REASONS } from './transfer/FeeWaitTracker.js';
 import { setTransferWaitSource, transferWaitAlarmSeconds } from './metrics.js';
 import { buildOutbound, buildServices } from './wiring.js';
@@ -186,6 +187,12 @@ function main(): void {
       readiness,
     },
     feeEstimator,
+    verifier: new TransferVerifier({ rpc, tokenContracts: config.tokenContracts }),
+    platformWallets: () => ({
+      hotWalletAddress: keys.hotWalletAddress,
+      fuelWalletAddress: transfers.fuelWalletAddress(),
+      coldWalletAddress: config.coldWalletAddress,
+    }),
   });
 
   const server = app.listen(config.port, '0.0.0.0', () => {

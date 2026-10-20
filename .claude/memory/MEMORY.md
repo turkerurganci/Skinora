@@ -7,7 +7,8 @@
 
 ## Current Status (2026-10-20)
 > **Not:** Bu özet stale olabilir. "Sırada ne var?" sorularına cevap vermeden önce **her zaman** [`Docs/IMPLEMENTATION_STATUS.md`](../../Docs/IMPLEMENTATION_STATUS.md) oku — kaynak orası, burası snapshot.
-- **F8 (Çok Ağlı Ödeme, T141–T160) ilerleyişi:** T141–T156 ✓ · T157 doğrulama PASS, kapanış bekliyor · T158 ✓ · T159 ✓ (doğrulama KOŞULLU PASS) · T159a ⏳ sahip kararı uygulandı (2026-10-20: reddedilen ödeme iadelerinde gas iki ağda alıcıdan; PR #356), doğrulama bekliyor · T159b ve T160 (F8 Gate Check) sırada. Tek doğru kaynak: `Docs/IMPLEMENTATION_STATUS.md`.
+- **F8 (Çok Ağlı Ödeme, T141–T160) ilerleyişi:** T141–T158 ✓ (T157 ✓ 2026-10-20) · T159 ✓ (doğrulama KOŞULLU PASS) · T159a ⏳ sahip kararı uygulandı (2026-10-20: reddedilen ödeme iadelerinde gas iki ağda alıcıdan; PR #356), doğrulama bekliyor · T159b ve T160 (F8 Gate Check) sırada. Tek doğru kaynak: `Docs/IMPLEMENTATION_STATUS.md`.
+- **T157 ✓** (2026-10-20, PR #354, kapanış: main birleştirmesi `d31bdc4c` + 4 test + runbook §D 7.4; merge yöneticide) — S22 cüzdan ekranı + ⚠ PARA iki aşamalı giden satır kapatma aracı (verify MATCH; elle yolda verify MATCH + AuditLog, N özdeş satırda toplam sayı+tutar). Ayrıntı `MEMORY_ARCHIVE.md`.
 - **⚠️ Hâlâ geri alınacak:** `auth.min_steam_account_age_days` = 1 (üretim 30) → F9 T166.
 - **Ayrıntılı task changelog** (T23–T97 + gate-check / validator / tasarım / GPT-review) ve **F8 görev başına eski durum satırları (T141–T159, 2026-10-20'de taşındı)** → [`MEMORY_ARCHIVE.md`](MEMORY_ARCHIVE.md); tek bir görev için arşivi `grep`'le.
 
@@ -65,6 +66,7 @@
 - [wp5-validation-pass.md](wp5-validation-pass.md) — WP5 admin dispute doğrulama PASS (2026-06-17)
 - [project_playbook_template.md](project_playbook_template.md) — Skinora metodu → public template, v1.1.0
 - [project_f8_yonetici_duzeni.md](project_f8_yonetici_duzeni.md) — F8 yönetici düzeni; F8 bitene kadar sürer
+- [project_f8_devir_notu.md](project_f8_devir_notu.md) — F8 kaldığı yer (2026-10-20): açık PR'lar, kalan T159a/T159b/T160, bekleyen PARA sorusu, ⚠ listesinin yeri
 - [feedback_model_by_task_weight.md](feedback_model_by_task_weight.md) — alt ajan: model+effort birlikte (haiku/sonnet/opus tablosu)
 - [project_backlog_round_2026_10_02.md](project_backlog_round_2026_10_02.md) — 2026-10-02 dört backlog satırı, #331
 - [project_wallet_policy_round.md](project_wallet_policy_round.md) — cüzdan politikası turu (2026-09), #324/#325

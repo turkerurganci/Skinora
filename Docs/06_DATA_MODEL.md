@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.33** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-20 — T159a — §3.8 GasFee: reddedilen ödeme iadelerinde de düşülen gas snapshot'ı (Amount net). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
+**Versiyon: v6.34** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-20 — T159a — §3.8 GasFee: reddedilen ödeme iadelerinde de düşülen gas snapshot'ı (Amount net). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -43,6 +43,7 @@ Bu doküman, Skinora platformundaki tüm veri yapılarını tanımlar. Entity'le
 | 26 | Fraud | **ItemPriceCache** | Steam Market `priceoverview` fiyat sonuçlarının on-demand cache'i — fraud fiyat sapma kontrolü için (08 §7.3) |
 | 27 | Kullanıcı & Kimlik | **UserWalletAddress** *(T146 — §1.4, §3.1a)* | Kullanıcının ağ başına ödeme ve iade adresi |
 | 28 | İşlem | **TransactionNetworkOption** *(T147 — §1.4, §3.5b)* | İlanın kabul ettiği ağlar ve her ağ için satıcı ödeme adresi snapshot'ı |
+| 29 | Finans | **OutboundRowClosure** *(T157 — §3.8b)* | Ethereum giden satırını zincirdeki hash'le kapatma önerisi ve iki aşamalı onayı (⚠ PARA — para göndermez, satırı bağlar) |
 
 ### 1.2 İlişki Diyagramı
 
@@ -373,8 +374,12 @@ F8 Ethereum'u ekler (11 §F8 K1). Bu bölüm hedef modeli tanımlar; §3'teki en
 | `MAINTENANCE_MODE_CHANGED` | Admin | Admin bakım/kesinti moduna girdi veya çıktı — EntityType = `Maintenance`, EntityId yeni bakım tipi; eski/yeni dört `platform.maintenance.*` ayarı ve dondurulan/serbest bırakılan işlem sayısı kaydedilir (07 §9.31 AD30/AD31, 05 §4.4, WP7) |
 | `TIMEOUT_AUTO_EXTENDED` | Admin | Yeniden başlatma kurtarması kesinti eşiğini aştı ve aktif timeout'lar otomatik uzatıldı — kurtarma turu başına tek özet satır (kesinti süresi, uzatılan işlem sayısı, yeniden planlanan ödeme job'ları), aktör SYSTEM, EntityType = `SystemHeartbeat` (05 §4.4, WP16) |
 | `PLATFORM_OUTAGE_DETECTED` | Güvenlik | Periyodik sağlık probu bir bileşenin (`STEAM` / `BLOCKCHAIN_TRON` / `BLOCKCHAIN_ETHEREUM` — T148'den önce tek `BLOCKCHAIN`) ardışık hata eşiğini aştığını (`DEGRADED`) veya toparlandığını (`RECOVERED`) tespit etti — durum geçişi başına tek satır, aktör SYSTEM, EntityType = `PlatformHealth`; `ADMIN_PLATFORM_OUTAGE` bildirimi üretir. Kaydın kendisi bir şey dondurmaz; aynı geçişte sağlık yoklaması timeout dondurmasını ayrıca uygular/çözer (Steam bileşeninde `STEAM_OUTAGE`, blockchain bileşeninde yalnız o ağın işlemleri için `BLOCKCHAIN_DEGRADATION` — §1.4, 08 §3.7.4) (05 §4.4, 02 §3.3, WP16, T148) |
+| `OUTBOUND_ROW_CLOSURE_PROPOSED` | Fon | Admin bir Ethereum giden satırının zincirdeki hash'le kapatılmasını önerdi (07 §9.32 AD35, T157) — EntityType = `OutboundRowClosure`; NewValue satır, alıcı, tutar, hash ve gerekçeyi taşır. ⚠ PARA |
+| `OUTBOUND_ROW_CLOSURE_APPROVED` | Fon | Farklı bir admin öneriyi onayladı ve satır hash'le `PENDING → DETECTED` oldu (07 §9.32 AD36, T157) — aktör onaylayan; NewValue öneren, zincirdeki sonuç ve blok dahil. Para gönderilmez |
+| `OUTBOUND_ROW_CLOSURE_REJECTED` | Fon | Öneri reddedildi ya da geri çekildi (07 §9.32 AD37, T157); satıra dokunulmaz |
+| `OUTBOUND_ROW_CLOSURE_REFUSED` | Güvenlik | Onay, gözden geçirenin görmesi gereken bir sebeple reddedildi: aynı admin, hash uyuşmazlığı, zincirde başarısız ya da bilinmeyen hash (07 §9.32, T157) |
 
-> **Kaynak:** Kod enum'u `AuditAction` (`backend/src/Skinora.Shared/Enums/AuditAction.cs`) — tablo **29 değerin tamamını** listeler, alt küme değildir; enum'a değer eklendiğinde bu tabloya da satır eklenir. `Grup` kolonu 07 §9.19 AD18 `category` filtresinin birebir karşılığıdır: Fon = `FUND_MOVEMENT`, Admin = `ADMIN_ACTION`, Güvenlik = `SECURITY_EVENT`; eşleme `AuditLogCategoryMap`'te tutulur ve haritalanmamış bir değer çalışma zamanında hata verir. Alanın entity tanımı için bkz. §3.20.
+> **Kaynak:** Kod enum'u `AuditAction` (`backend/src/Skinora.Shared/Enums/AuditAction.cs`) — tablo **33 değerin tamamını** listeler, alt küme değildir; enum'a değer eklendiğinde bu tabloya da satır eklenir. `Grup` kolonu 07 §9.19 AD18 `category` filtresinin birebir karşılığıdır: Fon = `FUND_MOVEMENT`, Admin = `ADMIN_ACTION`, Güvenlik = `SECURITY_EVENT`; eşleme `AuditLogCategoryMap`'te tutulur ve haritalanmamış bir değer çalışma zamanında hata verir. Alanın entity tanımı için bkz. §3.20.
 
 ### 2.20 TimeoutFreezeReason
 
@@ -460,6 +465,16 @@ ITEM_DELIVERED  ⟸  SELLER_ASSET_GONE  AND  INVENTORY_DELTA
 | `REFUND` | Alıcı iade adresi — reddedilenler dahil bütün iadelerin hedefi (02 §12.2, 11 §F8 K9) |
 
 > **Kaynak:** §1.4, §3.1a. `UserWalletAddress.Type` kolonu bu adı saklar (`nvarchar(10)`). API'de (07 §5.1 `wallets[].type`) aynı adlar kullanılır. `WalletAddressHistory.Type` geriye uyum için `"seller"` / `"buyer"` olarak kalır (07 §9.16).
+
+### 2.27 OutboundRowClosureStatus *(T157)*
+
+| Değer | Açıklama |
+|-------|----------|
+| `PROPOSED` | Öneri ikinci bir admin'i bekliyor; satır değişmedi |
+| `APPROVED` | Farklı bir admin onayladı; satır zincirdeki hash'i taşıyor (`DETECTED`) |
+| `REJECTED` | Reddedildi ya da geri çekildi; satır değişmedi, hash yeniden önerilebilir |
+
+> **Kaynak:** §3.8b. `OutboundRowClosure.Status` kolonu bu adı saklar (`nvarchar(20)`).
 
 ---
 
@@ -974,6 +989,30 @@ Satıcının payout sorununu bildirmesi ve çözüm takibi (02 §10.3).
 > - **ESCALATED**: `EscalatedToAdminId NOT NULL`.
 > - **RESOLVED**: `ResolvedAt NOT NULL`.
 > - **RETRY_SCHEDULED**: `RetryCount > 0`.
+
+---
+
+### 3.8b OutboundRowClosure *(T157)*
+
+Ethereum servisi işlem günlüğünü kaybedince (`JOURNAL_BEHIND_CHAIN`, DEPLOY_RUNBOOK §D adım 7) zincirde olduğu hâlde backend'de `PENDING` kalan **giden satırı** zincirdeki hash'le kapatma kaydı (07 §9.32). ⚠ PARA — **araç para göndermez**: onay yalnız `BlockchainTransaction.TxHash` yazar ve durumu `PENDING → DETECTED` yapar; onay işi sonrasını zincirden bitirir.
+
+| Field | Tip | Kısıt | Açıklama |
+|-------|-----|-------|----------|
+| `Id` | guid | PK | |
+| `BlockchainTransactionId` | guid | FK → BlockchainTransaction, NOT NULL | Kapatılacak giden satır |
+| `Network` | int | NOT NULL, CHECK = `ETHEREUM` | Araç yalnız Ethereum içindir (TRON'un servisinde günlük yoktur) |
+| `TxHash` | string(100) | NOT NULL | Zincirdeki hash — kanonik biçim (§1.4): `0x` + 64 küçük harfli onaltılık hane |
+| `Reason` | string(2000) | NOT NULL | Öneren admin'in gerekçesi (hangi hesap/nonce, neyle eşleşti) |
+| `Status` | int | NOT NULL | Enum: OutboundRowClosureStatus (§2.27) |
+| `ProposedByAdminId` | guid | FK → User, NOT NULL | Öneren admin |
+| `DecidedByAdminId` | guid | FK → User, NULL | Onaylayan ya da reddeden/geri çeken admin; `PROPOSED`'da NULL |
+| `DecidedAt` | datetime | NULL | Karar zamanı; `PROPOSED`'da NULL |
+| `DecisionNote` | string(2000) | NULL | Ret/geri çekme notu |
+| `CreatedAt`, `UpdatedAt`, `RowVersion` | | | `BaseEntity` |
+
+> **Kurallar (veritabanında da tekrarlanır):** `APPROVED` ⇒ `DecidedByAdminId` dolu ve **≠ `ProposedByAdminId`** (`CK_OutboundRowClosures_Approved_DifferentAdmin`); `PROPOSED` ⇔ karar alanları NULL (`CK_OutboundRowClosures_Decision_Fields`); `Network = 'ETHEREUM'` (`CK_OutboundRowClosures_Network_Ethereum`). Tekillik: bir satırın tek canlı (`REJECTED` olmayan) kaydı (`UQ_OutboundRowClosures_Row_Live`) ve bir hash'in tek canlı kaydı (`UQ_OutboundRowClosures_Network_TxHash_Live`) — ayrıca `BlockchainTransaction (Network, TxHash, EventIndex)` tekilliği hash'in iki satıra bağlanmasını engeller.
+>
+> **Silme politikası:** Workflow Record — DELETE tanımlı değil; `Status` ve karar alanları güncellenir, karar sonrası frozen. Her adım `AuditLog`'a yazılır (§2.19 `OUTBOUND_ROW_CLOSURE_*`).
 
 ---
 
@@ -1548,6 +1587,9 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | SellerPayoutIssue | SellerId | User | N:1 |
 | SellerPayoutIssue | EscalatedToAdminId | User | N:1 (opsiyonel) |
 | ColdWalletTransfer | InitiatedByAdminId | User | N:1 |
+| OutboundRowClosure | BlockchainTransactionId | BlockchainTransaction | N:1 |
+| OutboundRowClosure | ProposedByAdminId | User | N:1 |
+| OutboundRowClosure | DecidedByAdminId | User | N:1 (opsiyonel) |
 | SanctionedAddress | AddedByAdminId | User | N:1 (opsiyonel — MANUAL kaynak için admin; auto-sync için NULL/SYSTEM) |
 | AuditLog | ActorId | User | N:1 |
 | AuditLog | UserId | User | N:1 (opsiyonel) |
@@ -1587,6 +1629,8 @@ Yaptırımlı cüzdan adresi listesi (02 §21.1 sanctions screening, 03 §11a.3)
 | PaymentAddress | Network + HdWalletIndex | Derivation index reuse engeli — ağ başına monoton artan, arşivleme sonrası da tekillik korunur; her ağın tohumu ve indeksi ayrıdır (11 §F8 K7; T145) |
 | BlockchainTransaction | Network + TxHash + EventIndex (WHERE TxHash NOT NULL) | Blockchain transaction tekrar kontrolü — per-event (WP10, 08 §3.4); tek tx'in birden fazla Transfer event'i her event için ayrı kredilenir. Ağ T145'te anahtara girdi (§1.4) |
 | ColdWalletTransfer | Network + TxHash | Hot→cold ledger kaydı tekilliği (§3.22; T145) |
+| OutboundRowClosure *(T157)* | BlockchainTransactionId (WHERE Status <> REJECTED) | Satır başına tek canlı kapatma kaydı (§3.8b) |
+| OutboundRowClosure *(T157)* | Network + TxHash (WHERE Status <> REJECTED) | Bir hash tek canlı kayda bağlanır (§3.8b) |
 | SanctionedAddress | Network + Address (WHERE IsActive = 1) | Ağ başına aktif yaptırım satırı tekilliği (§3.25; T145) |
 | UserWalletAddress | UserId + Network + Type | Kullanıcı başına ağ başına tek ödeme ve tek iade adresi (§1.4, §3.1a; T146 — `UQ_UserWalletAddresses_UserId_Network_Type`) |
 | TransactionNetworkOption *(T147)* | TransactionId + Network | İlanda ağ başına tek satır (§1.4, §3.5b) — `UQ_TransactionNetworkOptions_TransactionId_Network` |

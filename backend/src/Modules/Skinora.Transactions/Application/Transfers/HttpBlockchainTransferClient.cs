@@ -296,6 +296,73 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         }
     }
 
+    public async Task<TransferVerifyResult> VerifyTransferAsync(
+        TransferVerifyRequest request,
+        CancellationToken cancellationToken)
+    {
+        // Only the Ethereum service has this read (T157); the TRON service is not asked.
+        if (_policy.Network != BlockchainNetwork.ETHEREUM)
+        {
+            return new TransferVerifyResult(TransferVerifyOutcome.NotSupported, null, "Not supported by this network's service.");
+        }
+
+        var body = new VerifyBody(
+            _networkWire,
+            request.TxHash,
+            request.Token.ToString(),
+            request.From,
+            request.To,
+            request.Amount.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture));
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/transfer/verify")
+        {
+            Content = JsonContent.Create(body, options: JsonOptions),
+        };
+        ApplyAuth(httpRequest);
+
+        // One chain lookup: the chain-read budget, not the broadcast budget.
+        using var readBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        readBudget.CancelAfter(_options.ResolveChainReadTimeout());
+
+        try
+        {
+            using var response = await _http.SendAsync(httpRequest, readBudget.Token);
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                _logger.LogWarning(
+                    "Blockchain sidecar verify returned {StatusCode} for {TxHash}",
+                    (int)response.StatusCode, request.TxHash);
+                return new TransferVerifyResult(
+                    TransferVerifyOutcome.Unavailable, null,
+                    $"{(int)response.StatusCode} {response.ReasonPhrase}");
+            }
+
+            var payload = await response.Content
+                .ReadFromJsonAsync<VerifyResponse>(JsonOptions, cancellationToken);
+            if (payload is null || string.IsNullOrEmpty(payload.Outcome))
+            {
+                return new TransferVerifyResult(TransferVerifyOutcome.Unavailable, null, "Empty verify body");
+            }
+
+            // Anything but an exact, known outcome is "not verified" — and the
+            // `matches` flag must agree with the outcome name (a service that
+            // says MATCH with matches:false, or the reverse, is not believed).
+            var outcome = payload.Outcome switch
+            {
+                "MATCH" when payload.Matches == true => TransferVerifyOutcome.Match,
+                "NO_MATCHING_TRANSFER" when payload.Matches != true => TransferVerifyOutcome.NoMatchingTransfer,
+                "REVERTED" when payload.Matches != true => TransferVerifyOutcome.Reverted,
+                "NOT_FOUND" when payload.Matches != true => TransferVerifyOutcome.NotFound,
+                _ => TransferVerifyOutcome.Unavailable,
+            };
+            return new TransferVerifyResult(outcome, payload.BlockNumber, payload.Outcome);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            _logger.LogWarning(ex, "Blockchain sidecar verify failed for {TxHash}", request.TxHash);
+            return new TransferVerifyResult(TransferVerifyOutcome.Unavailable, null, ex.Message);
+        }
+    }
+
     /// <summary>A 4xx about the asked transaction, not about the service (T152).</summary>
     private static bool IsRowSpecific(HttpStatusCode code)
     {
@@ -439,6 +506,19 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("amount")] string Amount,
         [property: JsonPropertyName("token")] string Token,
         [property: JsonPropertyName("feeCapUsd"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FeeCapUsd);
+
+    private sealed record VerifyBody(
+        [property: JsonPropertyName("network")] string Network,
+        [property: JsonPropertyName("txHash")] string TxHash,
+        [property: JsonPropertyName("token")] string Token,
+        [property: JsonPropertyName("from"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? From,
+        [property: JsonPropertyName("to")] string To,
+        [property: JsonPropertyName("amount")] string Amount);
+
+    private sealed record VerifyResponse(
+        [property: JsonPropertyName("outcome")] string? Outcome,
+        [property: JsonPropertyName("matches")] bool? Matches,
+        [property: JsonPropertyName("blockNumber")] long? BlockNumber);
 
     private sealed record TransferBroadcastResponse(
         [property: JsonPropertyName("txHash")] string? TxHash);

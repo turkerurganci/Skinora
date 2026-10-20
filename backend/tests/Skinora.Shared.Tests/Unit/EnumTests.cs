@@ -432,11 +432,14 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ActorType), Enum.Parse<ActorType>(valueName)));
     }
 
-    // ── AuditAction (29) ────────────────────────────────────────────
+    // ── AuditAction (33) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave29Values()
+    public void AuditAction_ShouldHave33Values()
     {
+        // 33 after T157 added OUTBOUND_ROW_CLOSURE_PROPOSED / _APPROVED /
+        // _REJECTED / _REFUSED (the two-person outbound-row closure tool,
+        // 07 §9.32) — each with its row in 06 §2.19.
         // 28 after T103b-2 added BOT_RECOVERY_ITEM_CREATED / BOT_RECOVERY_UPDATED;
         // 29 after WP7 added MAINTENANCE_MODE_CHANGED;
         // 30 after WP8 added BOT_SESSION_FAILED;
@@ -458,7 +461,7 @@ public class EnumTests
         // row there — and never the reverse: do NOT delete enum values to
         // "align", every one of them has a writer.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(29, values.Length);
+        Assert.Equal(33, values.Length);
     }
 
     [Theory]
@@ -491,9 +494,30 @@ public class EnumTests
     [InlineData(nameof(AuditAction.TIMEOUT_AUTO_EXTENDED))]
     [InlineData(nameof(AuditAction.PLATFORM_OUTAGE_DETECTED))]
     [InlineData(nameof(AuditAction.SETTLEMENT_CLEARED_ADMIN))]
+    [InlineData(nameof(AuditAction.OUTBOUND_ROW_CLOSURE_PROPOSED))]
+    [InlineData(nameof(AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED))]
+    [InlineData(nameof(AuditAction.OUTBOUND_ROW_CLOSURE_REJECTED))]
+    [InlineData(nameof(AuditAction.OUTBOUND_ROW_CLOSURE_REFUSED))]
     public void AuditAction_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(AuditAction), Enum.Parse<AuditAction>(valueName)));
+    }
+
+    // ── OutboundRowClosureStatus (3) — 06 §3.8c, T157 ───────────────
+
+    [Fact]
+    public void OutboundRowClosureStatus_ShouldHave3Values()
+    {
+        Assert.Equal(3, Enum.GetValues<OutboundRowClosureStatus>().Length);
+    }
+
+    [Theory]
+    [InlineData(nameof(OutboundRowClosureStatus.PROPOSED))]
+    [InlineData(nameof(OutboundRowClosureStatus.APPROVED))]
+    [InlineData(nameof(OutboundRowClosureStatus.REJECTED))]
+    public void OutboundRowClosureStatus_ShouldContainExpectedValue(string valueName)
+    {
+        Assert.True(Enum.IsDefined(typeof(OutboundRowClosureStatus), Enum.Parse<OutboundRowClosureStatus>(valueName)));
     }
 
     // ── TimeoutFreezeReason (4) ─────────────────────────────────────
@@ -630,7 +654,8 @@ public class EnumTests
         // 25 after the v3.0 P2P pivot removed 5 bot/trade enums (TradeOfferDirection,
         // TradeOfferStatus, PlatformSteamBotStatus, BotRecoveryStatus, ItemRefundTrigger)
         // and added DeliveryEvidence; 26 since T145 added BlockchainNetwork (06 §2.25);
-        // 27 since T146 added WalletAddressType (06 §2.26).
-        Assert.Equal(27, enumTypes.Count);
+        // 27 since T146 added WalletAddressType (06 §2.26);
+        // 28 since T157 added OutboundRowClosureStatus (06 §2.27).
+        Assert.Equal(28, enumTypes.Count);
     }
 }

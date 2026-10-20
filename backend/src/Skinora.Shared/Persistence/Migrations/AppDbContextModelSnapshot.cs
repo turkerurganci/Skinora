@@ -2241,6 +2241,89 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.ToTable("DeliveryEvidenceCaptures", (string)null);
                 });
 
+            modelBuilder.Entity("Skinora.Transactions.Domain.Entities.OutboundRowClosure", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BlockchainTransactionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DecidedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Network")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("ProposedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TxHash")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BlockchainTransactionId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_OutboundRowClosures_Row_Live")
+                        .HasFilter("[Status] <> 'REJECTED'");
+
+                    b.HasIndex("DecidedByAdminId");
+
+                    b.HasIndex("ProposedByAdminId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_OutboundRowClosures_Status");
+
+                    b.HasIndex("Network", "TxHash")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_OutboundRowClosures_Network_TxHash_Live")
+                        .HasFilter("[Status] <> 'REJECTED'");
+
+                    b.ToTable("OutboundRowClosures", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_OutboundRowClosures_Approved_DifferentAdmin", "([Status] <> 'APPROVED') OR ([DecidedByAdminId] IS NOT NULL AND [DecidedByAdminId] <> [ProposedByAdminId] AND [DecidedAt] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_OutboundRowClosures_Decision_Fields", "([Status] = 'PROPOSED' AND [DecidedByAdminId] IS NULL AND [DecidedAt] IS NULL) OR ([Status] <> 'PROPOSED' AND [DecidedByAdminId] IS NOT NULL AND [DecidedAt] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_OutboundRowClosures_Network_Ethereum", "[Network] = 'ETHEREUM'");
+                        });
+                });
+
             modelBuilder.Entity("Skinora.Transactions.Domain.Entities.PaymentAddress", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3290,6 +3373,28 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasForeignKey("TransactionId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Skinora.Transactions.Domain.Entities.OutboundRowClosure", b =>
+                {
+                    b.HasOne("Skinora.Transactions.Domain.Entities.BlockchainTransaction", "BlockchainTransaction")
+                        .WithMany()
+                        .HasForeignKey("BlockchainTransactionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Skinora.Users.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedByAdminId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Skinora.Users.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProposedByAdminId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("BlockchainTransaction");
                 });
 
             modelBuilder.Entity("Skinora.Transactions.Domain.Entities.PaymentAddress", b =>

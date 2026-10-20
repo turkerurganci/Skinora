@@ -195,6 +195,7 @@
     "disputes": "Disputes",
     "transactions": "Transactions",
     "settings": "Settings",
+    "wallets": "Wallets",
     "roles": "Roles",
     "users": "Users",
     "auditLog": "Audit Log"
@@ -494,7 +495,11 @@
       "SANCTIONS_LIST_ADDRESS_REMOVED": "Sanctions list address removed",
       "MAINTENANCE_MODE_CHANGED": "Maintenance mode changed",
       "TIMEOUT_AUTO_EXTENDED": "Timeout automatically extended",
-      "PLATFORM_OUTAGE_DETECTED": "Platform outage detected"
+      "PLATFORM_OUTAGE_DETECTED": "Platform outage detected",
+      "OUTBOUND_ROW_CLOSURE_PROPOSED": "Outbound row closure proposed",
+      "OUTBOUND_ROW_CLOSURE_APPROVED": "Outbound row closure approved",
+      "OUTBOUND_ROW_CLOSURE_REJECTED": "Outbound row closure rejected",
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "Outbound row closure refused"
     }
   },
   "adminTransactions": {
@@ -511,7 +516,8 @@
       "buyer": "Buyer",
       "status": "Status",
       "createdAt": "Created",
-      "completedAt": "Completed / Cancelled"
+      "completedAt": "Completed / Cancelled",
+      "network": "Network"
     },
     "filters": {
       "status": "Status",
@@ -523,7 +529,9 @@
       "minAmount": "Min amount",
       "maxAmount": "Max amount",
       "dateFrom": "From",
-      "dateTo": "To"
+      "dateTo": "To",
+      "network": "Network",
+      "allNetworks": "All"
     },
     "statusGroup": {
       "ACTIVE": "Active",
@@ -577,7 +585,9 @@
       "heldAt": "Held at",
       "autoHoldSanctions": "Auto-Hold — Sanctions Match",
       "readOnly": "This transaction is in a terminal state and is read-only.",
-      "loadError": "Could not load transaction detail."
+      "loadError": "Could not load transaction detail.",
+      "network": "Network",
+      "viewOnExplorer": "View on {explorer}"
     },
     "actions": {
       "cancelTx": "Cancel Transaction",
@@ -2014,6 +2024,237 @@
       "title": "No users found",
       "browseDescription": "No user has an admin role assigned yet. Search by Steam ID or username to find any user.",
       "searchDescription": "No user matches these filters."
+    }
+  },
+  "adminWallets": {
+    "title": "Wallets",
+    "intro": "Platform wallets, balances, transfers and the outbound queue, shown separately for each network.",
+    "loadError": "Could not load the wallets overview.",
+    "sectionLabel": "{network} wallets",
+    "state": {
+      "notConfigured": "The signing service for this network is not configured. Balances and transfers are unavailable.",
+      "degraded": "This network is degraded. Balances may be out of date and transfers may be deferred."
+    },
+    "walletsHeading": "Wallets",
+    "tableAriaLabel": "{network} wallets",
+    "columns": {
+      "role": "Role",
+      "address": "Address",
+      "balances": "Balances",
+      "nativeFloor": "Minimum {asset}"
+    },
+    "roles": {
+      "HOT": "Hot wallet",
+      "COLD": "Cold wallet",
+      "FUEL": "Fuel wallet"
+    },
+    "addressNotConfigured": "Not configured",
+    "balanceUnavailable": "Unavailable",
+    "balanceNotConfigured": "Not configured",
+    "balancesStatus": {
+      "UNAVAILABLE": "Balances are unavailable: the signing service could not be reached. This is not a zero balance.",
+      "NOT_CONFIGURED": "Balances are not configured for this network. This is not a zero balance."
+    },
+    "balancesAtBlock": "Balances as of block {block}",
+    "floor": {
+      "value": "{amount} {asset}",
+      "none": "—",
+      "below": "Below the minimum {asset} balance. Top it up."
+    },
+    "addressMismatch": "Address mismatch: the configured hot address ({configured}) differs from the address the signing service uses ({actual}). Do not transfer until this is resolved.",
+    "outbound": {
+      "heading": "Outbound queue",
+      "pending": "Pending: {count}",
+      "oldestPending": "Oldest pending: {date}",
+      "noneOldest": "Oldest pending: —",
+      "inFlight": "In flight: {count}"
+    },
+    "coldHistory": {
+      "heading": "Recent cold transfers",
+      "empty": "No cold transfers yet.",
+      "ariaLabel": "{network} cold transfers",
+      "columns": {
+        "date": "Date",
+        "amount": "Amount",
+        "from": "From",
+        "to": "To",
+        "tx": "Transaction",
+        "by": "Initiated by"
+      }
+    },
+    "outboundRows": {
+      "heading": "Recent outbound transfers",
+      "empty": "No outbound transfers yet.",
+      "ariaLabel": "{network} outbound transfers",
+      "columns": {
+        "type": "Type",
+        "status": "Status",
+        "amount": "Amount",
+        "to": "Recipient",
+        "tx": "Transaction",
+        "retries": "Retries",
+        "created": "Created"
+      }
+    },
+    "outboundType": {
+      "SELLER_PAYOUT": "Seller payout",
+      "BUYER_REFUND": "Buyer refund",
+      "EXCESS_REFUND": "Excess refund",
+      "WRONG_TOKEN_REFUND": "Wrong-token refund",
+      "INCORRECT_AMOUNT_REFUND": "Incorrect-amount refund",
+      "LATE_PAYMENT_REFUND": "Late-payment refund",
+      "SWEEP": "Sweep"
+    },
+    "outboundStatus": {
+      "DETECTED": "Detected",
+      "PENDING": "Pending",
+      "CONFIRMED": "Confirmed",
+      "FAILED": "Failed"
+    },
+    "noHash": "—",
+    "transfer": {
+      "heading": "Hot → cold transfer",
+      "description": "Moves funds from the hot wallet to the cold wallet on {network}. The destination is fixed by deployment configuration.",
+      "from": "From (hot wallet)",
+      "to": "To (cold wallet, fixed)",
+      "token": "Token",
+      "amount": "Amount",
+      "amountInvalid": "Enter an amount greater than zero (up to 6 decimals).",
+      "review": "Review transfer",
+      "unavailable": "Transfers are unavailable: the hot or cold wallet is not configured.",
+      "confirmTitle": "Confirm hot → cold transfer",
+      "confirmWarning": "This sends real funds on-chain and cannot be undone. Check every detail below.",
+      "confirmNetwork": "Network",
+      "confirmToken": "Token",
+      "confirmAmount": "Amount",
+      "confirmFrom": "From",
+      "confirmTo": "To",
+      "confirmSubmit": "Send {amount} {token}",
+      "cancel": "Cancel",
+      "sending": "Sending…",
+      "success": "Transfer submitted: {amount} {token} to the cold wallet.",
+      "successTx": "Transaction"
+    },
+    "closures": {
+      "heading": "Outbound row closure (two-person)",
+      "intro": "Use this only when the Ethereum signing service lost its journal and a payment already went out on-chain while its row still shows pending. One admin proposes the on-chain transaction hash; a different admin approves it by typing the hash again. This tool never sends money.",
+      "noMoney": "This tool sends no money.",
+      "candidates": {
+        "heading": "Open Ethereum outbound rows",
+        "empty": "No open Ethereum outbound rows.",
+        "ariaLabel": "Open Ethereum outbound rows",
+        "columns": {
+          "type": "Type",
+          "amount": "Amount",
+          "to": "Recipient",
+          "created": "Created",
+          "retries": "Retries",
+          "action": "Action"
+        },
+        "live": "Closure in progress",
+        "propose": "Propose closure"
+      },
+      "list": {
+        "heading": "Closures",
+        "statusFilter": "Status",
+        "all": "All",
+        "empty": "No closures with this status.",
+        "ariaLabel": "Closures"
+      },
+      "status": {
+        "PROPOSED": "Proposed",
+        "APPROVED": "Approved",
+        "REJECTED": "Rejected"
+      },
+      "row": {
+        "transaction": "Transaction",
+        "row": "Row",
+        "recipient": "Recipient",
+        "amount": "Amount",
+        "proposedHash": "Proposed hash",
+        "reason": "Reason",
+        "proposedBy": "Proposed by {name} on {date}",
+        "decidedBy": "Decided by {name} on {date}",
+        "decisionNote": "Decision note",
+        "ownProposal": "You proposed this closure. A different admin must approve it.",
+        "rowStatus": "Row status",
+        "tokenDiffers": "The transaction expected {expected}; this row moves {actual} on chain (wrong-token refund).",
+        "tokenUnresolved": "The token this row moves on chain cannot be determined; the tool cannot close it."
+      },
+      "actions": {
+        "approve": "Approve",
+        "reject": "Reject",
+        "withdraw": "Withdraw"
+      },
+      "propose": {
+        "title": "Propose closure",
+        "warning": "This tool sends no money. Once a different admin approves, the row is treated as already paid on-chain with the hash you enter, and the platform stops retrying it.",
+        "row": "Row: {type}, {amount} {token} to {to}",
+        "hash": "On-chain transaction hash",
+        "hashHelp": "0x followed by 64 hexadecimal characters.",
+        "hashInvalid": "Enter a valid transaction hash (0x + 64 hex characters).",
+        "explorer": "Open this hash on {explorer}",
+        "reason": "Reason",
+        "reasonHelp": "Which nonce/account, and what you matched on the chain (at least 20 characters).",
+        "reasonTooShort": "The reason must be at least 20 characters.",
+        "submit": "Propose closure",
+        "cancel": "Cancel"
+      },
+      "approve": {
+        "title": "Approve closure",
+        "warning": "This tool sends no money, but approving is irreversible in effect: the row will be treated as already paid on-chain and will never be retried.",
+        "systemCheck": "The system checks the transaction against the row's recipient and amount, but you must still compare it yourself on the explorer.",
+        "compare": "Compare these with the transaction on {explorer} before approving.",
+        "proposedBy": "Proposed by {name}",
+        "hashProposed": "Proposed hash",
+        "explorer": "Open the proposed hash on {explorer}",
+        "typeHash": "Type the transaction hash again",
+        "typeHashHelp": "Read it from the explorer and type it. It is not prefilled on purpose.",
+        "mismatch": "The hash you typed does not match the proposal.",
+        "submit": "Approve closure",
+        "cancel": "Cancel"
+      },
+      "reject": {
+        "titleReject": "Reject closure",
+        "titleWithdraw": "Withdraw closure",
+        "note": "Note",
+        "noteHelp": "Required. Say why.",
+        "noteRequired": "A note is required.",
+        "submitReject": "Reject closure",
+        "submitWithdraw": "Withdraw closure",
+        "cancel": "Cancel"
+      }
+    },
+    "errors": {
+      "GENERIC": "The action could not be completed. Please try again.",
+      "VALIDATION_ERROR": "The request is invalid. Check the fields and try again.",
+      "INVALID_TX_HASH": "The transaction hash is not valid.",
+      "HASH_CONFIRMATION_MISMATCH": "The typed hash does not match the proposed hash.",
+      "SELF_APPROVAL_FORBIDDEN": "You cannot approve your own proposal. A different admin must do it.",
+      "ROW_NOT_FOUND": "The outbound row was not found.",
+      "CLOSURE_NOT_FOUND": "The closure was not found.",
+      "ROW_NOT_ETHEREUM": "The row is not on Ethereum.",
+      "ROW_NOT_OUTBOUND": "The row is not an outbound transfer.",
+      "HASH_NOT_SUCCESSFUL": "That transaction did not succeed on-chain.",
+      "HASH_NOT_FOUND": "That transaction hash was not found on-chain.",
+      "HASH_DOES_NOT_MATCH_ROW": "This transaction does not pay this row (wrong recipient, wrong amount, wrong token or it failed on chain). It cannot close this row. Check the hash on the explorer or reject the proposal.",
+      "ROW_TRANSFER_UNRESOLVED": "What this row moves on chain cannot be determined (unknown token or no recorded sender). The tool cannot close it; follow the manual path in the runbook.",
+      "AMBIGUOUS_ROW_MATCH": "Another open row on this network has the same recipient, token and amount. A chain hash cannot tell which one it paid, so the tool refuses. Follow the manual path in the runbook.",
+      "ROW_NOT_OPEN": "The row is no longer open.",
+      "CLOSURE_NOT_OPEN": "The closure has already been decided.",
+      "HASH_ALREADY_BOUND": "That hash is already bound to another row.",
+      "CLOSURE_ALREADY_PROPOSED": "A closure is already proposed for this row.",
+      "HASH_NOT_FINAL": "The transaction is not final yet. Try again later.",
+      "CLOSURE_CONFLICT": "The closure changed in the meantime. Refresh and try again.",
+      "CHAIN_SERVICE_UNAVAILABLE": "The chain service is unavailable. Try again later.",
+      "INVALID_AMOUNT": "The amount is not valid.",
+      "INVALID_TOKEN": "This token is not supported on this network.",
+      "INVALID_NETWORK": "The network is not valid.",
+      "HOT_WALLET_NOT_CONFIGURED": "The hot wallet is not configured.",
+      "COLD_WALLET_NOT_CONFIGURED": "The cold wallet is not configured.",
+      "SIDECAR_UNAVAILABLE": "The signing service did not answer. The transfer may have been signed and sent. Before trying again, check the hot wallet's latest outgoing transaction on the explorer (Etherscan / Tronscan).",
+      "NETWORK_UNAVAILABLE": "The network is unavailable. Nothing was sent.",
+      "TRANSFER_DEFERRED": "The transfer was deferred (for example the fee is above the cap). Nothing was sent. Try again later."
     }
   }
 }
