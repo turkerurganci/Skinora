@@ -18,7 +18,8 @@ PR aciklamasi (09 §21.3):
 <!-- Degisen alan -->
 
 ## Doküman Referanslari
-<!-- Hangi 11_IMPLEMENTATION_PLAN task'i, hangi 02-10 dokuman bolumu? -->
+<!-- Hangi 11_IMPLEMENTATION_PLAN task'i (faz dosyasi: Docs/plan/11_F*.md), hangi 02-10 dokuman bolumu? -->
+<!-- Belge basligi kurali: baslikta yalniz surum + tarih + tek cumle; ayrinti Docs/DOC_CHANGELOG.md'de belgenin bolumunun en ustune. Basliga "Onceki guncelleme" zinciri eklenmez. -->
 
 ## Test
 - [ ] Unit testler eklendi/guncellendi (varsa)
