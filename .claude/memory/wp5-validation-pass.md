@@ -1,7 +1,10 @@
 ---
 name: wp5-validation-pass
 description: WP5 (admin dispute resolution) independent validation outcome — PASS 2026-06-17
-type: project
+metadata:
+  type: project
+  node_type: memory
+  originSessionId: 8ed3961e-aa2d-4328-b715-739a8a9c4644
 ---
 
 WP5 (Dispute çözüm — admin, PR #174, branch `task/WP5-admin-dispute-resolution`) bağımsız validator sonucu: **PASS** (2026-06-17). 8/8 AC karşılandı, 0 bloke-edici bulgu.

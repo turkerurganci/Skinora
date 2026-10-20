@@ -1,7 +1,10 @@
 ---
 name: reference_workflow_subagents_blocked
 description: Workflow/Agent subagents — were org-policy-blocked 2026-06-14, but WORK again as of 2026-06-15; verify per session with one cheap probe
-type: reference
+metadata:
+  type: reference
+  node_type: memory
+  originSessionId: 2ddc08ff-bcb3-4deb-8d53-6f3b60daff51
 ---
 
 **Status flips between sessions — always re-verify.**

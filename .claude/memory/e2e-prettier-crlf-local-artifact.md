@@ -1,7 +1,10 @@
 ---
 name: e2e-prettier-crlf-local-artifact
-description: Local `prettier --check` in e2e/ flags files on this Windows box due to core.autocrlf — it's a checkout artifact, not a defect; CI (LF) is authoritative
-type: project
+description: "Local `prettier --check` in e2e/ flags files on this Windows box due to core.autocrlf — it's a checkout artifact, not a defect; CI (LF) is authoritative"
+metadata:
+  type: project
+  node_type: memory
+  originSessionId: d8208e4d-a852-41c5-a2dc-52d9414e7b4d
 ---
 
 On this Windows machine `git config core.autocrlf=true` and `.gitattributes` only has `* text=auto` (no explicit `eol=lf` for `.ts`), so all `e2e/*.ts` are checked out with CRLF on disk. The e2e `.prettierrc.json` sets no `endOfLine`, so prettier defaults to `"lf"` → `npm run format:check` in `e2e/` flags most/all files **locally**. This is a checkout artifact, NOT a formatting defect.

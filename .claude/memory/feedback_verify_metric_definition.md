@@ -1,7 +1,11 @@
 ---
 name: feedback_verify_metric_definition
 description: Devralınan bir sayıyı aktarmadan önce onu üreten komutun ne saydığını oku — tutarlılık doğruluk değildir
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: ca62ed2f-4c11-4a9d-a69c-cffdb348e4d2
+  modified: 2026-08-22T17:38:44.367Z
 ---
 
 Bir dokümandan/rapordan **devralınan sayıyı** kendi çıktına yazmadan önce, o sayıyı üreten komutu bul ve **ne saydığını** ölç. Sayının uzun süre tutarlı raporlanmış olması onu doğru yapmaz — yalnız *karşılaştırılabilir* yapar.

@@ -1,7 +1,11 @@
 ---
 name: feedback_branch_from_main_after_squash
-description: Squash merge sonrası yeni dal daima origin/main'den kesilmeli; task dalından kesilen dal doğduğu anda çakışmalı olur ve GitHub o hâlde CI run'ı hiç yaratmaz
-type: feedback
+description: "Squash merge sonrası yeni dal daima origin/main'den kesilmeli; task dalından kesilen dal doğduğu anda çakışmalı olur ve GitHub o hâlde CI run'ı hiç yaratmaz"
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 301a7c99-006a-464c-b75d-908a870aa209
+  modified: 2026-08-17T14:29:53.012Z
 ---
 
 Bir task dalı `main`'e **squash** merge edildikten sonra açılacak yeni dal (chore/docs/follow-up) **`origin/main`'den** kesilmelidir — merge edilmiş task dalının üstünden değil.

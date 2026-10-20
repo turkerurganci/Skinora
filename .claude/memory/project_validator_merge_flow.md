@@ -1,8 +1,13 @@
 ---
-name: Validator merge akışı (B — skill §17 disiplini korunur)
-description: T27'den itibaren task chat merge etmez, validator chat PASS verince squash merge eder (T26 istisnai sapma sonrası teyit)
-type: project
+name: project_validator_merge_flow
+description: "Merge yetkisi: F8 boyunca yönetici (PASS + CI yeşilse) birleştirir; doğrulama genel SubAgentIndependentValidation akışıyla (F9'dan itibaren); T27 sonrası validator-chat-merge akışı tarihçede"
+metadata:
+  type: project
+  node_type: memory
 ---
+**Güncel durum (2026-10-20):** Aşağıdaki "validator chat merge eder" akışı (T27 → F7) F8'de yönetici düzeniyle değişti: F8 boyunca doğrulama ajanı PASS + PR CI yeşil verirse yönetici squash-merge eder ([[project_f8_yonetici_duzeni]]; doğrulama ajanı `opus` + `high`). Doğrulama işinin kendisi genel `SubAgentIndependentValidation` skill'iyle yürür (talimat → Türker'e göster → "başlat" → izole `general-purpose` alt ajan → rapor dosyasından oku); F8 bitene kadar yönetici düzeni istisnası geçerli, skill akışı F9'dan itibaren ([[feedback_validation_separate_chat]]). Birleştirme yetkisi F9'da skill ve Türker'in o günkü kararına göre yeniden belirlenir; bu dosya o zaman güncellenmeli.
+
+## Tarihçe — T27'den itibaren validator chat merge akışı (B)
 
 T27'den itibaren task merge akışı [validate.md](.claude/skills/validate.md) §17'e sıkı sıkıya uyar: **validator chat PASS verince squash merge eder.** Task chat CI PASS alır, PR açıp bırakır — merge etmez.
 

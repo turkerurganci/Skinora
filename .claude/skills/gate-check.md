@@ -60,7 +60,7 @@
 
 ### Adım 4 — Traceability ve Boşluk Taraması
 
-8. **Traceability matrix kontrolü:** `Docs/11_IMPLEMENTATION_PLAN.md` §7'deki traceability matrix'i kontrol et:
+8. **Traceability matrix kontrolü:** `Docs/11_IMPLEMENTATION_PLAN.md` §7 girişi + atıf haritası; tablolar faz dosyalarındadır (§7.1–§7.5 → `Docs/plan/11_F0-F7_ARCHIVE.md`, §7.6 → `Docs/plan/11_F8.md`; F9 için ilgili faz dosyası). Yalnız hedef fazın tablosunu oku; matrix'i kontrol et:
    - Bu fazda implement edilmesi gereken her kaynak öğe implement edilmiş mi?
    - Eşlenip de implement edilmeyen öğe = S3 (Eksik) bulgusu
 

@@ -1,7 +1,11 @@
 ---
 name: feedback_new_chat_prompt
 description: "Yeni chat'te yapılacak bir iş önerdiğimde, o chat'e yapıştırılacak hazır metni de yaz"
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: dbaf6b9b-07cf-437a-bbfe-6beac45faf00
+  modified: 2026-10-03T20:46:39.443Z
 ---
 
 Türker'e "bunu yeni chat'te yap" dediğim her durumda (doğrulama, FAIL sonrası düzeltme, ayrı iş kolu), yeni chat'e yazacağı **hazır metni** de veririm: kod bloğu içinde, kopyala-yapıştır yapılabilir.

@@ -1,7 +1,8 @@
 ---
 name: Implementation Phase Decisions
 description: Kodlama fazına geçiş kararları — çalışma modeli, doğrulama, ortam, CI/CD, kalite katmanları
-type: project
+metadata:
+  type: project
 ---
 
 Implementation fazına geçiş kararları (2026-04-05):

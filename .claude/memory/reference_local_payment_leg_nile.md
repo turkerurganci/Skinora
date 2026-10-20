@@ -1,7 +1,8 @@
 ---
 name: reference_local_payment_leg_nile
 description: Lokal ödeme bacağı Nile testnet kurulumu — üretilen cüzdanlar, seçilen USDT kontratı ve kalan dış-değer borcu
-type: reference
+metadata:
+  type: reference
 ---
 
 **2026-08-28'de lokal ödeme bacağının yapılandırılabilir yarısı kuruldu** (`DEPLOY_RUNBOOK §G` adım 5 + 9). Sırlar `.env`'de (gitignored); burada yalnız **kamuya açık** değerler var.

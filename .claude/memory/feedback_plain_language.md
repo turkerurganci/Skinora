@@ -1,7 +1,8 @@
 ---
 name: Sade ve anlaşılır yaz
 description: Yanıtlar kısa cümlelerle, az terimle ve az biçimlendirmeyle yazılır; uzun teknik anlatım kullanıcıyı zorluyor
-type: feedback
+metadata:
+  type: feedback
 ---
 
 Bu kullanıcıya yazarken **sade dil** kullanılır. Uzun, yoğun teknik anlatım anlaşılmıyor.

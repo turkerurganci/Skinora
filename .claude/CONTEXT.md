@@ -40,7 +40,12 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `Docs/08_INTEGRATION_SPEC.md` | Üçüncü parti servis entegrasyonları |
 | `Docs/09_CODING_GUIDELINES.md` | Kod standartları, klasör yapısı |
 | `Docs/10_MVP_SCOPE.md` | MVP kapsamı ve sınırları |
-| `Docs/11_IMPLEMENTATION_PLAN.md` | Sıralı task listesi ve bağımlılıklar |
+| `Docs/11_IMPLEMENTATION_PLAN.md` | Plan ana dosyası: §1–4, faz kapıları özeti, boşluk raporu + **atıf haritası** (hangi faz hangi dosyada). Görev listeleri faz dosyalarında; tümünü okuma |
+| `Docs/plan/11_F0-F7_ARCHIVE.md` | F0–F7 görev listeleri (T01–T140), §6.2 F7 gate notu, §7.1–§7.5 izlenebilirlik |
+| `Docs/plan/11_F8.md` | F8 görev listesi (T141–T160), K1–K9, "Txxx kararları", §7.6, FK8 |
+| `Docs/plan/11_F9.md` | F9 görev listesi (T161–T175) |
+| `Docs/DOC_CHANGELOG.md` | `Docs/` belge başlıklarından taşınan değişiklik geçmişi (belge başına bölüm, en yeni üstte) |
+| `Docs/STATUS_CHANGELOG.md` | `IMPLEMENTATION_STATUS.md` "Son güncelleme" geçmişi (arşiv) |
 | `Docs/12_VALIDATION_PROTOCOL.md` | Doğrulama kuralları ve cross-check |
 | `Docs/PRODUCT_DISCOVERY_STATUS.md` | Tüm ürün kararlarının kayıt dosyası |
 | `Docs/IMPLEMENTATION_STATUS.md` | Implementation ilerleme tablosu (tüm task'lar) |

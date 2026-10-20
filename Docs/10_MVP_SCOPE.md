@@ -1,6 +1,6 @@
 # Skinora — MVP Scope
 
-**Versiyon: v2.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-10-17 (**T141 — çok ağlı ödeme** (11 §F8 K1–K3): §2.2 ve §4 — **yalnız USDT**, ağlar **TRON + Ethereum**, satıcı kabul ettiği ağları seçer, para aynı ağda kalır; ağ ücreti dağılımı (K8); §3.2 ve §6 — Ethereum kapsamdan çıktı, Arbitrum/Avalanche açılış sonrası ayrı karar.) · 2026-10-02 (**§4** — eşzamanlı ödeme izleme kapasitesi satırı (TronGrid bütçesi, `T139-ActiveMonitorQuotaAlarm`)) · 2026-08-08
+**Versiyon: v2.2** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md` | **Son güncelleme:** 2026-10-17 — T141 — çok ağlı ödeme: §2.2 ve §4 yalnız USDT, TRON + Ethereum (11 §F8 K1–K3). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#10_mvp_scopemd)
 
 ---
 

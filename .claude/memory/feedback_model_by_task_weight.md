@@ -1,12 +1,33 @@
 ---
 name: feedback_model_by_task_weight
-description: "Yönetici düzeninde her işi Opus'a verme — basit işleri Sonnet/Haiku'ya ver; bulgu bulan, kod yazan, doğrulayan ve karar veren işler Opus'ta kalır"
+description: "Alt ajan açarken model + effort BİRLİKTE verilir: Explore haiku/low, özet-derleme sonnet/medium, inceleme-plan-zor hata opus/high, bağımsız doğrulama opus/high (Türker 2026-10-20; 2026-10-18 'para dışı doğrulama Sonnet' maddesi değişti)"
 metadata:
-  node_type: memory
   type: feedback
+  node_type: memory
   originSessionId: 05a18c17-d163-437f-bb77-9c997ee193cc
   modified: 2026-10-17T22:05:14.888Z
 ---
+Türker 2026-10-20'de genel kuralı koydu (`C:\Users\teknodeveloper\.claude\CLAUDE.md` > "Alt ajan modeli ve effort", proje bağımsız): açtığım HER alt ajanda (Agent aracı) `model` ve `effort` BİRLİKTE verilir, işe göre seçilir. Türker başka model/effort derse o geçer.
+
+**Güncel kural (2026-10-20):**
+- Arama, yer bulma, liste çıkarma (Explore) → `haiku` / `low`
+- Özet, derleme, mekanik düzenleme → `sonnet` / `medium`
+- İnceleme, plan, zor hata teşhisi → `opus` / `high`
+- Bağımsız doğrulama → `opus` / `high` (para/güvenlik olsun olmasın; önce medium'du, 2026-10-20'de high'a çıktı)
+- `fork` türünde model/effort verilemez (ana modeli miras alır); fork yalnız bağlam gerektiren işler için, doğrulama için ASLA.
+- Garanti: `~/.claude/settings.json` PreToolUse (Agent) hook'u `~/.claude/hooks/subagent-model-guard.js` model/effort eksikse, Explore haiku değilse, görev metninde DOĞRULAMA geçen ajan opus değilse ya da fork ise çağrıyı engeller; her çağrı `~/.claude/logs/subagent-calls.log`'a yazılır. Engellerse kurala uygun model+effort ile yeniden çağır, hook'u atlatmaya çalışma.
+
+**Why:** Maliyet iyileştirmesi; Türker 2026-10-20: "model ve effort bilgisi beraber olacak unutma", uygulanacağının garantisi istendi.
+
+**Ölçülmüş ders (2026-10-20):**
+- Büyük yapım işinde Sonnet ucuz çıkmadı: T157 yapımı 705 bin token ve 3,4 saat sürdü. Ucuz model yalnız küçük, sınırı belli işte ucuzdur; büyük yapımda daha çok tur ve token harcayıp toplamı pahalılaştırabilir.
+- Geçmişi büyük (yüz binlerce token) ajana devam mesajı (SendMessage) pahalı: her adım tüm geçmişi yeniden okur. Kısa, hedefli istemle yeni ajan açmak daha ucuz (2026-10-18'deki itiraz bununla ölçüyle doğrulandı).
+
+**Hâlâ geçerli kalanlar (2026-10-18'den):** tek satırlık iş için ajan açma (doğrudan komut, ajan proje kurallarını yükleyince daha pahalı); CI izleme, merge, PR yorumu gibi işler ajan açmadan doğrudan Bash ile; ucuz modelin çıktısını yönetici gözden geçirir; ajan istemleri kısa tutulur.
+
+İlgili: [[project_f8_yonetici_duzeni]] · [[feedback_validation_separate_chat]].
+
+## Tarihçe — 2026-10-18 kuralı (DEĞİŞTİ: yukarıdaki 2026-10-20 kuralı geçerli; özellikle "para dışı görevlerin doğrulaması Sonnet" ve "efor varsayılan medium" maddeleri artık geçerli değil)
 
 Türker 2026-10-18'de, F8 yönetici düzeninde her alt ajanın Opus'la koştuğunu görünce: *"her işi opusla yapma, basit işleri daha ucuz modellere yaptır!"*
 
