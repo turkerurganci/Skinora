@@ -1,7 +1,9 @@
 ---
 name: Infra degisikliklerini task basindan once commit et
 description: Meta/infrastructure degisiklikleri working tree'de birakma — sonraki task basiyorsa zorla commit+PR akisini baslat
-type: feedback
+metadata:
+  type: feedback
+  originSessionId: 168e59ab-c8a7-4367-8275-c3882a26384b
 ---
 Hook/skill/INSTRUCTIONS/CLAUDE.md/config gibi meta degisiklikleri tamamladiktan sonra, kullanicinin "ne zaman commit edelim?" sorusunu beklemeden **proaktif olarak commit+PR akisini tetikle** — ozellikle bir task'a (T21 vb.) yaklasiliyorsa.
 

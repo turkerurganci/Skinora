@@ -1,7 +1,9 @@
 ---
 name: Session basinda dirty working tree'yi coz
 description: Her session (task, validate, chore, herhangi) basinda git status dirty ise kullaniciya sor ve cozulmeden baslatma
-type: feedback
+metadata:
+  type: feedback
+  originSessionId: 168e59ab-c8a7-4367-8275-c3882a26384b
 ---
 Her session basinda, herhangi bir ise baslamadan once `git status` calistir. Working tree dirty ise (uncommitted staged/unstaged degisiklikler, untracked dosyalar) kullaniciya hemen goster ve aksiyon iste:
 - **Commit + PR** (aslina uygun: docs, chore, infra)

@@ -1,7 +1,11 @@
 ---
 name: feedback_measure_effective_on_mainnet
 description: "Testnet'te gözlenemeyen bir zincir davranışını koda taşımadan önce ana ağdaki ETKİN sonucu makbuzlardan ölç; ayar alanı ve düğümün \"bekleyen\" hesap durumu gerçeği söylemez"
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 11a26a15-568c-4000-a0e8-18bdc5330939
+  modified: 2026-09-17T10:21:45.497Z
 ---
 
 Bir zincir davranışı testnet'te **gözlenemiyorsa** (ör. Nile test USDT'si enerjiyi kendisi ödüyor), onu koda taşımadan önce **ana ağda etkin sonucu** ölç: gerçek işlemlerin makbuzları (`gettransactioninfobyblocknum` → `receipt`). Bir ayar alanını (`consume_user_resource_percent`) okumak etkin sonucu vermez.

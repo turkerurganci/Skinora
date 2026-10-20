@@ -1,7 +1,8 @@
 ---
 name: Çözümü sonuna kadar düşün
 description: Önerilen bir değişikliğin tüm sonuçlarını (bağımlı dosyalar, gereksiz kalacak yapılar, mimari tutarsızlıklar) ilk seferde düşün — kullanıcının ikinci kez sormasını bekleme
-type: feedback
+metadata:
+  type: feedback
 ---
 
 Bir yapısal değişiklik önerirken, sadece "ne yapılacak"ı değil "bunun sonucunda başka ne değişmeli" sorusunu da ilk seferde yanıtla.

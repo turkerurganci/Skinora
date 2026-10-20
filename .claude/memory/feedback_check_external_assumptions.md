@@ -1,7 +1,8 @@
 ---
 name: Check external assumptions before implementation
 description: Implementasyona başlamadan önce kabul kriterlerindeki dış bağımlılık varsayımlarını (paid feature, plan tier, API rate limit, free tier kısıt) doğrula
-type: feedback
+metadata:
+  type: feedback
 ---
 
 Kabul kriterleri ya da plan dış bir servise/feature'a bağlıysa (GitHub plan tier, GitHub Pro feature, API rate limit, free tier kısıt, third-party trial), **implementasyon başlamadan önce 5 dakikalık bir doğrulama yap**: "bu varsayım gerçekten current environment'ta çalışıyor mu?" sorusuna kanıtla cevap ver.

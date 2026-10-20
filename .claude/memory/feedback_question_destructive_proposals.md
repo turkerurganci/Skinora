@@ -1,7 +1,8 @@
 ---
 name: Yıkıcı önerilerde kendini sorgula
 description: Dosya silme, birleştirme, kaldırma gibi yıkıcı aksiyonları önermeden önce gerçekten gerekli olup olmadığını sorgula
-type: feedback
+metadata:
+  type: feedback
 ---
 
 Bir dosyayı silmeyi, birleştirmeyi veya kaldırmayı önermeden önce "bu gerçekten gerekli mi?" sorusunu sor.

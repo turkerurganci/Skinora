@@ -1,7 +1,10 @@
 ---
-name: Türkçe yanıt ver
-description: Bu kullanıcıyla sohbet/açıklama/rapor iletişimi Türkçe yapılır; kod ve kod yorumları İngilizce kalır
-type: feedback
+name: feedback_respond_in_turkish
+description: "Bu kullanıcıyla sohbet/açıklama/rapor iletişimi Türkçe yapılır; kod ve kod yorumları İngilizce kalır (durum özetleri/ilerleme dahil, TÜM yanıtlar)"
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: be82ed34-ec00-4cc4-a2dd-9d6ffb4a11c5
 ---
 
 Bu kullanıcıyla tüm sohbet iletişimi (açıklamalar, özetler, sorular, durum raporları) **Türkçe** yapılır. Soru sorarken (AskUserQuestion dahil) ve cevap verirken Türkçe yaz; İngilizce'ye kayma.

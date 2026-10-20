@@ -1,7 +1,11 @@
 ---
 name: feedback_verify_probe_subject
 description: Bir probe cevap verdiğinde önce CEVABI KİMİN VERDİĞİNİ doğrula; ayakta kalmış eski süreç/build sessizce eski gerçeği raporlar
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 02c4a4b6-771e-4b28-a04d-4f1aa046e1ee
+  modified: 2026-08-24T11:19:45.487Z
 ---
 
 Bir ölçüm probe'u cevap verdiğinde, cevabın **az önce ürettiğin şeyden** geldiğini varsayma — önce özneyi doğrula. Süreç ayakta mı, hangi build'i servis ediyor, portu gerçekten senin başlattığın süreç mi tutuyor?

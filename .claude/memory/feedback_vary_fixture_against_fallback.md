@@ -1,7 +1,11 @@
 ---
 name: feedback_vary_fixture_against_fallback
 description: "Bir iddiayı \"testle pinli\" saymadan önce ölç: fixture geri düşüş sabitine eşit mi, test üretim kablosunu kendi mi kuruyor, sabiti import edip onunla birlikte mi kayıyor, kapsam tek örnekle mi sınanıyor, değer compose'da doğru konteynere gidiyor mu, zincirin tek halkası mı pinli (çalışan süreçten oku), süreç sınırının iki tarafı aynı örnek dosyaya bağlı mı, örnek değerler biçimin tamamını kullanıyor mu"
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: b068d66b-753d-4cd8-b60a-29d555b360ce
+  modified: 2026-09-26T17:44:33.318Z
 ---
 
 Bir testin bir geri düşüşü ya da seçimi pinlediğini iddia etmeden önce, fixture'daki değerin **o kodu bozan en olası sabitle aynı olup olmadığına** bak. Aynıysa test hiçbir şey ölçmüyor: "beklenen token'a düş" ile "sabit USDT'ye düş" fixture USDT iken aynı sonucu verir.

@@ -1,7 +1,9 @@
 ---
 name: Her acilan PR'in CI'sini Claude izler, kullaniciya sormaz
 description: Actigim her PR'in CI run'ini ben izlerim — task/chore/docs/infra ayrimi yok, "sen mi izleyeceksin" sorusu yasak
-type: feedback
+metadata:
+  type: feedback
+  originSessionId: 168e59ab-c8a7-4367-8275-c3882a26384b
 ---
 Actigim her PR'in CI run'ini `gh run watch <ID> --exit-status` (veya esdeger polling) ile **concluded+success** olana kadar **ben izlerim**. Kullaniciya "CI'yi sen mi izleyeceksin ben mi" diye sormam. task PR, chore PR, infra PR, docs PR — ayrim yok.
 

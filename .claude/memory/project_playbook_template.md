@@ -1,7 +1,11 @@
 ---
 name: project_playbook_template
-description: Skinora metodunu uygulama-bağımsız GitHub template'ine dönüştürme projesi — public, v1.1.0 (2026-08-01); doğrulama turları kapandı
-type: project
+description: "Skinora metodunu uygulama-bağımsız GitHub template'ine dönüştürme projesi — public, v1.1.0 (2026-08-01); doğrulama turları kapandı"
+metadata:
+  type: project
+  node_type: memory
+  originSessionId: 786f0800-004b-4624-b537-31fc03b774c2
+  modified: 2026-07-30T20:31:32.792Z
 ---
 
 Skinora MVP'si bittikten sonra proje sahibi, Skinora'nın discovery → MVP yönteminin son hâlini uygulama-bağımsız bir **public GitHub template repository**'sine dönüştürmeye karar verdi. Klasör: `c:\projects\project-playbook`.

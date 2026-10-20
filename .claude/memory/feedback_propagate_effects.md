@@ -1,7 +1,8 @@
 ---
 name: feedback_propagate_effects
 description: GPT cross-review sonrası diğer dokümanlarla uyumluluk kontrolü ve etki yansıtma yapılmalı
-type: feedback
+metadata:
+  type: feedback
 ---
 
 GPT cross-review tamamlandıktan sonra değişikliklerin diğer dokümanlarla uyumluluğunu kontrol et ve etkileri yansıt.

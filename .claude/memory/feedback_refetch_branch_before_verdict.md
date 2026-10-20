@@ -1,7 +1,11 @@
 ---
 name: feedback_refetch_branch_before_verdict
-description: Validate'te dal başka session'dan ilerleyebilir — verdict'i kapatmadan ÖNCE git fetch'i tekrarla, yoksa CI kanıtı eski commit'i gösterir
-type: feedback
+description: "Validate'te dal başka session'dan ilerleyebilir — verdict'i kapatmadan ÖNCE git fetch'i tekrarla, yoksa CI kanıtı eski commit'i gösterir"
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 9fc9c9ab-fae0-4044-9906-2ffb3cac50ef
+  modified: 2026-08-16T11:32:36.202Z
 ---
 
 Validate skill'inin Adım 3'ü (`git fetch origin`) doğrulamanın **başında** bir kez yapılır, ama task chat'i / mobil session / kullanıcı doğrulama sürerken dala commit atmaya devam edebilir. `git fetch`'i **verdict'i kapatmadan önce tekrarla** ve dal HEAD'inin kendi CI run'ını doğrula — Adım 8a'nın kanıtı dal HEAD'ine ait olmalı, oturum başındaki commit'e değil.

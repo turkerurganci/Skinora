@@ -1,7 +1,8 @@
 ---
 name: feedback_dont_flip_recommendations
 description: Önerileri hızlıca değiştirme, ilk önerinin arkasında dur ve gerekçeni savun
-type: feedback
+metadata:
+  type: feedback
 ---
 
 Önerini kolayca değiştirme. İlk değerlendirmen sağlamsa arkasında dur.

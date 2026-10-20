@@ -1,7 +1,11 @@
 ---
 name: feedback_measure_the_failure_shape
 description: Bir dis probu entegre ederken BASARISIZLIGIN nasil gorundugunu de olc; basarili cevapla ayni kalibi tasiyan hata cevabi sessizce gecer — ve bir ret kontrolu, ozellik bozukken de gelen reddi bekliyor olabilir (#325 runbook adim 6)
-type: feedback
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 2b80273d-dafe-4f67-b759-5c0906cdb551
+  modified: 2026-09-19T15:35:59.520Z
 ---
 
 Bir dış API/prob entegre ederken **yalnız başarılı cevabı ölçmek yetmez** — aynı
