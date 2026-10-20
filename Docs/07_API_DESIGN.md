@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.14** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-18 — T156 doğrulaması — kabulde confirmLowercase (§1.3, §7.6; güvenlik, yönetici kararı). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.16** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-19 — T157 — admin uçları ağ başına: AD33–AD39 (§9.32–§9.34), AD6/AD7 network; 409/422 kapatma kuralları. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -35,11 +35,11 @@ Bu doküman, Skinora platformunun frontend-backend API iletişimini tanımlar. T
 | Steam | 1 |
 | Transactions | 14 |
 | Notifications | 4 |
-| Admin | 33 |
+| Admin | 40 |
 | Platform | 2 |
-| **Toplam REST** | **82** |
+| **Toplam REST** | **89** |
 | SignalR Hub | 2 |
-| **Genel Toplam** | **84** |
+| **Genel Toplam** | **91** |
 
 ### 1.2 Base URL
 
@@ -62,7 +62,7 @@ Bugünkü API tek ağlıdır: hiçbir istek ağ taşımaz ve `payment.network` m
 | Kabul (§7.6) | Gövde `network` taşır (zorunlu; ilanın `acceptedNetworks`'ünden biri — değilse 422 `NETWORK_NOT_ACCEPTED`; ağ o an dondurulmuşsa 503 `NETWORK_UNAVAILABLE`). `refundWalletAddress` o ağın doğrulayıcısından geçer. TRON seçilirse ağ ücreti satırı bu anda sabitlenir; yanıt `network`, `networkFeeAmount`, `totalAmount` döner. **Uygulandı (T147):** `network` verilmezse `TRON` (bugünkü istemci için — öneriyle kaydedildi — ⚠); iki hata da `details.network` taşır; "açık" T148'in `IBlockchainNetworkAvailability`'sidir (servisi yapılandırılmış ∧ sağlık dondurmasında değil — `supportedNetworks` ile aynı kaynak); yanıt `network` ve `totalAmount` döner. **Uygulandı (T149):** ücret satırı kabulü reddedebilecek her kuraldan sonra okunur ve kabulle aynı kayıtta yazılır; yanıt `networkFeeAmount` taşır (TRON'da satır, Ethereum'da `"0.00"`), `totalAmount` satırı içerir; tahmin alınamazsa ağ başına yedek yazılır ve kabul beklemez (08 §3.1a) | T147 ✓, T149 ✓ |
 | İşlem detayı (§7.5) | Kabulden önce `acceptedNetworks` ve ağ başına teklif: `networkQuotes: [{ network, networkFeeAmount, totalAmount }]` (alıcıya ağ seçerken ücret farkı — TRON'da tahmini ağ ücreti, Ethereum'da `"0.00"`). Kabulden sonra `network`, `networkFeeAmount`; `payment.network` makine değeri olur (`"TRON"`/`"ETHEREUM"`), gösterim etiketi ve gezgin bağlantısı (Tronscan / Etherscan) istemcide ağa göre üretilir. `refund.refundAddress` reddedilen ödeme iadelerinde de alıcının iade adresidir (K9). **Uygulandı (T147):** `acceptedNetworks`, `networkQuotes` (yalnız taraflar ve aday alıcı; herkese açık kısa biçimde yok), `network`; K9 iade yönlendirmesi. `payment.network` şimdilik ağa göre gösterim metnidir (`"Tron (TRC-20)"` / `"Ethereum (ERC-20)"`) — makine değerine geçiş arayüzle birlikte T156'da (öneriyle kaydedildi — ⚠); Ethereum depozit adresi EIP-55 gösterilir. **Uygulandı (T156):** `payment.network` makine değeridir (`"TRON"` / `"ETHEREUM"`) ve depozit satırının (`PaymentAddress.Network`) ağından okunur — adresin bulunduğu ağ, alıcının göndereceği ağdır (ayırıcı başka ağın depozitini vermez, T147 kararı xiii); etiket (`TRON (TRC-20)` / `Ethereum (ERC-20)`) ve gezgin (Tronscan / Etherscan) istemcide üretilir. **Uygulandı (T149):** `networkQuotes[].networkFeeAmount` TRON'da ağ ücreti satırının o anki değeri (kabulde aynı önbellekteki tahminden sabitlenir — 5 dk), Ethereum'da `"0.00"`; `networkQuotes[].totalAmount` = fiyat + komisyon + satır; kabulden sonra üst düzey `networkFeeAmount` (kabulde sabitlenen satır; T149 öncesi kabul edilmiş işlemde `"0.00"`) | T147 ✓, T149 ✓, T156 |
 | Tutarlar | Para alanları bugünkü gibi ondalık metindir; alıcının ödeyeceği tutarlar (`totalAmount`, `networkQuotes[].totalAmount`, `networkFeeAmount`) 2 ondalıklıdır ve metin tutarın kendisidir — T144 bunu tek ağlı bugünkü sözleşmede uyguladı (§2.8, 06 §8.3); T149 ağ ücreti satırını 2 haneye **yukarı** yuvarlayarak ekledi | T144 ✓, T149 ✓ |
-| Admin | İşlem listesi/detayı (§9.6/§9.7) `network` alanı ve filtresi taşır; ayarlar (§9.8) ağ başına anahtarları gösterir; dashboard ve cüzdan ekranları sıcak/soğuk/yakıt bakiyelerini ağ başına verir; yaptırım listesi (§9.23–§9.24) `network` değerleri `TRON`/`ETHEREUM` (✓ T145) | T157, T145 |
+| Admin | İşlem listesi/detayı (§9.6/§9.7) `network` alanı ve filtresi taşır; ayarlar (§9.8) ağ başına anahtarları gösterir; dashboard ve cüzdan ekranları sıcak/soğuk/yakıt bakiyelerini ağ başına verir; yaptırım listesi (§9.23–§9.24) `network` değerleri `TRON`/`ETHEREUM` (✓ T145). **Uygulandı (T157):** §9.6 liste satırı ve §9.7 detay `network` taşır (kabulden önce `null`), §9.6 `network` süzgeci alır; cüzdan, bakiye, yakıt cüzdanı ve transferler §9.33 (AD38) ile ağ başına; sıcak→soğuk aktarım gövdesi `network` alır (§9.34); Ethereum giden satırı kapatma aracı §9.32 (öneriyle kaydedildi — ⚠) | T157 ✓, T145 |
 
 ---
 
@@ -2024,7 +2024,7 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
 
 **Amaç:** Tüm işlem listesi (S15). Permission: `VIEW_TRANSACTIONS`. Paginated.
 
-**Query Params:** `status`, `statusGroup`, `stablecoin`, `dateFrom`, `dateTo`, `minAmount`, `maxAmount`, `search`, `sortBy`, `sortOrder`
+**Query Params:** `status`, `statusGroup`, `stablecoin`, `network` *(T157: `TRON` \| `ETHEREUM` — kabul edilmiş işlemlerde ağa göre süzer; kabulden önceki ilan ağsızdır, süzgeçle gelmez)*, `dateFrom`, `dateTo`, `minAmount`, `maxAmount`, `search`, `sortBy`, `sortOrder`
 
 `statusGroup` — 04 §8.4 "Durum" filtresinin çok-durumlu gruplarını sunucu tarafında ifade eder (tek `status` paramı yetmediği için). Değerler:
 
@@ -2050,17 +2050,20 @@ Ek field: `pendingCount` — bekleyen flag sayısı (badge).
   "buyer": { "steamId": "...", "displayName": "...", "avatarUrl": "..." },
   "createdAt": "2026-03-16T10:00:00Z",
   "completedAt": "2026-03-16T17:00:00Z",
-  "cancelledAt": null
+  "cancelledAt": null,
+  "network": "ETHEREUM"
 }
 ```
 
 `completedAt` / `cancelledAt`: işlemin terminal durumuna göre biri dolu, diğeri null (04 §8.4 "Tamamlanma/İptal" kolonu).
 
+`network` *(T157)*: işlemin ödeme ağı (`"TRON"` / `"ETHEREUM"`, makine değeri; etiket istemcide üretilir); alıcı kabul etmeden önce `null` (06 §1.4).
+
 ### 9.7 AD7 — `GET /admin/transactions/:id`
 
 **Amaç:** İşlem tam admin görünümü (S16). Permission: `VIEW_TRANSACTIONS`.
 
-T5'teki tüm alanlar + admin'e özel bölümler:
+T5'teki tüm alanlar + admin'e özel bölümler. **`network` *(T157)*:** işlemin ödeme ağı (`"TRON"` / `"ETHEREUM"` ya da kabulden önce `null`) — `paymentDetail`, `sellerPayoutDetail` ve `refundDetail` içindeki tx hash'leri bu ağın zincirindedir; istemci bağlantıyı ağa göre Tronscan ya da Etherscan olarak üretir (hash'in ağı satırın kendisinden okunur, tahmin edilmez; `null` = TRON, T148 kararı vi):
 
 **Ek bölümler:**
 
@@ -2684,6 +2687,67 @@ Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR",
 > **Audit:** AD30/AD31 her ikisi de `MAINTENANCE_MODE_CHANGED` audit satırı yazar (`EntityType=Maintenance`, `EntityId`=yeni tip, eski/yeni dört ayar + işlem sayısı). 05 §4.4 "maintenance mode giriş/çıkış AuditLog'a kaydedilir".
 
 > **Doğrudan ayar düzenleme:** `platform.maintenance.*` anahtarları AD9 (`PUT /admin/settings/:key`) ile de düzenlenebilir; bu yolda da cache invalidate + push yapılır (banner stale kalmaz) ama **freeze tetiklenmez** (freeze AD30/AD31'e özgü). `active=true` + `type=NONE` kombinasyonu cross-key invariant ile reddedilir → bakıma giriş AD30 üzerinden yapılır.
+
+### 9.32 AD33–AD37 — Gönderim satırı kapatma aracı (`/admin/wallets/outbound-closures`, T157) ⚠ PARA
+
+**Amaç:** Ethereum servisi işlem günlüğünü kaybedince (`JOURNAL_BEHIND_CHAIN`, DEPLOY_RUNBOOK §D adım 7) zincirde bulunan ama backend'de hâlâ `PENDING` görünen **gönderim satırlarını** zincirdeki hash'le kapatmak. Servis günlüğünü hatırlamadığı bir satırı yeniden imzalar (çift ödeme); bu araç satırı "zincirde zaten gitti" diye bağlayıp yeniden imzalanmasını engeller. **Araç para göndermez** — onay yalnız satıra `TxHash` yazar ve durumunu `PENDING → DETECTED` yapar; sonrasını olağan onay işi (`OutgoingTransferConfirmationJob`) zincirden bitirir.
+
+**Yetki:** hepsi `MANAGE_SETTINGS` (AD39 ve AD8 ile aynı anahtar; ayrı bir cüzdan izni katalog değişikliği olur — yapımcı önerisi, öneriyle kaydedildi — ⚠). **İki aşamalı:** öneren ile onaylayan **farklı** admin olmalıdır; kimlik her zaman oturumdan okunur, gövdedeki hiçbir alan öneren/onaylayan sayılmaz.
+
+| Uç | Amaç |
+|----|------|
+| AD33 `GET /admin/wallets/outbound-closures/candidates` | Kapatma önerilebilecek satırlar: Ethereum, giden (`SELLER_PAYOUT`, iade türleri, `SWEEP`), `PENDING`, hash'siz. `hasLiveClosure` bu satır için bekleyen/onaylı kayıt var mı. `token` işlemin beklediği token, `chainToken` satırın zincirde **taşıdığı** token (yanlış token iadesinde gelen token, ör. USDC; çözülemezse `null` — araç o satırı reddeder) |
+| AD34 `GET /admin/wallets/outbound-closures?status=` | Kapatma kayıtları (`PROPOSED` / `APPROVED` / `REJECTED`), satır ayrıntısıyla (tür, tutar, `token`, `chainToken`, alıcı, durum), en yeni üstte, en çok 200 |
+| AD35 `POST /admin/wallets/outbound-closures` | Öneri: `{ blockchainTransactionId, txHash, reason }` |
+| AD36 `POST /admin/wallets/outbound-closures/:id/approve` | Onay: `{ txHash }` — onaylayan hash'i **yeniden yazar** |
+| AD37 `POST /admin/wallets/outbound-closures/:id/reject` | Ret ya da geri çekme: `{ note }` (öneren de kendi önerisini geri çekebilir) |
+
+**Kurallar (hepsi testli ve bozmayla sabitlenmiş — 11 §F8 "T157 kararları"):**
+
+- Yalnız `Network = ETHEREUM`, yalnız giden tür, yalnız `Status = PENDING` ve `TxHash = NULL` satır. Öneri anında ve onay anında yeniden denetlenir; arada satır gönderilmiş/kapanmışsa onay reddedilir ve onay yazımı satırın durumuna karşı **koşullu** güncellemedir (kayıt kaybı yok).
+- `txHash` = `0x` + 64 onaltılık hane; küçük harfe çevrilip saklanır. Aynı hash başka bir satıra ya da canlı (reddedilmemiş) başka bir kayda **bağlanamaz** (servis denetimi + veritabanında süzgeçli tekil indeks). Bir satırın tek canlı kaydı olur.
+- `reason` 20–2.000 karakter: hangi hesabın hangi nonce'u, zincirde neyle eşleştirildi.
+- **Satırın zincirdeki transferi** (T157 düzeltme turu, ⚠ PARA): token ve gönderen, gönderim işinin imzaladığı ve onay işinin beklediği **tek kuraldan** çıkar (`OutboundTransferExpectation`): yanlış token iadesinde token `ActualTokenAddress`'teki izinli token'dır (USDT işlemine gelen USDC'nin iadesi USDC taşır), değilse satırın `Token`'ı; gönderen satırın `FromAddress`'idir (depozit ya da sweep sonrası iadede sıcak cüzdan, T158 (f)), ödemede (satır göndereni yazmaz) ağın sıcak cüzdanı. Token ya da gönderen çözülemiyorsa öneri ve onay **ret**tir (`ROW_TRANSFER_UNRESOLVED`, fail-closed) — onay işi de o satırı hiç onaylayamazdı.
+- **Benzer açık satır** (yönetici kararı, ⚠ PARA): aynı ağda aynı alıcıya, aynı (zincirdeki) token'la ve aynı tutarda başka bir **açık** (`PENDING` ya da `DETECTED`) giden satır varsa öneri de onay da **ret**tir (409 `AMBIGUOUS_ROW_MATCH`): zincirdeki hash hangisini ödediğini söyleyemez. İmzalanmamış satıra hash bağlansaydı öbür satır kendi gönderiminde tekil hash indeksine takılır, satıcı bir ödeme eksik alabilirdi. Operatör runbook'taki elle yolu izler (DEPLOY_RUNBOOK §D adım 7.4). Kural onayda yeniden denetlenir (öneriden sonra kuyruğa giren benzer satır).
+- Onay: öneren ≠ onaylayan; onaylayan hash'i yeniden yazar (öneridekiyle aynı olmalı); servis hash'i zincire sorar ve yalnız **kesinleşmiş ve başarılı** (`Confirmed`) cevapta ilerler — bekleyen, başarısız, bilinmeyen ya da cevap vermeyen servis **ret**tir (fail-closed). Durum sorgusu satırın beklentisini (kontrat, gönderen, alıcı, tutar) taşır (T158 (g)); günlükte olmayan hash'in Transfer log'u buna uymazsa servis `UNKNOWN` der → ret (`HASH_DOES_NOT_MATCH_ROW`).
+- Ardından servis hash'i satıra karşı **doğrular** (`POST /api/transfer/verify`, 08 §3.7.6): başarılı işlem + zincirdeki token'ın kontratından, gönderenden, alıcıya, tam tutarda `Transfer` log'u. Yalnız tam eşleşme (`MATCH`) ilerler; eşleşmeyen transfer, geri alınmış işlem, bilinmeyen hash, cevap vermeyen ya da bu denetimi sunmayan servis **ret**tir.
+- Her adım audit log'a yazılır (`OUTBOUND_ROW_CLOSURE_PROPOSED` / `_APPROVED` / `_REJECTED`; onayın reddedilme sebebi güvenlik açısından önemliyse `_REFUSED`: aynı admin, hash uyuşmazlığı, zincirde başarısız/bilinmeyen hash, satıra uymayan hash, çözülemeyen satır, benzer açık satır). Öneri ve onay kaydı `chainToken` ve gönderen adresini de taşır. Onaylanmış ya da reddedilmiş kayıt yeniden karara açılmaz (`CLOSURE_NOT_OPEN`). Veritabanı da kuralı tekrarlar: ağ yalnız Ethereum, onaylayan öneren olamaz.
+
+**Hatalar:** 400 `VALIDATION_ERROR`, `INVALID_TX_HASH`, `HASH_CONFIRMATION_MISMATCH`; 403 `INSUFFICIENT_PERMISSION`, `SELF_APPROVAL_FORBIDDEN`; 404 `ROW_NOT_FOUND`, `CLOSURE_NOT_FOUND`; 422 `ROW_NOT_ETHEREUM`, `ROW_NOT_OUTBOUND`, `HASH_NOT_SUCCESSFUL`, `HASH_NOT_FOUND`, `HASH_DOES_NOT_MATCH_ROW`, `ROW_TRANSFER_UNRESOLVED`; 409 `ROW_NOT_OPEN`, `CLOSURE_NOT_OPEN`, `HASH_ALREADY_BOUND`, `CLOSURE_ALREADY_PROPOSED`, `HASH_NOT_FINAL`, `CLOSURE_CONFLICT`, `AMBIGUOUS_ROW_MATCH`; 502 `CHAIN_SERVICE_UNAVAILABLE`; 401.
+
+> **Makine denetimi ve sınırı:** Alıcı, tutar, token ve gönderen eşleşmesini makine yapar (yukarıdaki iki denetim); iki admin yine de satırı gezgin sayfasıyla yan yana karşılaştırır — makine ikinci çizgidir, tek çizgi değil. Makinenin cevaplayamadığı tek soru "aynı alıcı/token/tutarda iki açık satırdan hangisi" sorusudur; onu araç cevaplamaz, reddeder (`AMBIGUOUS_ROW_MATCH`).
+
+### 9.33 AD38 — `GET /admin/wallets` (T157)
+
+**Amaç:** Platform cüzdanları, bakiyeler ve transferler **ağ başına** (S22, 04 §8.11). Permission: `MANAGE_SETTINGS` (cüzdan adreslerini salt okunur gösteren AD8 ile aynı).
+
+**Response (200) `data`:** `{ networks: [...] }` — enum sırasıyla (TRON, ETHEREUM) her ağ için bir blok:
+
+| Alan | Açıklama |
+|------|----------|
+| `network`, `nativeAsset` | `TRON`/`TRX`, `ETHEREUM`/`ETH` |
+| `serviceConfigured`, `degraded` | Ağın servisi yapılandırılmamışsa `false`; sağlık yoklaması kesinti görüyorsa `degraded` |
+| `balancesStatus`, `balancesBlock` | `OK` / `UNAVAILABLE` (servis cevap vermedi) / `NOT_CONFIGURED`; bakiyelerin okunduğu blok. **Okunamayan bakiye asla 0 gösterilmez** |
+| `wallets[]` | `role` (`HOT`, `COLD`, Ethereum'da `FUEL`), `address` (gösterim biçimi — Ethereum EIP-55; `null` = tanımsız), `configuredAddress`, `addressMismatch` (backend'in `…_HOT_WALLET_ADDRESS` ayarı servisin imzaladığı adresten farklı), `balances` (`[{symbol, amount}]` — yerel varlık + USDT + USDC; `null` = okunamadı), `nativeFloor` ve `belowNativeFloor` (sıcak ve yakıt cüzdanının ETH/TRX alarm tabanı) |
+| `outbound` | `pendingCount`, `oldestPendingAt`, `inFlightCount` — o ağın giden satırları |
+| `recentColdTransfers[]` | Son 10 sıcak→soğuk aktarım (`ColdWalletTransfer`) |
+| `recentOutbound[]` | Son 20 giden satır (ödeme, iade, sweep) |
+
+Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity) okunur; bir ağın cevabı ötekini etkilemez. **Yakıt cüzdanının adresi yapılandırmada yoktur** (anahtardan türer): backend onu yalnız Ethereum servisinden alır (`POST /api/wallet/platform`, 08 §3.7.5); servis cevap vermezse `FUEL` satırı `address: null` ile listelenir, tahmin edilmez.
+
+### 9.34 AD39 — `POST /admin/wallets/hot-to-cold-transfer` (T77; T157'de ağ eklendi)
+
+**Amaç:** Sıcak cüzdandan soğuk cüzdana elle konsolidasyon (05 §3.3). Permission: `MANAGE_SETTINGS`. (Kod yorumlarında T77 döneminden "AD20" diye geçer; 07'nin AD20'si hesap askısıdır, §9.26.)
+
+**Request:** `{ "amount": 1500.25, "token": "USDT", "network": "ETHEREUM" }` — `network` verilmezse `TRON` (07 §1.3 geriye uyum, öneriyle kaydedildi — ⚠); tanınmayan değer 400 `INVALID_NETWORK`. Ethereum yalnız **USDT** taşır (11 §F8 K2): `USDC` → 400 `INVALID_TOKEN`. Hedef adres isteğin parçası değildir: ağın `…_COLD_WALLET_ADDRESS` dağıtım ayarıdır ve imzalayan servis başkasına imzalamaz.
+
+**Response (200) `data`:** `{ coldTransferId, txHash, amount, token, fromAddress, toAddress, network }`.
+
+**Ethereum'da ek kurallar:** istek servise platformun ücret tavanıyla (`blockchain.ethereum.fee_cap_usd_per_transfer`) gider; servis tavanın üstünde ya da ETH kuru/yakıt yokken **imzalamaz, bekler** → 503 `TRANSFER_DEFERRED` (hiçbir şey gönderilmedi, defter/audit satırı yazılmadı, admin sonra tekrar dener). Servisi yapılandırılmamış ağ → 503 `NETWORK_UNAVAILABLE`.
+
+**Hatalar:** 400 `INVALID_AMOUNT`, `INVALID_TOKEN`, `INVALID_NETWORK`; 422 `HOT_WALLET_NOT_CONFIGURED`, `COLD_WALLET_NOT_CONFIGURED`; 502 `SIDECAR_UNAVAILABLE` (servis cevap vermedi, zaman aşımı ya da okunamayan cevap — aktarım **imzalanmış ve gönderilmiş olabilir**; ekran bunu söyler ve yeniden denemeden önce gezginde kontrol ister, T157 düzeltme turu); 503 `NETWORK_UNAVAILABLE`, `TRANSFER_DEFERRED`; 401/403.
+
+> **Bilinen sınır:** Ethereum servisi aktarımı istek kimliğiyle günlüğe bağlar; backend defter satırını gönderim **başarılı olduktan sonra** yazdığı için, servis imzalayıp cevap yolda kaybolursa admin'in yeniden denemesi yeni bir kimlikle ikinci bir aktarım yapabilir (para soğuk cüzdana gider, kayıp yok; mutabakat bir fazla aktarım gösterir). Yeniden denemeden önce Etherscan'de sıcak cüzdanın son çıkışına bakılması runbook'a yazıldı (DEPLOY_RUNBOOK §D).
 
 ---
 

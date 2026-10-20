@@ -16,6 +16,7 @@ interface AdminMenuItem {
     | "disputes"
     | "transactions"
     | "settings"
+    | "wallets"
     | "roles"
     | "users"
     | "auditLog";
@@ -28,6 +29,7 @@ const MENU: readonly AdminMenuItem[] = [
   { key: "disputes", path: "/admin/disputes" },
   { key: "transactions", path: "/admin/transactions" },
   { key: "settings", path: "/admin/settings" },
+  { key: "wallets", path: "/admin/wallets" },
   { key: "roles", path: "/admin/roles" },
   { key: "users", path: "/admin/users" },
   { key: "auditLog", path: "/admin/audit-logs" },

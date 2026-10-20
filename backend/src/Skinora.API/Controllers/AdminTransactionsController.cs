@@ -57,6 +57,7 @@ public sealed class AdminTransactionsController : ControllerBase
         [FromQuery] TransactionStatus? status,
         [FromQuery] AdminTransactionStatusGroup? statusGroup,
         [FromQuery] StablecoinType? stablecoin,
+        [FromQuery] BlockchainNetwork? network,
         [FromQuery] DateTime? dateFrom,
         [FromQuery] DateTime? dateTo,
         [FromQuery] decimal? minAmount,
@@ -80,7 +81,8 @@ public sealed class AdminTransactionsController : ControllerBase
             SortBy: sortBy,
             SortOrder: sortOrder,
             Page: page,
-            PageSize: pageSize);
+            PageSize: pageSize,
+            Network: network);
 
         var result = await _queries.ListAsync(query, cancellationToken);
         return Ok(result);

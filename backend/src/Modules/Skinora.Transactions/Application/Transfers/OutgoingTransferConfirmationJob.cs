@@ -271,21 +271,10 @@ public sealed class OutgoingTransferConfirmationJob
     private TransferStatusExpectation? ExpectationFor(BlockchainTransaction row, BlockchainNetworkPolicy policy)
     {
         if (!policy.VerifiesUnjournalledTransferStatus) return null;
-
-        var contract = row.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND
-            ? row.ActualTokenAddress
-            : _contracts.ResolveContractAddress(row.Network, row.Token);
-        var from = !string.IsNullOrWhiteSpace(row.FromAddress)
-            ? row.FromAddress
-            : row.Type == BlockchainTransactionType.SELLER_PAYOUT
-                ? _walletAddresses.For(row.Network).HotWalletAddress
-                : null;
-        if (string.IsNullOrWhiteSpace(contract) || string.IsNullOrWhiteSpace(from)
-            || string.IsNullOrWhiteSpace(row.ToAddress))
-        {
-            return null;
-        }
-        return new TransferStatusExpectation(contract, from, row.ToAddress, row.Amount);
+        // T157 düzeltme turu — the same rule the dispatcher signs with and the
+        // closure tool verifies with (a wrong-token refund expects the
+        // allowlisted token that arrived; an unresolvable one expects nothing).
+        return OutboundTransferExpectation.For(row, _contracts, _walletAddresses);
     }
 
     /// <summary>T152 — send the row to the back of its network's rotation.</summary>

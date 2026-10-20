@@ -6,6 +6,8 @@ using Skinora.Admin.Application.Users;
 using Skinora.API.BackgroundJobs;
 using Skinora.API.Services;
 using Skinora.API.Services.HotWallet;
+using Skinora.API.Services.AdminWallets;
+using Skinora.API.Services.WalletClosures;
 using Skinora.Platform.Application.Settings;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Steam;
@@ -408,6 +410,10 @@ public static class TransactionsModule
         // monitor job broadcasts threshold breaches over SignalR.
         services.AddScoped<IHotWalletService, HotWalletService>();
         services.AddScoped<IHotWalletMonitorService, HotWalletMonitorService>();
+        // T157 — two-person closure of an Ethereum outbound row after journal loss (07 §9.32).
+        services.AddScoped<IOutboundRowClosureService, OutboundRowClosureService>();
+        // T157 — AD38 wallet / balance / transfer overview per network.
+        services.AddScoped<IAdminWalletOverviewService, AdminWalletOverviewService>();
         services.AddScoped<HotWalletMonitorJob>();
         // WP14 — same reconfigurer wiring as ReconciliationJobRegistrar above
         // (hot_wallet.monitor_cron).

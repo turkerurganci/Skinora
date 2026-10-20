@@ -27,6 +27,7 @@ describe("admin route → permission map", () => {
       "/admin/disputes": "VIEW_DISPUTES",
       "/admin/transactions": "VIEW_TRANSACTIONS",
       "/admin/settings": "MANAGE_SETTINGS",
+      "/admin/wallets": "MANAGE_SETTINGS",
       "/admin/roles": "MANAGE_ROLES",
       "/admin/users": ["VIEW_USERS", "MANAGE_ROLES"],
       "/admin/audit-logs": "VIEW_AUDIT_LOG",
@@ -77,6 +78,7 @@ describe("menu visibility", () => {
     expect(visible(role, permissions, "/admin/disputes")).toBe(false);
     expect(visible(role, permissions, "/admin/transactions")).toBe(false);
     expect(visible(role, permissions, "/admin/settings")).toBe(false);
+    expect(visible(role, permissions, "/admin/wallets")).toBe(false);
     expect(visible(role, permissions, "/admin/roles")).toBe(false);
     expect(visible(role, permissions, "/admin/users")).toBe(false);
     expect(visible(role, permissions, "/admin/audit-logs")).toBe(false);
@@ -92,6 +94,11 @@ describe("menu visibility", () => {
     expect(visible(role, ["VIEW_USERS"], "/admin/roles")).toBe(false);
     // The other holder of the key still sees it.
     expect(visible(role, ["MANAGE_ROLES"], "/admin/users")).toBe(true);
+  });
+
+  it("shows the wallets screens to MANAGE_SETTINGS holders only (T157)", () => {
+    expect(visible("admin", ["MANAGE_SETTINGS"], "/admin/wallets")).toBe(true);
+    expect(visible("admin", ["VIEW_TRANSACTIONS", "MANAGE_ROLES"], "/admin/wallets")).toBe(false);
   });
 
   it("hides everything but the dashboard from an admin holding no permissions", () => {

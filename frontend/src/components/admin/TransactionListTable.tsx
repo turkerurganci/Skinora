@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { ResponsiveTable, StatusBadge } from "@/components/common";
 import type { ResponsiveTableColumn, ResponsiveTableSort } from "@/components/common";
 import { cn } from "@/lib/utils/cn";
+import { networkLabel, parseNetwork } from "@/lib/utils/blockchain";
 import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import type { AdminTransactionListItem, AdminTransactionParty } from "@/lib/api/admin";
 
@@ -43,8 +44,9 @@ export interface TransactionListTableProps {
 }
 
 /**
- * S15 admin transaction table (04 §8.4). Eight columns — ID (→ S16), item,
- * price, seller (→ S20), buyer (→ S20), status, created, completed/cancelled.
+ * S15 admin transaction table (04 §8.4). Nine columns — ID (→ S16), item,
+ * price, network (T157), seller (→ S20), buyer (→ S20), status, created,
+ * completed/cancelled.
  * Desktop renders a semantic table; mobile collapses to cards via
  * {@link ResponsiveTable} (04 §9.4).
  */
@@ -93,6 +95,19 @@ export function TransactionListTable({ transactions, className, sort }: Transact
           {formatStablecoin(row.price, row.stablecoin)}
         </span>
       ),
+    },
+    {
+      key: "network",
+      header: t("columns.network"),
+      cell: (row) => {
+        // parseNetwork: an unrecognised wire value shows as "—", never as TRON.
+        const network = parseNetwork(row.network);
+        return network ? (
+          <span className="text-sm text-gray-900">{networkLabel(network)}</span>
+        ) : (
+          <span className="text-sm text-gray-400">—</span>
+        );
+      },
     },
     {
       key: "seller",

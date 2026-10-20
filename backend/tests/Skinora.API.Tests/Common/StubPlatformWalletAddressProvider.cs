@@ -1,4 +1,5 @@
 using Skinora.Platform.Application.Wallets;
+using Skinora.Shared.Enums;
 
 namespace Skinora.API.Tests.Common;
 
@@ -13,4 +14,14 @@ public sealed class StubPlatformWalletAddressProvider : IPlatformWalletAddressPr
     public string? HotWalletAddress { get; set; }
 
     public string? ColdWalletAddress { get; set; }
+
+    /// <summary>T157 — a network's own pair; a network without an entry keeps the interface default.</summary>
+    public Dictionary<BlockchainNetwork, PlatformWalletAddresses> Pairs { get; } = new();
+
+    public PlatformWalletAddresses For(BlockchainNetwork network) =>
+        Pairs.TryGetValue(network, out var pair)
+            ? pair
+            : network == BlockchainNetwork.TRON
+                ? new PlatformWalletAddresses(network, HotWalletAddress, ColdWalletAddress)
+                : new PlatformWalletAddresses(network, null, null);
 }

@@ -24,15 +24,17 @@ namespace Skinora.API.Services.HotWallet;
 /// composition rule used by <see cref="ReconciliationService"/>.
 /// </summary>
 /// <remarks>
-/// T148 — the consolidation runs on <see cref="ConsolidationNetwork"/> (TRON): its
-/// service signs, its hot/cold pair is the source and the pinned destination,
-/// and the ledger row carries it. The admin endpoint (AD20) does not name a
-/// network yet; choosing one there is T157's (07 §1.3 "Admin").
+/// T148 — a consolidation runs on one network: its service signs, its hot/cold
+/// pair is the source and the pinned destination, and the ledger row carries
+/// it. T157 — AD39 names the network (07 §1.3 "Admin", §9.34); Ethereum moves USDT
+/// only (11 §F8 K2) and its service needs the platform's fee cap
+/// (<c>blockchain.ethereum.fee_cap_usd_per_transfer</c>, 08 §3.7.7), read here
+/// at the moment of the request. When the service waits (fee above the cap, no
+/// ETH price, no gas) nothing is signed and nothing is written — the admin
+/// tries again later.
 /// </remarks>
 public sealed class HotWalletService : IHotWalletService
 {
-    /// <summary>The network AD20 consolidates on until the admin API names one (T157).</summary>
-    public const BlockchainNetwork ConsolidationNetwork = BlockchainNetwork.TRON;
 
     private const int AmountScale = 6;
     private static readonly decimal AmountScaleQuantum = 0.000001m;
@@ -40,6 +42,7 @@ public sealed class HotWalletService : IHotWalletService
     private readonly AppDbContext _db;
     private readonly IBlockchainServiceRegistry _services;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
+    private readonly IBlockchainNetworkSettingsProvider _networkSettings;
     private readonly TimeProvider _clock;
     private readonly ILogger<HotWalletService> _logger;
 
@@ -47,17 +50,20 @@ public sealed class HotWalletService : IHotWalletService
         AppDbContext db,
         IBlockchainServiceRegistry services,
         IPlatformWalletAddressProvider walletAddresses,
+        IBlockchainNetworkSettingsProvider networkSettings,
         TimeProvider clock,
         ILogger<HotWalletService> logger)
     {
         _db = db;
         _services = services;
         _walletAddresses = walletAddresses;
+        _networkSettings = networkSettings;
         _clock = clock;
         _logger = logger;
     }
 
     public async Task<HotWalletColdTransferOutcome> InitiateColdTransferAsync(
+        BlockchainNetwork network,
         decimal amount,
         StablecoinType token,
         Guid initiatingAdminId,
@@ -83,7 +89,19 @@ public sealed class HotWalletService : IHotWalletService
                 $"Amount must be a multiple of {AmountScaleQuantum.ToString(CultureInfo.InvariantCulture)}.");
         }
 
-        var addresses = ReadWalletAddresses();
+        // Ethereum moves USDT only (11 §F8 K2); TRON keeps both stablecoins.
+        if (network == BlockchainNetwork.ETHEREUM && token != StablecoinType.USDT)
+        {
+            return new HotWalletColdTransferOutcome.TokenNotSupported(network, token);
+        }
+
+        // Fail closed per network (05 §3.3a): no service, nothing is sent.
+        if (!_services.IsConfigured(network))
+        {
+            return new HotWalletColdTransferOutcome.NetworkNotConfigured(network);
+        }
+
+        var addresses = ReadWalletAddresses(network);
         if (addresses.HotWallet is null)
         {
             return new HotWalletColdTransferOutcome.HotWalletNotConfigured();
@@ -98,13 +116,36 @@ public sealed class HotWalletService : IHotWalletService
         // and is only known after the SaveChanges below.
         var correlationId = Guid.NewGuid();
 
-        var sidecarResult = await _services.Sidecar(ConsolidationNetwork).SendHotToColdTransferAsync(
+        // Ethereum's service refuses a cold-wallet transfer without the fee
+        // cap (08 §3.7.7). No cap configured = nothing signed, same as the
+        // service's own "no cap, no send".
+        string? feeCapUsd = null;
+        if (network == BlockchainNetwork.ETHEREUM)
+        {
+            var settings = await _networkSettings.GetAsync(network, cancellationToken);
+            if (settings.FeeCapUsdPerTransfer is not { } cap || cap <= 0m)
+            {
+                return new HotWalletColdTransferOutcome.Deferred("FEE_CAP_NOT_CONFIGURED");
+            }
+            feeCapUsd = cap.ToString("0.######", CultureInfo.InvariantCulture);
+        }
+
+        var sidecarResult = await _services.Sidecar(network).SendHotToColdTransferAsync(
             new HotToColdTransferRequest(
                 ColdTransferId: correlationId,
                 ToColdAddress: addresses.ColdWallet,
                 Amount: amount.ToString("0.######", CultureInfo.InvariantCulture),
-                Token: token.ToString()),
+                Token: token.ToString(),
+                FeeCapUsd: feeCapUsd),
             cancellationToken);
+
+        if (sidecarResult.Status == BlockchainSidecarStatus.Deferred)
+        {
+            _logger.LogWarning(
+                "Hot→cold transfer on {Network} not signed for now ({Reason}); token={Token}, amount={Amount}, admin={Admin}.",
+                network, sidecarResult.Reason, token, amount, initiatingAdminId);
+            return new HotWalletColdTransferOutcome.Deferred(sidecarResult.Reason ?? "DEFERRED");
+        }
 
         if (sidecarResult.Status != BlockchainSidecarStatus.Success
             || string.IsNullOrWhiteSpace(sidecarResult.TxHash))
@@ -121,7 +162,7 @@ public sealed class HotWalletService : IHotWalletService
         {
             // 06 §1.4 (T145) / T148 — the ledger row carries the network the
             // consolidation ran on.
-            Network = ConsolidationNetwork,
+            Network = network,
             Amount = amount,
             Token = token,
             FromAddress = addresses.HotWallet,
@@ -136,6 +177,7 @@ public sealed class HotWalletService : IHotWalletService
         // atomically visible to reconciliation alongside the ledger entry.
         var payload = JsonSerializer.Serialize(new
         {
+            network = network.ToString(),
             token = token.ToString(),
             amount = amount.ToString("0.######", CultureInfo.InvariantCulture),
             fromAddress = addresses.HotWallet,
@@ -158,8 +200,8 @@ public sealed class HotWalletService : IHotWalletService
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "Hot→cold transfer accepted: id={Id} token={Token} amount={Amount} tx={TxHash} admin={Admin}.",
-            transfer.Id, token, amount, sidecarResult.TxHash, initiatingAdminId);
+            "Hot→cold transfer accepted on {Network}: id={Id} token={Token} amount={Amount} tx={TxHash} admin={Admin}.",
+            network, transfer.Id, token, amount, sidecarResult.TxHash, initiatingAdminId);
 
         return new HotWalletColdTransferOutcome.Success(
             ColdTransferId: transfer.Id,
@@ -167,7 +209,8 @@ public sealed class HotWalletService : IHotWalletService
             Amount: amount,
             Token: token,
             FromAddress: addresses.HotWallet,
-            ToAddress: addresses.ColdWallet);
+            ToAddress: addresses.ColdWallet,
+            Network: network);
     }
 
     /// <summary>
@@ -177,9 +220,9 @@ public sealed class HotWalletService : IHotWalletService
     /// <c>COLD_WALLET_ADDRESS</c>, so a drifted value fails there rather than
     /// sending platform funds to an address someone typed into the panel.
     /// </summary>
-    private (string? HotWallet, string? ColdWallet) ReadWalletAddresses()
+    private (string? HotWallet, string? ColdWallet) ReadWalletAddresses(BlockchainNetwork network)
     {
-        var pair = _walletAddresses.For(ConsolidationNetwork);
+        var pair = _walletAddresses.For(network);
         return (pair.HotWalletAddress, pair.ColdWalletAddress);
     }
 

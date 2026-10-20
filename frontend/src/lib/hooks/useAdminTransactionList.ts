@@ -17,6 +17,7 @@ export function useAdminTransactionList(query: AdminTransactionListQuery, enable
       query.status ?? null,
       query.statusGroup ?? null,
       query.stablecoin ?? null,
+      query.network ?? null,
       query.dateFrom ?? null,
       query.dateTo ?? null,
       query.minAmount ?? null,

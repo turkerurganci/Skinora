@@ -1,0 +1,8 @@
+{
+  "network": "ETHEREUM",
+  "coldTransferId": "7b5b3b4e-0c2f-4c5e-9d52-5d6a1e0f9a11",
+  "toColdAddress": "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed",
+  "amount": "1500.25",
+  "token": "USDT",
+  "feeCapUsd": "0.5"
+}

@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.10** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-18 — T156 — ağ seçimi arayüzü uygulandı: C11 ağ başına adres doğrulama, S06 kabul edilen ağlar ve ağ seçimi. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
+**Versiyon: v4.11** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-19 — T157 — admin ekranları ağ başına: yeni S22 Cüzdanlar (§8.11), S15 Ağ kolonu, S16 gezgin bağlantısı ağa göre. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
 
 ---
 
@@ -70,6 +70,7 @@ Bu doküman, Skinora platformunun ekran bazında kullanıcı arayüzü tanımlar
 | S19 | Rol & Yetki Yönetimi | Admin | `/admin/roles` |
 | S20 | Kullanıcı Detay (Admin) | Admin | `/admin/users/:steamId` |
 | S21 | Audit Log | Admin | `/admin/audit-logs` |
+| S22 | Cüzdanlar | Admin | `/admin/wallets` |
 
 > **Not:** S04 numarası atlanmıştır. ToS kabul adımı S02 içinde modal olarak yer alır (ayrı ekran gerektirmez).
 
@@ -286,6 +287,7 @@ S12 Admin Dashboard
  ├── İşlem sayısı kartı ──→ S15 İşlem Listesi
  ├── Ayarlar ──────────────→ S17 Parametre Yönetimi
  ├── Roller ───────────────→ S19 Rol & Yetki
+ ├── Cüzdanlar ────────────→ S22 Cüzdanlar
  └── Audit Log ────────────→ S21 Audit Log
 
 S13 Flag Kuyruğu
@@ -1517,7 +1519,8 @@ S13'te hesap flag'i seçildiğinde S14 farklı bir layout gösterir:
 - Tarih aralığı: Başlangıç — Bitiş
 - Kullanıcı: Steam ID veya kullanıcı adı (arama)
 - Tutar aralığı: Min — Max
-- Stablecoin: USDT / USDC / Tümü (F8 hedefi: yerine Ağ: TRON / Ethereum / Tümü — T157)
+- Stablecoin: USDT / USDC / Tümü
+- Ağ: TRON / Ethereum / Tümü *(T157 — uygulandı; kabulden önceki ilan ağsızdır, bu süzgeçle gelmez. Stablecoin süzgeci kalktı sayılmadı: K2 sonrası yeni işlem yalnız USDT'dir ama eski USDC işlemleri veritabanında durur — öneriyle kaydedildi, ⚠)*
 
 **Tablo Kolonları:**
 
@@ -1526,6 +1529,7 @@ S13'te hesap flag'i seçildiğinde S14 farklı bir layout gösterir:
 | İşlem ID | Tıklanabilir → S16 |
 | Item | Görsel (küçük) + ad |
 | Fiyat | Tutar + stablecoin |
+| Ağ *(T157)* | `TRON (TRC-20)` / `Ethereum (ERC-20)`; kabulden önce "—" |
 | Satıcı | Ad + avatar, tıklanabilir → S20 |
 | Alıcı | Ad + avatar (varsa), tıklanabilir → S20 |
 | Durum | Status badge (C01) |
@@ -1561,7 +1565,7 @@ S07'deki tüm bilgiler + admin'e özel ek bilgiler:
 
 4. **Ödeme Detayları** (ödeme yapıldıysa)
    - Alıcının gönderdiği tutar
-   - Blockchain tx hash (tıklanabilir → explorer)
+   - Blockchain tx hash (tıklanabilir → explorer; **T157:** işlemin ağına göre Etherscan ya da Tronscan — ağ etiketi detayda gösterilir, ağı olmayan kayıt TRON sayılır)
    - Doğrulama zamanı
 
 5. **Satıcıya Ödeme Detayları** (tamamlandıysa)
@@ -1846,6 +1850,22 @@ Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sa
 | Filtre sonucu boş | "Filtrelere uygun kayıt bulunamadı" |
 | Yükleniyor | Skeleton (C14) |
 
+### 8.11 S22 — Cüzdanlar *(T157)*
+
+**Amaç:** Platformun cüzdanlarını, bakiyelerini ve giden transferlerini **ağ başına** görmek (TRON ve Ethereum ayrı bölümlerde — bir ağın bakiyesi ötekinin yerine geçmez); sıcak→soğuk aktarım başlatmak; Ethereum servisi günlüğünü kaybettiğinde takılı kalan giden satırları zincirdeki hash'le kapatmak (07 §9.32–§9.34).
+
+**Erişim:** Admin (`MANAGE_SETTINGS` — ayarlar ekranındaki salt okunur cüzdan adresleriyle aynı izin; ayrı bir cüzdan izni katalog değişikliği olur, öneriyle kaydedildi — ⚠).
+
+**Bölümler (her ağ için ayrı kart, ağ etiketiyle: "TRON (TRC-20)" / "Ethereum (ERC-20)"):**
+
+1. **Durum:** servis yapılandırılmamış / sağlık yoklaması kesinti görüyor uyarısı.
+2. **Cüzdanlar tablosu:** sıcak, soğuk ve (yalnız Ethereum) **yakıt** cüzdanı — adres (kopyalama düğmesiyle; Ethereum EIP-55), yerel varlık (TRX / ETH), USDT ve USDC bakiyesi, sıcak ve yakıt cüzdanı için yerel varlık alarm tabanı ve tabanın altındaysa uyarı. **Okunamayan bakiye "0" olarak gösterilmez:** "Okunamadı" ya da "Yapılandırılmadı" yazılır. Yakıt cüzdanının adresi yalnız Ethereum servisinden gelir; servis cevap vermezse "bilinmiyor" yazılır. Backend'deki sıcak cüzdan adresi servisin imzaladığı adresten farklıysa belirgin uyarı.
+3. **Giden satırlar:** bekleyen sayısı ve en eskinin yaşı, kesinleşmeyi bekleyen sayısı, son 20 satır (tür, durum, tutar, alıcı, tx hash — ağın gezgini), son 10 soğuk aktarım.
+4. **Sıcak→soğuk aktarım formu:** tutar, token (Ethereum'da yalnız USDT); gönderen ve hedef adres salt okunur (hedef dağıtım ayarıdır); **onay penceresi** ağı, token'ı, tutarı ve hedef adresi açıkça yazar. "Servis şimdilik imzalamadı" (503 `TRANSFER_DEFERRED`) hata değil bekleme olarak anlatılır.
+5. **Giden satırı kapatma aracı (yalnız Ethereum, ⚠ PARA):** (a) aday satırlar (PENDING, hash'siz) ve "Kapatma öner" eylemi — hash (`0x` + 64 hane) ve gerekçe (en az 20 karakter) ister; pencere açıkça "bu araç para göndermez; satır zincirde zaten gitmiş sayılır" der; (b) öneriler listesi (varsayılan: bekleyenler) — satırın alıcısı ve tutarı, önerilen hash'in gezgin bağlantısı, öneren ve gerekçeyle birlikte; **Onayla** yalnız öneren olmayan admin'e sunulur ve **hash'in yeniden yazılmasını** ister (öneriden doldurulmaz); **Reddet / Geri çek** not ister; karar verilmiş kayıtlar salt okunurdur.
+
+**Responsive:** tablolar kart görünümüne geçer (§9.4); form ve pencereler tek kolon.
+
 ---
 
 ## 9. Responsive Tasarım Notları
@@ -1865,7 +1885,7 @@ Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sa
 | S05 Dashboard | İşlem listesi + sağ panel (istatistikler) | Tek kolon, istatistikler üstte | Tek kolon, kompakt kart |
 | S06 İşlem Oluşturma | Merkezi form (max 600px) | Aynı | Tam genişlik |
 | S07 İşlem Detay | Item sol, bilgiler sağ | Tek kolon | Tek kolon, kompakt |
-| S12-S21 Admin | Sol menü + içerik | Hamburger menü + içerik | Hamburger menü + tam genişlik |
+| S12-S22 Admin | Sol menü + içerik | Hamburger menü + içerik | Hamburger menü + tam genişlik |
 | Tablolar (S13, S15) | Tam tablo | Yatay scroll | Kart görünümüne geçiş |
 
 ### 9.3 C05 Transaction Timeline

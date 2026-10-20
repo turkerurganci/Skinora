@@ -105,6 +105,15 @@ public static class AuditLogCategoryMap
             // A sidecar going down is an operational integrity alarm, so it sits
             // in the security queue beside the reconciliation/hot-wallet alarms.
             [AuditAction.PLATFORM_OUTAGE_DETECTED] = Categories.SecurityEvent,
+
+            // T157 — outbound row closure (07 §9.32). Proposal, approval and
+            // rejection decide whether a payout/refund can be signed again, so
+            // they sit in the fund movement queue; a refused approval (same
+            // admin, hash mismatch, hash not final) is a security signal.
+            [AuditAction.OUTBOUND_ROW_CLOSURE_PROPOSED] = Categories.FundMovement,
+            [AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED] = Categories.FundMovement,
+            [AuditAction.OUTBOUND_ROW_CLOSURE_REJECTED] = Categories.FundMovement,
+            [AuditAction.OUTBOUND_ROW_CLOSURE_REFUSED] = Categories.SecurityEvent,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>
