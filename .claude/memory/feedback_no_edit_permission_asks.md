@@ -1,9 +1,10 @@
 ---
 name: Edit için izin sorma
 description: Kullanıcı onay verdikten sonra edit/commit/push/PR adımları için tekrar izin isteme
-type: feedback
+metadata:
+  type: feedback
+  originSessionId: 39faa398-6ed3-4338-8651-8dbb60794610
 ---
-
 Kullanıcı bir işi onayladıysa (örn. "yap", "onay", "devam"), o iş kapsamındaki dosya edit'leri, commit, push, PR açma gibi adımlar için tekrar **"hazırlayayım mı / yapayım mı"** diye sorma — doğrudan uygula.
 
 **Why:** Kullanıcı 2026-04-23'te PR #51 (validate.md Adım 17 fix) sırasında açıkça "benden herhangi bir edit için izin isteme" dedi. Onay bir kez verildikten sonra implementasyon adımlarını parçalayarak tekrar onay istemek akışı yavaşlatıyor ve gereksiz.

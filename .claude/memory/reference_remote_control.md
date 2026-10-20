@@ -1,7 +1,8 @@
 ---
 name: remote_control
 description: VS Code Claude Code extension'ında /remote-control (/rc) komutu — mobil cihazdan session izleme ve kontrol
-type: reference
+metadata:
+  type: reference
 ---
 
 ## Aktif etme

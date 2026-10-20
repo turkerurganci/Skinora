@@ -1,7 +1,11 @@
 ---
 name: feedback_single_session_worktree
-description: Bu worktree tek session ile calisilir - paralel session pratigi 2026-08-17'de birakildi
-type: feedback
+description: "Bu worktree tek session ile calisilir - paralel session pratigi 2026-08-17'de birakildi"
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 794793ff-af85-4e01-8f3f-725912cf2e44
+  modified: 2026-08-17T20:48:48.916Z
 ---
 
 `c:\projects\Escrow` worktree'sinde **paralel session calistirilmayacak** (proje sahibi karari, 2026-08-17). Bu, T137a doneminde uygulanan "P5 ile paralel gorev, izole git worktree (`c:/projects/Escrow-T137a`)" pratiginin **sonu** demektir — repo hafizasindaki T137a girisi o karari kaydeder ama artik gecerli desen degildir.

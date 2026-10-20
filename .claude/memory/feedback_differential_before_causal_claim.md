@@ -3,6 +3,9 @@ name: feedback_differential_before_causal_claim
 description: Belirtiyi bir nedene bağlamadan önce ayırt edici (diferansiyel) ölçüm yap; ilk uyan sinyalde durma
 metadata:
   type: feedback
+  node_type: memory
+  originSessionId: 083df5ac-7918-48f8-bca4-6eedc103b878
+  modified: 2026-09-17T10:21:54.419Z
 ---
 
 **Bir sinyal görmek onu açıklamak değildir.** Hikâyene uyan **ilk** ölçümde durma; alternatif sebepleri **eleyen** ikinci ölçümü yap. Aynı probu tekrar koşmak **tutarlılık** verir, **doğruluk** vermez.

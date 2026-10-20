@@ -1,8 +1,10 @@
 ---
 name: module-test-assembly-initializer
-description: Yeni modül integration-test assembly'sinde EF model-cache race'ini önlemek için TestAssemblyModuleInitializer ([ModuleInitializer]) ekle
+description: "Yeni modül integration-test assembly'sinde EF model-cache race'ini önlemek için TestAssemblyModuleInitializer ([ModuleInitializer]) ekle"
 metadata:
   type: project
+  node_type: memory
+  originSessionId: 40fcd2f6-15f8-49c0-b331-234db72439cd
 ---
 
 EF Core `AppDbContext` modelini **process-statik** cache'ler (model connection-string'e bağlı değil — ilk build'de tüm process için sabitlenir). Modül entity-config'leri `AppDbContext.RegisterModuleAssembly(assembly)` ile kaydedilir. Modül kayıtları per-class `static` ctor'larda **farklı alt kümelerle** yapılırsa ve xUnit sınıfları paralel koşarsa, eksik-kümeli bir sınıf ilk `AppDbContext`'i açtığında model o entity'ler olmadan cache'lenir → diğer sınıflar `System.InvalidOperationException : Cannot create a DbSet for 'X' because this type is not included in the model for the context.` ile **sıralamaya bağlı flaky** kırılır (örn. Platform kaydedilmezse `AuditLog`/`SystemSetting`).

@@ -1,7 +1,8 @@
 ---
 name: user_technical_profile
 description: Kullanıcının teknik deneyimi ve projedeki rolü — tech stack kararlarını etkiler
-type: user
+metadata:
+  type: user
 ---
 
 - .NET (C#) ve SQL Server deneyimi var

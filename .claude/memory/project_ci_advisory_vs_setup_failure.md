@@ -1,7 +1,11 @@
 ---
 name: project_ci_advisory_vs_setup_failure
-description: Skinora CI'da run "failure" ama bloke edici joblar yeşilse — advisory legleri suçlamadan önce "Set up job" kırılmasına bak
-type: project
+description: "Skinora CI'da run \"failure\" ama bloke edici joblar yeşilse — advisory legleri suçlamadan önce \"Set up job\" kırılmasına bak"
+metadata:
+  type: project
+  node_type: memory
+  originSessionId: f7d1c98a-d9a6-4864-a374-78fbf86b5b1e
+  modified: 2026-08-17T16:58:39.329Z
 ---
 
 Skinora CI'da 8 E2E leg (`e2e-smoke`) `continue-on-error: true`. T117'den beri hepsi

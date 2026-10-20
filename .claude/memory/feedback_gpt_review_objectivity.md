@@ -1,7 +1,8 @@
 ---
 name: feedback_gpt_review_objectivity
 description: GPT cross-review bulgularını değerlendirirken bağımsız ve objektif ol, otomatik onaylama
-type: feedback
+metadata:
+  type: feedback
 ---
 
 GPT cross-review bulgularını değerlendirirken rubber stamp olma — her bulguyu bağımsız analiz et.

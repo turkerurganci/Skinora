@@ -1,7 +1,11 @@
 ---
 name: reference_local_stack_runbook_g
-description: Yerel Docker stack'e dokunmadan önce Docs/DEPLOY_RUNBOOK.md §G oku — çıplak "docker compose up" ve nginx bayat IP tuzakları orada kayıtlı
-type: reference
+description: "Yerel Docker stack'e dokunmadan önce Docs/DEPLOY_RUNBOOK.md §G oku — çıplak \"docker compose up\" ve nginx bayat IP tuzakları orada kayıtlı"
+metadata:
+  type: reference
+  node_type: memory
+  originSessionId: 02c4a4b6-771e-4b28-a04d-4f1aa046e1ee
+  modified: 2026-09-22T21:44:49.691Z
 ---
 
 Yerel stack'i ayağa kaldırmadan/yeniden kurmadan önce `Docs/DEPLOY_RUNBOOK.md` **§G** okunmalı. İki tuzak orada yazılı ve ikisine de 2026-08-24'te runbook okunmadığı için yeniden düşüldü:

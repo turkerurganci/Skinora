@@ -1,7 +1,8 @@
 ---
 name: Yerleşim kontrolü yap
 description: Proje sahibi bir içeriği belirli bir yere ekle dediğinde, o yerin doğru olup olmadığını değerlendir — körü körüne uyma
-type: feedback
+metadata:
+  type: feedback
 ---
 
 Proje sahibi "bunu X dosyasına ekle" dediğinde, içeriğin gerçekten oraya ait olup olmadığını sorgula.

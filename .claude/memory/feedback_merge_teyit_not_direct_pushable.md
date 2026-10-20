@@ -1,7 +1,10 @@
 ---
 name: feedback_merge_teyit_not_direct_pushable
-description: Validate chat'inde post-merge "merge teyit" run ID'leri doğrudan main'e push edilemez — lokal pre-push hook bloke eder
-type: feedback
+description: "Validate chat'inde post-merge \"merge teyit\" run ID'leri doğrudan main'e push edilemez — lokal pre-push hook bloke eder"
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 14f1c393-49f7-45c3-8f7c-31aef826456f
 ---
 
 Validate akışında PR squash-merge edildikten sonra eklemek istediğin "merge teyit" satırları (main squash SHA + post-merge CI/Docker Publish run ID'leri) **post-merge** üretildiği için o PR'ın squash'ına dahil değildir ve **doğrudan main'e commit+push EDİLEMEZ**: repo'da lokal `pre-push` hook `main`/`develop`'a doğrudan push'u bloke eder (`SKINORA_ALLOW_DIRECT_PUSH=1` yalnız acil-durum bypass'ı — kozmetik doc için kullanma). CI'daki `0. Guard (direct push)` job'undaki `[skip-guard]` ayrı bir katmandır ve pre-push hook'u atlamaz.

@@ -1,7 +1,11 @@
 ---
 name: feedback_ask_questions_via_modal
-description: Soruları düz metinde numaralı liste olarak değil, AskUserQuestion (modal) ile sor
-type: feedback
+description: "Soruları düz metinde numaralı liste olarak değil, AskUserQuestion (modal) ile sor"
+metadata:
+  type: feedback
+  node_type: memory
+  originSessionId: 02c4a4b6-771e-4b28-a04d-4f1aa046e1ee
+  modified: 2026-08-24T17:34:49.452Z
 ---
 
 Kullanıcıya bir karar sorarken **AskUserQuestion aracını** kullan; soruyu mesajın içine numaralı liste olarak gömme.
