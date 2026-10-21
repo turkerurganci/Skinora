@@ -568,6 +568,145 @@ public class ChargedGasFeeResolverTests
             Assert.Single(observer.Fallbacks));
     }
 
+    // -------------------- T160b düzeltme turu B1 — min(measured, static) --------------------
+    //
+    // The measurement does not know the recipient's address state, so on its
+    // own it could charge more than the setting did before T160b (T159b
+    // Sepolia: 0.87 and 0.18 from one deposit). The setting caps it. Fixture
+    // measurements sit on both sides of every static setting and equal none.
+
+    [Fact]
+    public async Task T160b_B1_A_Measurement_Above_The_Static_Setting_Is_Capped_By_The_Setting()
+    {
+        var clock = new FakeTimeProvider(T0);
+        var ethereum = new ScriptedEstimator(GasFeeEstimateAttempt.Estimated(0.87m))
+        {
+            Then = GasFeeEstimateAttempt.Failed(retryable: false, "down"),
+        };
+        var tron = new ScriptedEstimator(GasFeeEstimateAttempt.Estimated(4.13m))
+        {
+            Then = GasFeeEstimateAttempt.Failed(retryable: false, "down"),
+        };
+        var observer = new RecordingObserver();
+        var sut = ChargedGasFeeResolverFactory.Create(
+            FakeBlockchainServiceRegistry.ForTron(gasFee: tron).With(BlockchainNetwork.ETHEREUM, gasFee: ethereum),
+            new StubSettings(), NoWaitRetry, clock, observer: observer);
+
+        var ethereumMeasured = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdepositA", "0xbuyerA", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        var tronMeasured = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.TRON, "TDepositA", "TBuyerA", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        var ethereumFallback = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdepositB", "0xbuyerB", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        var tronFallback = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.TRON, "TDepositB", "TBuyerB", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        var tronNoSender = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.TRON, null, "TBuyerC", 10.20m, StablecoinType.USDT, CancellationToken.None);
+
+        // The measurements were charged as estimates (and recorded) ...
+        Assert.Equal(0.87m, ethereumMeasured.FeeUsdt);
+        Assert.Equal(4.13m, tronMeasured.FeeUsdt);
+        // ... but a fallback never charges more than the setting.
+        Assert.Equal(EthereumRefundFallback, ethereumFallback.FeeUsdt);
+        Assert.Equal(GasFeeSource.StaticFallback, ethereumFallback.Source);
+        Assert.Equal(StaticRefundFee, tronFallback.FeeUsdt);
+        Assert.Equal(GasFeeSource.StaticFallback, tronFallback.Source);
+        Assert.Equal(StaticRefundFee, tronNoSender.FeeUsdt);
+        Assert.Equal(
+            [
+                (BlockchainNetwork.ETHEREUM, ChargedGasFeeResolver.RefundFlow, GasFeeFallbackReason.Unavailable, false),
+                (BlockchainNetwork.TRON, ChargedGasFeeResolver.RefundFlow, GasFeeFallbackReason.Unavailable, false),
+                (BlockchainNetwork.TRON, ChargedGasFeeResolver.RefundFlow, GasFeeFallbackReason.NoSender, false),
+            ],
+            observer.Fallbacks);
+    }
+
+    [Fact]
+    public async Task T160b_B1_A_Measurement_Below_The_Static_Setting_Is_Charged()
+    {
+        var clock = new FakeTimeProvider(T0);
+        var ethereum = new ScriptedEstimator(GasFeeEstimateAttempt.Estimated(0.18m))
+        {
+            Then = GasFeeEstimateAttempt.Failed(retryable: false, "down"),
+        };
+        var tron = new ScriptedEstimator(GasFeeEstimateAttempt.Estimated(1.37m))
+        {
+            Then = GasFeeEstimateAttempt.Failed(retryable: false, "down"),
+        };
+        var observer = new RecordingObserver();
+        var sut = ChargedGasFeeResolverFactory.Create(
+            FakeBlockchainServiceRegistry.ForTron(gasFee: tron).With(BlockchainNetwork.ETHEREUM, gasFee: ethereum),
+            new StubSettings(), NoWaitRetry, clock, observer: observer);
+
+        await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdepositA", "0xbuyerA", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.TRON, "TDepositA", "TBuyerA", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        var ethereumFallback = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdepositB", "0xbuyerB", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        var tronFallback = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.TRON, "TDepositB", "TBuyerB", 10.20m, StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Equal(0.18m, ethereumFallback.FeeUsdt);
+        Assert.Equal(GasFeeSource.MeasuredFallback, ethereumFallback.Source);
+        Assert.Equal(1.37m, tronFallback.FeeUsdt);
+        Assert.Equal(GasFeeSource.MeasuredFallback, tronFallback.Source);
+        Assert.Equal(
+            [
+                (BlockchainNetwork.ETHEREUM, ChargedGasFeeResolver.RefundFlow, GasFeeFallbackReason.Unavailable, true),
+                (BlockchainNetwork.TRON, ChargedGasFeeResolver.RefundFlow, GasFeeFallbackReason.Unavailable, true),
+            ],
+            observer.Fallbacks);
+    }
+
+    [Fact]
+    public async Task T160b_B1_A_Refused_Estimate_After_A_Measurement_Above_The_Setting_Charges_The_Setting()
+    {
+        var clock = new FakeTimeProvider(T0);
+        var estimator = new ScriptedEstimator(
+            GasFeeEstimateAttempt.Estimated(0.87m),
+            GasFeeEstimateAttempt.Estimated(250m)); // above the 10 USDT ceiling
+        var sut = BuildEthereum(estimator, NoWaitRetry, clock);
+
+        await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdeposit", "0xbuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+        var refused = await sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdeposit", "0xbuyer", 10.20m, StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Equal(EthereumRefundFallback, refused.FeeUsdt);
+        Assert.Equal(GasFeeSource.EstimateRejected, refused.Source);
+    }
+
+    // -------------------- T160b düzeltme turu B4 — the check before each wait --------------------
+
+    [Fact]
+    public async Task T160b_B4_No_Wait_Starts_When_The_Retry_Could_Not_Start_Before_The_Budget_Ends()
+    {
+        // The first call failed fast-enough to be retryable but late: at 10 s,
+        // with a 3 s wait before the next call, the retry would start at 13 s,
+        // past the 12 s budget. The fallback is charged at once — no wait.
+        var fake = new FakeTimeProvider(T0);
+        var clock = new TimerRecordingClock(fake);
+        var estimator = new ScriptedEstimator(
+            GasFeeEstimateAttempt.Failed(retryable: true, "HTTP 502"),
+            GasFeeEstimateAttempt.Estimated(0.18m))
+        {
+            Clock = fake,
+            Durations = [TimeSpan.FromSeconds(10)],
+        };
+        var policy = new GasFeeEstimateRetryPolicy(
+            MaxAttempts: 3, Delays: [TimeSpan.FromSeconds(3)], Budget: TimeSpan.FromSeconds(12));
+        var sut = BuildEthereum(estimator, policy, clock);
+
+        var resolved = await DriveAsync(fake, sut.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, "0xdeposit", "0xbuyer", 10.20m, StablecoinType.USDT, CancellationToken.None));
+
+        Assert.Equal(EthereumRefundFallback, resolved.FeeUsdt);
+        Assert.Equal(1, estimator.Calls);
+        Assert.Empty(clock.DueTimes);                                   // no wait was started
+        Assert.Equal(T0 + TimeSpan.FromSeconds(10), fake.GetUtcNow());  // returned when the first call ended
+    }
+
     private static ChargedGasFeeResolver BuildEthereum(
         IGasFeeEstimator estimator,
         GasFeeEstimateRetryPolicy policy,

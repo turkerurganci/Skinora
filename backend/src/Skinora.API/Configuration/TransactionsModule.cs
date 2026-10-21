@@ -224,6 +224,10 @@ public static class TransactionsModule
         services.AddSingleton(GasFeeEstimateRetryPolicy.Default);
         services.AddSingleton<MeasuredGasFeeCache>();
         services.AddSingleton<IGasFeeFallbackObserver, Skinora.API.Monitoring.PrometheusGasFeeFallbackObserver>();
+        // T160b düzeltme turu (B2) — build the observer at startup so its
+        // series are at 0 before the first fallback (increase() cannot see a
+        // series born at 1).
+        services.AddHostedService<Skinora.API.Monitoring.GasFeeFallbackSeriesPrimer>();
 
         // T149 — the buyer's network fee line (11 §F8 K8): quoted in the
         // detail view before the network is chosen, fixed at acceptance. The

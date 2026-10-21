@@ -1,3 +1,7 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Skinora.API.Configuration;
 using Skinora.API.Monitoring;
 using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.GasFee;
@@ -30,6 +34,28 @@ public sealed class PrometheusGasFeeFallbackObserverTests
                             labels => labels.SequenceEqual(
                                 [network.ToString(), flow, PrometheusGasFeeFallbackObserver.Label(reason), basis]));
                     }
+    }
+
+    [Fact]
+    public void B2_The_Host_Builds_The_Observer_At_Startup_Not_On_The_First_Refund()
+    {
+        // T160b düzeltme turu (B2): without a startup consumer the observer is
+        // built by the first ChargedGasFeeResolver, i.e. by the first refund
+        // or payout; a fallback then would create its series at 1 and
+        // increase() would never see it. A hosted service takes the observer
+        // as a dependency; the host builds hosted services at startup.
+        var services = new ServiceCollection();
+        services.AddTransactionsModule(new ConfigurationBuilder().AddInMemoryCollection().Build());
+
+        var primer = Assert.Single(
+            services,
+            d => d.ServiceType == typeof(IHostedService)
+                && d.ImplementationType == typeof(GasFeeFallbackSeriesPrimer));
+        using var provider = services.BuildServiceProvider();
+        var started = (GasFeeFallbackSeriesPrimer)ActivatorUtilities.CreateInstance(provider, primer.ImplementationType!);
+
+        Assert.IsType<PrometheusGasFeeFallbackObserver>(started.Observer);
+        Assert.Same(provider.GetRequiredService<IGasFeeFallbackObserver>(), started.Observer);
     }
 
     [Fact]

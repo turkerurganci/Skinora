@@ -37,8 +37,12 @@ public enum GasFeeSender
 /// Payout estimates feed the hot-wallet entry (the same transfer shape as a
 /// hot-wallet refund); the payout's own fallback is not changed by T160b.
 /// What is not in the key — whether the recipient already holds the token
-/// (TRON ~64k vs ~130k Energy, Ethereum ~47k vs ~70k gas) — stays a spread
-/// of up to ~2× around the measured value.
+/// (TRON ~64k vs ~130k Energy, Ethereum ~47k vs ~70k gas) and whether the
+/// deposit needs fuel first — is a spread around the measured value that is
+/// larger than the unit counts suggest: T159b's two Sepolia refunds from one
+/// deposit cost 0.87 and 0.18 (≈4.8×). That is why the resolver charges
+/// <c>min(measurement, static setting)</c> (T160b B1): the buyer never pays
+/// more than the setting charged before T160b.
 /// </para>
 /// <para>
 /// <b>Fresh = <see cref="Ttl"/>, 6 hours.</b> On TRON the unit prices change

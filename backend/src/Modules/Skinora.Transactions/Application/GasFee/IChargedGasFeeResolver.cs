@@ -72,14 +72,15 @@ public enum GasFeeSource
     /// T160b — refund only: the estimator stayed silent after its retries and
     /// the last measured estimate of the same network, sender and token (at
     /// most <see cref="MeasuredGasFeeCache.Ttl"/> old) was charged instead of
-    /// the static setting.
+    /// the static setting, because it was below it (B1: min(measured, static);
+    /// a measurement at or above the setting charges the setting, <see cref="StaticFallback"/>).
     /// </summary>
     MeasuredFallback,
 
     /// <summary>
     /// An estimate came back but exceeded <c>blockchain.max_charged_gas_fee_usdt</c>,
     /// so it was refused and the fallback used instead (T160b: for a refund
-    /// the last measured estimate while fresh, else the static setting). Distinct from
+    /// min(last measured estimate while fresh, static setting), else the static setting). Distinct from
     /// <see cref="StaticFallback"/> on purpose: that one means the estimator
     /// was silent, this one means it spoke and was not believed — which is an
     /// operator signal, not routine degradation.

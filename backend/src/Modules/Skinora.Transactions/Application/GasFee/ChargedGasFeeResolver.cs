@@ -20,9 +20,11 @@ namespace Skinora.Transactions.Application.GasFee;
 /// 3 calls within 12 s), because the deduction is fixed once and a node's
 /// passing lag (T159b B1, <c>block not found</c>) used to become a permanent
 /// fallback charge. When there is still no estimate the refund charges the
-/// last measured estimate of the same kind (<see cref="MeasuredGasFeeCache"/>,
-/// at most 6 h old), else the static setting; every fallback is reported to
-/// <see cref="IGasFeeFallbackObserver"/> (alarm <c>gas-fee-fallback-charged</c>).
+/// lower of the last measured estimate of the same kind
+/// (<see cref="MeasuredGasFeeCache"/>, at most 6 h old) and the static
+/// setting (B1: never more than before T160b), else the static setting;
+/// every fallback is reported to <see cref="IGasFeeFallbackObserver"/>
+/// (alarm <c>gas-fee-fallback-charged</c>).
 /// The payout keeps one call and the static setting — its split is a seller
 /// rule T160b does not touch — but is reported to the alarm too.
 /// </para>
@@ -229,11 +231,24 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
     }
 
     /// <summary>
-    /// What is charged without a live estimate: for a refund the last
-    /// measured estimate of the same network, sender and token while it is
-    /// fresh (<see cref="MeasuredGasFeeCache"/>), otherwise the flow's static
-    /// setting. Every fallback is reported to the alarm.
+    /// What is charged without a live estimate: for a refund the lower of the
+    /// last measured estimate of the same network, sender and token while it
+    /// is fresh (<see cref="MeasuredGasFeeCache"/>) and the flow's static
+    /// setting; with no fresh measurement, the static setting. Every fallback
+    /// is reported to the alarm.
     /// </summary>
+    /// <remarks>
+    /// T160b düzeltme turu (B1, yönetici kararı — öneriyle kaydedildi — ⚠ PARA):
+    /// <c>min(measured, static)</c>. The measurement does not know the
+    /// recipient's address state (holds the token or not — TRON ~64k vs ~130k
+    /// Energy, Ethereum ~47k vs ~70k gas; T159b's two Sepolia refunds from one
+    /// deposit cost 0.87 and 0.18, ≈4.8×), so on its own it could charge the
+    /// buyer more than the setting did before T160b. Capped by the setting,
+    /// the buyer never pays more than before T160b; where the setting is far
+    /// above the tariff (Ethereum mainnet: 0.50 vs ~0.05–0.08) the measurement
+    /// is what is charged. A measurement at or above the setting charges the
+    /// setting and is reported as a static fallback.
+    /// </remarks>
     private ResolvedGasFee Fallback(
         BlockchainNetwork network,
         BlockchainNetworkSettings settings,
@@ -243,18 +258,25 @@ public sealed class ChargedGasFeeResolver : IChargedGasFeeResolver
         GasFeeFallbackReason reason)
     {
         var rejected = reason == GasFeeFallbackReason.Rejected;
+        var fallback = flow.StaticFallback(settings);
         if (flow.IsRefund && _measured.TryGetFresh(network, flow.Sender, token, out var measurement))
         {
+            if (measurement.FeeUsdt < fallback)
+            {
+                _logger.LogWarning(
+                    "Gas fee for {Network} {Flow} to {To} charged without a live estimate ({Reason}) — charging the last measured estimate {Fee} USDT ({Sender}, {Token}, measured {MeasuredAt:O}; below the static fallback {Fallback} USDT).",
+                    network, flow.Name, toAddress, reason, measurement.FeeUsdt, flow.Sender, token, measurement.MeasuredAt, fallback);
+                _fallbackObserver.FallbackCharged(network, flow.Name, reason, measured: true);
+                return new ResolvedGasFee(
+                    measurement.FeeUsdt,
+                    rejected ? GasFeeSource.EstimateRejected : GasFeeSource.MeasuredFallback);
+            }
+
             _logger.LogWarning(
-                "Gas fee for {Network} {Flow} to {To} charged without a live estimate ({Reason}) — charging the last measured estimate {Fee} USDT ({Sender}, {Token}, measured {MeasuredAt:O}).",
-                network, flow.Name, toAddress, reason, measurement.FeeUsdt, flow.Sender, token, measurement.MeasuredAt);
-            _fallbackObserver.FallbackCharged(network, flow.Name, reason, measured: true);
-            return new ResolvedGasFee(
-                measurement.FeeUsdt,
-                rejected ? GasFeeSource.EstimateRejected : GasFeeSource.MeasuredFallback);
+                "Gas fee for {Network} {Flow} to {To}: the last measured estimate {Fee} USDT ({Sender}, {Token}, measured {MeasuredAt:O}) is not below the static fallback {Fallback} USDT — the static fallback caps it.",
+                network, flow.Name, toAddress, measurement.FeeUsdt, flow.Sender, token, measurement.MeasuredAt, fallback);
         }
 
-        var fallback = flow.StaticFallback(settings);
         _logger.LogWarning(
             "Gas fee for {Network} {Flow} to {To} charged without a live estimate ({Reason}) — charging static fallback {Fallback} USDT.",
             network, flow.Name, toAddress, reason, fallback);
