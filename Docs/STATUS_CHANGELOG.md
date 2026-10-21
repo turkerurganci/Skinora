@@ -4,6 +4,10 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T159b ✓ Tamamlandı, doğrulama PASS (Sepolia giden bacağı elle müdahalesiz: sweep, iade, yanlış token, reddedilen ödeme kesintisi; rapor [`T159b_REPORT.md`](TASK_REPORTS/T159b_REPORT.md), PR [#360](https://github.com/turkerurganci/Skinora/pull/360), doğrulanan HEAD `7a5602e5`, Opus high, 27/27 hash zincirden okundu, 5 × S4). Merge teyitleri: T159a main `eb66ffe6` → CI `39522975375` ✓ (2. deneme; 1. deneme OutboxTests kararsızlığı, #359 ile giderildi), Docker Publish `39522975374` ✓; #359 main `5be40559` → CI `39529062386` ✓, Docker Publish `39529062379` ✓. Yeni backlog satırları: `RefundGasEstimateSingleAttempt` 🟡 ⚠ PARA, `StackStartReconciliationBeforePaymentServices` 🟡, `EthereumMultiPaymentRefundNotProven` ⚪ (47 aktif / 156 çözülmüş). Sırada T160 (F8 Gate Check)
+
+**Önceki güncelleme:** 2026-10-21 — T159b ⏳ yapım bitti, doğrulama bekliyor (Sepolia giden bacağı elle müdahalesiz: sweep, iade, yanlış token, reddedilen ödeme kesintisi ✓; T159b_REPORT.md)
+
 **Önceki güncelleme:** 2026-10-21 — T159a ✓ Tamamlandı, doğrulama PASS (T159a_REPORT.md); T157 merge teyidi (main `e0e9a9d8`, CI ✓); sırada T159b
 
 **Önceki güncelleme:** 2026-10-20 — T157 ✓ Tamamlandı, yeniden doğrulama PASS (admin ekranları ağ başına + kapatma aracı; rapor [`T157_REPORT.md`](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)); T159a ⏳ sahip kararı uygulandı: reddedilen ödeme iadelerinde gas iki ağda alıcıdan; doğrulama bekliyordu. **2026-10-21 merge teyidi (T157):** main `e0e9a9d8` → CI `39495423338` ✓, Docker Publish `39495423270` ✓.

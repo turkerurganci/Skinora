@@ -1,6 +1,6 @@
 # T159b — Sepolia giden bacağı yeniden provası (müdahalesiz)
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor | **Tarih:** 2026-10-21 (prova 00:49–01:53 UTC)
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — doğrulama PASS | **Tarih:** 2026-10-21 (prova 00:49–01:53 UTC)
 
 ---
 
@@ -26,6 +26,18 @@
 **Bulgular:** B1 🟡 ⚠ PARA (küçük) — iptal iadesinde gas tahmini tek atış; düğümün geçici hatasında 0,50 sabit yedeğe düşüyor (2/2 admin iptalinde). B2 🟡 — yığın açılışındaki mutabakat turu servisler hazır olmadan koşup iki ağda alarm bırakıyor. B3 ℹ — yanlış token iade satırının `Token` alanı `USDT` (gönderilen USDC, doğru). B4 ℹ — kesinti ve yakıt payı depozitlerde kalıyor (T159a ⚠ kararı 2, bilinen). B5 ℹ — Nile'de üçüncü tarafın 0,000001 USDT tozu doğru işlendi. Kod değişikliği yapılmadı.
 
 ---
+
+## Doğrulama sonucu
+
+**✓ PASS** — bağımsız doğrulama, HEAD `7a5602e5`, Opus high (izole alt ajan). Üç kabul kriteri ve T159a (ix) kesintisi zincirde kanıtlandı; TRON regresyonu uçtan uca geçti. Rapordaki **27 hash'in 27'si zincirden bağımsız okundu** (Sepolia 21, Nile 6), sapma yok. 12 Sepolia adresinin tüm geçmişi tarandı, dışarıdan ETH / ön token girişi yok. Bulgular 5 adet S4 (öneri / bilgi):
+
+- **S4-1 (B1, ⚠ PARA):** kodda teyit edildi; `DEFERRED_BACKLOG.md` §4'e 🟡 olarak yazıldı (hedef F9 canlı öncesi).
+- **S4-2 (düzeltildi):** Sepolia'da 6 depozit var (indeks 4–9); 7 olan yakıt sayısı. "Yedi depozit" ifadeleri düzeltildi.
+- **S4-3 (düzeltildi):** TRON zamanları blok zamanıyla düzeltildi (ödeme `67f6b470` 00:54:54; `6e7c4eb5` 01:17:30). "7 sn tespit" iddiası yerine ölçülen **~62 sn** (bloktan tespite) yazıldı.
+- **S4-4:** çoklu ödeme türü (T159a (ix)) Ethereum'da koşulmadı; **T160'a not**; backlog ⚪ satırı.
+- **S4-5:** yanlış token satırında `Token = USDT` tasarım gereği (06 §3.8, "Token = expected"); yalnız gösterim.
+
+B2 (açılış mutabakat turu): log görülmedi, doğrulanamadı; backlog 🟡. Doğrulanamayanlar (kabul kriteri değil): yerel DB ayar geri alma ve satır değerleri.
 
 ## Ortam
 
@@ -54,7 +66,7 @@
 
 | Ne | Yapıldı mı |
 |---|---|
-| Depozite ETH / token | **Hayır** — yedi depozitin tüm ETH'si servisin yakıtından (aşağıdaki yakıt hash'leri), tek token girişi alıcının ödemesi |
+| Depozite ETH / token | **Hayır** — altı depozitin tüm ETH'si servisin yakıtından (aşağıdaki yakıt hash'leri), tek token girişi alıcının ödemesi |
 | Satıcı / iade adresine ön token | **Hayır** — altı taze adres ilk token'ını ürünün gönderiminden aldı |
 | Alıcının fonlanması | Sepolia: **gerekmedi** (alıcıda 969,4 USDT kopyası + 9,8 USDC vardı; yanlış token senaryosu 5 USDC ile açıldı). Nile: tek USDT kaynağı sıcak cüzdan olduğu için sıcak → alıcı 1,06 USDT (`8f8037e5…995a`) ve 1,79 USDT (`3860c895…f1c5`) — ödeme amaçlı, T159'daki emsal |
 | Prova kısayolu | `PayoutEligibleAt = now` yalnız `f7de324d` ve `da4f02a3` (runbook §G.4 10a; 8 günlük mutabakat bekleyişi) |
@@ -115,8 +127,8 @@ Hazırlık onayından sonra alıcı iptal etti (00:52, `CANCELLED_BUYER`, depozi
 | Adım | Zaman (UTC) | Kanıt |
 |---|---|---|
 | Kabul: toplam **2,02** (1,00 + 0,02 komisyon + 1,00 ağ ücreti satırı, K8); depozit `TFJ4rA2Qj61CuYxW6iLenjLTG2YBewpvLj` (indeks 3) | 00:52 | API |
-| Ödeme 2,02 USDT | 00:55:49 | `67f6b47024d0292885a7c7a78761e3b4302b921b878a036f2cd96278c86b1069`, blok 72.003.601 |
-| Tespit / 20 onay → `PAYMENT_RECEIVED` | 00:55:56 / 00:56:56 (**~67 sn**) | |
+| Ödeme 2,02 USDT | 00:54:54 (blok zamanı) | `67f6b47024d0292885a7c7a78761e3b4302b921b878a036f2cd96278c86b1069`, blok 72.003.601 |
+| Tespit / 20 onay → `PAYMENT_RECEIVED` | 00:55:56 / 00:56:56 (bloktan **~62 sn** sonra tespit) | |
 | Sahte takas + alıcı onayı → `ITEM_DELIVERED`; `PayoutEligibleAt = now` | 00:57:05 / 00:57:10 | |
 | Mutabakat doğrulandı | 01:00:06 | |
 | Sweep 2,02 → sıcak cüzdan (hesap açma 1 SUN + yakma takviyesi; tahmin 0,988 USDT) | 01:01:06 → 01:05:08 | `1d2e1aaa9791c19da602f35dd778ea13e7153a12e1270532f4d3bea6478cbed1`, blok 72.003.749 |
@@ -125,7 +137,7 @@ Hazırlık onayından sonra alıcı iptal etti (00:52, `CANCELLED_BUYER`, depozi
 
 ### 6. TRON eksik ödeme — `e7305d8d`, fiyat 2,00 (beklenen 3,04)
 
-Depozit `THmvon1aTzDhURM6LUdQftR8HqkQBkPXoo`. Ödeme **2,67** `6e7c4eb5988f85cd5850007afc5178c4525076646d7bbd1c36012d76384b4d54` (blok 72.004.051, 01:18:27) → 01:19:32 `INCORRECT_AMOUNT_REFUND` **2,30**, `GasFee` **0,37** (servis tahmini: enerji açığı 0 — Nile USDT kontratı enerjiyi sahibinden karşılıyor; hesap açma yakması 1.100.000 SUN × TRX 0,3313) → iade `d1ac39047d69df64e87bcef746340d4b04c60ff8972334004e0695f136d4f9c1` (blok 72.004.108, SUCCESS, 14.650 enerji, ücret 0) → `CONFIRMED` 01:23:12. Alıcı adresi `THBVFCfoTmriK7WsiRxCvTYapztzM7iDfd` 0,004001 → **2,304001** USDT (+2,30). Depozitte 0,370001 USDT + 1,6115 TRX (kullanılmayan yakma takviyesi) kaldı.
+Depozit `THmvon1aTzDhURM6LUdQftR8HqkQBkPXoo`. Ödeme **2,67** `6e7c4eb5988f85cd5850007afc5178c4525076646d7bbd1c36012d76384b4d54` (blok 72.004.051, 01:17:30 blok zamanı) → 01:19:32 `INCORRECT_AMOUNT_REFUND` **2,30**, `GasFee` **0,37** (servis tahmini: enerji açığı 0 — Nile USDT kontratı enerjiyi sahibinden karşılıyor; hesap açma yakması 1.100.000 SUN × TRX 0,3313) → iade `d1ac39047d69df64e87bcef746340d4b04c60ff8972334004e0695f136d4f9c1` (blok 72.004.108, SUCCESS, 14.650 enerji, ücret 0) → `CONFIRMED` 01:23:12. Alıcı adresi `THBVFCfoTmriK7WsiRxCvTYapztzM7iDfd` 0,004001 → **2,304001** USDT (+2,30). Depozitte 0,370001 USDT + 1,6115 TRX (kullanılmayan yakma takviyesi) kaldı.
 
 Backend log: *"Underpayment refund queued — expected=3.04 received=2.67 net=2.30 gasFee=0.37"*.
 
@@ -155,7 +167,7 @@ Aynı depozite ödemeden 6 sn sonra üçüncü bir adresten (`TEMSSnDm7cPhBFmHet
 | Yakıt `0x6436…3239` | 0,009856125 | 0,007657769 | **−0,002198356** | 7 yakıt: değer 0,000949756 + ücret 0,0012486 (6 × 204.600 + 21.000 gas × 1 gwei). Günlük yakıt tavanı 0,005 ETH'nin %44'ü |
 | Sıcak `0xeC18…404d` | 0,009945503 | 0,009793086 | −0,000152417 | payout (152.417 gas × 1 gwei) |
 | Alıcı `0xC7fB…6209` | 0,005099999990 | 0,005099817198 | −0,000000183 | 6 ödeme × ~152.400 gas × 200.024 wei |
-| Yedi depozit | 0 | toplam ~0,000090 | + | yakıtın kullanılmayan gas payı (token gas limiti %10 pay + tahmin) — depozitte kalır |
+| Altı depozit | 0 | toplam ~0,000090 | + | yakıtın kullanılmayan gas payı (token gas limiti %10 pay + tahmin) — depozitte kalır |
 
 Yakıt ve sıcak cüzdan 0,005 alarm tabanının üzerinde kaldı. `ethereum-*` Grafana kurallarının hiçbiri çalmadı (aşağıda).
 
@@ -203,7 +215,7 @@ Senaryo 6'da depozite ödemeden 6 sn sonra yabancı adresten 0,000001 USDT geldi
 
 ### Beklenen / bilinen davranışlar
 
-- **Kesinlik gecikmesi:** Sepolia ödemeden `PAYMENT_RECEIVED`'a 19 dk 30 sn; gönderimden onaya 14–18 dk. TRON 7 sn tespit, ~60 sn onay.
+- **Kesinlik gecikmesi:** Sepolia ödemeden `PAYMENT_RECEIVED`'a 19 dk 30 sn; gönderimden onaya 14–18 dk. TRON tespit bloktan ~62 sn sonra (blok zamanıyla ölçüldü; ilk yazılan "7 sn" iddiası yanlıştı), `PAYMENT_RECEIVED` ~2 dk sonra.
 - **Geçici düğüm hataları:** `RPC_UNAVAILABLE` (`eth_feeHistory: request beyond head block`) 2 kez, `GAS_ESTIMATE_UNAVAILABLE` (`block not found`) 2 kez — hepsi beklemeye alındı, bir sonraki turda gitti; satırlar `FAILED` olmadı, deneme hakkı harcanmadı. PublicNode adressiz `eth_getLogs`'u reddediyor (T151'de bilinen; spam token taraması o aralıkta yok).
 - **Yakıt önce, token sonra:** her gönderimde `FUEL_PENDING` → yakıt bloğa girince imza (7/7).
 - **Açık kalan işlem:** `e7305d8d` (TRON eksik ödeme) yığın indiğinde `SELLER_CONFIRMED`; ödeme süresi 02:17'de doluyordu — bir sonraki açılışta zaman aşımına düşer. Depozitinde yalnız kesinti tozu var.

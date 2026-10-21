@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T159b ⏳ yapım bitti, doğrulama bekliyor (Sepolia giden bacağı elle müdahalesiz: sweep, iade, yanlış token, reddedilen ödeme kesintisi ✓; T159b_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-21 — T159b ✓ Tamamlandı, doğrulama PASS (Sepolia giden bacağı elle müdahalesiz; T159b_REPORT.md, PR #360); T159a ve #359 merge teyitleri; sırada T160 (F8 Gate Check) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -345,9 +345,9 @@
 | T156 | Kullanıcı arayüzü — ağ seçimi | ✓ Tamamlandı — doğrulama ✓ PASS (doğrulama alt ajanı, F8 yönetici düzeni; main ile bütünleştirildi; [rapor](TASK_REPORTS/T156_REPORT.md), PR [#350](https://github.com/turkerurganci/Skinora/pull/350)) |
 | T157 | Admin ekranları ağ başına | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → yeniden doğrulama ✓ PASS (merge yöneticide; merge teyit: main `e0e9a9d8` → CI `39495423338` ✓, Docker Publish `39495423270` ✓) ([rapor](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)) |
 | T158 | Ethereum kurulumu — ayarlar, sırlar, alarmlar, runbook | ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (merge yöneticide) ([rapor](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353)) |
-| T159 | Sepolia canlı provası + TRON regresyonu | ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak) ([rapor](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355)) |
+| T159 | Sepolia canlı provası + TRON regresyonu | ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak; giden bacak T159b'de müdahalesiz ✓) ([rapor](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355)) |
 | T159a | Ethereum gas tarifesine uyum (T159 B1, ⚠ PARA) [ÇOK RİSKLİ] | ✓ Tamamlandı — doğrulama PASS ([rapor](TASK_REPORTS/T159a_REPORT.md), PR [#356](https://github.com/turkerurganci/Skinora/pull/356)) |
-| T159b | Sepolia giden bacağı yeniden provası (müdahalesiz) | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T159b_REPORT.md), PR [#360](https://github.com/turkerurganci/Skinora/pull/360)) |
+| T159b | Sepolia giden bacağı yeniden provası (müdahalesiz) | ✓ Tamamlandı — doğrulama PASS ([rapor](TASK_REPORTS/T159b_REPORT.md), PR [#360](https://github.com/turkerurganci/Skinora/pull/360)) |
 | T160 | F8 Gate Check | ⬚ Bekliyor |
 
 ---
