@@ -86,3 +86,5 @@ T11 discipline-only branch protection rejiminde `SKINORA_ALLOW_DIRECT_PUSH=1` il
 | 2026-10-19 03:26 UTC | Türker urgancı | task/T159-sepolia-provasi | `pending` | [secret-guard] T159 raporu: Nile TRON islem hash'leri (64 hex, kamu zinciri) - sir degil |
 | 2026-10-19 04:49 UTC | Türker urgancı | task/T159a-ethereum-gas-tarifesi | `pending` | [secret-guard] main birlestirmesi: T159 raporundaki Nile TRON islem hash'leri (64 hex, kamu zinciri, main'de zaten var) - sir degil |
 | 2026-10-20 20:19 UTC | Türker urgancı | task/T157-admin-ag-basina | `pending` | [secret-guard] T157 main birlestirmesi: main'deki T159_REPORT Nile TRON islem hash'leri (64 hex, kamu zinciri) - sir degil, main'de ayni kayit var |
+| 2026-10-21 01:57 UTC | Türker urgancı | task/T159b-sepolia-giden-bacak | `pending` | [secret-guard] T159b raporu: Nile TRON islem hash'leri (64 hex, kamu zinciri) - sir degil; staged diff'teki tum 64-hex diziler Sepolia/Nile islem hash'i (dogrulandi) |
+| 2026-10-21 02:16 UTC | Türker urgancı | detached | `pending` | [secret-guard] T159b kapanis: rapor duzeltmesi, Nile TRON islem hash'i (64 hex, kamu zinciri) - sir degil; degisen satir zaten rapordaki hash |
