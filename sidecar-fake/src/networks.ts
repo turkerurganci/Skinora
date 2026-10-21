@@ -173,6 +173,10 @@ export const ETHEREUM: NetworkProfile = {
     confirmations: 13,
     finalized: true,
     realizedFeeWei: '21000000000000',
+    // T160c düzeltme turu — the platform's spend for the send (a hot-wallet
+    // send: its receipt fee) and the ETH/USDT price of this final read.
+    platformSpendWei: '21000000000000',
+    nativePriceUsdt: '2444.861904',
   }),
 };
 
