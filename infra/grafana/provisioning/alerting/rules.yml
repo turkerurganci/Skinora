@@ -1320,8 +1320,9 @@ groups:
             max_charged_gas_fee_usdt, or had no deposit address to price, and wrote the
             fee from its fallback instead. Labels: network; flow (refund, hot-wallet
             refund, payout); basis (measured = the last estimate of the same kind,
-            at most 6 h old; static = the blockchain.*_gas_fee_estimate_usdt
-            setting). The amount is fixed on the row and not corrected later
+            at most 6 h old, charged because it was below the setting; static =
+            the blockchain.*_gas_fee_estimate_usdt setting: no fresh measurement,
+            or one at or above it — the fallback is min(measured, setting)). The amount is fixed on the row and not corrected later
             (08 §3.1a): check the service's estimate-fee log and the RPC provider,
             and compare the row's GasFee with the realized fee (DEPLOY_RUNBOOK §J
             "Gas tahmini"). The alarm clears an hour after the last fallback.
