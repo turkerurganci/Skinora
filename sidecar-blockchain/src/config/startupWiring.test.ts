@@ -22,6 +22,8 @@ const HOT_WALLET = 'TP6e9Yqa1wFFDbJzKaSgTwBq2LHax9YSFD';
 /** The Nile stake account measured 2026-09-18 — a real address, as the flow requires. */
 const STAKE_ACCOUNT = 'TVqvXQhRcmcCQudYx6uhq1WWuNHVmEEyQ6';
 const STARTUP_MESSAGE = 'Energy delegation:';
+/** T161 — the service does not start without its internal key (config/internalKey.ts). */
+const INTERNAL_KEY = 'test-internal-key-'.padEnd(64, 'k');
 
 interface Startup {
   /** The parsed startup line, if the process got that far. */
@@ -39,6 +41,7 @@ function start(env: Record<string, string>, message: string = STARTUP_MESSAGE): 
         NODE_ENV: 'test',
         PORT: '0',
         LOKI_URL: 'http://127.0.0.1:9',
+        INTERNAL_KEY,
         HOT_WALLET_ADDRESS: HOT_WALLET,
         HOT_WALLET_PRIVATE_KEY: '',
         COLD_WALLET_ADDRESS: '',
@@ -187,4 +190,38 @@ describe('sidecar startup — the polling cadences and the quota budget reach th
     expect(startup.exitCode ?? 0).toBeGreaterThan(0);
     expect(startup.output).toContain('PAYMENT_HOLDING_POLLING_INTERVAL_MS');
   }, 30_000);
+});
+
+/**
+ * T161 — fail closed on the internal key (05 §3.4). Before T161 an empty
+ * INTERNAL_KEY made the auth middleware skip the check, so a container started
+ * without it served every /api route — payouts, refunds, sweeps — to whoever
+ * reached its port. Started the way production starts it, the process must
+ * exit non-zero, name the reason, and never reach the listen call.
+ */
+describe('sidecar startup — the internal key is required', () => {
+  it.each([
+    ['unset', { INTERNAL_KEY: '' }, 'INTERNAL_KEY_MISSING'],
+    [
+      'shorter than 32 characters',
+      { INTERNAL_KEY: 'test-short-'.padEnd(31, 'k') },
+      'INTERNAL_KEY_TOO_SHORT',
+    ],
+  ])(
+    'refuses to start when the key is %s',
+    async (_label, env, code) => {
+      const startup = await start(env, 'Blockchain sidecar listening');
+
+      expect(startup.line, startup.output).toBeUndefined();
+      expect(startup.exitCode ?? 0).toBeGreaterThan(0);
+      expect(startup.output).toContain(code);
+      // Refused before anything else was built: the delegation line never came.
+      expect(startup.output).not.toContain(STARTUP_MESSAGE);
+    },
+    30_000,
+  );
+
+  // The positive case is every other test in this file: each starts with
+  // INTERNAL_KEY set and reads a line logged after this check. Blank keys and
+  // the length floor are covered without a process (internalKey.test.ts).
 });

@@ -151,6 +151,13 @@ jobs:
             # said nothing about, because CI had never run those tests.
             scripts:
               - 'scripts/**'
+              # T161 — scripts/compose-exposure.test.mjs renders these with
+              # `docker compose config` and fails on any port that is not
+              # loopback; a compose-only PR must run it.
+              - 'docker-compose.yml'
+              - 'docker-compose.override.yml'
+              - 'docker-compose.trial.yml'
+              - '.env.example'
               - '.github/workflows/**'
 
       # Build a matrix JSON for docker-build-check. Empty array when no
@@ -455,6 +462,9 @@ jobs:
   #
   # `needs: [changes]` only — see the T137 note on 3b: depending on a job that
   # can skip makes THIS job skip with it.
+  #
+  # T161 — compose-exposure.test.mjs needs the runner's docker CLI (Compose
+  # >= 2.24 for `!reset`); it fails, not skips, when CI has none.
   # ----------------------------------------------------------------------------
   scripts-test:
     name: 3c. Script test (node --test)

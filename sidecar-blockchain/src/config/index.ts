@@ -88,6 +88,8 @@ export const config = {
 
   // Backend communication
   backendUrl: process.env.BACKEND_URL || 'http://skinora-backend:5000',
+  // X-Internal-Key (05 §3.4). Raw here; the entry point refuses to start when
+  // it is empty or shorter than 32 characters (T161, config/internalKey.ts).
   internalKey: process.env.INTERNAL_KEY || '',
   webhookSecret: process.env.WEBHOOK_SECRET || '',
 

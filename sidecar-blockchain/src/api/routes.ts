@@ -25,6 +25,11 @@ import type { RefundService } from '../transfer/RefundService.js';
 import type { FeeEstimationService } from '../fee/FeeEstimationService.js';
 
 export interface RouterDeps {
+  /**
+   * T161 — the X-Internal-Key every /api route requires (05 §3.4). Required:
+   * the router cannot be built without one (fail closed, config/internalKey.ts).
+   */
+  internalKey: string;
   walletManager: WalletManager;
   monitorRegistry: MonitorRegistry;
   postCancelMonitorRegistry: PostCancelMonitorRegistry;
@@ -44,7 +49,7 @@ export function createRouter(deps: RouterDeps): Router {
 
   // Authenticated API routes
   const apiRouter = Router();
-  apiRouter.use(internalKeyAuth);
+  apiRouter.use(internalKeyAuth(deps.internalKey));
   // T148 (05 §3.3a) — every POST body names its network; one naming another
   // network than this service's is refused with 400 NETWORK_MISMATCH.
   apiRouter.use(networkGuard);

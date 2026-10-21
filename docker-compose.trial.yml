@@ -1,0 +1,174 @@
+# =============================================================================
+# Skinora — TRIAL deployment overlay (T161). Layered OVER docker-compose.yml:
+#
+#   docker compose -p skinora-trial --env-file .env.trial \
+#     -f docker-compose.yml -f docker-compose.trial.yml [--profile ethereum] \
+#     [--profile tunnel] up -d --build --wait
+#
+# Owner decision 2026-10-21: no rented server yet. The public trial runs on the
+# owner's PC (Docker Desktop) on test networks only (TRON Nile + Ethereum
+# Sepolia), reached from outside ONLY through a Cloudflare Tunnel. No router
+# port is opened. Steps: Docs/DEPLOY_RUNBOOK.md §K.
+#
+# What this overlay changes, and nothing else:
+#   * Its own project — its own containers, network, named volumes and images.
+#     `name:` below; -p on the command line wins (T161's port scan used
+#     -p skinora-t161). container_name is reset so names derive from the
+#     project and never collide with the development stack (skinora-backend …).
+#   * Its own configuration: values from .env.trial (--env-file; `.env.*` is
+#     gitignored) and Docker secrets from ./secrets/trial/ (gitignored).
+#   * NO internal port on the host. `ports: !reset []` removes the base file's
+#     loopback ports; the database, Redis, backend, sidecars, Loki and
+#     Prometheus are reachable only inside the compose network. Three loopback
+#     ports stay for the operator on this machine: the edge (local smoke test),
+#     Grafana and Uptime Kuma (admin UIs). Nothing binds a LAN address.
+#   * Production mode forced (ASPNETCORE_ENVIRONMENT / NODE_ENV) whatever
+#     .env.trial says, and Grafana refuses to start on a missing admin password.
+#   * The Cloudflare tunnel (profile "tunnel"): cloudflared dials OUT to
+#     Cloudflare and forwards to the edge over the compose network. It does not
+#     start without its token (skinora-tunnel-preflight below).
+#
+# Needs Docker Compose >= 2.24 (`!reset` / `!override`). The tags are written
+# on every service on purpose: through a YAML anchor (`<<: *x`) compose drops
+# them and the base ports silently survive (measured with Compose v5.1.0).
+# scripts/compose-exposure.test.mjs renders this file and fails CI on any
+# published port that is not loopback, or any internal service that publishes.
+# =============================================================================
+name: skinora-trial
+
+services:
+  skinora-backend:
+    container_name: !reset null
+    ports: !reset []
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      # The trust boundary for X-Forwarded-For is THIS project's network, pinned
+      # below — not .env.trial's REVERSE_PROXY_KNOWN_NETWORK, which a copied
+      # .env.example would leave at the development value.
+      - ReverseProxy__KnownNetworks__0=${TRIAL_NETWORK_SUBNET:-172.30.161.0/24}
+
+  skinora-frontend:
+    container_name: !reset null
+    ports: !reset []
+    environment:
+      - NODE_ENV=production
+
+  skinora-steam-sidecar:
+    container_name: !reset null
+    ports: !reset []
+    environment:
+      - NODE_ENV=production
+
+  skinora-blockchain-sidecar:
+    container_name: !reset null
+    ports: !reset []
+    environment:
+      - NODE_ENV=production
+
+  skinora-ethereum-sidecar:
+    container_name: !reset null
+    ports: !reset []
+    environment:
+      - NODE_ENV=production
+
+  skinora-db:
+    container_name: !reset null
+    ports: !reset []
+
+  skinora-redis:
+    container_name: !reset null
+    ports: !reset []
+
+  skinora-loki:
+    container_name: !reset null
+    ports: !reset []
+
+  skinora-prometheus:
+    container_name: !reset null
+    ports: !reset []
+
+  skinora-grafana-provisioning:
+    container_name: !reset null
+
+  skinora-grafana:
+    container_name: !reset null
+    ports: !override
+      - "127.0.0.1:${TRIAL_GRAFANA_PORT:-3011}:3000"
+    environment:
+      # No `admin` fallback on a deployment the internet can find.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env.trial}
+
+  skinora-uptime-kuma:
+    container_name: !reset null
+    ports: !override
+      - "127.0.0.1:${TRIAL_UPTIME_KUMA_PORT:-3012}:3001"
+
+  # The edge. Outside traffic reaches it from cloudflared over the compose
+  # network; the loopback port is only for a local smoke test (curl
+  # http://127.0.0.1:8090/nginx-health). No 443 here: TLS ends at Cloudflare.
+  skinora-reverse-proxy:
+    container_name: !reset null
+    ports: !override
+      - "127.0.0.1:${TRIAL_HTTP_PORT:-8090}:80"
+
+  # Fail-closed gate of the tunnel: exits 1 when the token secret is empty, so
+  # cloudflared (which waits for it to complete successfully) never starts
+  # without a token instead of crash-looping on one it cannot use.
+  skinora-tunnel-preflight:
+    image: alpine:3.20
+    profiles: ["tunnel"]
+    secrets:
+      - cloudflare_tunnel_token
+    command:
+      - sh
+      - -c
+      - |
+        if [ -s /run/secrets/cloudflare_tunnel_token ] && grep -q '[^[:space:]]' /run/secrets/cloudflare_tunnel_token; then
+          echo "tunnel token present"
+        else
+          echo "TUNNEL_TOKEN_MISSING: secrets/trial/cloudflare_tunnel_token.txt is empty - the tunnel does not start without it (DEPLOY_RUNBOOK §K.5)" >&2
+          exit 1
+        fi
+    networks:
+      - skinora-network
+
+  # Cloudflare Tunnel connector (T161 ready, T162 connects it to skinora.com).
+  # Outbound-only: it opens no port on the host. The public hostname and its
+  # origin (http://skinora-reverse-proxy:80) are set on the tunnel in the
+  # Cloudflare dashboard; this container only carries the token, read from a
+  # Docker secret file so `docker inspect` does not show it.
+  skinora-cloudflared:
+    image: cloudflare/cloudflared:2026.9.3
+    profiles: ["tunnel"]
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      - TUNNEL_TOKEN_FILE=/run/secrets/cloudflare_tunnel_token
+    secrets:
+      - cloudflare_tunnel_token
+    depends_on:
+      skinora-tunnel-preflight:
+        condition: service_completed_successfully
+      skinora-reverse-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - skinora-network
+
+# The trial's own network, with a pinned subnet: the backend's forwarded-header
+# trust (above) names exactly this range.
+networks:
+  skinora-network:
+    ipam:
+      config:
+        - subnet: ${TRIAL_NETWORK_SUBNET:-172.30.161.0/24}
+
+# The trial's own secrets — never the development ones under ./secrets.
+secrets:
+  ethereum_hd_mnemonic:
+    file: ./secrets/trial/ethereum_hd_mnemonic.txt
+  ethereum_hot_wallet_private_key:
+    file: ./secrets/trial/ethereum_hot_wallet_private_key.txt
+  ethereum_fuel_wallet_private_key:
+    file: ./secrets/trial/ethereum_fuel_wallet_private_key.txt
+  cloudflare_tunnel_token:
+    file: ./secrets/trial/cloudflare_tunnel_token.txt
