@@ -70,6 +70,8 @@ public class AuthSessionEndpointTests : IClassFixture<AuthSessionEndpointTests.F
             u.MobileAuthenticatorVerified = true;
             u.TosAcceptedAt = DateTime.UtcNow.AddDays(-1);
             u.TosAcceptedVersion = "1.0";
+            // T166 — tosAccepted means BOTH stamps (TosAcceptanceRule).
+            u.AgeConfirmedAt = DateTime.UtcNow.AddDays(-1);
             u.PreferredLanguage = "tr";
             // T146 — an Ethereum-only payout address still counts: the flag
             // means "a payout address on any network" (07 §4.5).

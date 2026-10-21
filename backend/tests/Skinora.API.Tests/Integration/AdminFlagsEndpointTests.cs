@@ -360,6 +360,11 @@ public class AdminFlagsEndpointTests : IClassFixture<AdminFlagsEndpointTests.Fac
             var user = new User
             {
                 Id = Guid.NewGuid(),
+                // T166 — TosAcceptanceGateFilter rejects an account without both
+                // stamps; endpoint tests act as an account that has accepted.
+                TosAcceptedVersion = "1.0",
+                TosAcceptedAt = DateTime.UtcNow,
+                AgeConfirmedAt = DateTime.UtcNow,
                 SteamId = $"{SteamIdPrefix}{suffix:D3}",
                 SteamDisplayName = $"Tester{suffix:D3}",
                 PreferredLanguage = "en",
