@@ -91,6 +91,9 @@ function redirectToLogin(): void {
   if (typeof window === "undefined") return;
   // Avoid a redirect loop when a page in the auth flow itself returns 401.
   if (window.location.pathname.includes("/auth/")) return;
+  // Intentional hard navigation: this runs outside React (no router), after the
+  // session was cleared, and a full reload drops every cached query/store.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.assign("/auth/login");
 }
 
