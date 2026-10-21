@@ -1,6 +1,6 @@
 # T160a — Next.js güvenlik yükseltmesi + CI frontend audit
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-10-21
 
 ---
 
@@ -14,7 +14,7 @@
   - **middleware/proxy:** `src/middleware.ts` → **`src/proxy.ts`** (içerik aynı). Next 16'da `middleware` dosya adı deprecated; 16.2.3'te de uyarı veriyordu (T13 raporu K-notu "next-intl güncellemesiyle çözülecek"). next-intl belgesi (https://next-intl.dev/docs/routing/middleware) Next 16 için `proxy.ts` + aynı `createMiddleware(routing)` default export'unu gösteriyor. Build çıktısında `ƒ Proxy (Middleware)` görünüyor, deprecation uyarısı kalktı.
   - **API:** kodda kullanılan Next API'leri yalnız `next/link` (33), `next/navigation` (29), `next/server` (1) — tsc 0 hata.
   - **lint:** `eslint-plugin-next` 16.3 yeni kural getirdi: `no-location-assign-relative-destination`. Tek isabet `src/lib/api/client.ts` `redirectToLogin()` — React dışında, oturum silindikten sonra çağrılan bilinçli tam sayfa yönlendirme (router yok; tam yeniden yükleme önbellek/store'u temizler). Davranış korunup satıra gerekçeli `eslint-disable-next-line` kondu.
-  - **Node:** next 16.3.8 `engines.node >=20.9.0`; Dockerfile `node:20-slim`, CI `NODE_VERSION` aynı → uyumlu.
+  - **Node:** next 16.3.8 `engines.node >=20.9.0`; Dockerfile `node:20-slim`, CI `NODE_VERSION` 24 (doğrulama S4-1: ikisi farklı ama ikisi de `>=20.9.0` aralığında) → uyumlu.
 - `.claude/CONTEXT.md` dosya haritasında `frontend/src/middleware.ts` → `frontend/src/proxy.ts`.
 - `DEFERRED_BACKLOG`: `FrontendNextAdvisories` 🔴 → ✅ (Öne Çıkanlar + §7); yeni ⚪ `FrontendDevToolingBracesAdvisory` (§7); durum satırı **51 aktif / 157 çözülmüş, açık 🔴 yok**.
 - **Devir kaydı:** `STATUS_CHANGELOG.md`'ye merge teyitleri: T160 (#361) main `5ad1e6b7` → CI `39545306202` ✓, Docker Publish `39545306158` ✓; #362 main `fc3e8840` → CI `39546534823` ✓, Docker Publish `39546534805` ✓ (`gh run list --branch main` ile okundu).
@@ -49,9 +49,9 @@ Not: lokal `npm run format:check` 290 dosyada uyarı veriyor — `core.autocrlf`
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici düzeni — ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (bağımsız doğrulama alt ajanı, Opus high, HEAD `af9674d8`, 2026-10-21 08:40 UTC; 4/4 kriter) |
+| Bulgu sayısı | 5 (hepsi S4, bloke eden yok) |
+| Düzeltme gerekli mi | Hayır — S4-1 bu kapanışta düzeltildi, diğerleri aşağıda follow-up |
 
 ## Altyapı Değişiklikleri
 - Migration: Yok
@@ -69,6 +69,7 @@ Not: lokal `npm run format:check` 290 dosyada uyarı veriyor — `core.autocrlf`
 ## Known Limitations / Follow-up
 - **Dev-only high (`braces`)**: `npm audit` (dev dahil) 5 high gösteriyor, hepsi tek kök `braces@3.0.3` (GHSA-vfj7-8cjw-p6xm, etkilenen aralık `*`, npm'de düzeltme yok), `eslint-config-next@16.3.8` → `@next/eslint-plugin-next` → `fast-glob@3.3.1` → `micromatch` altında. Lint aracı, üretim imajına girmez; CI adımı `--omit=dev` ile bilerek kapsam dışı. Backlog ⚪ `FrontendDevToolingBracesAdvisory`.
 - **Audit adımı ağa bağlı:** npm danışma veritabanına yeni bir high düştüğünde ilgisiz bir PR da kırmızıya döner. Bu bilinçli (canlı öncesi istenen sinyal); düzeltme o an `npm audit fix` ya da gerekçeli karar.
+- **Doğrulama S4 notları:** (S4-2) `src/i18n/request.ts` `requestLocale` kullanıyor — next-intl 4.13.6'dan beri deprecated, bugün uyarısız çalışıyor; (S4-3) `/` → `/en` dil yönlendirmesini otomatik test ölçmüyor — doğrulayıcı `next start` + standalone sunucuda elle teyit etti; (S4-4) `proxy.ts` ile yönlendirme katmanı Edge yerine Node.js runtime'da çalışıyor, davranış aynı; (S4-5) lock güncellemesi next-intl üzerinden üretim ağacına `@eloqnt/*` üç paket ekledi (bakımcı next-intl ile aynı). Backlog ⚪ `FrontendLocaleRedirectUntested`.
 - **16.4.x'e geçilmedi:** npm'in önerdiği `next@16.4.2` 2026-10-15'te yayımlandı (6 günlük); danışmaların tamamı 16.3.8'de kapalı. 16.4'e geçiş ayrı bir iş.
 
 ## Notlar
