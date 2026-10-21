@@ -317,6 +317,20 @@ public class TransactionCreationServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Rejects_Usdc_Stablecoin()
+    {
+        // 11 §F8 K2 (T166) — the enum still knows USDC (wrong-token refunds,
+        // existing rows) but a new listing may not choose it.
+        var sut = BuildSut();
+        var outcome = await sut.CreateAsync(
+            _seller.Id, ValidRequest() with { Stablecoin = StablecoinType.USDC }, CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.ValidationFailed, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.ValidationError, outcome.ErrorCode);
+        Assert.False(await Context.Set<Transaction>().AnyAsync(t => t.SellerId == _seller.Id));
+    }
+
+    [Fact]
     public async Task Rejects_Timeout_Below_Configured_Range()
     {
         var sut = BuildSut();

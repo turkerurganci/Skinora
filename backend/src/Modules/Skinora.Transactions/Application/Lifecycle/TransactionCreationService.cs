@@ -98,6 +98,11 @@ public sealed class TransactionCreationService : ITransactionCreationService
         // ---------- Stage 1: cheap, in-memory request validation ----------
         if (!Enum.IsDefined(request.Stablecoin))
             return Validation("Unsupported stablecoin.");
+        // 11 §F8 K2 (T166) — a new listing is USDT only; "USDC" is a defined
+        // enum value (wrong-token refunds and existing rows still carry it)
+        // but is no longer a choice a seller can make (07 §1.3: 400).
+        if (request.Stablecoin != StablecoinType.USDT)
+            return Validation("Only USDT is supported for new transactions.");
         if (!Enum.IsDefined(request.BuyerIdentificationMethod))
             return Validation("Unsupported buyer identification method.");
         if (string.IsNullOrWhiteSpace(request.ItemAssetId))

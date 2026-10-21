@@ -19,7 +19,7 @@ const params: TransactionParamsResponse = {
   commissionRate: 0.02,
   paymentTimeout: { minHours: 1, maxHours: 72, defaultHours: 24 },
   openLinkEnabled: true,
-  supportedStablecoins: [StablecoinType.USDT, StablecoinType.USDC],
+  supportedStablecoins: [StablecoinType.USDT],
   supportedNetworks: [BlockchainNetwork.TRON],
 };
 
@@ -43,7 +43,6 @@ function renderStep(price: string) {
         acceptedNetworks={[BlockchainNetwork.TRON]}
         onToggleNetwork={vi.fn()}
         onChangeItem={vi.fn()}
-        onChangeStablecoin={vi.fn()}
         onChangePrice={vi.fn()}
         onChangeTimeout={vi.fn()}
       />
