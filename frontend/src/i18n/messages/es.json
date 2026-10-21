@@ -48,7 +48,6 @@
     "trust": {
       "title": "Por qué Skinora",
       "totalTransactions": "Transacciones completadas",
-      "uptime": "Disponibilidad de la plataforma",
       "automation": {
         "title": "Verificación automática",
         "body": "Los pasos de pago y entrega son verificados por el sistema, no por una persona."
@@ -115,7 +114,7 @@
       "summary": {
         "escrow": "Tu pago se mantiene en custodia hasta que el vendedor entrega el ítem; la plataforma nunca retiene el ítem.",
         "commission": "Se cobra una comisión al vendedor al completarse la operación.",
-        "crypto": "Los pagos se hacen en USDT o USDC únicamente en la red TRON o Ethereum.",
+        "crypto": "Los pagos se hacen únicamente en USDT, en la red TRON o Ethereum.",
         "disputes": "Las disputas son revisadas por administradores de Skinora.",
         "kyc": "Las carteras sancionadas y las regiones embargadas están bloqueadas."
       },
@@ -831,7 +830,7 @@
       "sections": {
         "dataWeCollect": {
           "heading": "Datos que recopilamos",
-          "body": "Cuando inicias sesión con Steam (Steam OpenID), recibimos tu perfil público de Steam, incluidos tu Steam ID, nombre visible y avatar. También almacenamos las direcciones de billetera que proporcionas, por red, para pagos en stablecoins (USDT, USDC) en las redes TRON (TRC-20) y Ethereum (ERC-20), y un registro de tu actividad de transacciones en la plataforma, como ofertas, estado de custodia, pagos, reembolsos y disputas. No recibimos tu contraseña de Steam ni las credenciales de tu Steam Mobile Authenticator."
+          "body": "Cuando inicias sesión con Steam (Steam OpenID), recibimos tu perfil público de Steam, incluidos tu Steam ID, nombre visible y avatar. También almacenamos las direcciones de billetera que proporcionas, por red, para pagos en USDT en las redes TRON (TRC-20) y Ethereum (ERC-20), y un registro de tu actividad de transacciones en la plataforma, como ofertas, estado de custodia, pagos, reembolsos y disputas. No recibimos tu contraseña de Steam ni las credenciales de tu Steam Mobile Authenticator."
         },
         "howWeUse": {
           "heading": "Cómo usamos tus datos",
@@ -1232,9 +1231,6 @@
       "title": "Detalles de la transacción",
       "selectedItem": "Artículo seleccionado",
       "changeItem": "Cambiar",
-      "stablecoin": {
-        "label": "Stablecoin"
-      },
       "price": {
         "label": "Precio",
         "range": "Mín: {min} — Máx: {max}",

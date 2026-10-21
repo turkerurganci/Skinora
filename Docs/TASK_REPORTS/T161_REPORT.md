@@ -1,6 +1,6 @@
 # T161 — Sunucu sıkılaştırma
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ✓ Tamamlandı (bağımsız doğrulama PASS) | **Tarih:** 2026-10-21
 
 ---
 
@@ -45,7 +45,7 @@ Proje sahibi kararı (2026-10-21, modal): **kiralık sunucu yok.** Deneme yayın
 - `docker-compose.yml`, `docker-compose.override.yml`, `docker-compose.trial.yml` (yeni), `.env.example`, `.github/workflows/ci.yml`
 - `sidecar-steam/src/config/internalKey.ts` (yeni), `…/internalKey.test.ts` (yeni), `…/config/startupWiring.test.ts` (yeni), `…/config/index.ts`, `…/api/middleware.ts`, `…/api/middleware.test.ts` (yeni), `…/api/routes.ts`, `…/api/routes.test.ts`, `…/index.ts`
 - `sidecar-blockchain/src/config/internalKey.ts` (yeni), `…/internalKey.test.ts` (yeni), `…/config/startupWiring.test.ts`, `…/config/index.ts`, `…/api/middleware.ts`, `…/api/middleware.test.ts` (yeni), `…/api/routes.ts`, `…/index.ts`
-- `scripts/compose-exposure.test.mjs` (yeni)
+- `scripts/compose-exposure.test.mjs` (yeni; kapanışta `.env.trial` işareti testi)
 - `Docs/DEPLOY_RUNBOOK.md`, `Docs/plan/11_F9.md`, `Docs/05_TECHNICAL_ARCHITECTURE.md`, `Docs/DOC_CHANGELOG.md`, `Docs/IMPLEMENTATION_STATUS.md`, `Docs/STATUS_CHANGELOG.md`, `Docs/TASK_REPORTS/T161_REPORT.md`, `secrets/README.md`, `.claude/CONTEXT.md`, `.claude/memory/MEMORY.md`
 
 ## Kabul Kriterleri Kontrolü
@@ -74,13 +74,28 @@ Proje sahibi kararı (2026-10-21, modal): **kiralık sunucu yok.** Deneme yayın
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici düzeni — ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız doğrulama (Opus high, yönetici düzeni), HEAD `d3e97a50`, 7/7 kriter |
+| Bulgu sayısı | 6 × S4 (S1–S3 yok). Rapor: `f9-handoff/T161_VALIDATION.md` |
+| Düzeltme gerekli mi | Hayır (PASS). S4-1 (⚠ GÜVENLİK, `--env-file` unutulması) yönetici kararıyla kapanışta düzeltildi; diğerleri aşağıda |
+
+**S4 bulguları ve karşılıkları:**
+
+| # | Bulgu | Karşılık |
+|---|---|---|
+| S4-1 ⚠ | `--env-file .env.trial` unutulursa deneme yayını sessizce geliştirme `.env`'iyle kalkıyor (TRON tohumu, anahtarlar, DB parolası paylaşılır); runbook §K.4'teki "unutulursa geliştirme projesine gider" cümlesi bu bayrak için yanlıştı | **Kapanışta düzeltildi.** Overlay'e `x-skinora-trial-guard: ${SKINORA_TRIAL_STACK:?...}`; işaret yalnız `.env.trial`'da (runbook §K.4 `echo 'SKINORA_TRIAL_STACK=1' >> .env.trial` der), `.env.example`'a konmadı. İşaretsiz `config` → `rc=1 required variable SKINORA_TRIAL_STACK is missing a value`; işaretli → `rc=0`; geliştirme `.env`'li (işaretsiz) dizinde `--env-file` yokken de `rc=1`. CI kapısına yeni test (`compose-exposure.test.mjs` 10/10) ve `.env.example`'da işaret olmadığını sabitleyen assert. Runbook §K.1/§K.2/§K.4 düzeltildi |
+| S4-2 | `INTERNAL_KEY=your_internal_api_key_here` yalnız uzunluk (26 < 32) yüzünden reddediliyor; örnek değeri açıkça reddeden kural/test yok | Kabul edildi, kodda değişiklik yok (şu an doğru reddediliyor). Şablon ≥ 32 karakterlik yer tutucuya çevrilirse servis o değerle açılır: şablonu değiştiren görev örnek değeri reddeden kural/test eklemeli |
+| S4-3 | `docker-compose.e2e.yml` portları `0.0.0.0` (14333 DB, 5000, 5100–5300, 8080) | Bilinçli kapsam dışı (⚠, aşağıda); runbook §K.7'ye uyarı eklendi |
+| S4-4 | 3 GB sınırında yığın açıkken soğuk frontend derlemesi swap'ı doldurdu (available 431 MB); soğuk backend+frontend birlikte denenmedi | **T172 risk notu.** Runbook §K.3'e RAM ölçümü ve "yığın durmuşken derle, sonra aç" kuralı eklendi |
+| S4-5 | Geçersiz (boş olmayan) token'la cloudflared `restart: unless-stopped` yüzünden döngüye giriyor (~2 dk'da 9 yeniden başlama) | Gözlem, değişiklik yok (port açmaz, sızıntı yok); runbook §K.7'ye not |
+| S4-6 | Bu PC'de IIS/HTTP.sys `0.0.0.0:80` dinliyor; `192.168.1.104:80` LAN'dan 200 (Skinora dışı, modemde yönlendirme yok) | T161 dışı host gözlemi; sahibe bildirilecek, runbook §K.7'ye not |
+
+**RAM ölçümü (Docker/WSL2 sınırı 3 GB, doğrulayıcı):** tam deneme yığını (12 servis, ethereum dahil) boştayken ≈ 1,56 GiB (db 829 MiB, backend 183, uptime-kuma 125, grafana 83, frontend 79, blockchain 60, loki 57, steam 47, prometheus 42, ethereum 38, nginx 14, redis 7); `OOMKilled=false`, `RestartCount=0`. Yığın açıkken frontend `build --no-cache`: en düşük available 431 MB, swap 1024/1024 MB (dolu), build başarılı, OOM yok. T172 riski: açık yığınla soğuk derleme yapma.
+
+**Ek doğrulama kanıtı:** ethereum sidecar'ı container'da boş anahtarla denendi (`MISSING`/`MISSING`/`TOO_SHORT`, rc=1); 13 bozma testinin (M1–M4, X1–X6) tamamı kırmızı verdi. CI `39579911699` (`d3e97a50`) 27 iş yeşil.
 
 ## Altyapı Değişiklikleri
 - Migration: Yok.
-- Config/env değişikliği: **Var.** `NGINX_BIND_ADDRESS` (yeni, varsayılan `127.0.0.1`), `TRIAL_HTTP_PORT` / `TRIAL_GRAFANA_PORT` / `TRIAL_UPTIME_KUMA_PORT` / `TRIAL_NETWORK_SUBNET` (yalnız trial), `.env.example`'da `GRAFANA_ADMIN_PASSWORD` boş (geliştirme `:-admin` ile aynı davranır). **İç anahtar artık zorunlu:** `INTERNAL_KEY` (ya da servis başına `*_SIDECAR_INTERNAL_KEY`) boş ya da < 32 karakterse Steam ve TRON servisi açılmaz. Bu makinedeki geliştirme `.env`'i ölçüldü: `INTERNAL_KEY`, `STEAM_SIDECAR_INTERNAL_KEY`, `BLOCKCHAIN_SIDECAR_INTERNAL_KEY` 64 karakter → etkilenmez. `.env.example`'daki yer tutucu (26 karakter) bilerek geçmez.
+- Config/env değişikliği: **Var.** `SKINORA_TRIAL_STACK` (yalnız `.env.trial`, zorunlu işaret — kapanış), `NGINX_BIND_ADDRESS` (yeni, varsayılan `127.0.0.1`), `TRIAL_HTTP_PORT` / `TRIAL_GRAFANA_PORT` / `TRIAL_UPTIME_KUMA_PORT` / `TRIAL_NETWORK_SUBNET` (yalnız trial), `.env.example`'da `GRAFANA_ADMIN_PASSWORD` boş (geliştirme `:-admin` ile aynı davranır). **İç anahtar artık zorunlu:** `INTERNAL_KEY` (ya da servis başına `*_SIDECAR_INTERNAL_KEY`) boş ya da < 32 karakterse Steam ve TRON servisi açılmaz. Bu makinedeki geliştirme `.env`'i ölçüldü: `INTERNAL_KEY`, `STEAM_SIDECAR_INTERNAL_KEY`, `BLOCKCHAIN_SIDECAR_INTERNAL_KEY` 64 karakter → etkilenmez. `.env.example`'daki yer tutucu (26 karakter) bilerek geçmez.
 - Docker değişikliği: **Var.** Taban host portları loopback; dev override portsuz; yeni trial overlay + cloudflared/preflight servisleri. Geliştirme stack'inin davranış farkı: servis portları artık LAN'dan erişilemez (localhost'tan aynen).
 
 ## Commit & PR
@@ -96,7 +111,7 @@ Proje sahibi kararı (2026-10-21, modal): **kiralık sunucu yok.** Deneme yayın
 - **`docker-compose.e2e.yml` portları `0.0.0.0`'da kaldı.** Sabit test değerleri taşır; CI runner'ında harness `localhost` üzerinden bağlanır. Bu PC'de yerel E2E koşulursa test DB'si (bilinen `sa` parolası) koşu süresince LAN'dan erişilebilir — kapsam dışı bırakıldı, CI'ı riske atmamak için (⚠).
 - **Webhook sırrı boşken TRON servisi yine açılır** (her gönderimde reddeder — `WebhookClient`). Kriter iç anahtar içindi; webhook sırrı açılış kapısı yapılmadı.
 - **`sidecar-fake`** iç anahtarsız kabul etmeye devam eder (E2E test ikizi, bilinçli).
-- `.env.trial` için ayrı şablon dosyası yok (`.gitignore`'da `.env.*`); runbook §K.4 `.env.example`'dan kopyalayıp değiştirilecekleri listeler.
+- `.env.trial` için tam şablon yok (`.gitignore`'da `.env.*`); runbook §K.4 `.env.example`'dan kopyalayıp değiştirilecekleri listeler. Zorunlu işaret (`SKINORA_TRIAL_STACK=1`) runbook adımıyla eklenir; ayrı `.env.trial.example` dosyası denendi ama pre-commit kancası `.env.example` dışındaki `.env*` dosyalarını reddediyor (bypass kullanılmadı).
 
 ## Notlar
 - **Working tree:** temiz (`git status --short` boş, dal `origin/main` 50868b13'ten açık).
@@ -123,3 +138,5 @@ Proje sahibi kararı (2026-10-21, modal): **kiralık sunucu yok.** Deneme yayın
   11. CI kapısı render edilmiş modeli okur (`docker compose config`), metin değil; `scripts` job'unda; yol süzgeci genişletildi.
   12. `docker-compose.e2e.yml` değiştirilmedi (CI'ı riske atmamak için).
   13. T172 görev adı değiştirilmedi ("Sunucuda prova"), yalnız kriteri deneme yayınına bağlandı (paralel dallarda status tablosu çakışmasın).
+  14. ⚠ GÜVENLİK (kapanış, yönetici kararı, öneriyle kaydedildi) — Deneme overlay'i `SKINORA_TRIAL_STACK` işareti olmadan render etmez; işaret yalnız `.env.trial`'da, geliştirme `.env.example`'da yok. `--env-file` unutulursa deneme yayını geliştirme cüzdanlarıyla kalkamaz. `config`, `up`, `down` dahil her komut işaret ister (`down` için de `--env-file`, `$TRIAL` öneki zaten taşır).
+  15. S4-2 / S4-5 / S4-6 için kod değişikliği yapılmadı (gözlem ya da kapsam dışı); S4-3 / S4-4 / S4-5 / S4-6 runbook §K'ya not düşüldü.

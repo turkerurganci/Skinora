@@ -40,7 +40,8 @@ public class TransactionParamsServiceTests
         Assert.Equal(72, dto.PaymentTimeout.MaxHours);
         Assert.Equal(24, dto.PaymentTimeout.DefaultHours);
         Assert.True(dto.OpenLinkEnabled);
-        Assert.Equal(["USDT", "USDC"], dto.SupportedStablecoins);
+        // 11 §F8 K2 (T166) — USDC is no longer offered.
+        Assert.Equal(["USDT"], dto.SupportedStablecoins);
     }
 
     [Fact]

@@ -113,7 +113,7 @@ public sealed class PaymentRefundToBuyerConsumer
         // (Prova-GasFeeChargedIsFixedGuess — owner decision 2026-09-02). The
         // deposit address is the refund's sender (RefundService broadcasts
         // deposit-sourced); without a PaymentAddress row there is no sender to
-        // price and the resolver charges the static setting instead — a
+        // price and the resolver charges its refund fallback instead — a
         // hot-wallet estimate would price another account's resources.
         var deposit = await _db.Set<PaymentAddress>()
             .AsNoTracking()

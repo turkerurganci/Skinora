@@ -48,7 +48,6 @@
     "trust": {
       "title": "Neden Skinora",
       "totalTransactions": "Tamamlanan işlem",
-      "uptime": "Platform çalışma süresi",
       "automation": {
         "title": "Otomatik doğrulama",
         "body": "Ödeme ve teslim adımları sistem tarafından otomatik doğrulanır."
@@ -115,7 +114,7 @@
       "summary": {
         "escrow": "Ödemeniz, satıcı eşyayı teslim edene kadar emanette tutulur; platform eşyanın kendisini hiçbir zaman tutmaz.",
         "commission": "İşlem tamamlandığında satıcıdan komisyon kesilir.",
-        "crypto": "Ödemeler yalnızca TRON veya Ethereum ağı üzerinden USDT veya USDC ile yapılır.",
+        "crypto": "Ödemeler yalnızca USDT ile, TRON veya Ethereum ağı üzerinden yapılır.",
         "disputes": "İtirazlar Skinora yöneticileri tarafından incelenir.",
         "kyc": "Yaptırım listesindeki cüzdanlar ve ambargolu bölgeler engellenir."
       },
@@ -831,7 +830,7 @@
       "sections": {
         "dataWeCollect": {
           "heading": "Topladığımız veriler",
-          "body": "Steam ile (Steam OpenID) oturum açtığınızda Steam ID, görünen ad ve avatar dâhil Steam genel profilinizi alırız. Ayrıca TRON (TRC-20) ve Ethereum (ERC-20) ağlarındaki stablecoin (USDT, USDC) ödemeleri için ağ başına sağladığınız cüzdan adreslerini ve teklifler, emanet durumu, ödemeler, iadeler ve uyuşmazlıklar gibi platformdaki işlem aktivitenize ilişkin kayıtları saklarız. Steam parolanızı veya Steam Mobile Authenticator kimlik bilgilerinizi almayız."
+          "body": "Steam ile (Steam OpenID) oturum açtığınızda Steam ID, görünen ad ve avatar dâhil Steam genel profilinizi alırız. Ayrıca TRON (TRC-20) ve Ethereum (ERC-20) ağlarındaki USDT ödemeleri için ağ başına sağladığınız cüzdan adreslerini ve teklifler, emanet durumu, ödemeler, iadeler ve uyuşmazlıklar gibi platformdaki işlem aktivitenize ilişkin kayıtları saklarız. Steam parolanızı veya Steam Mobile Authenticator kimlik bilgilerinizi almayız."
         },
         "howWeUse": {
           "heading": "Verilerinizi nasıl kullanırız",
@@ -1232,9 +1231,6 @@
       "title": "İşlem Detayları",
       "selectedItem": "Seçili item",
       "changeItem": "Değiştir",
-      "stablecoin": {
-        "label": "Stablecoin"
-      },
       "price": {
         "label": "Fiyat",
         "range": "Min: {min} — Max: {max}",

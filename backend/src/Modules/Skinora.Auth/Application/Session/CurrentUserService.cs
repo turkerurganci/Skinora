@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Enums;
+using Skinora.Auth.Application.TosAcceptance;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
@@ -100,7 +101,9 @@ public sealed class CurrentUserService : ICurrentUserService
             DisplayName: user.SteamDisplayName,
             AvatarUrl: user.SteamAvatarUrl,
             MobileAuthenticatorActive: user.MobileAuthenticatorVerified,
-            TosAccepted: user.TosAcceptedAt is not null,
+            // T166 — same rule the server-side gate enforces, so `false`
+            // here is exactly "the API will answer 403 TOS_NOT_ACCEPTED".
+            TosAccepted: TosAcceptanceRule.IsSatisfied(user.TosAcceptedAt, user.AgeConfirmedAt),
             TosAcceptedVersion: user.TosAcceptedVersion,
             Role: role,
             Language: user.PreferredLanguage,

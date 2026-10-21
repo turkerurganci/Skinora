@@ -244,6 +244,92 @@ public class HttpSidecarGasFeeEstimatorTests
         Assert.Null(fee);
     }
 
+    // ─── T160b: is the failure worth asking again? ──────────
+
+    public static TheoryData<HttpStatusCode, string?, bool> FailureKinds => new()
+    {
+        // The service's own flag wins (its 502 = retryable, 400 = not).
+        { HttpStatusCode.BadGateway, "{\"error\":\"FEE_ESTIMATE_SIMULATION_FAILED\",\"message\":\"block not found\",\"retryable\":true}", true },
+        { HttpStatusCode.BadGateway, "{\"error\":\"X\",\"message\":\"m\",\"retryable\":false}", false },
+        { HttpStatusCode.BadRequest, "{\"error\":\"INVALID_ESTIMATE_REQUEST\",\"message\":\"m\"}", false },
+        { HttpStatusCode.Unauthorized, "{\"error\":\"UNAUTHORIZED\",\"message\":\"m\"}", false },
+        // No envelope (a proxy's page, an old service): the status decides.
+        { HttpStatusCode.ServiceUnavailable, "<html>503</html>", true },
+        { HttpStatusCode.GatewayTimeout, null, true },
+        { HttpStatusCode.TooManyRequests, null, true },
+        { HttpStatusCode.RequestTimeout, null, true },
+        { HttpStatusCode.NotFound, null, false },
+    };
+
+    [Theory]
+    [MemberData(nameof(FailureKinds))]
+    public async Task T160b_A_Non200_Is_Retryable_When_The_Service_Says_So_Or_The_Status_Is_An_Outage(
+        HttpStatusCode status, string? body, bool retryable)
+    {
+        var handler = new RecordingHandler((_, _) => Task.FromResult(new HttpResponseMessage(status)
+        {
+            Content = new StringContent(body ?? string.Empty, Encoding.UTF8,
+                body?.StartsWith('{') == true ? "application/json" : "text/html"),
+        }));
+
+        var attempt = await BuildEstimator(handler).EstimateFeeAsync(SampleRequest, CancellationToken.None);
+
+        Assert.Null(attempt.FeeUsdt);
+        Assert.Equal(retryable, attempt.Retryable);
+        Assert.Contains(((int)status).ToString(System.Globalization.CultureInfo.InvariantCulture), attempt.Failure);
+    }
+
+    [Fact]
+    public async Task T160b_A_Transport_Error_And_The_Clients_Own_Timeout_Are_Retryable()
+    {
+        var refused = await BuildEstimator(new RecordingHandler((_, _) =>
+                Task.FromException<HttpResponseMessage>(new HttpRequestException("connection refused"))))
+            .EstimateFeeAsync(SampleRequest, CancellationToken.None);
+        // HttpClient.Timeout surfaces as TaskCanceledException while the caller's token is live.
+        var timedOut = await BuildEstimator(new RecordingHandler((_, _) =>
+                Task.FromException<HttpResponseMessage>(new TaskCanceledException("timeout"))))
+            .EstimateFeeAsync(SampleRequest, CancellationToken.None);
+
+        Assert.True(refused.Retryable);
+        Assert.True(timedOut.Retryable);
+    }
+
+    [Fact]
+    public async Task T160b_The_Callers_Cancellation_Is_Not_Retryable()
+    {
+        using var cts = new CancellationTokenSource();
+        var attempt = await BuildEstimator(new RecordingHandler((_, ct) =>
+            {
+                cts.Cancel();
+                return Task.FromException<HttpResponseMessage>(new TaskCanceledException("cancelled", null, ct));
+            }))
+            .EstimateFeeAsync(SampleRequest, cts.Token);
+
+        Assert.Null(attempt.FeeUsdt);
+        Assert.False(attempt.Retryable);
+    }
+
+    [Fact]
+    public async Task T160b_An_Answer_That_Cannot_Be_Believed_Is_Not_Retryable()
+    {
+        var unparsable = await BuildEstimator(RespondWith(new { feeUsdt = "not-a-number" }))
+            .EstimateFeeAsync(SampleRequest, CancellationToken.None);
+        var negative = await BuildEstimator(RespondWith(new { feeUsdt = "-1.00" }))
+            .EstimateFeeAsync(SampleRequest, CancellationToken.None);
+
+        Assert.False(unparsable.Retryable);
+        Assert.False(negative.Retryable);
+    }
+
+    [Fact]
+    public async Task T160b_A_Fee_Comes_Back_As_An_Estimate_Not_A_Failure()
+    {
+        var attempt = await BuildEstimator(RespondWith(new { feeUsdt = "0.18" }))
+            .EstimateFeeAsync(SampleRequest, CancellationToken.None);
+
+        Assert.Equal(GasFeeEstimateAttempt.Estimated(0.18m), attempt);
+    }
+
     // ─── T149: sweep cost (the TRON network fee line basis) ──────────
 
     [Fact]

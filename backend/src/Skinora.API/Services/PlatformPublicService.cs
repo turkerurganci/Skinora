@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -29,16 +28,13 @@ public sealed class PlatformPublicService : IPlatformPublicService
 
     private readonly AppDbContext _db;
     private readonly IMemoryCache _cache;
-    private readonly PlatformOptions _options;
 
     public PlatformPublicService(
         AppDbContext db,
-        IMemoryCache cache,
-        IOptions<PlatformOptions> options)
+        IMemoryCache cache)
     {
         _db = db;
         _cache = cache;
-        _options = options.Value;
     }
 
     public async Task<PlatformStatsResponse> GetStatsAsync(CancellationToken cancellationToken)
@@ -51,8 +47,7 @@ public sealed class PlatformPublicService : IPlatformPublicService
             .CountAsync(t => t.Status == TransactionStatus.COMPLETED, cancellationToken);
 
         var response = new PlatformStatsResponse(
-            TotalCompletedTransactions: totalCompleted,
-            PlatformUptimePercent: _options.UptimePercent);
+            TotalCompletedTransactions: totalCompleted);
 
         _cache.Set(StatsCacheKey, response, StatsCacheTtl);
         return response;

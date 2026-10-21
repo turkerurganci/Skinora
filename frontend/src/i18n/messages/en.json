@@ -48,7 +48,6 @@
     "trust": {
       "title": "Why Skinora",
       "totalTransactions": "Completed transactions",
-      "uptime": "Platform uptime",
       "automation": {
         "title": "Automatic verification",
         "body": "Payment and delivery steps are verified by the system, not by a human."
@@ -115,7 +114,7 @@
       "summary": {
         "escrow": "Your payment is held in escrow until the seller delivers the item; the platform never holds the item itself.",
         "commission": "A commission is taken from the seller upon completion.",
-        "crypto": "Payments use USDT or USDC on the TRON or Ethereum network only.",
+        "crypto": "Payments use USDT only, on the TRON or Ethereum network.",
         "disputes": "Disputes are reviewed by Skinora administrators.",
         "kyc": "Sanctions-listed wallets and embargoed regions are blocked."
       },
@@ -831,7 +830,7 @@
       "sections": {
         "dataWeCollect": {
           "heading": "Data we collect",
-          "body": "When you sign in with Steam (Steam OpenID), we receive your Steam public profile, including your Steam ID, display name, and avatar. We also store the wallet addresses you provide, per network, for stablecoin (USDT, USDC) payments on the TRON (TRC-20) and Ethereum (ERC-20) networks, and a record of your transaction activity on the platform, such as offers, escrow status, payouts, refunds, and disputes. We do not receive your Steam password or your Steam Mobile Authenticator credentials."
+          "body": "When you sign in with Steam (Steam OpenID), we receive your Steam public profile, including your Steam ID, display name, and avatar. We also store the wallet addresses you provide, per network, for USDT payments on the TRON (TRC-20) and Ethereum (ERC-20) networks, and a record of your transaction activity on the platform, such as offers, escrow status, payouts, refunds, and disputes. We do not receive your Steam password or your Steam Mobile Authenticator credentials."
         },
         "howWeUse": {
           "heading": "How we use your data",
@@ -1232,9 +1231,6 @@
       "title": "Transaction details",
       "selectedItem": "Selected item",
       "changeItem": "Change",
-      "stablecoin": {
-        "label": "Stablecoin"
-      },
       "price": {
         "label": "Price",
         "range": "Min: {min} — Max: {max}",

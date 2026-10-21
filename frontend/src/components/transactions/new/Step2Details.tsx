@@ -28,7 +28,6 @@ export interface Step2DetailsProps {
   acceptedNetworks: readonly BlockchainNetwork[];
   onToggleNetwork: (network: BlockchainNetwork) => void;
   onChangeItem: () => void;
-  onChangeStablecoin: (value: StablecoinType) => void;
   onChangePrice: (value: string) => void;
   onChangeTimeout: (value: number) => void;
 }
@@ -62,7 +61,6 @@ export function Step2Details({
   acceptedNetworks,
   onToggleNetwork,
   onChangeItem,
-  onChangeStablecoin,
   onChangePrice,
   onChangeTimeout,
 }: Step2DetailsProps) {
@@ -96,31 +94,8 @@ export function Step2Details({
         </div>
       </div>
 
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-gray-700">{t("stablecoin.label")}</legend>
-        <div className="flex gap-2" role="radiogroup">
-          {params.supportedStablecoins.map((coin) => {
-            const isActive = coin === stablecoin;
-            return (
-              <button
-                key={coin}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                onClick={() => onChangeStablecoin(coin)}
-                className={cn(
-                  "flex-1 rounded-md border-2 px-4 py-2 text-sm font-semibold transition-colors",
-                  isActive
-                    ? "border-blue-600 bg-blue-50 text-blue-700"
-                    : "border-gray-300 bg-white text-gray-700 hover:border-gray-400",
-                )}
-              >
-                {coin}
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
+      {/* T166 (11 §F8 K2, 04 §6.2) — no stablecoin toggle: the token is
+          always USDT; the price suffix below names it. */}
 
       <fieldset className="space-y-2" aria-describedby="networks-hint">
         <legend className="text-sm font-medium text-gray-700">{t("networks.label")}</legend>

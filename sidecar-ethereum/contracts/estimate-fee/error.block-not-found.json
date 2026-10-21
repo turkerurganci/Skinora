@@ -1,0 +1,5 @@
+{
+  "error": "FEE_ESTIMATE_SIMULATION_FAILED",
+  "message": "eth_estimateGas failed for this transfer: eth_estimateGas: block not found: 0xb67b27",
+  "retryable": true
+}

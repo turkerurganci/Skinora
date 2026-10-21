@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v4.14** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-20 — T159a — §4.4/§4.7 reddedilen ödeme iadelerinde gas her iki ağda alıcıdan düşülür (proje sahibi kararı, ⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
+**Versiyon: v4.17** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-21 — T166 — USDC ürün yüzeyinden kalktı (yalnız yanlış token iadesinde kalır); ToS + 18+ kabulü sunucuda zorunlu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -100,7 +100,7 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 | Gereksinim | Detay |
 |---|---|
 | Ödeme yöntemi | Kripto (stablecoin) |
-| Desteklenen stablecoin | **Yalnız USDT** (11 §F8 K2, 2026-10-17). USDC ürün yüzeyinden kalkar — bugünkü kodda satıcı hâlâ USDC seçebiliyor, kaldıran görev T166. USDC yalnız yanlış token izin listesinde kalır: yanlışlıkla gönderilen USDC otomatik iade edilir (§4.4) |
+| Desteklenen stablecoin | **Yalnız USDT** (11 §F8 K2, 2026-10-17). USDC ürün yüzeyinden **kalktı (T166)** — satıcı seçemez, `POST /transactions` reddeder (07 §7.2). USDC yalnız yanlış token izin listesinde kalır: yanlışlıkla gönderilen USDC otomatik iade edilir (§4.4) |
 | Blockchain ağları | **TRON (USDT TRC-20) ve Ethereum (USDT ERC-20)** (11 §F8 K1). Bugün yalnız TRON çalışır; Ethereum F8'de eklenir (T150–T159) ve açılış iki ağ hazır olunca yapılır. İki ağ Türkiye'deki 9 lisanslı borsanın hepsinde bulunur, bu yüzden her alıcı–satıcı çiftinin en az bir ortak yolu vardır |
 | Ödeme modeli | Dış cüzdan — platformda kullanıcı bakiyesi tutulmaz, kullanıcılar kendi cüzdanlarından gönderim yapar. Escrow, iade ve payout işlemleri için platform kontrolündeki operasyonel adres altyapısı kullanılır (detaylar 05 §3.2) |
 | Adres üretimi | Her işlem için platform, alıcının seçtiği ağda benzersiz bir ödeme adresi üretir (adres işlem başınadır — 08 §3.0) |
@@ -219,7 +219,7 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Koruma eşiği | Satıcıya gönderim gas fee'si komisyonun belirli bir yüzdesini aşarsa, aşan kısım satıcının alacağından düşülür (TRON; Ethereum'da uygulanmaz — yukarıdaki satır) |
 | Varsayılan eşik | %10 |
 | Eşik esnekliği | Admin tarafından değiştirilebilir |
-| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (TRON: transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a; Ethereum: gas tahmini wei cinsinden + canlı ETH/USDT kuru — 08 §3.7.7, T154). Hesaplama yapılamazsa admin ayarlarındaki fallback değerler kullanılır; para akışı hesaplamaya asla bloke olmaz |
+| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (TRON: transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a; Ethereum: gas tahmini wei cinsinden + canlı ETH/USDT kuru — 08 §3.7.7, T154). Hesaplama yapılamazsa iadede tahmin geçici hatada kısa süre yeniden sorulur (12 sn içinde en çok 3 kez); yine yoksa aynı ağ, gönderen ve token için son ölçülen tahmin (en çok 6 sa eski) ile admin ayarlarındaki fallback değerden **küçüğü**, ölçüm yoksa fallback değer kullanılır ve alarm verilir — alıcı yedekte T160b öncesinden fazla ödemez (T160b, öneriyle kaydedildi — ⚠ PARA — 08 §3.1a); payout'ta doğrudan fallback. Para akışı hesaplamaya asla bloke olmaz |
 | Satıcıya kalan tutar sıfır ya da altındaysa | Gas tahmini fiyatı ve platformun payını birlikte aşarsa satıcıya gönderilecek bir şey kalmaz — ödeme gönderilmez. İşlem ödeme kuyruğunu tıkamadan bekletilir ve 1 sa → 4 sa → 12 sa → her 24 sa arayla yeniden fiyatlanır: sıcak cüzdanın enerjisi yenilendikçe tahmin düşer ve ödeme kendiliğinden çıkar. Üçüncü ertelemede admin'e bir kez alarm gider; denemeler sürer. En düşük satış fiyatını gas maliyetinin üstünde tutmak bu durumu seyrekleştirir (DEPLOY_RUNBOOK §A) |
 
 ---
@@ -672,7 +672,7 @@ Platform kendi sürecini garanti eder, üçüncü taraflardan (Steam, blockchain
 |---|---|
 | Yasaklı bölgeler | OFAC/AB/BM yaptırım listesindeki ülkelerden erişim engellenir (geo-block). Yasaklı ülke listesi admin tarafından yönetilir ve güncellenebilir |
 | Geo-block mekanizması | IP bazlı coğrafi engelleme uygulanır. Engellenen kullanıcıya bilgilendirme sayfası gösterilir |
-| Yaş kısıtı | Platform kullanımı için minimum 18 yaş gereklidir. MVP'de Steam hesap yaşı ve kullanıcının kendi beyanı ile kontrol edilir. Steam hesap yaşı minimum eşiği admin tarafından `auth.min_steam_account_age_days` SystemSetting (default 30 gün) üzerinden yönetilir — burner/fake hesap caydırıcısı, gerçek yaş doğrulaması değildir |
+| Yaş kısıtı | Platform kullanımı için minimum 18 yaş gereklidir. MVP'de Steam hesap yaşı ve kullanıcının kendi beyanı ile kontrol edilir. Beyan ve Kullanım Şartları kabulü **sunucu tarafında zorunludur** (T166): kabul etmemiş hesap, istemciyi atlasa da yetkili uçlardan reddedilir (07 §4.4). Steam hesap yaşı minimum eşiği admin tarafından `auth.min_steam_account_age_days` SystemSetting (default 30 gün) üzerinden yönetilir — burner/fake hesap caydırıcısı, gerçek yaş doğrulaması değildir |
 | Sanctions screening | MVP'de cüzdan adresi bazlı temel tarama uygulanır — bilinen yaptırımlı adreslerle eşleşen adresler engellenir. Eşleşme tespit edildiğinde: yeni işlem/adres kaydı engellenir, hesap flag'lenir, kullanıcının tüm aktif işlemlerine otomatik EMERGENCY_HOLD uygulanır (§7). Tarama listesi admin tarafından güncellenebilir — ayrı bir yetki (`MANAGE_SANCTIONS`) gerektirir (07 §9.23–§9.25 AD22/AD23/AD24). MVP'de yalnız manuel admin entry; OFAC/EU/BM JSON feed auto-sync post-MVP |
 | VPN/proxy tespiti | MVP'de destekleyici sinyal olarak kullanılır — tek başına engelleme sebebi değil, diğer risk sinyalleriyle birlikte değerlendirilir |
 

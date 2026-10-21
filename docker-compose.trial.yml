@@ -16,7 +16,8 @@
 #     -p skinora-t161). container_name is reset so names derive from the
 #     project and never collide with the development stack (skinora-backend …).
 #   * Its own configuration: values from .env.trial (--env-file; `.env.*` is
-#     gitignored) and Docker secrets from ./secrets/trial/ (gitignored).
+#     gitignored; SKINORA_TRIAL_STACK in it is mandatory, see the guard
+#     below) and Docker secrets from ./secrets/trial/ (gitignored).
 #   * NO internal port on the host. `ports: !reset []` removes the base file's
 #     loopback ports; the database, Redis, backend, sidecars, Loki and
 #     Prometheus are reachable only inside the compose network. Three loopback
@@ -35,6 +36,14 @@
 # published port that is not loopback, or any internal service that publishes.
 # =============================================================================
 name: skinora-trial
+
+# Guard against a forgotten `--env-file .env.trial`: without it compose would
+# read the DEVELOPMENT .env and bring the trial up with the development wallet
+# seed, keys and DB password. SKINORA_TRIAL_STACK is defined ONLY in .env.trial
+# (DEPLOY_RUNBOOK K.4 adds it), never in .env.example, so the development
+# file cannot satisfy it and the render fails. (An extension field: it reaches
+# no container.)
+x-skinora-trial-guard: ${SKINORA_TRIAL_STACK:?SKINORA_TRIAL_STACK is not set - the trial overlay needs --env-file .env.trial (append SKINORA_TRIAL_STACK=1 to .env.trial, DEPLOY_RUNBOOK K.4); without it the DEVELOPMENT .env would be used}
 
 services:
   skinora-backend:

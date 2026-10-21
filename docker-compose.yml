@@ -649,3 +649,8 @@ secrets:
 networks:
   skinora-network:
     driver: bridge
+    # T166 B2: nginx geo ($skinora_trusted_edge) and REVERSE_PROXY_KNOWN_NETWORK assume
+    # 172.20.0.0/16; pin it so Docker cannot pick another subnet (geo-block would fail open).
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

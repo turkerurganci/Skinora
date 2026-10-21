@@ -4,7 +4,15 @@
 
 ## Güncelleme geçmişi
 
-**Önceki güncelleme:** 2026-10-21 — T160a ✓ Tamamlandı, doğrulama PASS (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363)
+**Önceki güncelleme:** 2026-10-21 — T166 ✓ Tamamlandı, doğrulama PASS (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; compose alt ağı sabit; T166_REPORT.md, PR #366). **Merge teyitleri (T161 dalında işlendi):** T160b (#364) main `2e502e99` → CI `39582270230` ✓, Docker Publish `39582270184` ✓; T166 (#366) main `e7e8acf1` → CI `39600854571` ✓, Docker Publish `39600854541` ✓
+
+**Önceki güncelleme:** 2026-10-21 — T166 ⏳ yapım bitti, doğrulama bekliyor (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; T166_REPORT.md, PR #366)
+
+**Önceki güncelleme:** 2026-10-21 — T160b ✓ Tamamlandı, doğrulama PASS (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek min(son ölçülen, sabit ayar), alarmlı; T160b_REPORT.md, PR #364)
+
+**Önceki güncelleme:** 2026-10-21 — T160b ⏳ yapım bitti, doğrulama bekliyor (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek son ölçülen tahmin ya da ayar, alarmlı; PR #364)
+
+**Önceki güncelleme:** 2026-10-21 — T160a ✓ Tamamlandı, doğrulama PASS (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363). **Merge teyidi (T160b dalında işlendi):** T160a (#363) main `50868b13` → CI `39572533083` ✓, Docker Publish `39572533142` ✓.
 
 **Önceki güncelleme:** 2026-10-21 — T160a ⏳ yapım bitti, doğrulama bekliyor (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363); T160 + #362 merge teyitleri
 

@@ -20,7 +20,7 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, appendFileSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -70,7 +70,7 @@ function render(files, { envFile = stubEnv, profiles = [], extraEnv = {} } = {})
 function cleanEnv() {
   const env = { ...process.env };
   for (const name of Object.keys(env)) {
-    if (/^(COMPOSE_|NGINX_|TRIAL_|GRAFANA_|DOCKER_DEFAULT_PLATFORM)/.test(name)) delete env[name];
+    if (/^(COMPOSE_|NGINX_|TRIAL_|SKINORA_|GRAFANA_|DOCKER_DEFAULT_PLATFORM)/.test(name)) delete env[name];
   }
   return env;
 }
@@ -99,6 +99,11 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
     stubEnv = join(workDir, "stub.env");
     copyFileSync(join(ROOT, ".env.example"), stubEnv);
     appendFileSync(stubEnv, "\nGRAFANA_ADMIN_PASSWORD=exposure-test-stub\n");
+    // The marker a real .env.trial carries (runbook K.4); the "no-grafana"
+    // stub has it too so that test fails for the Grafana reason, not this one.
+    const marker = "SKINORA_TRIAL_STACK=1";
+    appendFileSync(stubEnv, `\n${marker}\n`);
+    appendFileSync(stubEnvWithoutGrafanaAdmin, `\n${marker}\n`);
   });
 
   after(() => {
@@ -173,6 +178,19 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       const preflight = model.services["skinora-tunnel-preflight"];
       assert.deepEqual(preflight.secrets.map((s) => s.source), ["cloudflare_tunnel_token"]);
       assert.match(preflight.command.join(" "), /exit 1/);
+    });
+
+    test("refuses to render without the .env.trial marker (a forgotten --env-file must not fall back to the development .env)", () => {
+      // .env.example is what the development .env is copied from: it must not
+      // carry the marker, and the overlay must fail on it.
+      assert.doesNotMatch(readFileSync(join(ROOT, ".env.example"), "utf8"), /SKINORA_TRIAL_STACK/);
+      const devLike = join(workDir, "dev-like.env");
+      copyFileSync(join(ROOT, ".env.example"), devLike);
+      appendFileSync(devLike, "\nGRAFANA_ADMIN_PASSWORD=exposure-test-stub\n");
+      assert.throws(
+        () => render([BASE, TRIAL], { envFile: devLike }),
+        (err) => /SKINORA_TRIAL_STACK/.test(String(err.stderr)),
+      );
     });
 
     test("refuses to render without a Grafana admin password", () => {
