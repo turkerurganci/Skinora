@@ -1,8 +1,13 @@
 import { SigningKey, Transaction, computeAddress } from 'ethers';
 import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
+import { NATIVE_TRANSFER_GAS, isPlausibleGasEstimate, tokenGasLimit } from '../fee/feeMath.js';
 import { logger } from '../logger.js';
-import { fuelSendsTotal, transferStatusUnverifiedTotal } from '../metrics.js';
+import {
+  fuelSendsTotal,
+  gasEstimateAbnormalTotal,
+  transferStatusUnverifiedTotal,
+} from '../metrics.js';
 import {
   RpcError,
   isExecutionRevert,
@@ -13,11 +18,10 @@ import {
 import type { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { TOKEN_ABI, TRANSFER_TOPIC, addressTopic, encodeTransfer } from './erc20.js';
 import {
-  FUEL_SEND_GAS,
   TransferDeferredError,
+  capShareWei,
   cappedMaxFee,
   feeCeilingPerGas,
-  fuelCapWei,
   quoteFees,
   type CappedFlow,
   type EthUsdPriceSource,
@@ -91,6 +95,20 @@ import { formatTokenUnits, toTokenUnits, usdToMicros } from './units.js';
  * </para>
  *
  * <para>
+ * <b>No gas is assumed (T159a — yönetici kararı, ⚠ PARA).</b> Every gas limit
+ * comes from `eth_estimateGas` of exactly that transaction at the priced
+ * block: the token send's (+10 %), and in a deposit flow the fuel's — a plain
+ * ETH send from the fuel wallet to this deposit, so the deposit's account
+ * state is in it (Sepolia 2026-10-19: 207,391 to a new account, 21,000 to an
+ * existing one). The fee cap is shared out by those estimates. An estimate
+ * the node cannot give (a transient RPC answer) makes the send WAIT
+ * (`GAS_ESTIMATE_UNAVAILABLE`, never FAILED — proje sahibi kararı); one
+ * outside 21,000…1,000,000 is not believed (`GAS_ESTIMATE_ABNORMAL`, nothing
+ * signed, alarm); a revert of the token send's estimate stays a refusal (the
+ * chain's answer about the transfer).
+ * </para>
+ *
+ * <para>
  * <b>Fuel (T153, 08 §3.7.5).</b> A deposit pays its own gas in ETH it does
  * not hold, so a sweep or a refund before the sweep is preceded by a fuel
  * send from the fuel wallet — and only by this path: there is no fuel
@@ -100,8 +118,8 @@ import { formatTokenUnits, toTokenUnits, usdToMicros } from './units.js';
  * <b>exactly the missing amount</b> to the deposit — re-derived from this
  * service's seed, never a platform wallet — under its own journal id
  * (`fuel:<request id>`: one fuel per request, ever; a retry, a parallel tick
- * or a restart finds it), within its share of the fee cap (21,000 of the
- * flow's reference gas), the fuel single-send and 24-hour caps and the fuel
+ * or a restart finds it), within its share of the fee cap (its estimated gas
+ * of the flow's estimated gas, T159a), the fuel single-send and 24-hour caps and the fuel
  * wallet's balance. The request answers 503 `FUEL_PENDING`; the backend asks
  * again a minute later and the token send is signed only when the fuel is
  * <b>in a block at or below the priced head</b> (and so in the deposit's
@@ -280,6 +298,11 @@ interface FuelContext {
   readonly head: BlockHeader;
   readonly quote: FeeQuote;
   readonly gasLimit: bigint;
+  /**
+   * T159a — the fuel send's gas limit: its `eth_estimateGas` to this deposit
+   * (or the recorded fuel's); the cap is shared by `gasLimit + fuelGasLimit`.
+   */
+  readonly fuelGasLimit: bigint;
   /** The token send's fee ceiling per gas (capped). */
   readonly maxFeePerGas: bigint;
   /** ETH on the deposit not reserved by its other sends (≥ 0). */
@@ -338,8 +361,15 @@ export interface AcknowledgementAhead {
   readonly detectedAt: number;
 }
 
-/** Gas-limit headroom over `eth_estimateGas` (10 %). Unused gas is not charged. */
-const GAS_LIMIT_HEADROOM_PERCENT = 110n;
+/**
+ * T159a — the value of the fuel's gas probe: `eth_estimateGas` of a plain ETH
+ * send from the fuel wallet to the deposit. What a fuel costs in gas depends
+ * on whether the send creates the account (any value above 0 does), not on
+ * how much it carries, and the real amount is only known once the cap — which
+ * needs this estimate — is shared out; 1 wei is the smallest value that
+ * creates the account. The node checks the fuel wallet holds it.
+ */
+const FUEL_ESTIMATE_PROBE_WEI = 1n;
 
 /** EIP-1559 replacement: both fee fields at least +10 % (geth); we bump by 12.5 %. */
 const BUMP_NUMERATOR = 1125n;
@@ -747,7 +777,7 @@ export class TransferService {
   /**
    * T153 — ETH the fuel wallet signed away in the last 24 h, wei (what the
    * daily cap counts): each fuel's value plus its own worst-case fee
-   * (`21,000 × maxFeePerGas` of its latest attempt — a fee bump replaces the
+   * (its recorded gas limit × `maxFeePerGas` of its latest attempt — a fee bump replaces the
    * earlier price, it is not added to it). Yönetici kararı (T153 doğrulaması,
    * bulgu a): the fuel's fee leaves the platform too, so it is under the cap.
    */
@@ -899,6 +929,10 @@ export class TransferService {
     const quote = await quoteFees(rpc, head);
     const data = encodeTransfer(plan.recipient, plan.amountUnits);
     const gasLimit = await this.simulate(plan, data, head.number);
+    // T159a: a deposit flow shares the cap with its fuel, by the fuel's own
+    // estimate (the deposit's account state decides it) — never 21,000.
+    const fuelGasLimit =
+      plan.signer === 'DEPOSIT' ? await this.fuelGasLimitOf(plan, head.number) : 0n;
 
     let maxFeePerGas = quote.maxFeePerGas;
     let capWei: bigint | null = null;
@@ -907,10 +941,10 @@ export class TransferService {
       try {
         const capped = await cappedMaxFee(
           quote,
-          plan.capFlow,
           plan.capUsdMicros,
           this.deps.prices,
           gasLimit,
+          gasLimit + fuelGasLimit,
         );
         maxFeePerGas = capped.maxFeePerGas;
         capWei = capped.capWei;
@@ -934,6 +968,7 @@ export class TransferService {
           head,
           quote,
           gasLimit,
+          fuelGasLimit,
           maxFeePerGas,
           available,
           ethUsdMicros,
@@ -1157,25 +1192,40 @@ export class TransferService {
   }
 
   /**
-   * Gas estimate + `eth_call` from the sender at the priced block. Only the
-   * EVM's revert — or a token answering `false` — refuses for good; any other
-   * node error is left to the caller, which makes it transient.
+   * Gas estimate + `eth_call` from the sender at the priced block; returns
+   * the gas limit to sign with (estimate + 10 %). Only the EVM's revert — or
+   * a token answering `false` — refuses for good. T159a: any other failure of
+   * the estimate makes the send wait (`GAS_ESTIMATE_UNAVAILABLE`), an
+   * implausible estimate too (`GAS_ESTIMATE_ABNORMAL`, alarm); any other node
+   * error of the `eth_call` is left to the caller, which makes it transient.
    */
   private async simulate(plan: SendPlan, data: string, block: bigint): Promise<bigint> {
     const call = { from: plan.from, to: plan.contract, data };
+    const revertRefusal = (err: unknown) =>
+      new SidecarError(
+        `Simulation of the transfer reverted (${(err as Error).message}) — a blacklisted or empty sender, or a paused token; nothing signed (08 §3.7.6, §3.7.8).`,
+        'TRANSFER_SIMULATION_REVERTED',
+        false,
+      );
     let estimate: bigint;
-    let result: string;
     try {
       estimate = await this.deps.rpc.estimateGas(call, block);
+    } catch (err) {
+      if (isExecutionRevert(err)) throw revertRefusal(err);
+      throw this.deferral(
+        plan,
+        new TransferDeferredError(
+          `The gas of the ${plan.purpose.toLowerCase()} could not be estimated (${(err as Error).message}) — nothing signed, the send waits (T159a).`,
+          'GAS_ESTIMATE_UNAVAILABLE',
+        ),
+      );
+    }
+    this.assertPlausibleEstimate(plan, 'token', estimate);
+    let result: string;
+    try {
       result = await this.deps.rpc.callFrom(call, block);
     } catch (err) {
-      if (isExecutionRevert(err)) {
-        throw new SidecarError(
-          `Simulation of the transfer reverted (${(err as Error).message}) — a blacklisted or empty sender, or a paused token; nothing signed (08 §3.7.6, §3.7.8).`,
-          'TRANSFER_SIMULATION_REVERTED',
-          false,
-        );
-      }
+      if (isExecutionRevert(err)) throw revertRefusal(err);
       throw err;
     }
     // USDT returns nothing; USDC returns a 32-byte bool. False is a refusal.
@@ -1194,7 +1244,62 @@ export class TransferService {
         );
       }
     }
-    return ceilDiv(estimate * GAS_LIMIT_HEADROOM_PERCENT, 100n);
+    return tokenGasLimit(estimate);
+  }
+
+  /**
+   * T159a — the gas limit of this request's fuel, for the cap split and the
+   * fuel itself: the fuel already journalled for it (its fee is spent or on
+   * its way — the split it was signed under stands), else `eth_estimateGas`
+   * of a plain ETH send from the fuel wallet to the deposit at the priced
+   * block — the deposit's account state decides it (a new account costs more
+   * on a chain that prices state creation). Exactly the estimate, no
+   * headroom: that state only moves one way (an account, once there, stays),
+   * so the send can only get cheaper. Without a fuel wallet no fuel can go
+   * out; the split then counts the intrinsic 21,000.
+   */
+  private async fuelGasLimitOf(plan: SendPlan, block: bigint): Promise<bigint> {
+    const recorded = this.deps.journal.get(TransferService.fuelIdOf(plan.id));
+    if (recorded) return BigInt(recorded.gasLimit);
+    if (!this.deps.fuel?.key || this.fuelAddress === null) return NATIVE_TRANSFER_GAS;
+    let estimate: bigint;
+    try {
+      estimate = await this.deps.rpc.estimateGas(
+        { from: this.fuelAddress, to: plan.from, data: '0x', value: FUEL_ESTIMATE_PROBE_WEI },
+        block,
+      );
+    } catch (err) {
+      throw this.deferral(
+        plan,
+        new TransferDeferredError(
+          `The gas of the fuel to ${plan.from} could not be estimated (${(err as Error).message}) — nothing signed, the send waits (T159a).`,
+          'GAS_ESTIMATE_UNAVAILABLE',
+        ),
+      );
+    }
+    this.assertPlausibleEstimate(plan, 'fuel', estimate);
+    return estimate;
+  }
+
+  /**
+   * T159a (yönetici kararı, ⚠ PARA) — an estimate below the intrinsic 21,000
+   * or above `MAX_GAS_ESTIMATE` (1,000,000) is not believed: nothing is
+   * signed, the send waits and `ethereum-gas-estimate-abnormal` fires.
+   */
+  private assertPlausibleEstimate(plan: SendPlan, leg: 'token' | 'fuel', estimate: bigint): void {
+    if (isPlausibleGasEstimate(estimate)) return;
+    gasEstimateAbnormalTotal.inc({ flow: plan.purpose.toLowerCase(), leg });
+    logger.error(
+      { id: plan.id, purpose: plan.purpose, leg, from: plan.from, estimate: estimate.toString() },
+      'ABNORMAL GAS ESTIMATE — outside 21,000…1,000,000; nothing signed, the send waits (investigate the token contract and the RPC provider, DEPLOY_RUNBOOK §J)',
+    );
+    throw this.deferral(
+      plan,
+      new TransferDeferredError(
+        `The ${leg === 'fuel' ? 'fuel' : plan.purpose.toLowerCase()} gas estimate ${estimate} is outside 21,000…1,000,000 — nothing signed, the send waits (T159a).`,
+        'GAS_ESTIMATE_ABNORMAL',
+      ),
+    );
   }
 
   /** Policy check on the exact object, then signature, then sender re-check. */
@@ -1371,6 +1476,8 @@ export class TransferService {
         this.fuelAddress,
       ],
       feeCapWei: capWei ?? 0n,
+      // The bump keeps the gas limit the fuel was first signed with.
+      gasLimit: BigInt(record.gasLimit),
     });
   }
 
@@ -1574,13 +1681,20 @@ export class TransferService {
     // The token send's whole fee budget; fuel is what the deposit lacks of it.
     const sendNeeds = ctx.gasLimit * ctx.maxFeePerGas;
     const amount = sendNeeds - ctx.available;
-    // The fuel send's own share of the one cap (21,000 of the reference gas),
-    // priced with the same ETH reading as the token send's share.
-    const capWei = fuelCapWei(plan.capUsdMicros, plan.capFlow, ctx.ethUsdMicros);
-    const ceiling = feeCeilingPerGas(capWei, FUEL_SEND_GAS);
+    // The fuel send's own share of the one cap — its estimated gas of the
+    // flow's estimated gas (T159a) — priced with the same ETH reading as the
+    // token send's share.
+    const fuelGas = ctx.fuelGasLimit;
+    const capWei = capShareWei(
+      plan.capUsdMicros,
+      ctx.ethUsdMicros,
+      fuelGas,
+      ctx.gasLimit + fuelGas,
+    );
+    const ceiling = feeCeilingPerGas(capWei, fuelGas);
     if (ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas > ceiling) {
       throw wait(
-        `Fuel send ${FUEL_SEND_GAS} gas × ${ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas} wei/gas is above its share of the cap ${capWei} wei — no fuel, the send waits (08 §3.7.7).`,
+        `Fuel send ${fuelGas} gas × ${ctx.quote.baseFeePerGas + ctx.quote.priorityFeePerGas} wei/gas is above its share of the cap ${capWei} wei — no fuel, the send waits (08 §3.7.7).`,
         'FEE_ABOVE_CAP',
       );
     }
@@ -1590,12 +1704,35 @@ export class TransferService {
     // own worst-case fee is never sent — it would cost more to send than it
     // delivers, and many of them would spend the fuel wallet on fees. The
     // deposit then signs at the fee it affords, or waits.
-    const fuelFee = FUEL_SEND_GAS * maxFee;
-    if (amount < fuelFee) {
+    //
+    // T159a (öneriyle kaydedildi — ⚠ PARA): only when the deposit holds ETH
+    // of its own for this send. With none (`available` 0 — every fresh
+    // deposit) it can sign nothing at any fee, so "the fee it affords" is a
+    // wait that never ends; on a tariff that prices account creation (Sepolia
+    // 2026-10-19: 207,391 gas to a new account, more than the ~53,000-gas
+    // sweep it pays for) the fuel is then the only way out, and the cap split
+    // above already bounds fuel + send. On the mainnet tariff this case cannot
+    // arise (an empty deposit lacks the whole token budget, ≥ 23,100 gas ×
+    // the fee, more than a 21,000-gas fuel's), so the rule's decided
+    // behaviour is unchanged wherever it applied.
+    const fuelFee = fuelGas * maxFee;
+    if (amount < fuelFee && ctx.available > 0n) {
       return this.feeTheDepositAffords(
         plan,
         ctx,
         `it lacks ${amount} wei, less than a fuel's own fee ${fuelFee} wei`,
+      );
+    }
+    if (amount < fuelFee) {
+      logger.warn(
+        {
+          id: plan.id,
+          deposit: plan.from,
+          amount: amount.toString(),
+          fuelFee: fuelFee.toString(),
+          fuelGas: fuelGas.toString(),
+        },
+        'Fuel costs more than it delivers (the deposit holds no ETH; its account is created by the fuel) — sent, within the cap',
       );
     }
     if (amount > maxSingleWei) {
@@ -1663,7 +1800,7 @@ export class TransferService {
         type: 2,
         chainId: this.deps.policy.chainId,
         nonce,
-        gasLimit: FUEL_SEND_GAS,
+        gasLimit: fuelGas,
         maxFeePerGas: maxFee,
         maxPriorityFeePerGas: tip,
         to: plan.from,
@@ -1689,6 +1826,7 @@ export class TransferService {
           fuelAddress,
         ],
         feeCapWei: capWei,
+        gasLimit: fuelGas,
       });
       const record: JournalRecord = {
         id: fuelId,
@@ -1702,7 +1840,7 @@ export class TransferService {
         recipient: plan.from,
         amountUnits: amount.toString(),
         nonce,
-        gasLimit: FUEL_SEND_GAS.toString(),
+        gasLimit: fuelGas.toString(),
         feeCapWei: capWei.toString(),
         attempts: [attempt],
         createdAt: this.now(),

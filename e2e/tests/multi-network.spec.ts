@@ -345,7 +345,8 @@ test('refund on each network goes to the refund address fixed at acceptance (K9)
   const tronDep = await pollDeposit(tronTx);
 
   // 03 §5.1 — the buyer underpays on both networks. 10 − fee clears the
-  // 2 × fee minimum on each (TRON fee 2.00, Ethereum 0.05).
+  // 2 × fee minimum on each (TRON fee 2.00, Ethereum 0.05). T159a — on both
+  // networks the refund is sent net of its own fee (Amount + GasFee = 10).
   for (const txId of [tronTx, ethTx]) {
     const pay = await api.payViaFake(txId, { amount: '10.00' });
     expect(pay.ok, `pay failed: ${JSON.stringify(pay.body)}`).toBeTruthy();
@@ -353,14 +354,18 @@ test('refund on each network goes to the refund address fixed at acceptance (K9)
 
   const ethRefund = await pollChainRowConfirmed(ethTx, 'INCORRECT_AMOUNT_REFUND');
   expect(ethRefund, 'Ethereum INCORRECT_AMOUNT_REFUND never confirmed').not.toBeNull();
-  expect(ethRefund).toMatchObject({ network: 'ETHEREUM', status: 'CONFIRMED', amount: 10 });
+  expect(ethRefund).toMatchObject({ network: 'ETHEREUM', status: 'CONFIRMED' });
+  expect(ethRefund?.gasFee ?? 0).toBeGreaterThan(0);
+  expect(Number(ethRefund?.amount) + Number(ethRefund?.gasFee)).toBeCloseTo(10, 6);
   expect(ethRefund?.toAddress).toBe(ETH_REFUND.toLowerCase());
   expect(ethRefund?.toAddress).not.toBe(fakeEthereumBuyerWallet);
   expect(ethRefund?.txHash).toMatch(/^0x[0-9a-f]{64}$/);
 
   const tronRefund = await pollChainRowConfirmed(tronTx, 'INCORRECT_AMOUNT_REFUND');
   expect(tronRefund, 'TRON INCORRECT_AMOUNT_REFUND never confirmed').not.toBeNull();
-  expect(tronRefund).toMatchObject({ network: 'TRON', status: 'CONFIRMED', amount: 10 });
+  expect(tronRefund).toMatchObject({ network: 'TRON', status: 'CONFIRMED' });
+  expect(tronRefund?.gasFee ?? 0).toBeGreaterThan(0);
+  expect(Number(tronRefund?.amount) + Number(tronRefund?.gasFee)).toBeCloseTo(10, 6);
   expect(tronRefund?.toAddress).toBe(seed.buyerRefundAddress);
   expect(tronRefund?.toAddress).not.toBe(fakeBuyerWallet);
 

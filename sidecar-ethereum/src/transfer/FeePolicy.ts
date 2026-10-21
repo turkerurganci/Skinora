@@ -1,11 +1,12 @@
 import { SidecarError } from '../errors/SidecarError.js';
 import type { BlockHeader, EthereumRpcClient } from '../rpc/RpcClient.js';
 import type { FeePriceSource } from '../fee/FeeEstimationService.js';
+import { MIN_PRIORITY_FEE_WEI } from '../fee/feeMath.js';
 import { WEI_PER_ETH } from './units.js';
 
 /**
  * Fee price of a send and the platform's fee cap (08 §3.7.7, T142 —
- * öneriyle kaydedildi — ⚠).
+ * öneriyle kaydedildi — ⚠; T159a — yönetici kararı, ⚠ PARA).
  *
  * <list type="bullet">
  *   <item><b>Price.</b> EIP-1559: `maxPriorityFeePerGas` = the median tip of
@@ -15,21 +16,25 @@ import { WEI_PER_ETH } from './units.js';
  *   <item><b>Cap — per transaction, not per gas</b> (yönetici kararı, T152
  *     doğrulaması 2026-10-18). The cap in USD (backend setting
  *     `blockchain.ethereum.fee_cap_usd_per_transfer`, 0.50) covers the WORST
- *     the signed transaction can cost: `gasLimit × maxFeePerGas ≤ cap (wei)`.
- *     A per-gas cap over a reference gas let a transaction whose gas estimate
- *     was above the reference pay more than the cap (136,000 gas at the
- *     per-gas cap ≈ 0.725 $). The cap in wei = capUsd ÷ ETH price; in the two
- *     deposit flows (sweep, refund before the sweep) the deposit's own
- *     transaction gets only its share of it — the fuel send (21,000 gas, T153)
- *     is paid out of the same 0.50 $ (reference gas sweep 67,201 = fuel 21,000
- *     + sweep 46,201; refund 85,031 = fuel 21,000 + a first-time recipient
- *     64,031, 08 §3.7.5), so the token transaction's budget is
- *     cap × transfer gas ÷ reference gas. Payout and cold transfer have no fuel
- *     leg: their transaction gets the whole cap. A send goes out only when
- *     `gasLimit × (base fee + tip) ≤` the budget, and `maxFeePerGas` is held at
- *     ⌊budget ÷ gasLimit⌋; above it, or with no ETH price, it waits (fail
- *     closed). Refunds and cold transfers are capped too (yönetici kararları
- *     2026-10-18).</item>
+ *     the signed transactions of one flow can cost: `gasLimit × maxFeePerGas`
+ *     summed over them ≤ cap (wei), cap in wei = capUsd ÷ ETH price.</item>
+ *   <item><b>No assumed gas (T159a).</b> The cap is shared out by the
+ *     ESTIMATED gas of the flow's own transactions, never by a reference gas:
+ *     in the two deposit flows (sweep, refund before the sweep) the fuel send
+ *     (T153) is paid out of the same 0.50 $, so the token transaction gets
+ *     cap × its gas limit ÷ (its gas limit + the fuel's gas limit) and the
+ *     fuel the rest; payout, cold transfer and hot-wallet refund have no fuel
+ *     leg and their transaction gets the whole cap. Both shares are one price
+ *     per gas — cap ÷ the flow's gas — rounded down, so they never add up to
+ *     more than the cap. The gases T142 measured on mainnet (sweep 46,201 +
+ *     fuel 21,000 = 67,201; first-time recipient 64,031 + 21,000 = 85,031)
+ *     were the split until T159a, when a Sepolia tariff that takes 204,600 gas
+ *     for a fuel to a new account made the fixed 21,000 revert on chain. They
+ *     remain measurements (08 §3.7.5), not inputs.</item>
+ *   <item>A send goes out only when `gasLimit × (base fee + tip) ≤` its
+ *     share, and `maxFeePerGas` is held at ⌊share ÷ gasLimit⌋; above it, or
+ *     with no ETH price, it waits (fail closed). Refunds and cold transfers
+ *     are capped too (yönetici kararları 2026-10-18).</item>
  * </list>
  */
 
@@ -58,36 +63,16 @@ export function ethUsdFromPriceService(prices: FeePriceSource): EthUsdPriceSourc
   };
 }
 
-/** Reference gas of the whole flow the cap pays for, fuel included (08 §3.7.7). */
-export const CAP_REFERENCE_GAS = {
-  SWEEP: 67_201n,
-  PAYOUT: 64_031n,
-  COLD: 64_031n,
-  REFUND: 85_031n,
-  /**
-   * T158 (f) — a refund after the sweep leaves the HOT wallet (08 §3.7.6
-   * "Kaynaklar"): payout-shaped (first USDT to the buyer's address, 64,031),
-   * no fuel, so the transaction takes the whole cap.
-   */
-  HOT_REFUND: 64_031n,
-} as const;
+/**
+ * The flows a cap applies to. `SWEEP` and `REFUND` leave a deposit and may
+ * need fuel; `PAYOUT`, `COLD` and `HOT_REFUND` (T158 (f) — a refund after the
+ * sweep, from the hot wallet) are signed by the hot wallet, which pays its
+ * own gas.
+ */
+export type CappedFlow = 'SWEEP' | 'PAYOUT' | 'COLD' | 'REFUND' | 'HOT_REFUND';
 
-export type CappedFlow = keyof typeof CAP_REFERENCE_GAS;
-
-/** Gas of fuel (T153) inside the reference of the two deposit flows. */
-export const FUEL_SEND_GAS = 21_000n;
-
-/** Share of the reference that is the token transaction itself (the rest is the fuel send). */
-export const CAP_TRANSFER_GAS: Readonly<Record<CappedFlow, bigint>> = {
-  SWEEP: CAP_REFERENCE_GAS.SWEEP - FUEL_SEND_GAS,
-  PAYOUT: CAP_REFERENCE_GAS.PAYOUT,
-  COLD: CAP_REFERENCE_GAS.COLD,
-  REFUND: CAP_REFERENCE_GAS.REFUND - FUEL_SEND_GAS,
-  HOT_REFUND: CAP_REFERENCE_GAS.HOT_REFUND,
-};
-
-/** Floor on the tip — 0.01 gwei; a keyless provider answered `eth_maxPriorityFeePerGas` with 0. */
-export const MIN_PRIORITY_FEE_WEI = 10_000_000n;
+/** Re-exported for the send path; defined with the rest of the fee arithmetic (one source for the estimate too). */
+export { MIN_PRIORITY_FEE_WEI };
 
 /** Blocks the median tip is read over (T142). */
 export const TIP_SAMPLE_BLOCKS = 20;
@@ -105,11 +90,18 @@ export interface FeeQuote {
  * sent now (fuel key or caps not configured, the fuel arrived short);
  * `FUEL_PENDING` — the fuel for this send is signed and waits for a block;
  * `FUEL_LIMIT_REACHED` — the fuel single-send or 24-hour cap stops it;
- * `FUEL_WALLET_LOW` — the fuel wallet cannot pay the fuel.
+ * `FUEL_WALLET_LOW` — the fuel wallet cannot pay the fuel. T159a (yönetici
+ * kararı, ⚠ PARA): `GAS_ESTIMATE_UNAVAILABLE` — the node could not estimate
+ * the gas of the send or of its fuel (a transient RPC answer: the send waits,
+ * it is not FAILED — proje sahibi kararı); `GAS_ESTIMATE_ABNORMAL` — an
+ * estimate outside the plausible range (below 21,000 or above
+ * `MAX_GAS_ESTIMATE`): nothing is signed and an alarm fires.
  */
 export type DeferralReason =
   | 'FEE_ABOVE_CAP'
   | 'ETH_PRICE_UNAVAILABLE'
+  | 'GAS_ESTIMATE_UNAVAILABLE'
+  | 'GAS_ESTIMATE_ABNORMAL'
   | 'FUEL_REQUIRED'
   | 'FUEL_PENDING'
   | 'FUEL_LIMIT_REACHED'
@@ -147,46 +139,21 @@ export async function quoteFees(
   };
 }
 
-/** Cap in wei per gas: capUsd ÷ (reference gas × ETH price), rounded down. */
-export function capWeiPerGas(
-  capUsdMicros: bigint,
-  referenceGas: bigint,
-  ethUsdMicros: bigint,
-): bigint {
-  if (capUsdMicros <= 0n || referenceGas <= 0n || ethUsdMicros <= 0n) return 0n;
-  return (capUsdMicros * WEI_PER_ETH) / (referenceGas * ethUsdMicros);
-}
-
 /**
- * The most the flow's token transaction may cost in fees, wei: capUsd ÷ ETH
- * price × transfer gas ÷ reference gas, rounded down (one division, so the
- * rounding never favours the platform's spend).
+ * T159a — one transaction's share of a flow's cap, wei: capUsd ÷ ETH price ×
+ * its gas limit ÷ the flow's gas (its own plus, in a deposit flow, the fuel
+ * send's), rounded down in one division so the rounding never favours the
+ * platform's spend. With `ownGas === flowGas` (no fuel leg) it is the whole
+ * cap. The two shares of a deposit flow never add up to more than the cap.
  */
-export function capWeiPerTransaction(
+export function capShareWei(
   capUsdMicros: bigint,
-  flow: CappedFlow,
   ethUsdMicros: bigint,
+  ownGas: bigint,
+  flowGas: bigint,
 ): bigint {
-  if (capUsdMicros <= 0n || ethUsdMicros <= 0n) return 0n;
-  return (
-    (capUsdMicros * WEI_PER_ETH * CAP_TRANSFER_GAS[flow]) / (CAP_REFERENCE_GAS[flow] * ethUsdMicros)
-  );
-}
-
-/**
- * T153 — the fuel send's share of a deposit flow's cap, wei: capUsd ÷ ETH
- * price × 21,000 ÷ reference gas, rounded down. With
- * {@link capWeiPerTransaction} it splits the one 0.50 $ of a sweep (or a
- * refund before the sweep) between its two transactions; the two shares
- * never add up to more than the cap (08 §3.7.7, T142).
- */
-export function fuelCapWei(
-  capUsdMicros: bigint,
-  flow: 'SWEEP' | 'REFUND',
-  ethUsdMicros: bigint,
-): bigint {
-  if (capUsdMicros <= 0n || ethUsdMicros <= 0n) return 0n;
-  return (capUsdMicros * WEI_PER_ETH * FUEL_SEND_GAS) / (CAP_REFERENCE_GAS[flow] * ethUsdMicros);
+  if (capUsdMicros <= 0n || ethUsdMicros <= 0n || ownGas <= 0n || flowGas < ownGas) return 0n;
+  return (capUsdMicros * WEI_PER_ETH * ownGas) / (flowGas * ethUsdMicros);
 }
 
 /** Highest `maxFeePerGas` a transaction of `gasLimit` may carry under a budget: ⌊budget ÷ gasLimit⌋. */
@@ -195,16 +162,18 @@ export function feeCeilingPerGas(capWei: bigint, gasLimit: bigint): bigint {
 }
 
 /**
- * Applies the cap to a quote for a transaction of `gasLimit`: returns the fee
- * ceiling to sign with and the transaction's budget, or throws
- * {@link TransferDeferredError} when the send has to wait.
+ * Applies the cap to a quote for a transaction of `gasLimit` inside a flow
+ * of `flowGas` (T159a: `gasLimit` + the fuel's estimated gas in a deposit
+ * flow, `gasLimit` otherwise): returns the fee ceiling to sign with and the
+ * transaction's share, or throws {@link TransferDeferredError} when the send
+ * has to wait.
  */
 export async function cappedMaxFee(
   quote: FeeQuote,
-  flow: CappedFlow,
   capUsdMicros: bigint,
   prices: EthUsdPriceSource,
   gasLimit: bigint,
+  flowGas: bigint,
 ): Promise<{ maxFeePerGas: bigint; capWei: bigint; ethUsdMicros: bigint }> {
   const ethUsd = await prices.ethUsdMicros();
   if (ethUsd === null || ethUsd <= 0n) {
@@ -213,12 +182,12 @@ export async function cappedMaxFee(
       'ETH_PRICE_UNAVAILABLE',
     );
   }
-  const capWei = capWeiPerTransaction(capUsdMicros, flow, ethUsd);
+  const capWei = capShareWei(capUsdMicros, ethUsd, gasLimit, flowGas);
   const ceiling = feeCeilingPerGas(capWei, gasLimit);
   const needed = quote.baseFeePerGas + quote.priorityFeePerGas;
   if (needed > ceiling) {
     throw new TransferDeferredError(
-      `Fee ${gasLimit} gas × ${needed} wei/gas (base ${quote.baseFeePerGas} + tip ${quote.priorityFeePerGas}) is above the transaction's cap ${capWei} wei — the send waits (08 §3.7.7).`,
+      `Fee ${gasLimit} gas × ${needed} wei/gas (base ${quote.baseFeePerGas} + tip ${quote.priorityFeePerGas}) is above the transaction's cap ${capWei} wei (its share of ${flowGas} estimated gas) — the send waits (08 §3.7.7).`,
       'FEE_ABOVE_CAP',
     );
   }

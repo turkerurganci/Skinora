@@ -11,6 +11,7 @@ import type { EthereumRpcClient } from './rpc/RpcClient.js';
 import { UsdtStatusMonitor } from './token/UsdtStatus.js';
 import { createWebhookSender, type SendWebhook } from './webhook/WebhookClient.js';
 import { EthFeeEstimationService } from './fee/FeeEstimationService.js';
+import { MAX_SIGNABLE_GAS_LIMIT } from './fee/feeMath.js';
 import { EthPriceService, type EthPriceServiceOptions } from './price/EthPriceService.js';
 import { ethUsdFromPriceService } from './transfer/FeePolicy.js';
 import { FeeWaitTracker } from './transfer/FeeWaitTracker.js';
@@ -183,11 +184,16 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
   const { rpc, journal, wallet } = deps;
   const tokens = config.tokenContracts;
   const ethPrice = new EthPriceService(deps.priceOptions);
+  const fuelWalletAddress = config.fuelWalletKey
+    ? canonicalAddress(computeAddress(config.fuelWalletKey))
+    : null;
   const feeEstimator = new EthFeeEstimationService({
     rpc,
     prices: ethPrice,
     tokenContracts: tokens,
     hotWalletAddress: deps.feeHotWalletAddress,
+    // T159a — the fuel's gas is probed from the wallet that sends it.
+    fuelWalletAddress,
   });
   const feeWaits = new FeeWaitTracker(config.transfers.journalDir);
   const transfers = new TransferService({
@@ -207,7 +213,8 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
       chainId: BigInt(config.chainId),
       paymentToken: tokens.USDT,
       wrongTokenRefundToken: tokens.USDC,
-      maxTokenGasLimit: 150_000n,
+      // T159a: no transaction is signed above the abnormal-estimate ceiling.
+      maxGasLimit: MAX_SIGNABLE_GAS_LIMIT,
     },
     hotWalletKey: config.hotWalletKey,
     hotWalletAddress: config.hotWalletKey ? config.hotWalletAddress : null,
@@ -233,10 +240,10 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
 
   // T153 — ETH floors of the wallets that pay gas (alert ethereum-wallet-eth-low).
   const watched: WatchedWallet[] = [];
-  if (config.fuelWalletKey) {
+  if (fuelWalletAddress) {
     watched.push({
       label: 'fuel',
-      address: canonicalAddress(computeAddress(config.fuelWalletKey)),
+      address: fuelWalletAddress,
       floorWei: config.walletBalances.fuelFloorWei,
     });
   }

@@ -36,6 +36,17 @@ namespace Skinora.Shared.Events;
 /// address on the transaction's network, fixed at acceptance. Null only on an
 /// event written before T147, whose refund went to <c>SourceAddress</c>.
 /// </param>
+/// <param name="RefundAmount">
+/// T159a (owner decision 2026-10-20, 02 §4.7 / 08 §3.4) — what the buyer
+/// actually receives: the refunded base minus the refund's own network fee
+/// (<c>GasFee</c>), i.e. the queued refund row's <c>Amount</c>. Null only on
+/// an event written before T159a, whose refund was sent gross.
+/// </param>
+/// <param name="GasFee">
+/// T159a — the refund's network fee deducted from the refunded base (the same
+/// estimate snapshotted onto the refund row's <c>GasFee</c>). Null only on an
+/// event written before T159a.
+/// </param>
 public record LatePaymentRefundRequestedEvent(
     Guid EventId,
     Guid TransactionId,
@@ -47,4 +58,6 @@ public record LatePaymentRefundRequestedEvent(
     string TxHash,
     MonitoringStatus MonitorState,
     DateTime OccurredAt,
-    string? RefundAddress = null) : IDomainEvent;
+    string? RefundAddress = null,
+    decimal? RefundAmount = null,
+    decimal? GasFee = null) : IDomainEvent;

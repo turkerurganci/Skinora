@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v4.13** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-18 — T156 — ağ seçimi arayüzü: §4.2 ve §12.2 uygulandı notları (satıcı ağları kabul eder, alıcı birini seçer). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
+**Versiyon: v4.14** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-20 — T159a — §4.4/§4.7 reddedilen ödeme iadelerinde gas her iki ağda alıcıdan düşülür (proje sahibi kararı, ⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -131,11 +131,11 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 
 | Senaryo | Davranış |
 |---|---|
-| Eksik tutar | Platform kabul etmez, gelen tutar iade edilir, alıcı doğru tutarı baştan gönderir |
-| Fazla tutar | Platform doğru tutarı kabul eder, fazlayı alıcıya iade eder, işlem devam eder |
+| Eksik tutar | Platform kabul etmez, gelen tutar iadenin ağ ücreti düşülerek iade edilir (aşağıdaki not), alıcı doğru tutarı baştan gönderir |
+| Fazla tutar | Platform doğru tutarı kabul eder, fazlayı iadenin ağ ücreti düşülerek alıcıya iade eder (aşağıdaki not), işlem devam eder |
 | Yanlış token (izin listesindeki token — TRON'da TRC-20 USDC, Ethereum'da ERC-20 USDC) | Platform kabul etmez, alıcının **iade adresine** otomatik iade edilir (aşağıdaki not, K9). *Veri modeli notu: Yanlış token ile gelen transfer `WRONG_TOKEN_INCOMING` tipiyle blockchain audit kaydı oluşturulur; `ActualTokenAddress` field'ında yanlış token'ın contract adresi saklanır (06 §3.8).* |
 | Desteklenmeyen token/kontrat | Platform bu varlığı işleyemez — otomatik iade garanti edilemez, manuel incelemeye (admin review) düşer |
-| Timeout sonrası gecikmeli ödeme | İşlem zaten iptal, platform adresi izlemeye devam eder, gelen ödeme alıcıya otomatik iade edilir |
+| Timeout sonrası gecikmeli ödeme | İşlem zaten iptal, platform adresi izlemeye devam eder, gelen ödeme iadenin ağ ücreti düşülerek alıcıya otomatik iade edilir (aşağıdaki not) |
 | Çoklu/parçalı ödeme | Platform parçalı ödemeleri birleştirmez — tek seferde doğru tutarın gönderilmesi gerekir. İlk doğru transfer kabul edilir, sonraki transferler fazla tutar kuralıyla iade edilir. İşlem tamamlandıktan sonra gelen ek transferler gecikmeli ödeme kuralıyla iade edilir |
 
 > **Tek iade hedefi: alıcının iade adresi (11 §F8 K9, proje sahibi kararı 2026-10-17 — T110-K1'i tersine çevirir).**
@@ -143,6 +143,7 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 > - **Bu tablodaki reddedilen ödeme iadeleri** (eksik tutar · fazla tutarın fazlası · yanlış token · timeout sonrası gecikmeli ödeme · çoklu transferin fazlası) de, §4.6'daki `BUYER_REFUND` gibi, **alıcının kabul anında o ağ için belirlediği iade adresine** gider (`BuyerRefundAddress`, 06 §3.5). Depozit adresi yalnız satıcının hazırlık onayından sonra gösterildiği için (§2.2 adım 3) depozite para geldiğinde bu adres her zaman bellidir. Normatif kaynak: **08 §3.4 "Refund politikası"**.
 > - **Eski kural (T110-K1; 2026-10-17'ye kadar geçerliydi):** reddedilen ödemeler "paranın geldiği adrese" dönüyordu; gerekçe, kabul edilmemiş bir transferi beyan edilmiş bir adrese yönlendirmemekti. **Tersine dönme gerekçesi:** MASAK düzenlemesiyle alıcıların çoğu doğrudan bir Türk borsasından ödeyecek; borsanın gönderen adresi paylaşılan bir sıcak cüzdandır ve oraya dönen iade ya kaybolur ya da destek talebi ister. İade adresi ise alıcının kendisinin girdiği, biçim ve yaptırım kontrolünden geçmiş ve adres değişikliği korumasına (§12.3) tabi bir adrestir.
 > - **Uygulandı (T147):** eksik tutar, fazla tutarın fazlası, çoklu transferin fazlası, yanlış token ve iptal sonrası gecikmeli ödeme iadeleri alıcının kabul anında o ağ için verdiği iade adresine gider; gönderen adres (`FromAddress`) yalnız kanıt olarak kayıtta kalır. İade adresi yoksa (normal akışta olamaz — depozit kabulden sonra gösterilir) iade gönderen adrese **düşmez**: gönderilmez ve admin uyarılır, para depozitte elle karara bekler (öneriyle kaydedildi — ⚠).
+> - **İadenin ağ ücreti (gas) alıcıdan (proje sahibi kararı 2026-10-20 — ⚠ PARA; uygulayan T159a):** bu tablodaki **her** reddedilen ödeme iadesinde — eksik tutar, fazla tutarın fazlası, yanlış token, timeout sonrası gecikmeli ödeme, çoklu transferin fazlası — iadenin ağ ücreti iade edilen tutardan **her iki ağda** (TRON ve Ethereum) düşülür: alıcı **gelen tutar (fazla tutarda yalnız fazlası) − iadenin gas fee'si** alır. Gas fee, §4.6'daki iade ile aynı yoldan hesaplanır (depozitten iade adresine yapılacak transferin canlı tahmini — TRON 08 §3.1a, Ethereum 08 §3.7.7; tahmin alınamazsa ağın yedek ayarı, §4.7 "Gas fee tutarının kaynağı"). En düşük iade eşiği (§4.6) aynen geçerlidir: net iade < çarpan × gas fee (varsayılan 2) ya da negatifse iade yapılmaz, admin'e alarm gider ve para depozitte elle karara bekler. Yanlış tokende kesinti gelen token cinsinden yapılır (USDC ≈ USDT varsayımıyla, mevcut eşik kuralı gibi). **Uygulandı (T159a):** iade satırı net tutarı taşır, düşülen tahmin satırın `GasFee` alanında saklanır (06 §3.8); alıcı bildirimleri net tutarı ve düşülen ücreti gösterir. *Önceki durum (T72–T159a öncesi):* bu iadeler brüt gönderiliyor, ağ ücretini platform ödüyordu — belgeler "gas fee düşülerek" diyordu, kod kesmiyordu (T159 provası).
 
 ### 4.5 Satıcıya Ödeme
 
@@ -214,7 +215,7 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Alıcının ödeme gas fee'si | Alıcı karşılar (kendi cüzdanından gönderiyor) |
 | Sweep (depozit → sıcak cüzdan) gas fee'si | **TRON: alıcı karşılar** — kabul anında ayrı bir "TRON ağ ücreti" satırı olarak sabitlenir ve ödenecek toplama eklenir (§5; 11 §F8 K8; 08 §3.1a). **Ethereum: platform karşılar**, bir tavana kadar; tavanın üstünde sweep bekler ve alarm verir (öneriyle kaydedildi — ⚠) (08 §3.7.7). **Uygulandı (T149):** satır kabul anında yazılır ve toplamla birlikte ödenir; sweep'in TRX'ini sıcak cüzdan öder, satır USDT olarak sweep'le sıcak cüzdana geçer |
 | Satıcıya gönderim gas fee'si | **TRON:** platform karşılar (komisyondan düşülür) — aşağıdaki koruma eşiğiyle; TRON'da 2,29–4,53 $, olağan durum 13,03 TRX'lik koldur çünkü borsa depozit adresleri boşaltılır (11 §F8 K8). **Ethereum:** platform bir tavana kadar karşılar, satıcının alacağından düşülmez; tavanın üstünde payout bekler ve alarm verir (öneriyle kaydedildi — ⚠) (08 §3.7.7). **Uygulandı (T149):** payout hesabı ağ başına — TRON'da koruma eşiği kuralı, Ethereum'da satıcı fiyatın tamamını alır; tavanın üstündeki bekleme ve alarm T153/T158 |
-| İade gas fee'leri | İade tutarından düşülür (alıcı karşılar — alıcı alır: fiyat + komisyon (+ TRON'da ağ ücreti satırı, sweep'ten önceki iadede tam — §4.6) − gas fee) |
+| İade gas fee'leri | İade tutarından düşülür (alıcı karşılar — alıcı alır: fiyat + komisyon (+ TRON'da ağ ücreti satırı, sweep'ten önceki iadede tam — §4.6) − gas fee). **Reddedilen ödeme iadelerinde de** (eksik / fazla / çoklu transfer / yanlış token / gecikmeli ödeme) alıcı gelen tutar (fazla tutarda fazlası) − gas fee alır, her iki ağda (proje sahibi kararı 2026-10-20 — ⚠ PARA; uygulayan T159a — §4.4 notu) |
 | Koruma eşiği | Satıcıya gönderim gas fee'si komisyonun belirli bir yüzdesini aşarsa, aşan kısım satıcının alacağından düşülür (TRON; Ethereum'da uygulanmaz — yukarıdaki satır) |
 | Varsayılan eşik | %10 |
 | Eşik esnekliği | Admin tarafından değiştirilebilir |

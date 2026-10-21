@@ -26,10 +26,18 @@ import { writeFileDurably } from './TxJournal.js';
 
 export type WaitReason = DeferralReason;
 
-/** Reasons the 3-hour fee-cap alarm counts (08 §3.7.7); gas shortages have their own balance alarms. */
+/**
+ * Reasons the 3-hour fee-cap alarm counts (08 §3.7.7); gas shortages have
+ * their own balance alarms. T159a: a send whose gas cannot be estimated, or
+ * whose estimate is implausible, is not signed either — the same "the fee of
+ * this send cannot be priced within the cap" wait (an implausible estimate
+ * also has its own immediate alarm).
+ */
 export const FEE_CAP_WAIT_REASONS: readonly WaitReason[] = [
   'FEE_ABOVE_CAP',
   'ETH_PRICE_UNAVAILABLE',
+  'GAS_ESTIMATE_UNAVAILABLE',
+  'GAS_ESTIMATE_ABNORMAL',
 ];
 
 /**

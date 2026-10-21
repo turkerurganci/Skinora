@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-20 — T157 ✓ Tamamlandı, yeniden doğrulama PASS (admin ekranları ağ başına + kapatma aracı; rapor [`T157_REPORT.md`](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)); T159a ⏳ sahip kararı uygulandı: reddedilen ödeme iadelerinde gas iki ağda alıcıdan; doğrulama bekliyordu. **2026-10-21 merge teyidi (T157):** main `e0e9a9d8` → CI `39495423338` ✓, Docker Publish `39495423270` ✓.
+
 **Önceki güncelleme:** 2026-10-19 — **T159 ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak)** (Sepolia canlı provası; rapor [`T159_REPORT.md`](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355), doğrulanan HEAD `1f1d38ae`, CI `39196090612` ✓). Merge yöneticide.
 
 **Önceki güncelleme:** 2026-10-19 — **T158 ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme turu → tur 2 ✓ PASS** (Ethereum kurulumu; rapor [`T158_REPORT.md`](TASK_REPORTS/T158_REPORT.md), PR [#353](https://github.com/turkerurganci/Skinora/pull/353), doğrulanan HEAD `527cd680`, CI `39180296572` ✓; tur 1 HEAD `22c75eb6`, CI `39171417610`). Kapanışta yönetici kararı (⚠ PARA): yayınlanmış (`DETECTED`) sweep alıcı iadesinde "çalışmış" sayılır, TRON ağ ücreti satırı geri verilmez (11 §F8 "T158 düzeltme turu" (g)). Merge yöneticide.

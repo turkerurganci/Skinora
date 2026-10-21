@@ -287,7 +287,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         // K9 (T147) — the buyer's refund address, never the sender.
         Assert.Equal(BuyerRefundAddress, refund.ToAddress);
         Assert.NotEqual(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
-        Assert.Equal(50m, refund.Amount);
+        // T159a — received 50 minus the refund's own gas (2).
+        Assert.Equal(48m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         Assert.Null(refund.PaymentAddressId);
 
         var domainEvent = Assert.Single(_outbox.Events.OfType<BuyerPaymentInsufficientEvent>());
@@ -298,6 +300,8 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(50m, domainEvent.ReceivedAmount);
         Assert.Equal(fixture.BlockchainTransaction.FromAddress, domainEvent.SourceAddress);
         Assert.Equal(BuyerRefundAddress, domainEvent.RefundAddress);
+        Assert.Equal(48m, domainEvent.RefundAmount);
+        Assert.Equal(2m, domainEvent.GasFee);
         Assert.Empty(_alerts.Raised);
     }
 
@@ -339,7 +343,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Contains(fixture.Transaction.Id, _timeoutScheduling.DeliveryArmed);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.EXCESS_REFUND);
-        Assert.Equal(10m, refund.Amount);
+        // T159a — the excess (10) minus the refund's own gas (2).
+        Assert.Equal(8m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
         // K9 (T147) — the excess goes to the buyer's refund address.
         Assert.Equal(BuyerRefundAddress, refund.ToAddress);
@@ -352,6 +358,8 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(10m, domainEvent.ExcessAmount);
         Assert.Equal(100m, domainEvent.ExpectedAmount);
         Assert.Equal(110m, domainEvent.ReceivedAmount);
+        Assert.Equal(8m, domainEvent.RefundAmount);
+        Assert.Equal(2m, domainEvent.GasFee);
         Assert.Empty(_alerts.Raised);
     }
 
@@ -399,7 +407,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Empty(_timeoutScheduling.DeliveryArmed);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.EXCESS_REFUND);
-        Assert.Equal(100m, refund.Amount); // full received amount
+        // T159a — the whole received transfer (100) minus the refund's own gas (2).
+        Assert.Equal(98m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         // K9 (T147) — an extra transfer is refunded to the buyer's refund address.
         Assert.Equal(BuyerRefundAddress, refund.ToAddress);
         Assert.NotEqual(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
@@ -433,7 +443,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(AmountValidationOutcome.WrongTokenRefundQueued, outcome);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND);
-        Assert.Equal(50m, refund.Amount);
+        // T159a — the received wrong token (50) minus the refund's own gas (2).
+        Assert.Equal(48m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
         // K9 (T147) — the wrong token goes back to the buyer's refund address.
         Assert.Equal(BuyerRefundAddress, refund.ToAddress);
@@ -543,7 +555,9 @@ public sealed class AmountValidationServiceTests : IDisposable
         Assert.Equal(AmountValidationOutcome.LatePaymentRefundQueued, outcome);
         var refund = await _db.Set<BlockchainTransaction>()
             .SingleAsync(b => b.Type == BlockchainTransactionType.LATE_PAYMENT_REFUND);
-        Assert.Equal(100m, refund.Amount);
+        // T159a — the late transfer (100) minus the refund's own gas (2).
+        Assert.Equal(98m, refund.Amount);
+        Assert.Equal(2m, refund.GasFee);
         Assert.Equal(BuyerRefundAddress, refund.ToAddress);
         Assert.NotEqual(fixture.BlockchainTransaction.FromAddress, refund.ToAddress);
         var call = Assert.Single(_gasFee.RefundCalls);
@@ -611,6 +625,186 @@ public sealed class AmountValidationServiceTests : IDisposable
         }
     }
 
+    // ─── T159a — rejected-payment refunds are sent net of their own gas ─
+
+    // Owner decision 2026-10-20 (⚠ PARA; 02 §4.7, 05 §3.3, 08 §3.4): on BOTH
+    // networks every rejected-payment refund — underpayment, the excess of an
+    // overpayment, a multi-payment transfer, a wrong token, a late payment —
+    // carries the refunded base minus the refund's own network fee, with the
+    // fee snapshotted on GasFee (the BUYER_REFUND shape). The minimum-refund
+    // rule is unchanged: net < gas × ratio (or negative) → no row, admin alert.
+    // Fees mirror the e2e stack's: TRON 2.00, Ethereum 0.05 USDT.
+
+    public static TheoryData<string, BlockchainNetwork> RejectionKindsByNetwork()
+    {
+        var data = new TheoryData<string, BlockchainNetwork>();
+        foreach (var network in new[] { BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM })
+        {
+            foreach (var kind in new[] { "underpayment", "overpayment", "multi-payment", "wrong-token", "late-payment" })
+                data.Add(kind, network);
+        }
+        return data;
+    }
+
+    private static decimal RefundFeeOn(BlockchainNetwork network) =>
+        network == BlockchainNetwork.ETHEREUM ? 0.05m : 2m;
+
+    [Theory]
+    [MemberData(nameof(RejectionKindsByNetwork))]
+    public async Task T159a_Rejected_Payment_Refund_Is_Sent_Net_Of_Its_Own_Gas(string kind, BlockchainNetwork network)
+    {
+        var fee = RefundFeeOn(network);
+        _gasFee.RefundFee = fee;
+
+        var fixture = await RunRejectionAsync(kind, network, refundedBase: 50m);
+
+        var refund = await SingleRefundRowAsync(kind);
+        Assert.Equal(50m - fee, refund.Amount);   // what the buyer receives
+        Assert.Equal(fee, refund.GasFee);          // the deducted estimate, snapshotted
+        Assert.Equal(50m, refund.Amount + refund.GasFee!.Value); // 07 §7.5 reconstruction
+        Assert.Equal(network, refund.Network);
+        Assert.Equal(RefundAddressOn(network), refund.ToAddress);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, refund.Status);
+        // The deducted fee is the estimate of THIS network's transfer.
+        Assert.Equal([network], _gasFee.Networks);
+        var (eventRefund, eventGas) = RefundFieldsOfEvent(kind);
+        Assert.Equal(50m - fee, eventRefund);
+        Assert.Equal(fee, eventGas);
+        Assert.Empty(_alerts.Raised);
+        Assert.Equal(fixture.Transaction.Id, refund.TransactionId);
+    }
+
+    [Theory]
+    [MemberData(nameof(RejectionKindsByNetwork))]
+    public async Task T159a_Rejected_Payment_Refund_Exactly_At_The_Minimum_Is_Sent(string kind, BlockchainNetwork network)
+    {
+        // base = 3 × gas → net = 2 × gas = the threshold (gas × ratio 2): the
+        // rule is "net < threshold blocks", so this one is still sent.
+        var fee = RefundFeeOn(network);
+        _gasFee.RefundFee = fee;
+
+        await RunRejectionAsync(kind, network, refundedBase: 3m * fee);
+
+        var refund = await SingleRefundRowAsync(kind);
+        Assert.Equal(2m * fee, refund.Amount);
+        Assert.Equal(fee, refund.GasFee);
+        Assert.Empty(_alerts.Raised);
+    }
+
+    [Theory]
+    [MemberData(nameof(RejectionKindsByNetwork))]
+    public async Task T159a_Rejected_Payment_Refund_Below_The_Minimum_Is_Not_Sent_Admin_Is_Alerted(
+        string kind, BlockchainNetwork network)
+    {
+        // One cent under the boundary: net = 2 × gas − 0.01 < threshold.
+        var fee = RefundFeeOn(network);
+        _gasFee.RefundFee = fee;
+        var refundedBase = 3m * fee - 0.01m;
+
+        await RunRejectionAsync(kind, network, refundedBase);
+
+        Assert.False(await AnyRejectedRefundRowAsync());
+        var alert = Assert.Single(_alerts.Raised);
+        Assert.Equal(RefundBlockedReason.BelowMinimumThreshold, alert.Decision.Reason);
+        Assert.Equal(refundedBase - fee, alert.Decision.NetRefund);
+        Assert.Equal(fee, alert.Decision.GasFee);
+        Assert.Equal(2m * fee, alert.Decision.Threshold);
+    }
+
+    [Theory]
+    [MemberData(nameof(RejectionKindsByNetwork))]
+    public async Task T159a_Rejected_Payment_Whose_Gas_Exceeds_The_Amount_Is_Not_Sent_Admin_Is_Alerted(
+        string kind, BlockchainNetwork network)
+    {
+        // The fee swallows the whole amount (net negative): nothing is sent.
+        var fee = RefundFeeOn(network);
+        _gasFee.RefundFee = fee;
+
+        await RunRejectionAsync(kind, network, refundedBase: fee / 2m);
+
+        Assert.False(await AnyRejectedRefundRowAsync());
+        var alert = Assert.Single(_alerts.Raised);
+        Assert.Equal(RefundBlockedReason.NegativeAmount, alert.Decision.Reason);
+        Assert.Equal(-fee / 2m, alert.Decision.NetRefund);
+    }
+
+    /// <summary>
+    /// Drives one rejection <paramref name="kind"/> on <paramref name="network"/>
+    /// so that the refunded base (the received transfer, or the excess for an
+    /// overpayment) equals <paramref name="refundedBase"/>.
+    /// </summary>
+    private async Task<Fixture> RunRejectionAsync(string kind, BlockchainNetwork network, decimal refundedBase)
+    {
+        var refundTo = RefundAddressOn(network);
+        var (received, status) = kind switch
+        {
+            "underpayment" => (refundedBase, TransactionStatus.SELLER_CONFIRMED),
+            "overpayment" => (100m + refundedBase, TransactionStatus.SELLER_CONFIRMED),
+            "multi-payment" => (refundedBase, TransactionStatus.PAYMENT_RECEIVED),
+            "late-payment" => (refundedBase, TransactionStatus.CANCELLED_TIMEOUT),
+            "wrong-token" => (0m, TransactionStatus.SELLER_CONFIRMED),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+        var fixture = await SeedAsync(
+            expectedAmount: 100m, receivedAmount: received, initialStatus: status,
+            buyerRefundAddress: refundTo, network: network);
+
+        _ = kind switch
+        {
+            "wrong-token" => await _sut.ValidateWrongTokenIncomingAsync(
+                await SeedWrongTokenIncomingAsync(
+                    fixture,
+                    refundedBase,
+                    network == BlockchainNetwork.ETHEREUM
+                        ? KnownStablecoinContracts.EthereumUsdc
+                        : KnownStablecoinContractsForTest.Usdc),
+                "corr-t159a", default),
+            "late-payment" => await _sut.ValidateLatePaymentDetectedAsync(fixture.BlockchainTransaction, "corr-t159a", default),
+            _ => await _sut.ValidateConfirmedBuyerPaymentAsync(fixture.BlockchainTransaction, "corr-t159a", default),
+        };
+        await _db.SaveChangesAsync();
+        return fixture;
+    }
+
+    private static string RefundAddressOn(BlockchainNetwork network) =>
+        network == BlockchainNetwork.ETHEREUM ? EthereumBuyerRefundAddress : BuyerRefundAddress;
+
+    private static BlockchainTransactionType RefundTypeOf(string kind) => kind switch
+    {
+        "underpayment" => BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
+        "overpayment" or "multi-payment" => BlockchainTransactionType.EXCESS_REFUND,
+        "wrong-token" => BlockchainTransactionType.WRONG_TOKEN_REFUND,
+        "late-payment" => BlockchainTransactionType.LATE_PAYMENT_REFUND,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    private Task<BlockchainTransaction> SingleRefundRowAsync(string kind)
+    {
+        var type = RefundTypeOf(kind);
+        return _db.Set<BlockchainTransaction>().AsNoTracking().SingleAsync(b => b.Type == type);
+    }
+
+    private Task<bool> AnyRejectedRefundRowAsync() =>
+        _db.Set<BlockchainTransaction>().AnyAsync(b =>
+            b.Type == BlockchainTransactionType.INCORRECT_AMOUNT_REFUND
+            || b.Type == BlockchainTransactionType.EXCESS_REFUND
+            || b.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND
+            || b.Type == BlockchainTransactionType.LATE_PAYMENT_REFUND);
+
+    private (decimal? RefundAmount, decimal? GasFee) RefundFieldsOfEvent(string kind) => kind switch
+    {
+        "underpayment" => Pick(Assert.Single(_outbox.Events.OfType<BuyerPaymentInsufficientEvent>())),
+        "overpayment" or "multi-payment" => Pick(Assert.Single(_outbox.Events.OfType<BuyerPaymentExcessRefundedEvent>())),
+        "wrong-token" => Pick(Assert.Single(_outbox.Events.OfType<WrongTokenRefundRequestedEvent>())),
+        "late-payment" => Pick(Assert.Single(_outbox.Events.OfType<LatePaymentRefundRequestedEvent>())),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    private static (decimal?, decimal?) Pick(BuyerPaymentInsufficientEvent e) => (e.RefundAmount, e.GasFee);
+    private static (decimal?, decimal?) Pick(BuyerPaymentExcessRefundedEvent e) => (e.RefundAmount, e.GasFee);
+    private static (decimal?, decimal?) Pick(WrongTokenRefundRequestedEvent e) => (e.RefundAmount, e.GasFee);
+    private static (decimal?, decimal?) Pick(LatePaymentRefundRequestedEvent e) => (e.RefundAmount, e.GasFee);
+
     // ─── State machine refused ──────────────────────────────────────────
 
     [Fact]
@@ -649,8 +843,10 @@ public sealed class AmountValidationServiceTests : IDisposable
         TransactionStatus initialStatus = TransactionStatus.SELLER_CONFIRMED,
         bool isOnHold = false,
         StablecoinType expectedToken = StablecoinType.USDT,
-        string? buyerRefundAddress = BuyerRefundAddress)
+        string? buyerRefundAddress = BuyerRefundAddress,
+        BlockchainNetwork network = BlockchainNetwork.TRON)
     {
+        var ethereum = network == BlockchainNetwork.ETHEREUM;
         var seller = new User
         {
             Id = Guid.NewGuid(),
@@ -684,6 +880,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             BuyerId = buyerId,
             BuyerIdentificationMethod = BuyerIdentificationMethod.STEAM_ID,
             TargetBuyerSteamId = "76561198000000301",
+            Network = ethereum ? BlockchainNetwork.ETHEREUM : null,
             BuyerRefundAddress = buyerRefundAddress,
             ItemAssetId = "asset-1",
             ItemClassId = "cls",
@@ -693,7 +890,7 @@ public sealed class AmountValidationServiceTests : IDisposable
             CommissionRate = 0.02m,
             CommissionAmount = 2m,
             TotalAmount = expectedAmount,
-            SellerPayoutAddress = "TSellerPayout00000000000000000000000",
+            SellerPayoutAddress = ethereum ? EthereumSellerPayoutAddress : "TSellerPayout00000000000000000000000",
             IsOnHold = isOnHold,
         };
 
@@ -722,7 +919,10 @@ public sealed class AmountValidationServiceTests : IDisposable
         {
             Id = Guid.NewGuid(),
             TransactionId = tx.Id,
-            Address = "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
+            Network = network,
+            Address = ethereum
+                ? "0x" + Guid.NewGuid().ToString("N") + "00000000"
+                : "TDeposit" + Guid.NewGuid().ToString("N").Substring(0, 26),
             HdWalletIndex = 1,
             ExpectedAmount = expectedAmount,
             ExpectedToken = expectedToken,
@@ -734,10 +934,11 @@ public sealed class AmountValidationServiceTests : IDisposable
         {
             Id = Guid.NewGuid(),
             TransactionId = tx.Id,
+            Network = network,
             PaymentAddressId = paymentAddress.Id,
             Type = BlockchainTransactionType.BUYER_PAYMENT,
             TxHash = "0xTest" + Guid.NewGuid().ToString("N"),
-            FromAddress = "TBuyerSource0000000000000000000000000",
+            FromAddress = ethereum ? EthereumBuyerSource : "TBuyerSource0000000000000000000000000",
             ToAddress = paymentAddress.Address,
             Amount = receivedAmount,
             Token = expectedToken,
@@ -765,10 +966,13 @@ public sealed class AmountValidationServiceTests : IDisposable
         {
             Id = Guid.NewGuid(),
             TransactionId = fixture.Transaction.Id,
+            Network = fixture.PaymentAddress.Network,
             PaymentAddressId = fixture.PaymentAddress.Id,
             Type = BlockchainTransactionType.WRONG_TOKEN_INCOMING,
             TxHash = "0xWrong" + Guid.NewGuid().ToString("N"),
-            FromAddress = "TBuyerSource0000000000000000000000000",
+            FromAddress = fixture.PaymentAddress.Network == BlockchainNetwork.ETHEREUM
+                ? EthereumBuyerSource
+                : "TBuyerSource0000000000000000000000000",
             ToAddress = fixture.PaymentAddress.Address,
             Amount = amount,
             Token = fixture.PaymentAddress.ExpectedToken, // expected per 06 §3.8 token semantiği
@@ -786,6 +990,11 @@ public sealed class AmountValidationServiceTests : IDisposable
     // K9 (T147) — the buyer's refund address on the transaction, deliberately
     // different from the incoming transfer's FromAddress ("TBuyerSource…").
     private const string BuyerRefundAddress = "TBuyerRefund000000000000000000000000";
+
+    // T159a — Ethereum-shaped counterparts (canonical lowercase, 06 §1.4).
+    private const string EthereumBuyerRefundAddress = "0x1111111111111111111111111111111111111111";
+    private const string EthereumBuyerSource = "0x2222222222222222222222222222222222222222";
+    private const string EthereumSellerPayoutAddress = "0x3333333333333333333333333333333333333333";
 
     private sealed record Fixture(
         Transaction Transaction,

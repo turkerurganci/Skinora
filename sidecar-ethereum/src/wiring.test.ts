@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EthereumRpcClient } from './rpc/RpcClient.js';
 import { buildOutbound, buildServices, type OutboundConfig, type WiringConfig } from './wiring.js';
 import type { FeePriceSource } from './fee/FeeEstimationService.js';
+import { MAX_SIGNABLE_GAS_LIMIT } from './fee/feeMath.js';
 import type { EthUsdPriceSource } from './transfer/FeePolicy.js';
 import { TxJournal } from './transfer/TxJournal.js';
 import { EthereumHdWallet } from './wallet/HdWalletService.js';
@@ -256,6 +257,18 @@ describe('outbound wiring — sends and the fee estimate share one ETH price ser
     // No key mounted: nothing to watch (and nothing to alarm on).
     const none = outbound().walletBalances as unknown as { deps: { wallets: unknown[] } };
     expect(none.deps.wallets).toEqual([]);
+  });
+
+  it('T159a: the built signer accepts gas limits up to the abnormal-estimate ceiling (not the old 150,000) and the estimate probes the fuel from the fuel wallet', () => {
+    const fuel = new EthereumHdWallet(`${'abandon '.repeat(11)}about`).deriveSigner(40);
+    const built = outbound(priceFetch, { fuelWalletKey: fuel.privateKey });
+    const policy = (built.transfers as unknown as { deps: { policy: { maxGasLimit: bigint } } })
+      .deps.policy;
+    expect(policy.maxGasLimit).toBe(MAX_SIGNABLE_GAS_LIMIT);
+    const estimator = built.feeEstimator as unknown as { deps: { fuelWalletAddress: string } };
+    expect(estimator.deps.fuelWalletAddress).toBe(fuel.address.toLowerCase());
+    const none = outbound().feeEstimator as unknown as { deps: { fuelWalletAddress: null } };
+    expect(none.deps.fuelWalletAddress).toBeNull();
   });
 
   it('the estimate holds the built price service itself', () => {

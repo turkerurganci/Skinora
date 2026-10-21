@@ -45,6 +45,10 @@ public sealed class BuyerPaymentInsufficientNotificationConsumer
                 // K9 (T147) — where the refund is sent; a pre-T147 event has none and
                 // its refund went to the sender.
                 ["RefundAddress"] = domainEvent.RefundAddress ?? domainEvent.SourceAddress,
+                // T159a — the refund is sent net of its own network fee; a
+                // pre-T159a event has neither field and its refund went gross.
+                ["RefundAmount"] = MoneyFormat.Display(domainEvent.RefundAmount ?? domainEvent.ReceivedAmount),
+                ["GasFee"] = MoneyFormat.Display(domainEvent.GasFee ?? 0m),
             },
         };
 

@@ -546,6 +546,55 @@ groups:
             row, compare the hash on Etherscan and decide by hand
             (DEPLOY_RUNBOOK §J "Doğrulanamayan gönderim").
 
+      # T159a (yönetici kararı, ⚠ PARA) — no gas is assumed: every send and
+      # its fuel is estimated. An estimate below 21,000 or above 1,000,000 is
+      # not believed — nothing is signed, the send waits GAS_ESTIMATE_ABNORMAL.
+      # Every refused attempt counts (the backend asks again each minute), so
+      # the rule keeps firing while it lasts.
+      - uid: ethereum-gas-estimate-abnormal
+        title: Ethereum Gas Estimate Abnormal — Send Not Signed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_ethereum_gas_estimate_abnormal_total[1h])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: An Ethereum send's gas estimate is outside 21,000 to 1,000,000 — nothing signed
+          description: >-
+            eth_estimateGas answered a value the service does not believe for a
+            sweep, payout, refund or cold transfer (leg="token") or for the fuel
+            of a deposit (leg="fuel"). Nothing was signed; the backend keeps the
+            row PENDING and asks again every minute. Check the token contract
+            (an upgrade or a gas-heavy change), the RPC provider's answer and the
+            network's gas tariff before anything else (DEPLOY_RUNBOOK §J
+            "Gas tahmini").
+
   - orgId: 1
     name: Skinora Warning Alerts
     folder: Skinora Alerts
@@ -976,7 +1025,9 @@ groups:
           description: >-
             An Ethereum sweep, payout or cold transfer has not been signed for
             longer than the threshold (3 h by default) because the network fee
-            is above the platform's cap or no ETH price is available — or a
+            is above the platform's cap, no ETH price is available or its gas
+            could not be estimated (GAS_ESTIMATE_UNAVAILABLE /
+            GAS_ESTIMATE_ABNORMAL, T159a) — or a
             signed send has not been mined for that long (08 §3.7.7). The
             payout of a waiting sweep waits too. Check the base fee, the ETH
             price source, skinora_ethereum_transfer_wait_seconds by kind and

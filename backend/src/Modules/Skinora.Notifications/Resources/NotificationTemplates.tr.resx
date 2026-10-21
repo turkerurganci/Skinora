@@ -82,7 +82,7 @@
     <value>Geç ödeme iade edildi</value>
   </data>
   <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
-    <value>Cüzdanına {Amount} USDT iade edildi.</value>
+    <value>Cüzdanına {Amount} USDT iade edildi (iadenin {GasFee} USDT ağ ücreti düşüldü).</value>
   </data>
   <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Ödeme iade edildi</value>
@@ -142,19 +142,19 @@
     <value>Eksik ödeme — doğru tutarı tekrar gönder</value>
   </data>
   <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
-    <value>{ReceivedAmount} {Stablecoin} aldık ama beklenen {ExpectedAmount} {Stablecoin} idi. Alınan tutar {RefundAddress} adresine iade ediliyor; lütfen süre dolmadan önce {ExpectedAmount} {Stablecoin} tutarının tamamını tekrar gönder.</value>
+    <value>{ReceivedAmount} {Stablecoin} aldık ama beklenen {ExpectedAmount} {Stablecoin} idi. Alınan tutardan {GasFee} {Stablecoin} ağ ücreti düşülerek {RefundAmount} {Stablecoin} {RefundAddress} adresine iade ediliyor; lütfen süre dolmadan önce {ExpectedAmount} {Stablecoin} tutarının tamamını tekrar gönder.</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Fazla ödeme iade ediliyor</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
-    <value>{ReceivedAmount} {Stablecoin} gönderdin ama yalnızca {ExpectedAmount} {Stablecoin} gerekliydi. Aradaki {ExcessAmount} {Stablecoin} farkı {RefundAddress} adresine iade ediliyor.</value>
+    <value>{ReceivedAmount} {Stablecoin} gönderdin ama yalnızca {ExpectedAmount} {Stablecoin} gerekliydi. Aradaki {ExcessAmount} {Stablecoin} farktan {GasFee} {Stablecoin} ağ ücreti düşülerek {RefundAmount} {Stablecoin} {RefundAddress} adresine iade ediliyor.</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
     <value>Yanlış token tespit edildi — iade ediliyor</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
-    <value>İşlem {ExpectedStablecoin} bekliyordu ama {ReceivedAmount} {ActualStablecoin} alındı. Tutar {RefundAddress} adresine iade ediliyor; lütfen doğru token ile tekrar gönder.</value>
+    <value>İşlem {ExpectedStablecoin} bekliyordu ama {ReceivedAmount} {ActualStablecoin} alındı. Tutardan {GasFee} {ActualStablecoin} ağ ücreti düşülerek {RefundAmount} {ActualStablecoin} {RefundAddress} adresine iade ediliyor; lütfen doğru token ile tekrar gönder.</value>
   </data>
   <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
     <value>Hesabınız askıya alındı</value>

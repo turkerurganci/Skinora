@@ -130,7 +130,9 @@ export function setTransferWaitSource(source: TransferWaitSource): void {
 /**
  * Longest current wait, seconds, by kind: `fee_cap` — a sweep / payout / cold
  * transfer not signed because the fee is above the cap or the ETH price is
- * missing (08 §3.7.7, 3-hour alarm); `unmined` — a signed transfer not yet in a
+ * missing (08 §3.7.7, 3-hour alarm) — T159a: or because its gas could not be
+ * estimated (`GAS_ESTIMATE_UNAVAILABLE`) or the estimate is implausible
+ * (`GAS_ESTIMATE_ABNORMAL`); `unmined` — a signed transfer not yet in a
  * block; `gas` — a sender without ETH for gas (a deposit waiting for its
  * fuel or for a fuel that cannot be sent, T153; the hot wallet out of ETH) —
  * no alarm of its own: `ethereum-wallet-eth-low` and the backend's
@@ -210,6 +212,20 @@ export const transferStatusUnverifiedTotal = getOrCreateCounter({
   name: 'skinora_ethereum_transfer_status_unverified_total',
   help: 'Status reads of an unjournalled Ethereum transfer whose Transfer log did not match the expectation (answered UNKNOWN)',
   labelNames: ['reason'] as const,
+});
+
+/**
+ * T159a (yönetici kararı, ⚠ PARA) — a gas estimate outside the plausible
+ * range (below 21,000 or above 1,000,000 — `MAX_GAS_ESTIMATE`) for a send or
+ * its fuel: nothing was signed, the send waits (`GAS_ESTIMATE_ABNORMAL`).
+ * Every refused attempt counts (the backend asks again each minute), so the
+ * alert `ethereum-gas-estimate-abnormal` (critical, at once) keeps firing while
+ * it lasts. `leg`: `token` | `fuel`.
+ */
+export const gasEstimateAbnormalTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_gas_estimate_abnormal_total',
+  help: 'Ethereum gas estimates outside the plausible range — nothing signed, the send waits',
+  labelNames: ['flow', 'leg'] as const,
 });
 
 /**

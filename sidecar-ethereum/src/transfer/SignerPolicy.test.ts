@@ -2,6 +2,7 @@ import { Transaction, SigningKey, type TransactionLike } from 'ethers';
 import { describe, expect, it } from 'vitest';
 import { canonicalAddress } from '../address/canonicalAddress.js';
 import { MAINNET_TOKEN_CONTRACTS } from '../network.js';
+import { MAX_SIGNABLE_GAS_LIMIT } from '../fee/feeMath.js';
 import { TOKEN_ABI, encodeTransfer } from './erc20.js';
 import {
   NATIVE_TRANSFER_GAS,
@@ -28,7 +29,7 @@ const CONFIG: SignerPolicyConfig = {
   chainId: 11_155_111n,
   paymentToken: USDT,
   wrongTokenRefundToken: USDC,
-  maxTokenGasLimit: 150_000n,
+  maxGasLimit: MAX_SIGNABLE_GAS_LIMIT,
 };
 
 const INTENT: TokenTransferIntent = {
@@ -150,7 +151,7 @@ describe('token keys — every rule refuses', () => {
       () => token({ data: encodeTransfer(RECIPIENT, 12_345_678_000_000n) }),
     ],
     ['one unit more', () => token({ data: encodeTransfer(RECIPIENT, 12_345_679n) })],
-    ['a gas limit above the bound', () => token({ gasLimit: 150_001n })],
+    ['a gas limit above the bound', () => token({ gasLimit: MAX_SIGNABLE_GAS_LIMIT + 1n })],
     ['a fee ceiling above the cap', () => token({ maxFeePerGas: 3_000_000_001n })],
     [
       'a gas limit one above at the cap fee (worst case over the cap)',
@@ -256,6 +257,8 @@ describe('fuel key — the one exception (T153)', () => {
     maxForSendWei: 300_000_000_000_000n,
     platformAddresses: [HOT_WALLET, ''],
     feeCapWei: 21_000n * 2_050_000_000n,
+    // T159a: the gas limit the service estimated for this fuel.
+    gasLimit: NATIVE_TRANSFER_GAS,
   };
 
   function fuel(overrides: Partial<TransactionLike> = {}): Transaction {
@@ -292,6 +295,28 @@ describe('fuel key — the one exception (T153)', () => {
     );
   });
 
+  it('T159a: a fuel at its estimated gas — 207,391 to a new account on Sepolia — signs; 21,000 is no longer the rule', () => {
+    const gasLimit = 207_391n;
+    expect(() =>
+      assertSignableFuel(
+        fuel({ gasLimit }),
+        { ...FUEL, gasLimit, feeCapWei: gasLimit * 2_050_000_000n },
+        CONFIG,
+      ),
+    ).not.toThrow();
+  });
+
+  it('T159a: the ceiling is inclusive — a fuel at exactly the signable gas limit signs', () => {
+    const gasLimit = MAX_SIGNABLE_GAS_LIMIT;
+    expect(() =>
+      assertSignableFuel(
+        fuel({ gasLimit }),
+        { ...FUEL, gasLimit, feeCapWei: gasLimit * 2_050_000_000n, maxDailyWei: 10n ** 18n },
+        CONFIG,
+      ),
+    ).not.toThrow();
+  });
+
   it('the single cap is inclusive: a fuel of exactly the cap signs', () => {
     expect(() =>
       assertSignableFuel(fuel(), { ...FUEL, maxSingleWei: 300_000_000_000_000n }, CONFIG),
@@ -305,7 +330,21 @@ describe('fuel key — the one exception (T153)', () => {
       { recipient: RECIPIENT },
     ],
     ['calldata on a fuel send', () => fuel({ data: encodeTransfer(DEPOSIT, 1n) })],
-    ['a gas limit other than 21,000', () => fuel({ gasLimit: 21_001n })],
+    ['a gas limit other than the one decided', () => fuel({ gasLimit: 21_001n })],
+    [
+      'a gas limit below the intrinsic 21,000',
+      () => fuel({ gasLimit: 20_999n }),
+      { gasLimit: 20_999n },
+    ],
+    [
+      'a gas limit above the signable ceiling',
+      () => fuel({ gasLimit: MAX_SIGNABLE_GAS_LIMIT + 1n }),
+      {
+        gasLimit: MAX_SIGNABLE_GAS_LIMIT + 1n,
+        feeCapWei: (MAX_SIGNABLE_GAS_LIMIT + 1n) * 2_050_000_000n,
+        maxDailyWei: 10n ** 18n,
+      },
+    ],
     ['another value than asked', () => fuel({ value: 300_000_000_000_001n })],
     [
       'above the single cap',
@@ -329,7 +368,9 @@ describe('fuel key — the one exception (T153)', () => {
     const rule: Record<string, string> = {
       'an address the service does not derive': 'recipient',
       'calldata on a fuel send': 'calldata',
-      'a gas limit other than 21,000': 'gasLimit',
+      'a gas limit other than the one decided': 'gasLimit',
+      'a gas limit below the intrinsic 21,000': 'gasLimit',
+      'a gas limit above the signable ceiling': 'gasLimit',
       'another value than asked': 'value',
       'above the single cap': 'fuelCaps',
       'above the daily cap': 'fuelCaps',

@@ -82,7 +82,7 @@
     <value>Late payment refunded</value>
   </data>
   <data name="LATE_PAYMENT_REFUNDED_Body" xml:space="preserve">
-    <value>{Amount} USDT was refunded to your wallet.</value>
+    <value>{Amount} USDT was refunded to your wallet (the {GasFee} USDT network fee of the refund was deducted).</value>
   </data>
   <data name="PAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Payment refunded</value>
@@ -142,19 +142,19 @@
     <value>Insufficient payment — please re-send the correct amount</value>
   </data>
   <data name="INSUFFICIENT_PAYMENT_Body" xml:space="preserve">
-    <value>We received {ReceivedAmount} {Stablecoin} but expected {ExpectedAmount} {Stablecoin}. The received amount will be refunded to {RefundAddress}; please send the full {ExpectedAmount} {Stablecoin} again before the timeout.</value>
+    <value>We received {ReceivedAmount} {Stablecoin} but expected {ExpectedAmount} {Stablecoin}. The received amount minus the {GasFee} {Stablecoin} network fee, {RefundAmount} {Stablecoin}, will be refunded to {RefundAddress}; please send the full {ExpectedAmount} {Stablecoin} again before the timeout.</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Title" xml:space="preserve">
     <value>Excess payment refunded</value>
   </data>
   <data name="OVERPAYMENT_REFUNDED_Body" xml:space="preserve">
-    <value>You sent {ReceivedAmount} {Stablecoin} but only {ExpectedAmount} {Stablecoin} was required. The {ExcessAmount} {Stablecoin} excess is being refunded to {RefundAddress}.</value>
+    <value>You sent {ReceivedAmount} {Stablecoin} but only {ExpectedAmount} {Stablecoin} was required. The {ExcessAmount} {Stablecoin} excess minus the {GasFee} {Stablecoin} network fee, {RefundAmount} {Stablecoin}, is being refunded to {RefundAddress}.</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Title" xml:space="preserve">
     <value>Wrong token detected — refunding</value>
   </data>
   <data name="WRONG_TOKEN_REFUND_Body" xml:space="preserve">
-    <value>The transaction expected {ExpectedStablecoin} but received {ReceivedAmount} {ActualStablecoin}. The amount is being refunded to {RefundAddress}; please send the correct token.</value>
+    <value>The transaction expected {ExpectedStablecoin} but received {ReceivedAmount} {ActualStablecoin}. The amount minus the {GasFee} {ActualStablecoin} network fee, {RefundAmount} {ActualStablecoin}, is being refunded to {RefundAddress}; please send the correct token.</value>
   </data>
   <data name="ACCOUNT_SUSPENDED_Title" xml:space="preserve">
     <value>Your account has been suspended</value>

@@ -198,7 +198,7 @@ public sealed class AmountValidationService : IAmountValidationService
             paymentAddress.Network,
             BlockchainTransactionType.WRONG_TOKEN_REFUND,
             refundTo,
-            received,
+            decision,
             // 06 §3.8 token semantiği — Token = expected for wrong-token rows;
             // ActualTokenAddress carries the wrong contract.
             paymentAddress.ExpectedToken,
@@ -217,12 +217,14 @@ public sealed class AmountValidationService : IAmountValidationService
                 SourceAddress: wrongTokenIncoming.FromAddress,
                 TxHash: wrongTokenIncoming.TxHash ?? string.Empty,
                 OccurredAt: _clock.GetUtcNow().UtcDateTime,
-                RefundAddress: refundTo),
+                RefundAddress: refundTo,
+                RefundAmount: decision.NetRefund,
+                GasFee: decision.GasFee),
             cancellationToken);
 
         _logger.LogInformation(
-            "Wrong-token refund queued — txHash={TxHash} amount={Amount} actual={Actual} expected={Expected} refundId={RefundId} correlationId={CorrelationId}",
-            wrongTokenIncoming.TxHash, received, actualToken, paymentAddress.ExpectedToken, refundRow.Id, correlationId);
+            "Wrong-token refund queued — txHash={TxHash} received={Received} net={Net} gasFee={GasFee} actual={Actual} expected={Expected} refundId={RefundId} correlationId={CorrelationId}",
+            wrongTokenIncoming.TxHash, received, decision.NetRefund, decision.GasFee, actualToken, paymentAddress.ExpectedToken, refundRow.Id, correlationId);
         return AmountValidationOutcome.WrongTokenRefundQueued;
     }
 
@@ -282,7 +284,7 @@ public sealed class AmountValidationService : IAmountValidationService
             paymentAddress.Network,
             BlockchainTransactionType.LATE_PAYMENT_REFUND,
             refundTo,
-            received,
+            decision,
             paymentAddress.ExpectedToken);
 
         await _outbox.PublishAsync(
@@ -297,12 +299,14 @@ public sealed class AmountValidationService : IAmountValidationService
                 TxHash: latePayment.TxHash ?? string.Empty,
                 MonitorState: paymentAddress.MonitoringStatus,
                 OccurredAt: _clock.GetUtcNow().UtcDateTime,
-                RefundAddress: refundTo),
+                RefundAddress: refundTo,
+                RefundAmount: decision.NetRefund,
+                GasFee: decision.GasFee),
             cancellationToken);
 
         _logger.LogInformation(
-            "Late-payment refund queued — txHash={TxHash} received={Received} monitorState={State} refundId={RefundId} correlationId={CorrelationId}",
-            latePayment.TxHash, received, paymentAddress.MonitoringStatus, refundRow.Id, correlationId);
+            "Late-payment refund queued — txHash={TxHash} received={Received} net={Net} gasFee={GasFee} monitorState={State} refundId={RefundId} correlationId={CorrelationId}",
+            latePayment.TxHash, received, decision.NetRefund, decision.GasFee, paymentAddress.MonitoringStatus, refundRow.Id, correlationId);
         return AmountValidationOutcome.LatePaymentRefundQueued;
     }
 
@@ -344,7 +348,7 @@ public sealed class AmountValidationService : IAmountValidationService
             paymentAddress.Network,
             BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
             refundTo,
-            received,
+            decision,
             paymentAddress.ExpectedToken);
 
         await _outbox.PublishAsync(
@@ -359,12 +363,14 @@ public sealed class AmountValidationService : IAmountValidationService
                 SourceAddress: confirmedPayment.FromAddress,
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
                 OccurredAt: _clock.GetUtcNow().UtcDateTime,
-                RefundAddress: refundTo),
+                RefundAddress: refundTo,
+                RefundAmount: decision.NetRefund,
+                GasFee: decision.GasFee),
             cancellationToken);
 
         _logger.LogInformation(
-            "Underpayment refund queued — txHash={TxHash} expected={Expected} received={Received} refundId={RefundId} correlationId={CorrelationId}",
-            confirmedPayment.TxHash, expected, received, refundRow.Id, correlationId);
+            "Underpayment refund queued — txHash={TxHash} expected={Expected} received={Received} net={Net} gasFee={GasFee} refundId={RefundId} correlationId={CorrelationId}",
+            confirmedPayment.TxHash, expected, received, decision.NetRefund, decision.GasFee, refundRow.Id, correlationId);
         return AmountValidationOutcome.Underpaid;
     }
 
@@ -411,7 +417,7 @@ public sealed class AmountValidationService : IAmountValidationService
             paymentAddress.Network,
             BlockchainTransactionType.EXCESS_REFUND,
             refundTo,
-            excess,
+            decision,
             paymentAddress.ExpectedToken);
 
         await _outbox.PublishAsync(
@@ -428,12 +434,14 @@ public sealed class AmountValidationService : IAmountValidationService
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
                 IsMultiPayment: false,
                 OccurredAt: _clock.GetUtcNow().UtcDateTime,
-                RefundAddress: refundTo),
+                RefundAddress: refundTo,
+                RefundAmount: decision.NetRefund,
+                GasFee: decision.GasFee),
             cancellationToken);
 
         _logger.LogInformation(
-            "Overpayment refund queued — txHash={TxHash} expected={Expected} received={Received} excess={Excess} refundId={RefundId} correlationId={CorrelationId}",
-            confirmedPayment.TxHash, expected, received, excess, refundRow.Id, correlationId);
+            "Overpayment refund queued — txHash={TxHash} expected={Expected} received={Received} excess={Excess} net={Net} gasFee={GasFee} refundId={RefundId} correlationId={CorrelationId}",
+            confirmedPayment.TxHash, expected, received, excess, decision.NetRefund, decision.GasFee, refundRow.Id, correlationId);
         return AmountValidationOutcome.AcceptedWithExcessRefund;
     }
 
@@ -452,7 +460,8 @@ public sealed class AmountValidationService : IAmountValidationService
         var gasFee = await ResolveRefundGasFeeAsync(paymentAddress, refundTo, confirmedPayment, paymentAddress.ExpectedToken, cancellationToken);
 
         // 02 §4.4 — payments arriving after the transaction left SELLER_CONFIRMED
-        // are refunded in full (the state machine never advances; multi-payment
+        // are refunded whole minus the refund's own network fee (T159a, owner
+        // decision 2026-10-20 — the state machine never advances; multi-payment
         // is otherwise identical to underpayment from the refund-decision view).
         var decision = await _refundDecision.ResolveBuyerRefundAsync(paymentAddress.Network, received, gasFee, cancellationToken);
         if (decision.Outcome == RefundOutcome.Block)
@@ -477,7 +486,7 @@ public sealed class AmountValidationService : IAmountValidationService
             paymentAddress.Network,
             BlockchainTransactionType.EXCESS_REFUND,
             refundTo,
-            received,
+            decision,
             paymentAddress.ExpectedToken);
 
         await _outbox.PublishAsync(
@@ -494,12 +503,14 @@ public sealed class AmountValidationService : IAmountValidationService
                 TxHash: confirmedPayment.TxHash ?? string.Empty,
                 IsMultiPayment: true,
                 OccurredAt: _clock.GetUtcNow().UtcDateTime,
-                RefundAddress: refundTo),
+                RefundAddress: refundTo,
+                RefundAmount: decision.NetRefund,
+                GasFee: decision.GasFee),
             cancellationToken);
 
         _logger.LogInformation(
-            "Multi-payment refund queued — txHash={TxHash} received={Received} state={State} refundId={RefundId} correlationId={CorrelationId}",
-            confirmedPayment.TxHash, received, transaction.Status, refundRow.Id, correlationId);
+            "Multi-payment refund queued — txHash={TxHash} received={Received} net={Net} gasFee={GasFee} state={State} refundId={RefundId} correlationId={CorrelationId}",
+            confirmedPayment.TxHash, received, decision.NetRefund, decision.GasFee, transaction.Status, refundRow.Id, correlationId);
         return AmountValidationOutcome.MultiPaymentRefunded;
     }
 
@@ -627,10 +638,34 @@ public sealed class AmountValidationService : IAmountValidationService
         BlockchainNetwork network,
         BlockchainTransactionType type,
         string refundAddress,
-        decimal amount,
+        RefundDecision decision,
         StablecoinType token,
         string? actualTokenAddress = null)
     {
+        // T159a — owner decision 2026-10-20 (⚠ PARA; 02 §4.7, 05 §3.3, 08 §3.4):
+        // every rejected-payment refund — underpayment, the excess of an
+        // overpayment, a multi-payment transfer, a wrong token, a late payment
+        // — is sent NET of its own network fee, on both networks. The row
+        // carries exactly what the buyer receives (decision.NetRefund =
+        // refunded base − gas) and snapshots the deducted fee on GasFee, the
+        // same shape as BUYER_REFUND (PaymentRefundToBuyerConsumer), so the
+        // 07 §7.5 / admin breakdown reconstructs originalAmount = Amount +
+        // GasFee. The fee is the per-network runtime estimate of this very
+        // transfer (deposit → refund address, the token that will be
+        // broadcast; ChargedGasFeeResolver: TRON T149 / Ethereum T154+T159a,
+        // fallback setting when unavailable). The caller has already applied
+        // the minimum-refund rule to the same decision: a net below
+        // gas × min_refund_threshold_ratio (or negative) never reaches here —
+        // no row, admin alert, the money waits on the deposit. Before T159a
+        // these rows were written gross and no layer deducted anything (the
+        // sidecars broadcast the backend's amount verbatim), so the platform
+        // paid every rejected payment's refund gas.
+        if (decision.Outcome != RefundOutcome.Refund)
+        {
+            throw new InvalidOperationException(
+                $"QueueRefundIntent called with a blocked refund decision ({decision.Reason}).");
+        }
+
         // 06 §3.8 type-dependent CHECK constraints — outbound transfers
         // (BUYER_REFUND / EXCESS_REFUND / WRONG_TOKEN_REFUND / INCORRECT_AMOUNT_REFUND /
         // LATE_PAYMENT_REFUND) MUST carry PaymentAddressId NULL.
@@ -657,9 +692,10 @@ public sealed class AmountValidationService : IAmountValidationService
             TxHash = null,
             FromAddress = string.Empty, // Deposit address set at dispatch (OutgoingTransferDispatchJob).
             ToAddress = refundAddress,
-            Amount = amount,
+            Amount = decision.NetRefund,       // Net: refunded base − gas (T159a).
             Token = token,
             ActualTokenAddress = actualTokenAddress,
+            GasFee = decision.GasFee,          // Snapshot of the deducted estimate (07 §7.5 reconstruction).
             Status = BlockchainTransactionStatus.PENDING,
             BlockNumber = null,
             ConfirmationCount = 0,

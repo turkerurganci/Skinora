@@ -16,8 +16,68 @@ export const USDT_SCALE = 6;
 /** Micro-USDT per cent. */
 const MICRO_PER_CENT = 10n ** BigInt(USDT_SCALE - 2);
 
-/** Gas of a plain ETH transfer to an externally owned account (the fuel send). */
+/**
+ * The intrinsic gas of any transaction (the protocol's base cost) — a plain
+ * ETH send to an account that already exists costs exactly this. T159a: it
+ * is a FLOOR, never the gas of a send: a fuel send is estimated
+ * (`eth_estimateGas`), because a send that creates the account can cost far
+ * more (Sepolia 2026-10-19: 204,600 used, 207,391 estimated). Used only as
+ * the lowest plausible estimate and as the fuel's place in the cap split
+ * when no fuel wallet is provisioned (then no fuel can go out at all).
+ */
 export const NATIVE_TRANSFER_GAS = 21_000n;
+
+/**
+ * T159a — headroom of a token send's gas limit over its `eth_estimateGas`
+ * (T152: +10 %). The recipient's or sender's token state can change between
+ * the estimate and the block; unused gas is not charged. A fuel send carries
+ * none: a plain ETH send's gas depends only on whether the recipient exists,
+ * and that can only become cheaper (an account, once created, stays).
+ */
+export const GAS_LIMIT_HEADROOM_PERCENT = 110n;
+
+/**
+ * T159a (yönetici kararı, ⚠ PARA) — an estimate above this is not believed:
+ * nothing is signed, the send waits and an alarm fires
+ * (`ethereum-gas-estimate-abnormal`). ~5× the largest estimate measured (Sepolia
+ * 2026-10-19: a first USDC receipt 169,926; a fuel to a new account 207,391)
+ * and far below a block (≥ 30 M), so a real transfer never reaches it while a
+ * changed token contract or a broken node answer does.
+ */
+export const MAX_GAS_ESTIMATE = 1_000_000n;
+
+/** The gas limit a token send is signed with: ⌈estimate × 110 %⌉. */
+export function tokenGasLimit(estimate: bigint): bigint {
+  return (estimate * GAS_LIMIT_HEADROOM_PERCENT + 99n) / 100n;
+}
+
+/** The highest gas limit the signer accepts on any transaction (the abnormal-estimate ceiling + headroom). */
+export const MAX_SIGNABLE_GAS_LIMIT = tokenGasLimit(MAX_GAS_ESTIMATE);
+
+/** Whether an `eth_estimateGas` answer is plausible: at least the intrinsic gas, at most {@link MAX_GAS_ESTIMATE}. */
+export function isPlausibleGasEstimate(estimate: bigint): boolean {
+  return estimate >= NATIVE_TRANSFER_GAS && estimate <= MAX_GAS_ESTIMATE;
+}
+
+/**
+ * Floor on the tip — 0.01 gwei (T152): a keyless provider answered
+ * `eth_maxPriorityFeePerGas` with 0, and an empty-block median is 0.
+ */
+export const MIN_PRIORITY_FEE_WEI = 10_000_000n;
+
+/**
+ * The tip a send is signed with, from the blocks' median priority fees
+ * (`eth_feeHistory` at the 50th percentile): the upper middle of the sorted
+ * list (as `RpcClient.medianPriorityFee`), never below
+ * {@link MIN_PRIORITY_FEE_WEI}. T159a: the fee estimate (T154) uses this same
+ * rule, so the fee charged to a buyer is priced at the tip the signer pays.
+ */
+export function signingTip(blockMedians: readonly bigint[]): bigint {
+  if (blockMedians.length === 0) return MIN_PRIORITY_FEE_WEI;
+  const sorted = [...blockMedians].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const median = sorted[Math.floor(sorted.length / 2)];
+  return median > MIN_PRIORITY_FEE_WEI ? median : MIN_PRIORITY_FEE_WEI;
+}
 
 const DECIMAL = /^(\d+)(?:\.(\d+))?$/;
 
@@ -71,9 +131,11 @@ export function formatCents(cents: bigint): string {
 /**
  * The per-transfer fee cap (USD, 08 §3.7.7) as the highest price per gas in
  * wei a transfer of `gasUnits` may pay at the live ETH price, rounded DOWN:
- * `cap ÷ (gas × price)`. Example (T142): 0.50 $ over 67,201 gas at
- * 2,364.48 $ → ~3.15 gwei. Callers without a price must not send (fail-closed,
- * "kur yoksa bekler").
+ * `cap ÷ (gas × price)`. Example (T142's reference measurement, not a gas
+ * the service assumes — T159a): 0.50 $ over 67,201 gas at 2,364.48 $ →
+ * ~3.15 gwei. The sends pass the ESTIMATED gas of the whole flow
+ * (`FeePolicy.capShareWei`). Callers without a price must not send
+ * (fail-closed, "kur yoksa bekler").
  */
 export function feeCapPerGasWei(
   capMicroUsdt: bigint,

@@ -1,6 +1,7 @@
 import { Transaction } from 'ethers';
 import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
+import { NATIVE_TRANSFER_GAS } from '../fee/feeMath.js';
 import { decodeTransferCall } from './erc20.js';
 
 /**
@@ -22,7 +23,9 @@ import { decodeTransferCall } from './erc20.js';
  *     gas limit, and (when the flow has one) a worst-case fee
  *     (`gasLimit × maxFeePerGas`) within the cap.</item>
  *   <item><b>The one exception — the fuel key</b> (T153): a plain ETH send
- *     (no calldata, gas limit 21,000) to an address the service itself derives
+ *     (no calldata; T159a: the gas limit the caller estimated for it — at
+ *     least 21,000, at most the signable ceiling — not a fixed 21,000) to an
+ *     address the service itself derives
  *     from its seed — never a platform wallet — of no more than the token send
  *     it pays for lacks, within a single-send cap (value) and a 24-hour cap
  *     (value + the fuel's own worst-case fee) and (as every
@@ -37,8 +40,13 @@ export interface SignerPolicyConfig {
   readonly paymentToken: string;
   /** Canonical USDC contract — the only extra token, and only for a wrong-token refund. */
   readonly wrongTokenRefundToken: string;
-  /** Upper bound on a token transfer's gas limit (T142: sweep 46,201, payout 64,031 estimated). */
-  readonly maxTokenGasLimit: bigint;
+  /**
+   * Upper bound on any transaction's gas limit (T159a: `MAX_SIGNABLE_GAS_LIMIT`
+   * — the abnormal-estimate ceiling of 1,000,000 + the 10 % headroom; was
+   * 150,000 for token sends, which a first USDC receipt on Sepolia — 169,926
+   * estimated — already exceeded).
+   */
+  readonly maxGasLimit: bigint;
 }
 
 export interface TokenTransferIntent {
@@ -64,7 +72,7 @@ export interface FuelIntent {
   readonly maxDailyWei: bigint | null;
   /**
    * ETH the fuel key already signed away in the last 24 h (journal): each
-   * fuel's value plus its own worst-case fee (`21,000 × maxFeePerGas`) — the
+   * fuel's value plus its own worst-case fee (`gasLimit × maxFeePerGas`) — the
    * daily cap counts both (yönetici kararı, T153 doğrulaması bulgu a). This
    * transaction's value and worst-case fee are added on top here.
    */
@@ -81,12 +89,19 @@ export interface FuelIntent {
   readonly maxForSendWei: bigint;
   /** Platform wallets (hot, cold, fuel) — never a fuel destination. */
   readonly platformAddresses: readonly string[];
-  /** The fuel send's share of the flow's fee cap, wei: `21,000 × maxFeePerGas` may not exceed it. */
+  /** The fuel send's share of the flow's fee cap, wei: `gasLimit × maxFeePerGas` may not exceed it. */
   readonly feeCapWei: bigint;
+  /**
+   * T159a — the gas limit the caller decided for this fuel: its
+   * `eth_estimateGas` to this deposit (the recipient's account state
+   * included), or the recorded one on a fee bump. The transaction must carry
+   * exactly it.
+   */
+  readonly gasLimit: bigint;
 }
 
-/** Gas limit of a plain ETH send. */
-export const NATIVE_TRANSFER_GAS = 21_000n;
+/** The intrinsic gas of a plain ETH send — the lowest gas limit a fuel may carry (T159a: a floor, not the limit). */
+export { NATIVE_TRANSFER_GAS };
 
 function refuse(rule: string, detail: string): never {
   throw new SidecarError(
@@ -154,8 +169,8 @@ export function assertSignableTokenTransfer(
     refuse('amount', `calldata moves ${call.amountUnits}, the request names ${intent.amountUnits}`);
   }
   if (call.amountUnits <= 0n) refuse('amount', 'amount must be positive');
-  if (tx.gasLimit > config.maxTokenGasLimit) {
-    refuse('gasLimit', `gas limit ${tx.gasLimit} is above ${config.maxTokenGasLimit}`);
+  if (tx.gasLimit > config.maxGasLimit) {
+    refuse('gasLimit', `gas limit ${tx.gasLimit} is above ${config.maxGasLimit}`);
   }
   if (intent.feeCapWei !== undefined && tx.gasLimit * effectiveFeeCeiling(tx) > intent.feeCapWei) {
     refuse(
@@ -181,8 +196,18 @@ export function assertSignableFuel(
     refuse('recipient', `${to} is a platform wallet, not a deposit`);
   }
   if (tx.data !== '0x') refuse('calldata', 'a fuel send carries no calldata');
-  if (tx.gasLimit !== NATIVE_TRANSFER_GAS)
-    refuse('gasLimit', 'a fuel send uses exactly 21,000 gas');
+  if (tx.gasLimit !== intent.gasLimit) {
+    refuse(
+      'gasLimit',
+      `gas limit ${tx.gasLimit} is not the ${intent.gasLimit} decided for this fuel`,
+    );
+  }
+  if (tx.gasLimit < NATIVE_TRANSFER_GAS || tx.gasLimit > config.maxGasLimit) {
+    refuse(
+      'gasLimit',
+      `a fuel send's gas limit must be within ${NATIVE_TRANSFER_GAS}…${config.maxGasLimit}, not ${tx.gasLimit}`,
+    );
+  }
   if (tx.value <= 0n || tx.value !== intent.amountWei) {
     refuse('value', 'fuel value must be positive and the amount asked for');
   }

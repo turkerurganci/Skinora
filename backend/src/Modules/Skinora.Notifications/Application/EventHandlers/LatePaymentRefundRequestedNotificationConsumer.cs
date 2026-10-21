@@ -46,10 +46,13 @@ public sealed class LatePaymentRefundRequestedNotificationConsumer
             TransactionId = domainEvent.TransactionId,
             Parameters = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                // LATE_PAYMENT_REFUNDED_Body template references {Amount}; the
-                // refund row carries the full received amount (gas deducted at
-                // broadcast, 02 §4.6).
-                ["Amount"] = MoneyFormat.Display(domainEvent.ReceivedAmount),
+                // LATE_PAYMENT_REFUNDED_Body template references {Amount}: what
+                // the buyer receives. T159a — the refund row carries the received
+                // amount minus the refund's own network fee (owner decision
+                // 2026-10-20, 02 §4.7); a pre-T159a event has no RefundAmount and
+                // its refund went gross.
+                ["Amount"] = MoneyFormat.Display(domainEvent.RefundAmount ?? domainEvent.ReceivedAmount),
+                ["GasFee"] = MoneyFormat.Display(domainEvent.GasFee ?? 0m),
                 ["Stablecoin"] = domainEvent.Stablecoin.ToString(),
                 ["SourceAddress"] = domainEvent.SourceAddress,
                 // K9 (T147) — where the refund is sent; a pre-T147 event has none and

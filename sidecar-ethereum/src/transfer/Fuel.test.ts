@@ -10,17 +10,19 @@ import type { EthFeeEstimationService } from '../fee/FeeEstimationService.js';
 import { canonicalAddress } from '../address/canonicalAddress.js';
 import { MAINNET_TOKEN_CONTRACTS } from '../network.js';
 import { FuelLedger } from '../reconcile/FuelLedger.js';
-import { FakeSendChain } from '../testing/FakeEthereumChain.js';
+import { RpcError } from '../rpc/RpcClient.js';
+import {
+  FakeSendChain,
+  MAINNET_GAS_TARIFF,
+  SEPOLIA_T159_GAS_TARIFF,
+} from '../testing/FakeEthereumChain.js';
+import { gasEstimateAbnormalTotal } from '../metrics.js';
 import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 import { seedFuelLedger } from '../wiring.js';
 import { decodeTransferCall } from './erc20.js';
 import { FEE_CAP_WAIT_REASONS, FeeWaitTracker, GAS_WAIT_REASONS } from './FeeWaitTracker.js';
-import {
-  CAP_REFERENCE_GAS,
-  fuelCapWei,
-  capWeiPerTransaction,
-  feeCeilingPerGas,
-} from './FeePolicy.js';
+import { capShareWei, feeCeilingPerGas } from './FeePolicy.js';
+import { MAX_SIGNABLE_GAS_LIMIT } from '../fee/feeMath.js';
 import * as signerPolicy from './SignerPolicy.js';
 import type { FuelIntent } from './SignerPolicy.js';
 import { TransferGuard } from './TransferGuard.js';
@@ -123,7 +125,7 @@ function build(fuel: Partial<FuelDeps> | null = {}) {
       chainId: 11_155_111n,
       paymentToken: USDT,
       wrongTokenRefundToken: USDC,
-      maxTokenGasLimit: 150_000n,
+      maxGasLimit: MAX_SIGNABLE_GAS_LIMIT,
     },
     hotWalletKey: HOT.privateKey,
     hotWalletAddress: canonicalAddress(HOT.address),
@@ -196,6 +198,11 @@ const QUOTED_MAX_FEE = 2n * 1_000_000_000n + 50_000_000n; // 2 × base + tip
 const ONE_FUEL = SWEEP_GAS_LIMIT * QUOTED_MAX_FEE;
 const ONE_FUEL_FEE = 21_000n * QUOTED_MAX_FEE;
 const ONE_FUEL_OUTFLOW = ONE_FUEL + ONE_FUEL_FEE;
+// T159a — the cap is shared by ESTIMATED gas: on the mainnet tariff the sweep's
+// limit 50,822 and the fuel's estimate 21,000 (one price per gas for both).
+const SWEEP_FLOW_GAS = SWEEP_GAS_LIMIT + 21_000n;
+const TOKEN_SHARE = capShareWei(CAP_MICROS, ETH_USD, SWEEP_GAS_LIMIT, SWEEP_FLOW_GAS);
+const FUEL_SHARE = capShareWei(CAP_MICROS, ETH_USD, 21_000n, SWEEP_FLOW_GAS);
 
 describe('fuel before a deposit send — exactly what it lacks, to the deposit itself', () => {
   it('an empty deposit: the sweep waits (FUEL_PENDING) and the fuel wallet signs exactly gasLimit × maxFeePerGas to it', async () => {
@@ -431,29 +438,32 @@ describe('the fee cap stops the fuel too (08 §3.7.5, §3.7.7)', () => {
     },
   );
 
-  it('the fuel send’s own share of the cap is checked too', async () => {
-    // A small token send fits its share at 4 gwei; the 21,000-gas fuel does not fit its own.
-    chain.estimate = 20_000n;
-    chain.baseFee = 4_000_000_000n;
-    const { service } = build();
-    expect(await reason(service.sweep(sweep()))).toBe('FEE_ABOVE_CAP');
+  it('T159a: token and fuel are held to one price per gas — cap ÷ (token + fuel estimated gas); 1 wei above it nothing is sent', async () => {
+    const ceiling = feeCeilingPerGas(FUEL_SHARE, 21_000n);
+    expect(feeCeilingPerGas(TOKEN_SHARE, SWEEP_GAS_LIMIT)).toBe(ceiling);
+    chain.baseFee = ceiling - chain.tip + 1n; // base + tip one wei above the flow's ceiling
+    const over = build();
+    expect(await reason(over.service.sweep(sweep()))).toBe('FEE_ABOVE_CAP');
     expect(chain.sent).toHaveLength(0);
+
+    chain.baseFee = ceiling - chain.tip; // exactly at it: the fuel goes, at the ceiling
+    const at = build();
+    expect(await reason(at.service.sweep(sweep(2)))).toBe('FUEL_PENDING');
+    expect(fuelTxs()[0].maxFeePerGas).toBe(ceiling);
   });
 
   it.each([
-    // Token share binds (2.86 gwei), the fuel's own share does not (3.15): fuel at 2 × base + tip.
+    // Under the flow's ceiling (~2.94 gwei): fuel at 2 × base + tip.
     [1_420_000_000n, 2n * 1_420_000_000n + 50_000_000n],
-    // The fuel's own share binds: ⌊fuel cap ÷ 21,000⌋.
-    [1_600_000_000n, fuelCapWei(CAP_MICROS, 'SWEEP', ETH_USD) / 21_000n],
+    // 2 × base + tip above it: ⌊fuel share ÷ the fuel's 21,000 estimated gas⌋.
+    [1_600_000_000n, FUEL_SHARE / 21_000n],
   ])('the fuel send is priced on its own share of the cap (base %s)', async (base, expected) => {
     chain.baseFee = base;
     const { service } = build();
     expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
     const [fuel] = fuelTxs();
     expect(fuel.maxFeePerGas).toBe(expected);
-    expect(21_000n * fuel.maxFeePerGas!).toBeLessThanOrEqual(
-      fuelCapWei(CAP_MICROS, 'SWEEP', ETH_USD),
-    );
+    expect(21_000n * fuel.maxFeePerGas!).toBeLessThanOrEqual(FUEL_SHARE);
   });
 
   it('fuel and token send together never cost more than the one 0.50 $ cap', async () => {
@@ -466,11 +476,9 @@ describe('the fee cap stops the fuel too (08 §3.7.5, §3.7.7)', () => {
     const wholeCap = (CAP_MICROS * ONE_ETH) / ETH_USD; // 0.50 $ in wei
     // ETH leaving the fuel wallet for this sweep, at worst: the fuel + the fuel send's fee.
     expect(fuelTx.value + 21_000n * fuelTx.maxFeePerGas!).toBeLessThanOrEqual(wholeCap);
-    expect(BigInt(fuel.feeCapWei!)).toBe(fuelCapWei(CAP_MICROS, 'SWEEP', ETH_USD));
-    expect(
-      fuelCapWei(CAP_MICROS, 'SWEEP', ETH_USD) + capWeiPerTransaction(CAP_MICROS, 'SWEEP', ETH_USD),
-    ).toBeLessThanOrEqual(wholeCap);
-    expect(CAP_REFERENCE_GAS.SWEEP).toBe(67_201n);
+    expect(BigInt(fuel.feeCapWei!)).toBe(FUEL_SHARE);
+    expect(BigInt(journal.get(`transfer:${ID(1)}`)!.feeCapWei!)).toBe(TOKEN_SHARE);
+    expect(FUEL_SHARE + TOKEN_SHARE).toBeLessThanOrEqual(wholeCap);
   });
 });
 
@@ -624,7 +632,7 @@ describe('keeper and reconciliation', () => {
 
   it('a fee bump is not counted twice against the 24-hour fuel cap', async () => {
     // Room for exactly this fuel at its highest possible fee (its share of the cap).
-    const room = ONE_FUEL + fuelCapWei(CAP_MICROS, 'SWEEP', ETH_USD);
+    const room = ONE_FUEL + FUEL_SHARE;
     const { service, journal } = build({ maxDailyWei: room });
     await reason(service.sweep(sweep()));
     chain.baseFee = 2_500_000_000n;
@@ -766,12 +774,9 @@ describe('bulgu b — the signer is given what the send lacks, not its whole bud
 
 describe('bulgu c — money test gaps', () => {
   it('M35: when the token share of the cap binds, the fuel is the capped budget, not the quoted one', async () => {
-    chain.baseFee = 1_420_000_000n; // quoted 2.89 gwei; the token share allows ~2.86
-    const ceiling = feeCeilingPerGas(
-      capWeiPerTransaction(CAP_MICROS, 'SWEEP', ETH_USD),
-      SWEEP_GAS_LIMIT,
-    );
-    const quoted = 2n * 1_420_000_000n + 50_000_000n;
+    chain.baseFee = 1_460_000_000n; // quoted 2.97 gwei; the token share allows ~2.94
+    const ceiling = feeCeilingPerGas(TOKEN_SHARE, SWEEP_GAS_LIMIT);
+    const quoted = 2n * 1_460_000_000n + 50_000_000n;
     expect(ceiling).toBeLessThan(quoted);
     const { service } = build();
     expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
@@ -819,8 +824,24 @@ describe('bulgu c — money test gaps', () => {
         'FEE_ABOVE_CAP',
         () => ({}),
         () => {
-          chain.estimate = 20_000n; // the fuel's own share binds, the token's does not
-          chain.baseFee = 4_000_000_000n;
+          chain.baseFee = 4_000_000_000n; // base + tip above cap ÷ (token + fuel gas)
+        },
+      ],
+      // T159a — the fuel's gas cannot be estimated / is implausible: a wait too.
+      [
+        'GAS_ESTIMATE_UNAVAILABLE',
+        () => ({}),
+        () =>
+          chain.ethEstimateFailures.push(new RpcError('header not found', 'rpc', 'fake', -32000)),
+      ],
+      [
+        'GAS_ESTIMATE_ABNORMAL',
+        () => ({}),
+        () => {
+          chain.tariff = {
+            ...chain.tariff,
+            ethToNewAccount: { estimate: 1_000_001n, used: 1_000_001n },
+          };
         },
       ],
     ])('%s', async (expected, fuel, arrange) => {
@@ -904,3 +925,232 @@ describe('bulgu e — an id that holds only its fuel is taken', () => {
     expect(await reason(service.sweep(sweep(1)))).toBe('FUEL_PENDING');
   });
 });
+
+/*
+ * T159a (yönetici kararı, ⚠ PARA) — no gas is assumed. The T159 rehearsal
+ * measured Sepolia's tariff: ETH to a new account 204,600 gas (207,391
+ * estimated), a first USDT receipt ~153,000. The fixed 21,000-gas fuel reverted
+ * on it (status 0, fee burnt) and every sweep / refund before the sweep stopped
+ * at FUEL_REQUIRED. Here the same tariff runs on the fake chain: the fuel is
+ * estimated, lands, and the send completes.
+ */
+describe('T159a — Sepolia tariff: the fuel is estimated, lands, and the send completes', () => {
+  const SEPOLIA_FUEL_GAS = SEPOLIA_T159_GAS_TARIFF.ethToNewAccount.estimate; // 207,391
+  const FIRST_RECEIPT_LIMIT = 168_300n; // 153,000 × 1.1
+
+  beforeEach(() => {
+    chain.tariff = SEPOLIA_T159_GAS_TARIFF;
+    // A quiet day: base + tip 0.15 gwei, so fuel + send fit the 0.50 $ cap.
+    chain.baseFee = 100_000_000n;
+  });
+
+  it('sweep from a fresh deposit: the fuel carries its estimated 207,391 gas, does not revert, and the sweep lands', async () => {
+    const { service, journal } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    const [fuel] = fuelTxs();
+    expect(fuel.gasLimit).toBe(SEPOLIA_FUEL_GAS);
+    expect(journal.get(`fuel:${ID(1)}`)!.gasLimit).toBe(SEPOLIA_FUEL_GAS.toString());
+
+    chain.mine();
+    const receipt = chain.receipts.get(fuel.hash!.toLowerCase())!;
+    expect(receipt.status).toBe(1); // the T159 fuel reverted here
+    expect(receipt.gasUsed).toBe(204_600n);
+    expect(chain.ethOf(DEPOSIT.address)).toBe(fuel.value);
+
+    const result = await service.sweep(sweep());
+    expect(result.replayed).toBe(false);
+    chain.mine();
+    expect(chain.token(USDT, DEPOSIT.address)).toBe(0n);
+    expect(chain.token(USDT, HOT.address)).toBe(1_000_000_000_000n + 50_000_000n);
+    expect(distinctFuelSignatures()).toBe(1);
+  });
+
+  it('the fuel probe is a plain ETH send of 1 wei from the fuel wallet to the deposit, at the priced block', async () => {
+    const seen: Array<{ from: string; to: string; data: string; value?: bigint }> = [];
+    const estimate = chain.rpc.estimateGas;
+    chain.rpc.estimateGas = async (tx, block) => {
+      seen.push(tx);
+      expect(block).toBe(chain.head);
+      return estimate(tx, block);
+    };
+    const { service } = build();
+    await reason(service.sweep(sweep()));
+    const probe = seen.find((tx) => tx.data === '0x')!;
+    expect(canonicalAddress(probe.from)).toBe(canonicalAddress(FUEL.address));
+    expect(canonicalAddress(probe.to)).toBe(canonicalAddress(DEPOSIT.address));
+    expect(probe.value).toBe(1n);
+  });
+
+  it('refund before the sweep to a buyer who never held USDT: a 153,000-gas estimate (above the old 150,000 bound) and the 207,391-gas fuel — the refund lands', async () => {
+    const { service, journal } = build();
+    expect(await reason(service.refund(refund()))).toBe('FUEL_PENDING');
+    const [fuel] = fuelTxs();
+    expect(fuel.gasLimit).toBe(SEPOLIA_FUEL_GAS);
+    expect(fuel.value).toBe(FIRST_RECEIPT_LIMIT * (2n * chain.baseFee + chain.tip));
+    chain.mine();
+    await service.refund(refund());
+    chain.mine();
+    expect(chain.token(USDT, BUYER)).toBe(10_000_000n);
+    const record = journal.get(`transfer:${ID(2)}`)!;
+    expect(record.gasLimit).toBe(FIRST_RECEIPT_LIMIT.toString());
+    expect(chain.receipts.get(record.attempts[0].hash)!.status).toBe(1);
+  });
+
+  it('a wrong-token (USDC) refund to a first-time USDC holder completes the same way', async () => {
+    chain.setToken(USDC, DEPOSIT.address, 10_200_000n);
+    const { service } = build();
+    const request = refund(3, { token: 'USDC', amount: '10.2', refundType: 'WRONG_TOKEN_REFUND' });
+    expect(await reason(service.refund(request))).toBe('FUEL_PENDING');
+    chain.mine();
+    await service.refund(request);
+    chain.mine();
+    expect(chain.token(USDC, BUYER)).toBe(10_200_000n);
+  });
+
+  it('fuel + send never cost more than the one 0.50 $ cap: shared by 207,391 + the token’s estimated gas', async () => {
+    const { service, journal } = build();
+    await reason(service.refund(refund()));
+    chain.mine();
+    await service.refund(refund());
+    const fuel = journal.get(`fuel:${ID(2)}`)!;
+    const token = journal.get(`transfer:${ID(2)}`)!;
+    const flow = SEPOLIA_FUEL_GAS + FIRST_RECEIPT_LIMIT;
+    expect(BigInt(fuel.feeCapWei!)).toBe(capShareWei(CAP_MICROS, ETH_USD, SEPOLIA_FUEL_GAS, flow));
+    expect(BigInt(token.feeCapWei!)).toBe(
+      capShareWei(CAP_MICROS, ETH_USD, FIRST_RECEIPT_LIMIT, flow),
+    );
+    const wholeCap = (CAP_MICROS * ONE_ETH) / ETH_USD;
+    const fuelWorst = BigInt(fuel.gasLimit) * BigInt(fuel.attempts[0].maxFeePerGas);
+    const tokenWorst = BigInt(token.gasLimit) * BigInt(token.attempts[0].maxFeePerGas);
+    expect(fuelWorst + tokenWorst).toBeLessThanOrEqual(wholeCap);
+    // The daily fuel cap counts the fuel's ESTIMATED gas fee, not 21,000 × fee.
+    expect(service.fuelSpentLast24hWei()).toBe(BigInt(fuel.amountUnits) + fuelWorst);
+  });
+
+  it('at Sepolia’s real price (base 16 wei + ~1 gwei tip) the 0.50 $ cap makes the sweep wait — nothing signed, nothing burnt; a 1.00 $ cap lets it through', async () => {
+    chain.baseFee = 16n;
+    chain.tip = 999_999_984n;
+    const { service } = build();
+    // (50,822 + 207,391) gas × 1 gwei ≈ 0.61 $ at 2,364.48 $/ETH > 0.50 $.
+    expect(await reason(service.sweep(sweep()))).toBe('FEE_ABOVE_CAP');
+    expect(chain.sent).toHaveLength(0);
+    expect(await reason(service.sweep(sweep(1, { feeCapUsd: '1.00' })))).toBe('FUEL_PENDING');
+    chain.mine();
+    await service.sweep(sweep(1, { feeCapUsd: '1.00' }));
+    chain.mine();
+    expect(chain.token(USDT, DEPOSIT.address)).toBe(0n);
+  });
+
+  it('a fresh deposit gets its fuel even though it costs more than it delivers (no ETH of its own to sign with)', async () => {
+    const { service } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    const [fuel] = fuelTxs();
+    expect(fuel.value).toBeLessThan(fuel.gasLimit * fuel.maxFeePerGas!);
+  });
+
+  it('a deposit that already is an account (it holds ETH) is fuelled at 21,000 — and the no-fuel-below-its-fee rule still holds', async () => {
+    const needs = SWEEP_GAS_LIMIT * (2n * chain.baseFee + chain.tip);
+    chain.setEth(DEPOSIT.address, needs / 3n);
+    const { service } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    expect(fuelTxs()[0].gasLimit).toBe(21_000n);
+
+    // Lacking 1 wei: less than a fuel's own fee — no fuel, the deposit signs on its own.
+    chain.setEth(DEPOSIT_B.address, needs - 1n);
+    await service.sweep(sweep(2, { depositIndex: 6, depositAddress: DEPOSIT_B.address }));
+    expect(fuelTxs()).toHaveLength(1);
+    expect(tokenTxs()).toHaveLength(1);
+  });
+
+  it('a fuel stuck in the mempool is bumped at its recorded 207,391 gas', async () => {
+    const { service, journal } = build();
+    await reason(service.sweep(sweep()));
+    chain.baseFee = 260_000_000n; // the fuel's 0.25 gwei no longer gets in
+    chain.mine();
+    clock += 300_000;
+    await service.keepAll();
+    const record = journal.get(`fuel:${ID(1)}`)!;
+    expect(record.attempts).toHaveLength(2);
+    expect(Transaction.from(record.attempts[1].raw).gasLimit).toBe(SEPOLIA_FUEL_GAS);
+  });
+
+  it('mainnet tariff: the same sweep keeps a 21,000-gas fuel (behaviour unchanged)', async () => {
+    chain.tariff = MAINNET_GAS_TARIFF;
+    const { service } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+    expect(fuelTxs()[0].gasLimit).toBe(21_000n);
+    chain.mine();
+    await service.sweep(sweep());
+    chain.mine();
+    expect(chain.token(USDT, DEPOSIT.address)).toBe(0n);
+  });
+});
+
+describe('T159a — the gas estimate fails or is implausible: the send waits, nothing is signed', () => {
+  it('the fuel’s estimate fails (transient RPC): GAS_ESTIMATE_UNAVAILABLE, no fuel; the wait runs on the fee-cap clock; the retry fuels', async () => {
+    chain.ethEstimateFailures.push(new RpcError('request beyond head', 'rpc', 'fake', -32000));
+    const { service, feeWaits } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('GAS_ESTIMATE_UNAVAILABLE');
+    expect(chain.sent).toHaveLength(0);
+    clock += 60_000;
+    chain.ethEstimateFailures.push(new RpcError('request beyond head', 'rpc', 'fake', -32000));
+    expect(await reason(service.sweep(sweep()))).toBe('GAS_ESTIMATE_UNAVAILABLE');
+    // The 3-hour wait alarm counts it (fee_cap kind), not the gas-shortage kind.
+    expect(feeWaits.longestWaitSeconds(FEE_CAP_WAIT_REASONS)).toBe(60);
+    expect(feeWaits.longestWaitSeconds(GAS_WAIT_REASONS)).toBe(0);
+    expect(await reason(service.sweep(sweep()))).toBe('FUEL_PENDING');
+  });
+
+  it('the token send’s estimate fails at the transport: GAS_ESTIMATE_UNAVAILABLE, nothing signed', async () => {
+    chain.simulationFailures.push(new RpcError('socket hang up', 'transport', 'fake'));
+    const { service } = build();
+    expect(await reason(service.sweep(sweep()))).toBe('GAS_ESTIMATE_UNAVAILABLE');
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it.each<[string, () => void]>([
+    [
+      'token above 1,000,000',
+      () => {
+        chain.estimate = 1_000_001n;
+      },
+    ],
+    [
+      'token below 21,000',
+      () => {
+        chain.estimate = 20_999n;
+      },
+    ],
+    [
+      'fuel above 1,000,000',
+      () => {
+        chain.tariff = {
+          ...SEPOLIA_T159_GAS_TARIFF,
+          ethToNewAccount: { estimate: 1_000_001n, used: 1_000_001n },
+        };
+      },
+    ],
+  ])(
+    '%s: GAS_ESTIMATE_ABNORMAL, nothing signed, the alarm counter moves',
+    async (_label, arrange) => {
+      arrange();
+      const before = await abnormalCount();
+      const { service } = build();
+      expect(await reason(service.sweep(sweep()))).toBe('GAS_ESTIMATE_ABNORMAL');
+      expect(chain.sent).toHaveLength(0);
+      expect(await abnormalCount()).toBe(before + 1);
+    },
+  );
+
+  it('exactly 1,000,000 is believed (the ceiling is inclusive)', async () => {
+    chain.estimate = 1_000_000n;
+    const { service } = build({ maxSingleWei: ONE_ETH, maxDailyWei: ONE_ETH });
+    expect(await reason(service.sweep(sweep(1, { feeCapUsd: '10.00' })))).toBe('FUEL_PENDING');
+    expect(fuelIntents()[0].maxForSendWei).toBe(1_100_000n * QUOTED_MAX_FEE);
+  });
+});
+
+async function abnormalCount(): Promise<number> {
+  const metric = await gasEstimateAbnormalTotal.get();
+  return metric.values.reduce((sum, v) => sum + v.value, 0);
+}
