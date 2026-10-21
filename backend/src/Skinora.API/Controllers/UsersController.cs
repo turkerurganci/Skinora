@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Skinora.API.Filters;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
@@ -454,8 +455,16 @@ public sealed class UsersController : ControllerBase
     }
 
     /// <summary>U13 — <c>POST /users/me/deactivate</c> (07 §5.17, 02 §19).</summary>
+    /// <remarks>
+    /// T168 — exempt from the ToS gate (07 §4.4): an account that declines the
+    /// terms must still be able to close or delete itself (KVKK erasure right;
+    /// DEFERRED_BACKLOG <c>TosNotAcceptedAccountCannotSelfDelete</c>). Only the
+    /// two lifecycle endpoints are exempt — every other <c>/users/me</c> route
+    /// stays gated.
+    /// </remarks>
     [HttpPost("me/deactivate")]
     [Authorize(Policy = AuthPolicies.Authenticated)]
+    [SkipTosAcceptanceGate]
     [RateLimit("user-write")]
     public async Task<IActionResult> Deactivate(CancellationToken cancellationToken)
     {
@@ -486,8 +495,10 @@ public sealed class UsersController : ControllerBase
     }
 
     /// <summary>U14 — <c>DELETE /users/me</c> (07 §5.17, 02 §19, 06 §6.2).</summary>
+    /// <remarks>T168 — exempt from the ToS gate, same reason as <see cref="Deactivate"/>.</remarks>
     [HttpDelete("me")]
     [Authorize(Policy = AuthPolicies.Authenticated)]
+    [SkipTosAcceptanceGate]
     [RateLimit("user-write")]
     public async Task<IActionResult> DeleteMe(
         [FromBody] DeleteAccountRequest? request,

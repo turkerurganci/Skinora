@@ -429,6 +429,116 @@ public class AccountLifecycleEndpointTests
 
     // ---------- helpers ----------
 
+    // ---------- T168 — ToS gate exemption (KVKK erasure right) ----------
+
+    /// <summary>
+    /// An account that has not accepted the ToS + 18+ yet (or has only one of
+    /// the two stamps) is rejected by <c>TosAcceptanceGateFilter</c> everywhere
+    /// except the session surface and — since T168 — the two lifecycle
+    /// endpoints: declining the terms must not take away the right to close or
+    /// delete the account (DEFERRED_BACKLOG
+    /// <c>TosNotAcceptedAccountCannotSelfDelete</c>, T166 validation B4).
+    /// </summary>
+    public static TheoryData<bool, bool> NotAcceptedStamps => new()
+    {
+        { false, false }, // never accepted
+        { true, false },  // ToS stamped, 18+ declaration missing (pre-T30)
+    };
+
+    [Theory]
+    [MemberData(nameof(NotAcceptedStamps))]
+    public async Task Deactivate_TosNotAccepted_Succeeds(bool tosStamped, bool ageStamped)
+    {
+        var user = await _factory.CreateUserAsync(u => ClearAcceptance(u, tosStamped, ageStamped));
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.PostAsync("/api/v1/users/me/deactivate", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var reloaded = await db.Set<User>().AsNoTracking().FirstAsync(u => u.Id == user.Id);
+        Assert.True(reloaded.IsDeactivated);
+    }
+
+    [Theory]
+    [MemberData(nameof(NotAcceptedStamps))]
+    public async Task Delete_TosNotAccepted_Succeeds_AndAnonymizes(bool tosStamped, bool ageStamped)
+    {
+        var originalSteamId = $"{SteamId}9{(tosStamped ? 1 : 0)}";
+        var user = await _factory.CreateUserAsync(u =>
+        {
+            u.SteamId = originalSteamId;
+            u.SteamDisplayName = "Declined Terms";
+            ClearAcceptance(u, tosStamped, ageStamped);
+        });
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.SendAsync(BuildDeleteRequest("SİL"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var reloaded = await db.Set<User>().IgnoreQueryFilters().AsNoTracking()
+            .FirstAsync(u => u.Id == user.Id);
+        Assert.True(reloaded.IsDeleted);
+        Assert.NotEqual(originalSteamId, reloaded.SteamId);
+        Assert.StartsWith("ANON_", reloaded.SteamId);
+    }
+
+    [Fact]
+    public async Task Delete_TosNotAccepted_StillRequiresConfirmationAndNoActiveTransactions()
+    {
+        // The exemption skips only the consent gate — the endpoint's own rules
+        // (exact "SİL", no active transaction — 02 §19) still apply.
+        var user = await _factory.CreateUserAsync(u => ClearAcceptance(u, false, false));
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var badPhrase = await client.SendAsync(BuildDeleteRequest("DELETE"));
+        Assert.Equal(HttpStatusCode.BadRequest, badPhrase.StatusCode);
+
+        await _factory.CreateTransactionAsync(t =>
+        {
+            t.SellerId = user.Id;
+            t.Status = TransactionStatus.ACCEPTED;
+        });
+        var withActive = await client.SendAsync(BuildDeleteRequest("SİL"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, withActive.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("GET", "/api/v1/users/me")]
+    [InlineData("GET", "/api/v1/users/me/settings")]
+    [InlineData("GET", "/api/v1/users/me/stats")]
+    [InlineData("PUT", "/api/v1/users/me/settings/language")]
+    public async Task TosNotAccepted_OtherUsersMeEndpoints_StayGated(string method, string path)
+    {
+        // "Do not open other endpoints": the exemption is per action, not per
+        // controller.
+        var user = await _factory.CreateUserAsync(u => ClearAcceptance(u, false, false));
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        if (method != "GET") request.Content = JsonContent.Create(new { language = "tr" });
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("TOS_NOT_ACCEPTED", body.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    private static void ClearAcceptance(User user, bool tosStamped, bool ageStamped)
+    {
+        if (!tosStamped)
+        {
+            user.TosAcceptedAt = null;
+            user.TosAcceptedVersion = null;
+        }
+        if (!ageStamped) user.AgeConfirmedAt = null;
+    }
+
     private HttpRequestMessage BuildDeleteRequest(string? confirmation)
     {
         var request = new HttpRequestMessage(HttpMethod.Delete, "/api/v1/users/me")
