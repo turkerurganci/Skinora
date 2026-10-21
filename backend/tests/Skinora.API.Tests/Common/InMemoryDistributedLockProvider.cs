@@ -16,18 +16,29 @@ namespace Skinora.API.Tests.Common;
 /// exercised end-to-end without a database.
 /// </para>
 /// <para>
-/// Single-process semantics: identical lock names share a semaphore, so a
-/// second concurrent acquire from the same process returns null when called
-/// with <see cref="TimeSpan.Zero"/> — exactly the contract OutboxDispatcher
-/// relies on.
+/// Per-instance semantics: identical lock names share a semaphore <b>within
+/// one provider instance</b>, so a second concurrent acquire through the same
+/// provider returns null when called with <see cref="TimeSpan.Zero"/> —
+/// exactly the contract OutboxDispatcher relies on. Register the provider as a
+/// singleton so every consumer in one test's container sees the same locks.
+/// </para>
+/// <para>
+/// The lock table is deliberately NOT static. The real lock lives in the SQL
+/// Server database, and every test has its own database, so a test's locks
+/// must not be visible to another test. A process-wide table let one test
+/// class's OutboxDispatcher (e.g. <c>NetworkQueueIsolationTests</c>) hold
+/// "outbox-dispatcher" while <c>OutboxTests</c> — a different xUnit
+/// collection, running in parallel — tried to take it: the second dispatcher
+/// skipped its batch as if another instance owned the lock, and its handler
+/// assertions saw nothing (main CI run 39522975375).
 /// </para>
 /// </remarks>
 public class InMemoryDistributedLockProvider : IDistributedLockProvider
 {
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> Semaphores = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _semaphores = new();
 
     public IDistributedLock CreateLock(string name)
-        => new InMemoryDistributedLock(name, Semaphores.GetOrAdd(name, _ => new SemaphoreSlim(1, 1)));
+        => new InMemoryDistributedLock(name, _semaphores.GetOrAdd(name, _ => new SemaphoreSlim(1, 1)));
 
     private sealed class InMemoryDistributedLock : IDistributedLock
     {
