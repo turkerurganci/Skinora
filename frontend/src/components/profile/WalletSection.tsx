@@ -19,6 +19,7 @@ import { ALL_NETWORKS, networkLabel } from "@/lib/utils/blockchain";
 import { BlockchainNetwork } from "@/types/enums";
 import { maskWalletAddress } from "./helpers";
 import { tDynamic } from "@/lib/i18n/dynamicKey";
+import { PayoutSourceNotice } from "@/components/masak";
 
 export type WalletRole = "seller" | "refund";
 
@@ -78,6 +79,13 @@ export function WalletSection({
       <h2 className="text-lg font-semibold text-gray-900">{t(titleKey)}</h2>
       <p className="mt-1 text-sm text-gray-600">{t(noteKey)}</p>
       <p className="mt-1 text-xs text-gray-500">{t("perNetworkNote")}</p>
+      {/* T167 — where the seller's payouts come from, to declare to an exchange
+          before the first one lands (Tedbirler Yönetmeliği m. 24/A-6). */}
+      {role === "seller" && (
+        <div className="mt-3">
+          <PayoutSourceNotice />
+        </div>
+      )}
 
       <ul className="mt-4 divide-y divide-gray-100">
         {ALL_NETWORKS.map((network) => (

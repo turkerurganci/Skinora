@@ -904,6 +904,10 @@
           "heading": "İşlem uyuşmazlıkları",
           "body": "Bir takas beklendiği gibi tamamlanmazsa alıcı, işlem sayfasından ödeme, teslimat veya yanlış eşya alma gibi sorunlar için bir uyuşmazlık açabilir. Önce otomatik kontroller çalışır; çözülemeyen vakalar manuel inceleme için platform yöneticilerine yükseltilir. Bir uyuşmazlık, uygun durumlarda emanetteki fonların alıcının cüzdanına iadesi dâhil, alıcı veya satıcı lehine çözülebilir."
         },
+        "masak": {
+          "heading": "Türkiye'deki borsalar ve MASAK kuralları",
+          "body": "Türkiye'deki kripto borsaları, MASAK düzenlemesi gereği harici cüzdanlara yapılan çekimlere bekleme süresi ve tutar sınırı uygular; gönderdiğiniz ya da aldığınız transferin karşı tarafını size beyan ettirir. Borsanız Skinora'nın ödeme adreslerini harici cüzdan olarak görür. Bu kuralları borsanız uygular, Skinora değil; aşağıdaki özet pratik bilgidir, hukuki tavsiye değildir."
+        },
         "faq": {
           "heading": "Sık sorulan sorular",
           "body": "Steam ile oturum açma, takas tekliflerini gönderme ve kabul etme, stablecoin ödemeleri ve onayları, komisyonlar ve gas ücretleri, iadeler ve hesap güvenliği hakkında rehberlik burada yer alacaktır. O zamana kadar bu konuların herhangi birinde yardım için destekle iletişime geçin."
@@ -2268,6 +2272,32 @@
       "SIDECAR_UNAVAILABLE": "İmzalama servisi cevap vermedi. Aktarım imzalanıp gönderilmiş olabilir. Yeniden denemeden önce sıcak cüzdanın son çıkışını gezginde (Etherscan / Tronscan) kontrol edin.",
       "NETWORK_UNAVAILABLE": "Ağ kullanılamıyor. Hiçbir şey gönderilmedi.",
       "TRANSFER_DEFERRED": "Transfer ertelendi (örneğin ücret üst sınırın üstünde). Hiçbir şey gönderilmedi. Daha sonra tekrar deneyin."
+    }
+  },
+  "masak": {
+    "buyer": {
+      "title": "Türkiye'deki bir borsadan ödeyecekseniz",
+      "holdInAdvance": "USDT'nin hesabınızda önceden hazır olması gerekir: borsalar, aldığınız, takas ettiğiniz ya da yatırdığınız kriptoyu harici bir cüzdana en erken 48 saat sonra gönderir; borsadan ilk çekiminizde bu süre en az 72 saattir. Ödeme süresi bu bekleme süresinden kısaysa yeni alınan USDT zamanında gelmez.",
+      "dailyLimit": "USDT gibi sabit değerli kripto çekimlerinde günlük 3.000 $ ve aylık 50.000 $ sınırı vardır (borsanız bazı durumlarda iki katını uygulayabilir). Sınır tek bir transfere değil günlük ve aylık TOPLAMA uygulanır: aynı gün yaptığınız önceki çekimler kalan payınızı düşürür. Gönderilecek tutar kalan payı aşıyorsa ödemeyi tek seferde bir Türk borsasından gönderemezsiniz.",
+      "declare": "Borsanız alıcıyı beyan etmenizi ister: alıcı Skinora'dır, adres bu işlemin ödeme adresidir. Her işlemin ödeme adresi farklıdır — önceki bir işlem için kaydettiğiniz adrese göndermeyin.",
+      "description": "Borsanız en az 20 karakterlik bir işlem açıklaması ister; örneğin \"Skinora CS2 eşya satın alma ödemesi\".",
+      "source": "Bu kuralları borsanız MASAK düzenlemesi gereği uygular, Skinora değil. Bu bilgi pratik bir özettir, hukuki tavsiye değildir.",
+      "short": "Türkiye'deki bir borsadan ödeyecekseniz USDT'yi şimdiden alın: borsalar yeni alınan, takas edilen ya da yatırılan kriptoyu harici bir cüzdana en erken 48 saat sonra (ilk çekimde 72 saat) gönderir ve USDT çekimlerine günlük 3.000 $ sınırı uygular. Ödeme süresi bu bekleme süresinden kısaysa sonradan alınan USDT zamanında gelmez.",
+      "helpLink": "Ayrıntılar"
+    },
+    "seller": {
+      "title": "Ödemeyi Türkiye'deki bir borsada alacaksanız",
+      "declare": "Borsanız, Skinora'dan gelen ödemenin göndericisini beyan etmenizi isteyebilir: gönderici Skinora'dır. Skinora'nın ödemeleri her ağda hep aynı adresten çıkar; borsanız beyanınızı bu adres için saklıyorsa sonraki ödemelerde yeniden kullanabilirsiniz.",
+      "addressLabel": "Skinora ödeme gönderim adresi ({network})",
+      "addressUnavailable": "Gönderim adresi şu anda gösterilemiyor. Ödeme geldiğinde göndericiyi işlem hash'inden görebilirsiniz.",
+      "changeNote": "Bu adres değişirse yeni adresi burada görürsünüz; borsanızdaki kaydı güncelleyin."
+    },
+    "help": {
+      "buyerHeading": "Alıcıysanız",
+      "sellerHeading": "Satıcıysanız",
+      "paymentWindow": "Ödeme süresi, satıcının ilanda seçtiği süredir ve işlem sayfasında geri sayım olarak görünür. Borsanızın bekleme süresi bundan uzun olabileceği için USDT'yi işlemi kabul etmeden önce alın.",
+      "refund": "İadeler de Skinora'nın adresinden gelir (işlemin depozit adresi ya da sıcak cüzdan). İade adresiniz bir Türk borsasındaysa borsa sizden gönderici beyanı isteyebilir: gönderici Skinora'dır.",
+      "sources": "Kaynak: MASAK Genel Tebliği (Sıra No: 29), Resmî Gazete 28.06.2025, sayı 32940, madde 4; Suç Gelirlerinin Aklanmasının ve Terörün Finansmanının Önlenmesine Dair Tedbirler Hakkında Yönetmelik, madde 24/A."
     }
   }
 }

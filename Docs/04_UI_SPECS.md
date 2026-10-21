@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.12** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T166 — sabit uptime göstergesi kalktı (S01); işlem formunda stablecoin seçimi kalktı, token her zaman USDT. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
+**Versiyon: v4.13** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T167 — MASAK notları: ödeme ekranı, kabul formu, satıcı ödeme görünümleri, profil cüzdanı, destek sayfası. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
 
 ---
 
@@ -1013,6 +1013,8 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 > **Uygulandı (T156):** blok başlığın altında belirgin bir "Ağ: TRON (TRC-20)" / "Ağ: Ethereum (ERC-20)" etiketi taşır (`payment.network` makine değerinden); adres etiketi ağ adını içerir. "Gönderilecek Tutar" `payment.expectedAmount`'un kendisidir; altında fiyat, komisyon ve TRON'da "TRON ağ ücreti" satırı API değerleriyle — istemci toplama yapmaz. Uyarılar: "Yalnız <ağ> ağında USDT gönderin", Ethereum'da ayrıca "Aynı 0x adresi başka EVM ağlarında da bulunur (ör. BSC, Arbitrum, Polygon). Başka bir ağdan gönderilen ödeme bu işleme sayılmaz ve otomatik iade edilmez — destek talebi açmanız gerekir" (08 §3.0 "Yanlış ağ"), "Tam tutarı tek seferde gönderin", "Farklı token göndermeyin"; borsa uyarısı kalktı. Ağ okunamazsa adres gösterilmez, "hiçbir şey göndermeyin" uyarısı çıkar. İşlem bilgileri kutusunda kabulden sonra ağ etiketi ve TRON'da ayrı "TRON ağ ücreti" satırı (Ethereum'da yok); kabulden önce "Kabul edilen ağlar" ve TRON kabul ediliyorsa toplam satırı "Toplam (TRON ağ ücreti hariç)" der.
 >
+> **Uygulandı (T167 — MASAK):** uyarıların altında "Türkiye'deki bir borsadan ödeyecekseniz" kutusu: (1) USDT önceden hazır olmalı — borsalar aldığınız ya da yatırdığınız kriptoyu harici cüzdana en erken 48 saat sonra, ilk çekimde en az 72 saat sonra gönderir (MASAK Genel Tebliği Sıra No: 29 m. 4/3); (2) sabit değerli kripto çekiminde günlük 3.000 $ / aylık 50.000 $ sınırı, tutar sınırı aşarsa ödeme tek seferde bir Türk borsasından gönderilemez (m. 4/4); (3) alıcı beyanı — alıcı Skinora, adres bu işlemin ödeme adresi; her işlemin ödeme adresi farklıdır (Tedbirler Yönetmeliği m. 24/A-6; depozit işlem başına — 11 §F8 T141(b)); (4) en az 20 karakterlik açıklama (m. 4/5); "kuralları borsanız uygular, hukuki tavsiye değildir" notu ve destek sayfasının `#masak` bölümüne bağlantı. **Kabul formu (CREATED, alıcı):** gönder butonunun üstünde kısa not — USDT'yi şimdiden alın (48/72 saat, günlük 3.000 $) + bağlantı. Kaynak metin karşılaştırması: `Docs/TASK_REPORTS/T167_REPORT.md`.
+>
 > **F8 hedefi (T156; 02 §4.2, §5, §12.2):** "Token" ve "Ağ" satırları alıcının seçtiği ağı gösterir (TRON TRC-20 ya da Ethereum ERC-20, açık ağ etiketiyle); TRON'da "Gönderilecek Tutar" altında fiyat + komisyon + **TRON ağ ücreti** kırılımı görünür; tutar 2 ondalıklıdır ve beklenen tutarın aynısıdır (T144). "Exchange'den gönderim yapmayın" uyarısı **kalkar** — reddedilen ödemeler artık alıcının iade adresine döner (11 §F8 K9). Yerine **ağ uyarısı** gelir: "Yalnız <ağ> ağında USDT gönderin" (aynı `0x` adresi birçok EVM ağında geçerlidir). Gezgin bağlantısı ağa göre Tronscan / Etherscan.
 
 ##### PAYMENT_RECEIVED Durumu
@@ -1044,6 +1046,8 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 > - **Alıcıya:** "Satıcı bu süre içinde trade'i geri alırsa paranız iade edilir." — alıcı için bu bir **güvence** mesajıdır, uyarı değil
 > - Geri sayım gün ve saat cinsinden gösterilir (dakika hassasiyeti gereksiz)
 > - Ödeme öncesi son kontrol başarısız olursa (trade geri alınmışsa) işlem REFUNDED'a geçer; her iki tarafa açıklayıcı bildirim gider
+>
+> **Uygulandı (T167 — MASAK):** satıcı görünümünde ödemenin çıkacağı adres gösterilir — "Skinora ödeme gönderim adresi (<ağ>)" + kopyala; Türk borsası göndericiyi sorarsa gönderici Skinora'dır, Skinora'nın ödemeleri her ağda hep aynı adresten (o ağın sıcak cüzdanı) çıkar (Tedbirler Yönetmeliği m. 24/A-6). Adres `GET /platform/payout-sources`'tan (07 §10.3) okunur; okunamazsa "ödeme geldiğinde göndericiyi işlem hash'inden görebilirsiniz" yazar. Aynı kutu COMPLETED ödeme özetinin altında da vardır.
 
 ##### COMPLETED Durumu
 
@@ -1195,6 +1199,8 @@ Dispute aktifken işlem detay sayfasında ek bir bölüm gösterilir:
      - İptal oranı (%)
 
 3. **Cüzdan Adresleri**
+
+   **T167 — MASAK:** "Satıcı Ödeme Adresi" bölümünde, ağ satırlarının üstünde Skinora'nın her ağdaki ödeme gönderim adresi (07 §10.3) ve borsaya gönderici beyanı notu gösterilir — satıcı ilk ödeme gelmeden beyanını hazırlayabilsin.
 
    **T156 — ağ başına (02 §12.1–§12.2, 03 §9.1):** her iki bölüm de her ağ (TRON, Ethereum) için ayrı bir satır taşır: ağ etiketi, o ağın adresi (maskeli + "Tüm Adresi Göster"), kendi "Adres Ekle / Adresi Değiştir" butonu. Steam yeniden doğrulaması kullanıcının **o türde herhangi bir ağda** adresi varsa istenir — değişiklikte ve **yeni bir ağdaki ilk adreste** de (11 §F8 T146 kararı xv); yalnız o türdeki ilk adres doğrulamasızdır. Doğrulama dönüşü hangi ağ için başlatıldıysa (`walletNetwork`) o satırın giriş alanı açılır. Adresler sunucunun gösterim biçimiyle (Ethereum EIP-55) gösterilir. Profil ağları `supportedNetworks` ile süzülmez — adres kaydı ağ erişilebilirliğine bağlı değildir.
 

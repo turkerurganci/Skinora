@@ -5,6 +5,7 @@ import { formatDateTime, formatStablecoin } from "@/lib/utils/format";
 import { maskAddress } from "./helpers";
 import { TxHashLink } from "./TxHashLink";
 import type { BlockchainNetwork } from "@/types/enums";
+import { PayoutSourceNotice } from "@/components/masak";
 
 export interface SellerPayoutSummaryProps {
   payout: TransactionDetailSellerPayout;
@@ -90,6 +91,9 @@ export function SellerPayoutSummary({ payout, stablecoin, network }: SellerPayou
           </div>
         </div>
       </dl>
+      {/* T167 — the sender the seller's exchange may ask them to declare
+          (Tedbirler Yönetmeliği m. 24/A-6). */}
+      <PayoutSourceNotice network={network} />
     </section>
   );
 }

@@ -4,18 +4,24 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T167 ✓ Tamamlandı, doğrulama PASS (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368). **Merge teyidi (T160c dalında işlendi):** T167 (#368) main `daf0e301` → CI `39615975640` ✓, Docker Publish `39615975624` ✓.
+
+**Önceki güncelleme:** 2026-10-21 — T160c ⏳ düzeltme turu, yeniden doğrulama bekliyor (muhasebe gideri platformun gerçek zincir harcaması; T160c_REPORT.md, PR #365)
+
+**Önceki güncelleme:** 2026-10-21 — T167 ⏳ yapım bitti, doğrulama bekliyor (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368)
+
 **Önceki güncelleme:** 2026-10-21 — T161 ✓ Tamamlandı, doğrulama PASS (portlar 127.0.0.1, deneme yayını projesi + Cloudflare tüneli, sidecar iç anahtar zorunlu, `.env.trial` işaret kapısı; T161_REPORT.md, PR #367). **Merge teyidi (T160c dalında işlendi):** T161 (#367) main `d81d91f1` → CI `39607353309` ✓, Docker Publish `39607353298` ✓.
 
-**Önceki güncelleme:** 2026-10-21 — T166 ✓ Tamamlandı, doğrulama PASS (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; compose alt ağı sabit; T166_REPORT.md, PR #366). **Merge teyidi (T160c dalında işlendi):** T166 (#366) main `e7e8acf1` → CI `39600854571` ✓, Docker Publish `39600854541` ✓.
+**Önceki güncelleme:** 2026-10-21 — T166 ✓ Tamamlandı, doğrulama PASS (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; compose alt ağı sabit; T166_REPORT.md, PR #366). **Merge teyitleri (T161 dalında işlendi):** T160b (#364) main `2e502e99` → CI `39582270230` ✓, Docker Publish `39582270184` ✓; T166 (#366) main `e7e8acf1` → CI `39600854571` ✓, Docker Publish `39600854541` ✓
 
 **Önceki güncelleme:** 2026-10-21 — T160c ⏳ yapım bitti, doğrulama bekliyor (iade kesinti kalıntısı sweep + `REFUND_FEE_SWEEP` ile sıcak cüzdana; T160c_REPORT.md)
 
 **Önceki güncelleme:** 2026-10-21 — T166 ⏳ yapım bitti, doğrulama bekliyor (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; T166_REPORT.md, PR #366)
 
-**Önceki güncelleme:** 2026-10-21 — T160b ✓ Tamamlandı, doğrulama PASS (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek min(son ölçülen, sabit ayar), alarmlı; T160b_REPORT.md, PR #364). **Merge teyidi (T160c dalında işlendi):** T160b (#364) main `2e502e99` → CI `39582270230` ✓, Docker Publish `39582270184` ✓.
+**Önceki güncelleme:** 2026-10-21 — T160b ✓ Tamamlandı, doğrulama PASS (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek min(son ölçülen, sabit ayar), alarmlı; T160b_REPORT.md, PR #364)
 
-**Önceki güncelleme:** 2026-10-21 — T160b ⏳ yapım bitti, doğrulama bekliyor (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek son ölçülen tahmin ya da ayar, alarmlı; PR #364)
-
+**Önceki güncelleme:** 2026-10-21 — T160b ⏳ yapım bitti, doğrulama bekliyor (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek son ölçülen tahmin ya da ayar, alarmlı; PR #364)
+
 **Önceki güncelleme:** 2026-10-21 — T160a ✓ Tamamlandı, doğrulama PASS (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363). **Merge teyidi (T160b dalında işlendi):** T160a (#363) main `50868b13` → CI `39572533083` ✓, Docker Publish `39572533142` ✓.
 
 **Önceki güncelleme:** 2026-10-21 — T160a ⏳ yapım bitti, doğrulama bekliyor (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363); T160 + #362 merge teyitleri
