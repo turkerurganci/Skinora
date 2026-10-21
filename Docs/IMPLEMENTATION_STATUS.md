@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T160 F8 Gate Check ✓ PASS (GATE_CHECK_F8.md); T159b merge teyidi; tag `phase/F8-pass` sahip onayından sonra · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-21 — T160b ⏳ yapım bitti, doğrulama bekliyor (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek son ölçülen tahmin ya da ayar, alarmlı; PR #364) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -361,7 +361,7 @@
 | # | Task | Durum |
 |---|---|---|
 | T160a | Next.js güvenlik yükseltmesi + CI frontend audit (F9'un ilk işi; F8 gate devri) | ⬚ Bekliyor |
-| T160b | İade gas tahmininde yeniden deneme + yedek ücret (F8 gate devri, ⚠ PARA) | ⬚ Bekliyor |
+| T160b | İade gas tahmininde yeniden deneme + yedek ücret (F8 gate devri, ⚠ PARA) | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T160b_REPORT.md), PR [#364](https://github.com/turkerurganci/Skinora/pull/364)) |
 | T160c | İade kesinti kalıntısının sweep ile toplanması (F8 gate devri, ⚠ PARA) | ⬚ Bekliyor |
 | T161 | Sunucu sıkılaştırma | ⬚ Bekliyor |
 | T162 | HTTPS + alan adı (skinora.com) | ⬚ Bekliyor |
