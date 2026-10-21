@@ -191,6 +191,17 @@ public sealed class OutgoingTransferConfirmationJob
                 // T160c düzeltme turu (F1) — valued once, at the price the
                 // service reported with this final read; never revalued.
                 row.PlatformNetworkCostUsdt = PlatformCostUsdt(row.PlatformNetworkCost, status.NativePriceUsdt, policy);
+                if (row.PlatformNetworkCostUsdt is null
+                    && row.PlatformNetworkCost is not null
+                    && status.NativePriceUsdt is not null)
+                {
+                    // T160c kapanış (S4-4) — measurement, never a gate: a value the
+                    // column cannot hold would fail SaveChanges for the whole turn.
+                    _logger.LogWarning(
+                        "Outbound transfer row {Id} ({Type}) on {Network}: spend {Spend} at price {Price} USDT is not a realistic value (above {Max}) — left unvalued",
+                        row.Id, row.Type, row.Network, row.PlatformNetworkCost, status.NativePriceUsdt,
+                        MaxPlatformCostUsdt);
+                }
 
                 // WP1 — a confirmed SELLER_PAYOUT means the seller is paid on
                 // chain (03 §2.4 step 6). Publish PayoutCompletedEvent in the
@@ -312,15 +323,30 @@ public sealed class OutgoingTransferConfirmationJob
     /// <summary>
     /// T160c düzeltme turu (F1) — the platform spend (native smallest unit) in
     /// USDT at <paramref name="price"/> (USDT per whole native unit), rounded to
-    /// 6 decimals away from zero. NULL when either is missing.
+    /// 6 decimals away from zero. NULL when either is missing, and (T160c
+    /// kapanış, S4-4) when the value is beyond what <c>decimal(18,6)</c> holds
+    /// or overflows <see cref="decimal"/> — an unrealistic price must not stop
+    /// the confirmation turn; the row counts as "not measured" instead.
     /// </summary>
-    internal static decimal? PlatformCostUsdt(decimal? units, decimal? price, BlockchainNetworkPolicy policy)
+    public static decimal? PlatformCostUsdt(decimal? units, decimal? price, BlockchainNetworkPolicy policy)
     {
         if (units is not { } cost || price is not { } perUnit) return null;
         var divisor = 1m;
         for (var i = 0; i < policy.NativeAssetDecimals; i++) divisor *= 10m;
-        return decimal.Round(cost / divisor * perUnit, 6, MidpointRounding.AwayFromZero);
+        decimal value;
+        try
+        {
+            value = decimal.Round(cost / divisor * perUnit, 6, MidpointRounding.AwayFromZero);
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
+        return value is < 0m or > MaxPlatformCostUsdt ? null : value;
     }
+
+    /// <summary>The largest value <c>PlatformNetworkCostUsdt</c> (<c>decimal(18,6)</c>) holds.</summary>
+    public const decimal MaxPlatformCostUsdt = 999_999_999_999.999999m;
 
     private static string? TruncateError(string? message)
     {

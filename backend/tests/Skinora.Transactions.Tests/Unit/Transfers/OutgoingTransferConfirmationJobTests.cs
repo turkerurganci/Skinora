@@ -1,9 +1,11 @@
+using System.Globalization;
 using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Platform.Application.Wallets;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -300,6 +302,46 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
         Assert.Equal(373_540_002_534_100m, reloaded.PlatformNetworkCost);
         Assert.Null(reloaded.PlatformNetworkCostUsdt);
+    }
+
+    [Fact]
+    public async Task T160c_An_Unrealistic_Price_Leaves_The_Spend_Unvalued_And_Still_Confirms()
+    {
+        // S4-4 — 0.37354 ETH at 10^13 USDT/ETH is 3.7e12 USDT: more than
+        // decimal(18,6) holds. The row is confirmed with its spend, unvalued.
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(
+                TransferStatusOutcome.Confirmed, 11_959_101L, null, "SUCCESS", null,
+                RealizedFeeWei: 152_393_000_000_000m, PlatformSpendWei: 373_540_002_534_100_000m,
+                NativePriceUsdt: 10_000_000_000_000m),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var row = await SeedDetectedAsync(BlockchainTransactionType.LATE_PAYMENT_REFUND);
+        row.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        Assert.Equal(373_540_002_534_100_000m, reloaded.PlatformNetworkCost);
+        Assert.Null(reloaded.PlatformNetworkCostUsdt);
+    }
+
+    [Theory]
+    [InlineData("999999999999999999999999999", "79228162514264337593543950335")] // decimal overflow
+    [InlineData("1000000000000000000", "1000000000000")]                          // 10^12: one above the column
+    public void T160c_PlatformCostUsdt_Is_Null_Where_The_Column_Cannot_Hold_It(string wei, string price)
+    {
+        var policy = BlockchainNetworkPolicy.For(BlockchainNetwork.ETHEREUM);
+        Assert.Null(OutgoingTransferConfirmationJob.PlatformCostUsdt(
+            decimal.Parse(wei, CultureInfo.InvariantCulture), decimal.Parse(price, CultureInfo.InvariantCulture), policy));
+        // The column's own maximum is still a value.
+        Assert.Equal(
+            OutgoingTransferConfirmationJob.MaxPlatformCostUsdt,
+            OutgoingTransferConfirmationJob.PlatformCostUsdt(1_000_000_000_000_000_000m,
+                OutgoingTransferConfirmationJob.MaxPlatformCostUsdt, policy));
     }
 
     [Fact]
