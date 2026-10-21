@@ -1,11 +1,17 @@
 import express from 'express';
 import { config } from './config/index.js';
 import { InternalKeyError, requireInternalKey } from './config/internalKey.js';
+import {
+  SigningSecretError,
+  loadSigningMaterial,
+  type SigningMaterial,
+} from './config/signingSecrets.js';
 import { logger } from './logger.js';
 import { publishTronGridDailyRequestBudget } from './metrics.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { createRouter } from './api/routes.js';
 import { WalletManager } from './wallet/WalletManager.js';
+import { HdWalletService } from './wallet/HdWalletService.js';
 import { MonitorRegistry } from './monitor/MonitorRegistry.js';
 import { PostCancelMonitorRegistry } from './monitor/PostCancelMonitor.js';
 import { TronGridClient } from './tron/TronGridClient.js';
@@ -34,8 +40,35 @@ function startupInternalKey(): string {
   }
 }
 
+// T163 — the seed and the hot wallet key come from their Docker secret files
+// (config/signingMaterial.ts); outside NODE_ENV=development|test a plain
+// HD_WALLET_MNEMONIC / HOT_WALLET_PRIVATE_KEY variable stops the service. The
+// startup line below names the SOURCE of each and the public address the key
+// controls (never a value), so an operator can check a restore against the
+// backup summary (DEPLOY_RUNBOOK §L).
+const signingMaterial = startupSigningMaterial();
+
+function startupSigningMaterial(): SigningMaterial {
+  try {
+    return loadSigningMaterial(process.env, config.hotWalletAddress);
+  } catch (err) {
+    const code = err instanceof SigningSecretError ? err.code : 'STARTUP_FAILED';
+    logger.fatal({ code }, `Blockchain sidecar refused to start: ${code}`);
+    throw err;
+  }
+}
+
+logger.info(
+  {
+    hdMnemonicSource: signingMaterial.sources.hdMnemonic,
+    hotWalletKeySource: signingMaterial.sources.hotWalletKey,
+    hotWalletAddressFromKey: signingMaterial.hotWalletAddressFromKey,
+  },
+  'Signing secrets: loaded (sources only — values are never logged)',
+);
+
 const app = express();
-const walletManager = new WalletManager();
+const walletManager = new WalletManager(new HdWalletService(signingMaterial.hdMnemonic));
 const tronGridClient = new TronGridClient();
 const monitorRegistry = new MonitorRegistry({
   client: tronGridClient,
@@ -81,7 +114,7 @@ const energyDelegation = new EnergyDelegationService({
   client: tronDelegationClient,
   resources: tronResourceClient,
   sweeperAddress: config.hotWalletAddress,
-  sweeperPrivateKey: config.hotWalletPrivateKey,
+  sweeperPrivateKey: signingMaterial.hotWalletPrivateKey,
   // T149 — the hybrid stake is dormant; OFF unless ENERGY_STAKING_ENABLED=true.
   stakingEnabled: config.energyStakingEnabled,
   stakeAddress: config.stakeAccountAddress,
@@ -107,7 +140,7 @@ const transferService = new TransferService({
   client: tronTransferClient,
   tokenContracts,
   hotWalletAddress: config.hotWalletAddress,
-  hotWalletPrivateKey: config.hotWalletPrivateKey,
+  hotWalletPrivateKey: signingMaterial.hotWalletPrivateKey,
   tokenDecimals: config.tokenDecimals,
   energyDelegation,
   guard: transferGuard,

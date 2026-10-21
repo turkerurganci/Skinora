@@ -9,7 +9,7 @@ Savunma katmanları:
 |---|---|---|
 | 1 | [`.gitignore`](../.gitignore) | `secrets/`, `.env`, `*.maFile` takip edilmez |
 | 2 | [`scripts/git-hooks/pre-commit`](../scripts/git-hooks/pre-commit) | `git add -f` ile zorlanan veya yanlış dosyaya yapıştırılan sırrı **commit anında** bloklar |
-| 3 | Servis izolasyonu | `docker-compose.yml` her servise **yalnız kendi** env'ini geçer — özellikle `HOT_WALLET_PRIVATE_KEY` sadece blockchain sidecar'a gider, backend hiç görmez (F4 gate check garantisi) |
+| 3 | Servis izolasyonu | İmza sırları (tohumlar, cüzdan anahtarları) env değil **Docker secret** dosyasıdır ve her biri yalnız kendi ağının servisine bağlanır — TRON'unkiler yalnız blockchain sidecar'a (T163), Ethereum'unkiler yalnız Ethereum servisine (T150); backend hiçbirini görmez (F4 gate check garantisi) |
 
 Hook'ları kurmak için (yeni clone sonrası bir kez):
 
@@ -20,6 +20,50 @@ bash scripts/git-hooks/install.sh
 ---
 
 ## Beklenen dosyalar
+
+### TRON servisi (T163 — her stack'te)
+
+TRON servisi (`skinora-blockchain-sidecar`) depozit tohumunu ve sıcak cüzdan
+anahtarını **Docker secret** olarak alır (DEFERRED_BACKLOG
+`SigningSecretsInPlainEnv`, proje sahibi kararı 2026-09-17). Compose iki dosyayı
+yalnız bu servise, `/run/secrets/<ad>` yoluna bağlar. Servis her stack'te
+olduğu için dosyalar **her zaman** gerekir — boş olabilirler.
+
+| Dosya | İçerik | Zorunlu mu |
+|---|---|---|
+| `secrets/tron_hd_mnemonic.txt` | TRON depozit tohumu — BIP-39 ifadesi (tırnaksız, tek satır), BIP-39 parolası boş, türetme yolu `m/44'/195'/0'/0/{index}` BIP-32 kök düğümünden (08 §3.2). **Ethereum tohumundan farklı** (K7) | Dosya **evet**, içerik hayır: boşsa servis açılır ama `/api/wallet/derive` 503 döner (yeni işlem açılamaz). BIP-39 sağlaması tutmayan ifade servisi durdurur (`HD wallet initialization failed`) |
+| `secrets/tron_hot_wallet_private_key.txt` | TRON sıcak cüzdanının özel anahtarı (64 hex, `0x` isteğe bağlı) — payout, iade, sweep imzası | Dosya **evet**, içerik hayır: boşsa payout/iade/sweep reddedilir. Doluysa `.env`'deki `HOT_WALLET_ADDRESS`'i kontrol etmeli, yoksa servis açılmaz (`HOT_WALLET_ADDRESS_MISMATCH`); 64 hex değilse açılmaz (`INVALID_SIGNING_KEY`) |
+
+**Env yolu kapalı.** `HD_WALLET_MNEMONIC` ve `HOT_WALLET_PRIVATE_KEY` artık
+`.env`'de **durmaz** ve compose onları geçmez. Servis `NODE_ENV` tam olarak
+`development` ya da `test` değilken bu iki değişkenden biri doluysa **açılmaz**
+(`SIGNING_SECRET_IN_ENV`) — yalnız konteyner dışında `npm run dev` ile koşan
+geliştirme süreci ve testler env'den okuyabilir. Dosya ve değişken birlikte
+verilirse servis yine açılmaz (`SIGNING_SECRET_AMBIGUOUS`).
+
+**Eksik dosya tuzağı (ölçüldü 2026-10-21, Docker Desktop + Compose v5.1.0):**
+compose kaynak dosyası olmayan bir secret'ı hata vermeden başlatır ve Docker o
+yolda — hem konteynerde hem **host'ta**, ör. `secrets/tron_hd_mnemonic.txt/` —
+**boş bir dizin** oluşturur. Servis bunu okuyamaz ve açılmaz
+(`SIGNING_SECRET_UNREADABLE`; Ethereum servisinde de aynı). Düzeltme: o dizini
+silin (`rmdir`), dosyayı oluşturun, servisi yeniden başlatın. Geri yükleme
+betiği boş dizini kendisi kaldırır (DEPLOY_RUNBOOK §L).
+
+**Mevcut bir geliştirme `.env`'inden geçiş (bir kez):** değerleri ekrana
+yazdırmadan dosyaya taşıyın, sonra `.env`'den silin:
+
+```bash
+umask 077
+grep '^HD_WALLET_MNEMONIC=' .env | cut -d= -f2- | tr -d '"' > secrets/tron_hd_mnemonic.txt
+grep '^HOT_WALLET_PRIVATE_KEY=' .env | cut -d= -f2- | tr -d '"' > secrets/tron_hot_wallet_private_key.txt
+grep -v -e '^HD_WALLET_MNEMONIC' -e '^HOT_WALLET_PRIVATE_KEY' .env > .env.new && mv .env.new .env
+# Kontrol — yalnız ADRESLER yazılır (DEPLOY_RUNBOOK §L.5):
+node scripts/wallet-backup/wallet-manifest.mjs addresses secrets
+```
+
+`.env`'de değişken satırı kalırsa compose onu artık konteynere geçmez (zarar
+vermez), ama sırrın düz metin kopyası diskte durur — silin. Deneme yayını için
+aynısını `secrets/trial/` ve `.env.trial` ile yapın.
 
 ### Ethereum servisi (T150 — yalnız `ethereum` compose profiliyle)
 
@@ -57,6 +101,7 @@ korumayı sürdürür.
 
 | Dosya | İçerik | Zorunlu mu |
 |---|---|---|
+| `secrets/trial/tron_hd_mnemonic.txt`, `secrets/trial/tron_hot_wallet_private_key.txt` (T163) | Yukarıdaki iki TRON dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve sıcak cüzdan (aynı gerekçe: aynı depozit adresleri, aynı imzacı) | **Her zaman** (servis her stack'te); boş olabilir, kurallar yukarıdaki gibi |
 | `secrets/trial/ethereum_hd_mnemonic.txt`, `secrets/trial/ethereum_hot_wallet_private_key.txt`, `secrets/trial/ethereum_fuel_wallet_private_key.txt` | Yukarıdaki üç Ethereum dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve anahtarlar (iki veritabanı aynı tohumdan aynı indeksleri türetir ve aynı depozit adreslerini izler; iki imzacı aynı Ethereum hesabının nonce'unu yarıştırır) | Yalnız `--profile ethereum` ile, kurallar yukarıdaki gibi |
 | `secrets/trial/cloudflare_tunnel_token.txt` | Cloudflare Tunnel token'ı — tek satır, tırnaksız (Cloudflare Zero Trust → Networks → Tunnels) | Yalnız `--profile tunnel` ile. **Boşsa tünel açılmaz:** `skinora-tunnel-preflight` `TUNNEL_TOKEN_MISSING` ile çıkar ve cloudflared başlatılmaz. T162'ye kadar boş dosya olarak durabilir |
 
@@ -64,6 +109,8 @@ korumayı sürdürür.
 umask 077
 mkdir -p secrets/trial
 : > secrets/trial/cloudflare_tunnel_token.txt    # T162'de token yazılır
+: > secrets/trial/tron_hd_mnemonic.txt           # T163 — deneme yayınının kendi TRON tohumu
+: > secrets/trial/tron_hot_wallet_private_key.txt
 ```
 
 Linux sunucuda cloudflared konteyneri uid `65532` ile çalışır; token dosyası o
@@ -72,7 +119,7 @@ dizin) — okuyamazsa tünel açılmaz.
 
 ### Başka dosya
 
-**Ethereum ve deneme yayını dışında beklenen bir dosya yoktur (T133, T161).** Tek beklenen dosya
+**TRON, Ethereum ve deneme yayını dışında beklenen bir dosya yoktur (T133, T161, T163).** Tek beklenen dosya
 `secrets/steam-bots.json` idi: Steam escrow bot'unun hesap adı, parolası ve iki
 Mobile Authenticator sırrı. Platform artık hiçbir Steam hesabı çalıştırmıyor ve
 trade offer göndermiyor (05 §3.2, 02 §2.1) — Steam sidecar'ın tek kimlik bilgisi
@@ -103,8 +150,7 @@ ileride dosya olarak taşınması gereken bir sır çıkarsa yeri burasıdır.
 
 | Anahtar | Kim kullanır | Not |
 |---|---|---|
-| `HD_WALLET_MNEMONIC` | blockchain sidecar | Deposit adresi türetme — BIP-32 kök düğümünden `m/44'/195'/0'/0/{index}`, BIP-39 parolası boş (08 §3.2). T143'ten (2026-10-18) önce kod `m/44'/60'/0'/0/0/44'/195'/0'/0/{index}`'ten türetiyordu; o tarihten önce açılmış Nile depozitleri koddan erişilemez (DEPLOY_RUNBOOK §G.0b). Sıcak cüzdan bu tohumdan **türemez** |
-| `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + Energy delegation. **Backend'e geçilmez.** |
+| ~~`HD_WALLET_MNEMONIC`~~ · ~~`HOT_WALLET_PRIVATE_KEY`~~ | — | **T163'ten beri `.env`'de değil:** `secrets/tron_hd_mnemonic.txt` / `secrets/tron_hot_wallet_private_key.txt` (yukarıda). T143 notu geçerli: 2026-10-18'den önce açılmış Nile depozitleri koddan erişilemez (DEPLOY_RUNBOOK §G.0b). Sıcak cüzdan tohumdan **türemez** |
 | `STEAM_API_KEY` | steam sidecar + backend | Envanter okuma + trade-hold probu + OpenID profil |
 | `TRON_API_KEY` / `_SECONDARY` | blockchain sidecar | TronGrid rate limit + failover |
 | `JWT_SECRET`, `*_INTERNAL_KEY` | backend + sidecar'lar | ≥32 karakter rastgele |
@@ -123,7 +169,16 @@ openssl rand -hex 32
 
 Tron testnet cüzdanı (mnemonic + hot wallet) için TronLink veya `tronweb`
 kullanılabilir; **mainnet anahtarlarını bu dizine koymayın** — lokal prova
-Nile testnet üzerinde yapılır.
+Nile testnet üzerinde yapılır. Mainnet cüzdanları kurulum günü (T171) yeniden
+üretilir ve aynı gün çevrimdışı yedeklenir (DEPLOY_RUNBOOK §L).
+
+## Çevrimdışı yedek
+
+Bu dizindeki beş imza dosyasının (iki ağ) şifreli yedeği, geri yüklemesi ve
+provası: **DEPLOY_RUNBOOK §L**, betik `scripts/wallet-backup/wallet-backup.sh`.
+Diskteki bu dosyalar tek kopya değildir ancak o prosedür uygulandıysa —
+sunucu diski kaybolursa depozitlerde bekleyen para ve iadeler yalnız yedekten
+geri alınır.
 
 ---
 
