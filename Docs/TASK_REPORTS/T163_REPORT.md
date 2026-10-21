@@ -66,7 +66,7 @@ Ek: betiğin türettiği adresler T143 bilinen-cevap vektörleriyle (TRON `TUEZS
 | Build | ✓ | `npm run build` iki sidecar; Docker imajları (prova) |
 | Lint / format | ✓ | `npm run lint` iki sidecar; `prettier --check` değişen dosyalar |
 | Secret guard (pre-commit) | ✓ | İlk commit denemesi yanlış pozitiflerle bloklandı (kod tanımlayıcıları + test fikstürleri); bypass kullanılmadı — tanımlayıcılar yeniden adlandırıldı ve fikstürler özellik erişimine alındı; `bash scripts/git-hooks/pre-commit` → 0 |
-| CI | (aşağıda "Commit & PR") | |
+| CI | ✓ run `39615737136` | aşağıda "Commit & PR" |
 
 ## Doğrulama
 
@@ -87,7 +87,7 @@ Ek: betiğin türettiği adresler T143 bilinen-cevap vektörleriyle (TRON `TUEZS
 - Branch: `task/T163-imza-sirlari-secret`
 - Commit: `d0bb3c31` — T163: TRON imza sırları Docker secret, env yolu üretimde kapalı, çevrimdışı yedek betiği (+ rapor/status commit'i)
 - PR: #369
-- CI: bu raporu içeren commit'ten sonra izleniyor; sonuç PR'da ve yöneticiye son mesajda
+- CI: ✓ PASS — run `39615737136` (HEAD `b55498b2`, kod + rapor): CI Gate ✓; Sidecar-blockchain vitest (`signingSecrets` 20, `signingSecretsStartup` 9) ✓, Sidecar-ethereum vitest (`walletBackupScript` 6 — CI runner'da atlanmadan koştu) ✓, 3c Script test ✓, 7 Docker build ✓, 11 E2E (advisory) ✓. Önceki run `39615073534` (`d0bb3c31`) yeni push yüzünden `cancelled` (concurrency). Not: API, Ethereum Docker build job'ını run bittikten sonra da `in_progress` gösterdi; adımlarının hepsi ("Complete job" dahil) `success`. Bu satırı ekleyen commit yalnız rapordur
 
 ## Kararlar (öneriyle kaydedildi — ⚠)
 
