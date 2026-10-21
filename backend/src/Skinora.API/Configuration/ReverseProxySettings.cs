@@ -56,4 +56,32 @@ public sealed class ReverseProxySettings
     /// header'lar <b>hiç işlenmez</b> (yukarıdaki duruş).
     /// </summary>
     public bool IsConfigured => KnownProxies.Length > 0 || KnownNetworks.Length > 0;
+
+    /// <summary>
+    /// <see cref="KnownProxies"/> parsed; unparseable entries are skipped
+    /// (same tolerance <c>Program.cs</c> applied before T166 shared this).
+    /// </summary>
+    public IReadOnlyList<System.Net.IPAddress> ParseProxies() =>
+        KnownProxies
+            .Select(p => System.Net.IPAddress.TryParse(p, out var ip) ? ip : null)
+            .Where(ip => ip is not null)
+            .Select(ip => ip!)
+            .ToList();
+
+    /// <summary><see cref="KnownNetworks"/> parsed from CIDR; unparseable entries are skipped.</summary>
+    public IReadOnlyList<(System.Net.IPAddress Prefix, int Length)> ParseNetworks()
+    {
+        var result = new List<(System.Net.IPAddress, int)>();
+        foreach (var network in KnownNetworks)
+        {
+            var parts = network.Split('/', 2);
+            if (parts.Length == 2 &&
+                System.Net.IPAddress.TryParse(parts[0], out var prefix) &&
+                int.TryParse(parts[1], out var length))
+            {
+                result.Add((prefix, length));
+            }
+        }
+        return result;
+    }
 }

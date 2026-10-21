@@ -6,7 +6,8 @@ namespace Skinora.Auth.Application.SteamAuthentication;
 /// Tries each inner <see cref="ICountryResolver"/> in order and returns
 /// the first non-null code. The production composition (T83 / 08 §8) is:
 /// <list type="number">
-///   <item><see cref="HeaderCountryResolver"/> — trusts the edge
+///   <item><see cref="HeaderCountryResolver"/> — trusts the edge only via our
+///   own proxy chain (T166, <see cref="ITrustedProxyVerifier"/>)
 ///   (Cloudflare <c>CF-IPCountry</c>, AWS CloudFront viewer country, nginx
 ///   GeoIP module). Cheapest, closest to user truth.</item>
 ///   <item><see cref="MaxMindCountryResolver"/> — embedded MMDB fallback

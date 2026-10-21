@@ -59,6 +59,12 @@ public static class SteamAuthenticationModule
         // by HeaderCountryResolver.
         services.AddHttpContextAccessor();
         services.Configure<GeolocationSettings>(configuration.GetSection(GeolocationSettings.SectionName));
+        // T166 — X-Country-Code is believed only from our own reverse proxy:
+        // the direct socket peer must be in ReverseProxy:KnownNetworks/
+        // KnownProxies, the same list that governs X-Forwarded-For (F3a).
+        services.AddSingleton<ITrustedProxyVerifier>(_ => new ReverseProxyTrustVerifier(
+            configuration.GetSection(ReverseProxySettings.SectionName).Get<ReverseProxySettings>()
+            ?? new ReverseProxySettings()));
         services.AddSingleton<HeaderCountryResolver>();
         services.AddSingleton<IEnumerable<ICountryResolver>>(sp =>
         {
