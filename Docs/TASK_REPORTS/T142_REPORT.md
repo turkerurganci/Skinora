@@ -1,6 +1,6 @@
 # T142 — Ethereum ön ölçümleri (Sepolia + mainnet salt okuma) [ÖLÇÜM GÖREVİ]
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor (F8 yönetici düzeni: doğrulama ayrı alt ajanda) | **Tarih:** 2026-10-17 (ölçümler 21:28–21:55 UTC)
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS (PR #339) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-17 (ölçümler 21:28–21:55 UTC)
 
 ---
 

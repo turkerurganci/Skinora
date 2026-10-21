@@ -1,6 +1,6 @@
 # T146 — Ağ başına kullanıcı ödeme/iade adresleri
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor (yapım bitti, bağımsız doğrulama bekliyor) | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS (PR #342) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-18
 
 ---
 
