@@ -97,6 +97,29 @@ public class TosAcceptEndpointTests : IClassFixture<TosAcceptEndpointTests.Facto
     }
 
     [Fact]
+    public async Task Accept_SameVersion_WhenAgeStampMissing_Returns200AndStampsAge()
+    {
+        // T166 — an account holding a ToS stamp but no 18+ stamp is rejected
+        // by the server-side gate and shown the modal (/auth/me tosAccepted =
+        // false). Re-sending the version it already holds must COMPLETE the
+        // attestation, not answer 409 — otherwise the account has no way out.
+        var userId = await _factory.CreateUserAsync(alreadyAccepted: true, ageConfirmed: false); // "0.9"
+        var client = BuildClient(userId);
+
+        var response = await client.PostAsJsonAsync(
+            "/api/v1/auth/tos/accept",
+            new { tosVersion = "0.9", ageOver18 = true });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Set<User>().SingleAsync(u => u.Id == userId);
+        Assert.Equal("0.9", user.TosAcceptedVersion);
+        Assert.NotNull(user.AgeConfirmedAt);
+    }
+
+    [Fact]
     public async Task Accept_NewVersionAfterBump_Returns200AndUpgrades()
     {
         // WP11 — re-accepting a DIFFERENT (bumped) version succeeds (T30 reprompt).
@@ -135,7 +158,7 @@ public class TosAcceptEndpointTests : IClassFixture<TosAcceptEndpointTests.Facto
         return client;
     }
 
-    private static string IssueAccessToken(Guid userId)
+    internal static string IssueAccessToken(Guid userId)
     {
         var handler = new JwtSecurityTokenHandler();
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
@@ -177,7 +200,13 @@ public class TosAcceptEndpointTests : IClassFixture<TosAcceptEndpointTests.Facto
             _connection.Open();
         }
 
-        public async Task<Guid> CreateUserAsync(bool alreadyAccepted = false)
+        /// <param name="alreadyAccepted">Stamp ToS version "0.9".</param>
+        /// <param name="ageConfirmed">
+        /// With <paramref name="alreadyAccepted"/>, also stamp the 18+
+        /// attestation. <c>false</c> reproduces an account that accepted
+        /// before T30 added <c>AgeConfirmedAt</c> (T166).
+        /// </param>
+        public async Task<Guid> CreateUserAsync(bool alreadyAccepted = false, bool ageConfirmed = true)
         {
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -188,6 +217,7 @@ public class TosAcceptEndpointTests : IClassFixture<TosAcceptEndpointTests.Facto
                 SteamDisplayName = "Tester",
                 TosAcceptedVersion = alreadyAccepted ? "0.9" : null,
                 TosAcceptedAt = alreadyAccepted ? DateTime.UtcNow.AddDays(-1) : null,
+                AgeConfirmedAt = alreadyAccepted && ageConfirmed ? DateTime.UtcNow.AddDays(-1) : null,
             };
             db.Set<User>().Add(user);
             await db.SaveChangesAsync();

@@ -368,7 +368,7 @@
 | T163 | İmza sırları Docker secret + çevrimdışı yedek | ⬚ Bekliyor |
 | T164 | Veritabanı yedeği ve geri dönüş planı | ⬚ Bekliyor |
 | T165 | Bildirim kanalları ve dış alarm | ⬚ Bekliyor |
-| T166 | Küçük düzeltmeler (tek PR) | ⬚ Bekliyor |
+| T166 | Küçük düzeltmeler (tek PR) | ✓ Tamamlandı — doğrulama PASS (6/6, 4 × S4; B2 kapanışta düzeltildi): `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
 | T167 | MASAK akışı | ⬚ Bekliyor |
 | T168 | Hukuk metinleri | ⬚ Bekliyor |
 | T169 | Kalan sahip kararları | ⬚ Bekliyor |

@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.11** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-19 — T157 — admin ekranları ağ başına: yeni S22 Cüzdanlar (§8.11), S15 Ağ kolonu, S16 gezgin bağlantısı ağa göre. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
+**Versiyon: v4.12** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T166 — sabit uptime göstergesi kalktı (S01); işlem formunda stablecoin seçimi kalktı, token her zaman USDT. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
 
 ---
 
@@ -558,8 +558,8 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 3. **Güven Göstergeleri**
    - Toplam tamamlanan işlem sayısı
-   - Platform çalışma süresi (uptime)
    - Otomatik doğrulama vurgusu
+   - *(T166 — "Platform çalışma süresi (uptime)" göstergesi kaldırıldı: ölçülmüş bir değer değil, sabit bir "%99,9" yazısıydı. Gerçek ölçüm F9 T170 izleme işinde.)*
 
 4. **Footer**
    - Terms of Service linki
@@ -820,7 +820,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 **İçerik:**
 - Seçili item özeti (C03 Compact, değiştirilebilir → adım 1'e geri)
-- **Stablecoin seçimi:** USDT / USDC toggle butonları. **F8 hedefi (T156/T166; 02 §4.2):** toggle kalkar, token her zaman USDT'dir; yerine **kabul edilen ağlar** seçimi gelir (TRON / Ethereum çoklu seçim; yalnız profilde ödeme adresi kayıtlı ağlar seçilebilir)
+- **Stablecoin seçimi:** ~~USDT / USDC toggle butonları~~ — **kalktı (T166; 02 §4.2):** token her zaman USDT'dir (fiyat kutusunun yanında yazar); yerine **kabul edilen ağlar** seçimi gelir (TRON / Ethereum çoklu seçim; yalnız profilde ödeme adresi kayıtlı ağlar seçilebilir)
   - **Uygulandı (T156):** "Kabul ettiğiniz ağlar" onay kutuları. Listede **yalnız** `GET /transactions/params` `supportedNetworks`'teki ağlar vardır — açık olmayan ağ hiç gösterilmez. Açık ama profilde ödeme adresi olmayan ağ gösterilir, seçilemez ve "Bu ağda ödeme adresiniz yok — profilinizden ekleyin" der. Her seçenek ödeme adresini maskeli gösterir ve ağın ücret notunu taşır (TRON: alıcı ayrıca kabulde sabitlenen TRON ağ ücretini öder, satıcıya ödemenin komisyonla karşılanmayan ağ ücreti alacaktan düşer — 02 §4.7; Ethereum: iki taraftan da ağ ücreti alınmaz). Başlangıçta seçilebilir **bütün** ağlar işaretlidir; hiçbiri işaretli değilse adım geçilmez. Stablecoin toggle'ı T166'ya kadar yerinde (11 §F8 T156 kararları)
 - **Fiyat girişi:**
   - Input alanı + seçili stablecoin etiketi (örn: `[___] USDT`)

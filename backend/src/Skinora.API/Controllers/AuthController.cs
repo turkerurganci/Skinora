@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Skinora.Shared.Domain;
+using Skinora.API.Filters;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Application.MobileAuthenticator;
 using Skinora.Auth.Application.ReAuthentication;
@@ -28,6 +29,10 @@ namespace Skinora.API.Controllers;
 // tüm platformun oturum katmanını düşürülebilir kılıyordu
 // (UITour-AuthBucketIncludesSessionReads, kırmızı bulgu).
 [RateLimit("auth")]
+// T166 — the session surface stays reachable for an account that has not
+// accepted the ToS yet: it must read its state (/me), accept (/tos/accept),
+// refresh and sign out. Every other authorized endpoint is gated.
+[SkipTosAcceptanceGate]
 public sealed class AuthController : ControllerBase
 {
     private const string ReturnUrlStateCookie = "skinora_oid_rt";

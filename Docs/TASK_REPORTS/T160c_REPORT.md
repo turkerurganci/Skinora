@@ -309,6 +309,7 @@ ETH 2.444,861904, TRX 0,3313 (T159b). Eski ekran Ethereum'da gerçek giderin **%
 ### F4 (S4, süreç) — `origin/main` dala merge edildi
 
 - Merge commit `9985a2b7`, rebase değil; ebeveynler `c5dab67c` + `2e502e99`.
+- Düzeltme commit'i push edildikten sonra main'e T166 (#366, `e7e8acf1`) birleşti ve PR yine çakıştı. İkinci merge commit'i (rebase değil) aynı yöntemle çözüldü. Kod çakışması yok; i18n dosyaları otomatik birleşti. 02 ve 07 başlıkları T166 ile aynı gün v4.17'de çakıştı, bu yüzden ikisi de **v4.18** oldu (iki görev başlıkta). `STATUS_CHANGELOG`'u T166 bütünüyle yeniden yazmıştı; main'in sürümü alındı, bu dalın girişleri üstüne eklendi.
 - Kod çakışması yok (T160b dosyaları otomatik birleşti). T160b'nin min(ölçülen, sabit) yedeği değişmedi.
 - Çakışan belgelerde iki tarafın satırları da korundu:
   - 02/05/08 başlıkları: main'in bir üstü, v4.17 / v3.30 / v3.44.
@@ -316,7 +317,7 @@ ETH 2.444,861904, TRX 0,3313 (T159b). Eski ekran Ethereum'da gerçek giderin **%
   - `IMPLEMENTATION_STATUS`: T160a / T160b satırları main'den, T160c satırı bu dal.
   - `STATUS_CHANGELOG`: iki eski başlık da arşivde.
   - `DEFERRED_BACKLOG`: main'in iki Durum satırı korundu, üstüne yeni satır.
-- **Backlog sayımı:** dosyanın kendi yöntemiyle, §1'den itibaren `| 🔴/🟡/⚪ |` aktif ve `| ✅ |` çözülmüş satırlar sayıldı → **50 aktif / 159 çözülmüş**. main 51/158 idi, `RefundGasDeductionDustStaysOnDeposit` ✅.
+- **Backlog sayımı:** dosyanın kendi yöntemiyle, §1'den itibaren `| 🔴/🟡/⚪ |` aktif ve `| ✅ |` çözülmüş satırlar sayıldı → **51 aktif / 159 çözülmüş**. Bu, son main'e (`e7e8acf1`, 52/158) göre; `RefundGasDeductionDustStaysOnDeposit` ✅. `2e502e99`'a göre ilk merge'de 50/159 idi; T166 bir aktif satır ekledi.
 
 ### F5 (bilgi) — `plan/11_F9.md` CRLF
 
@@ -332,7 +333,7 @@ Blob ilk commit'te LF'ye normalize edilmişti. Bu turdaki diff yalnız "T160c ka
 
 ### Devir kaydı
 
-`STATUS_CHANGELOG`'a T160b (#364) merge teyidi işlendi: main `2e502e99`, CI `39582270230` ✓, Docker Publish `39582270184` ✓.
+`STATUS_CHANGELOG`'a T160b (#364) merge teyidi işlendi: main `2e502e99`, CI `39582270230` ✓, Docker Publish `39582270184` ✓. Ayrıca T166 (#366): main `e7e8acf1`, CI `39600854571` ✓, Docker Publish `39600854541` ✓.
 
 ### Yeni ⚠ kararlar (öneriyle kaydedildi — ⚠ PARA)
 
@@ -363,4 +364,5 @@ Blob ilk commit'te LF'ye normalize edilmişti. Bu turdaki diff yalnız "T160c ka
 | sidecar-ethereum | ✓ 882/882 | tsc ✓, eslint ✓, prettier (`--end-of-line auto`) ✓ |
 | sidecar-blockchain | ✓ 597/597 | tsc ✓, eslint ✓, prettier ✓ (`npm ci` ile) |
 | Frontend | ✓ 392/392 | `npm ci` (main'in next 16.3.8'i), `tsc --noEmit` ✓, `eslint` ✓, `i18n:check` 4 dil 1593 anahtar eşit ✓, prettier (`--end-of-line auto`) ✓, `vitest run` ✓ |
+| **T166 merge'ünden sonra (`e7e8acf1`)** | ✓ | Build 0 hata. Unit 2345/2345 (Auth 96, API 138 — T166 testleri dahil). `AdminWalletOverviewTests` (LocalDB) 8/8. `dotnet format` çıkış 0. Frontend tsc / eslint ✓, i18n 1591 anahtar eşit (T166 iki anahtar kaldırdı), vitest 401/401. Tam integration suite'i T166 sonrası CI'da koşar |
 | Bozma (bu tur) | 6 / 6 öldü | F1-M1…M4, M8, S3 (yukarıda) |

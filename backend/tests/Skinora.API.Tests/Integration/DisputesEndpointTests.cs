@@ -347,6 +347,11 @@ public class DisputesEndpointTests : IClassFixture<DisputesEndpointTests.Factory
             var user = new User
             {
                 Id = Guid.NewGuid(),
+                // T166 — TosAcceptanceGateFilter rejects an account without both
+                // stamps; endpoint tests act as an account that has accepted.
+                TosAcceptedVersion = "1.0",
+                TosAcceptedAt = DateTime.UtcNow,
+                AgeConfirmedAt = DateTime.UtcNow,
                 SteamId = $"{SteamIdBase}{suffix:D3}",
                 SteamDisplayName = "Tester",
                 PreferredLanguage = "en",

@@ -262,8 +262,6 @@ builder.Services.AddScoped<Skinora.Disputes.Application.Admin.IAdminDisputeServi
 // (15 min TTL) and maintenance toggles propagate within 30 s through the
 // per-replica cache; cross-replica invalidation is unnecessary at this scale.
 builder.Services.AddMemoryCache();
-builder.Services.Configure<PlatformOptions>(
-    builder.Configuration.GetSection(PlatformOptions.SectionName));
 builder.Services.AddScoped<IPlatformPublicService, PlatformPublicService>();
 
 // WP7 — admin maintenance/outage control (07 §9.31). Spans Platform settings,
@@ -319,6 +317,10 @@ builder.Services.AddHostedService<SettingsBootstrapHook>();
 // Diagnostic only: both inert defaults (Provider=logging, threshold=1.0) are
 // valid deployments, so it warns instead of failing the host.
 builder.Services.AddHostedService<PriceDeviationConfigDiagnosticHook>();
+
+// T166 — report whether the Steam account age gate is at its production value
+// (30). Diagnostic only, same placement and posture as the hook above.
+builder.Services.AddHostedService<AgeGateConfigDiagnosticHook>();
 
 // Outbox (T10) — IOutboxService producer, dispatcher (self-rescheduling
 // Hangfire job + Medallion distributed lock), consumer idempotency store,
@@ -410,6 +412,16 @@ builder.Services.AddHealthChecks()
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<ApiResponseWrapperFilter>();
+
+    // T166 — ToS + 18+ acceptance enforced on the server: every authorized
+    // endpoint outside [SkipTosAcceptanceGate] answers 403 TOS_NOT_ACCEPTED
+    // until the account has accepted (07 §2.5, §4.4).
+    options.Filters.Add<TosAcceptanceGateFilter>();
+
+    // T166 — [DevelopmentOnly] controllers (/api/v1/_diag/*) are not even
+    // registered outside Development: every such route is a plain 404.
+    options.Conventions.Add(
+        new DevelopmentOnlyControllerConvention(builder.Environment.IsDevelopment()));
 })
 .AddJsonOptions(options =>
 {
@@ -452,22 +464,11 @@ if (reverseProxySettings.IsConfigured)
         options.KnownProxies.Clear();
         options.KnownNetworks.Clear();
 
-        foreach (var proxy in reverseProxySettings.KnownProxies)
-        {
-            if (System.Net.IPAddress.TryParse(proxy, out var ip))
-                options.KnownProxies.Add(ip);
-        }
+        foreach (var ip in reverseProxySettings.ParseProxies())
+            options.KnownProxies.Add(ip);
 
-        foreach (var network in reverseProxySettings.KnownNetworks)
-        {
-            var parts = network.Split('/', 2);
-            if (parts.Length == 2 &&
-                System.Net.IPAddress.TryParse(parts[0], out var prefix) &&
-                int.TryParse(parts[1], out var length))
-            {
-                options.KnownNetworks.Add(new IPNetwork(prefix, length));
-            }
-        }
+        foreach (var (prefix, length) in reverseProxySettings.ParseNetworks())
+            options.KnownNetworks.Add(new IPNetwork(prefix, length));
     });
 }
 
@@ -481,6 +482,13 @@ var app = builder.Build();
 //    bu yeniden yazma daha sonra yapılırsa aradaki katmanlar proxy'nin
 //    kimliğini görmeye devam eder.
 //    YALNIZ yapılandırılmışsa kaydedilir — gerekçe ReverseProxySettings'te.
+// 0a. T166 — remember the DIRECT socket peer before UseForwardedHeaders
+//     replaces RemoteIpAddress with the client IP. Header trust that must
+//     depend on "came through our proxy" (X-Country-Code) reads this, never
+//     a header. Registered unconditionally: without forwarded headers the
+//     socket peer simply stays where it was.
+app.Use(DirectPeer.CaptureAsync);
+
 if (reverseProxySettings.IsConfigured)
 {
     app.UseForwardedHeaders();

@@ -167,6 +167,11 @@ export async function seedHappyPath(): Promise<typeof seed> {
 
   // Seller — MA verified + payout address + backdated account (dodges new-account limit).
   //
+  // T166 — every seeded party carries the ToS + 18+ stamps (TosAccepted*,
+  // AgeConfirmedAt). The backend now enforces them server-side: an account
+  // without them gets 403 TOS_NOT_ACCEPTED on every gated endpoint, exactly
+  // as a real user who closed the callback modal would.
+  //
   // 08 §2.2a — `SteamAccountCreatedAt` DOLU seed edilir ve bilerek çok eskidir.
   // Bu kolonu üretimde Steam girişi yazar (`GetPlayerSummaries.timecreated`);
   // e2e kullanıcıları DB'ye doğrudan ekleniyor, yani o yol hiç koşmuyor. NULL
@@ -187,8 +192,10 @@ export async function seedHappyPath(): Promise<typeof seed> {
       `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
          MobileAuthenticatorVerified, SteamAccountCreatedAt,
          CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+         TosAcceptedVersion, TosAcceptedAt, AgeConfirmedAt,
          CreatedAt, UpdatedAt)
        VALUES (@id, @steamId, @name, 'en', 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
+         '1.0', DATEADD(DAY,-60,SYSUTCDATETIME()), DATEADD(DAY,-60,SYSUTCDATETIME()),
          DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());
        INSERT INTO UserWalletAddresses (Id, UserId, Network, Type, Address, ChangedAt, CreatedAt, UpdatedAt)
        VALUES (NEWID(), @id, 'TRON', 'PAYOUT', @payout, NULL, SYSUTCDATETIME(), SYSUTCDATETIME());`,
@@ -412,8 +419,10 @@ export async function ensureAdmin(): Promise<void> {
          INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
            MobileAuthenticatorVerified, SteamAccountCreatedAt,
            CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+           TosAcceptedVersion, TosAcceptedAt, AgeConfirmedAt,
            CreatedAt, UpdatedAt)
          VALUES (@id, @steamId, @name, 'en', 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
+           '1.0', DATEADD(DAY,-60,SYSUTCDATETIME()), DATEADD(DAY,-60,SYSUTCDATETIME()),
            DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
     );
 }
@@ -430,8 +439,10 @@ async function insertBuyer(): Promise<void> {
       `INSERT INTO Users (Id, SteamId, SteamDisplayName, PreferredLanguage,
          MobileAuthenticatorVerified, SteamAccountCreatedAt,
          CompletedTransactionCount, IsDeactivated, IsSuspended, IsDeleted,
+         TosAcceptedVersion, TosAcceptedAt, AgeConfirmedAt,
          CreatedAt, UpdatedAt)
        VALUES (@id, @steamId, @name, 'en', 1, DATEADD(DAY,-400,SYSUTCDATETIME()), 0, 0, 0, 0,
+         '1.0', DATEADD(DAY,-60,SYSUTCDATETIME()), DATEADD(DAY,-60,SYSUTCDATETIME()),
          DATEADD(DAY,-60,SYSUTCDATETIME()), SYSUTCDATETIME());`,
     );
 }
