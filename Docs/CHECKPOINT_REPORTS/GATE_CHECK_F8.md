@@ -3,6 +3,7 @@
 **Tarih:** 2026-10-21
 **Task aralığı:** T141–T160 (+ T159a, T159b)
 **Toplam task:** 22 (T160 bu gate'in kendisi; ölçülen 21 görev T141–T159b)
+**PR:** [#361](https://github.com/turkerurganci/Skinora/pull/361) (dal `chore/f8-gate-check`)
 **Ölçüm commit'i:** `c1026b8c` (main = origin/main; dal `chore/f8-gate-check` buradan kesildi, gate'in kendi değişiklikleri yalnız belge/kayıt)
 **Yapan:** F8 yönetici düzeninde temiz bağlamlı gate alt ajanı (Opus high). Tag atılmadı — `phase/F8-pass` sahibin aşağıdaki "Sahip onayı bekleyen kararlar" listesine bakmasından sonra yönetici tarafından atılır.
 
