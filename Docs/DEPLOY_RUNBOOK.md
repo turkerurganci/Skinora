@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-21 — T166 — §B nginx ülke başlığı güveni, §F `_diag`/ülke başlığı/yaş kapısı doğrulaması, §G.5 yaş kapısı açılış logu; compose ağı alt ağı sabit. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-21 — T161 — §K deneme yayını (bu PC, Docker Desktop + Cloudflare Tunnel); §B iç anahtar zorunlu. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (75 satır — T149 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -17,6 +17,7 @@
 | **E. Runtime-tunable** | — | Admin UI'dan değişir; cron'lar **restart'sız** re-register olur (WP14), gas/retry her çalıştırmada taze okunur. |
 | **G. Lokal gerçek-konfigürasyon provası** | — | Uçtan uca çalıştırma reçetesi: sır yönetimi, migration, bootstrap SQL'leri, doğrulama listesi, bilinen tuzaklar. |
 | **J. Ethereum kurulumu ve alarmları (F8)** | Ethereum açılmadan ZORUNLU | Sırlar, RPC, fiyat kaynağı probu, cüzdan doldurma, açılış adımı (`ETHEREUM_SIDECAR_BASE_URL`), her Ethereum alarmının anlamı ve yordamı, uzun kesinti ve yanlış EVM ağı kurtarması (T158). |
+| **K. Deneme yayını (bu PC, Docker Desktop + Cloudflare Tunnel — T161)** | Deneme yayınından önce ZORUNLU | Ayrı compose projesi (`skinora-trial`, ayrı volume / `.env.trial` / `secrets/trial/`); dışarıya açık port yok, dış trafik yalnız tünelden; tünel token'sız açılmaz. Gelecekteki Linux sunucu için 80/443 + güvenlik duvarı notu §K.6. |
 | **H. Launch checklist — teslimat kanıtı kapısı** | **Launch'ta ZORUNLU adım** | `delivery.inventory_evidence_auto_release_enabled` `false` seed edilir. İlk N gerçek teslimatın kanıtı insan tarafından incelenmeden envanter kanıtına dayalı otomatik para bırakma **açılmaz** (02 §9.2, T125). |
 
 ---
@@ -71,7 +72,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `JWT_SECRET` (≥32 char) | backend | Access/refresh token imzası |
 | `JWT_ISSUER` / `JWT_AUDIENCE` | backend | Token issuer/audience |
 | `WEBHOOK_SECRET` (≥32 char) | backend + **blockchain** sidecar | Sidecar→backend HMAC-SHA256 webhook imzası (05 §3.4). Steam sidecar webhook göndermez (T133) — kalan tek imzalı yüzey blockchain'dir |
-| `INTERNAL_KEY` | backend + sidecar'lar | Backend↔sidecar internal API `X-Internal-Key` auth |
+| `INTERNAL_KEY` (+ `STEAM_SIDECAR_INTERNAL_KEY` / `BLOCKCHAIN_SIDECAR_INTERNAL_KEY`) | backend + sidecar'lar | Backend↔sidecar internal API `X-Internal-Key` auth. **T161 — fail-closed: Steam ve TRON servisi iç anahtar boşsa ya da 32 karakterden kısaysa AÇILMAZ** (`INTERNAL_KEY_MISSING` / `INTERNAL_KEY_TOO_SHORT`, Ethereum servisiyle aynı kural). T161 öncesi boş anahtar "dev modu" sayılıp kimlik doğrulaması atlanıyordu — servisin portuna ulaşan herkes `/api` uçlarını çağırabiliyordu. Üretim: `openssl rand -hex 32`, servis başına ayrı değer |
 | `STEAM_API_KEY` | steam sidecar + backend | Steam Web API (envanter + trade-hold probu) + OpenID profil adı/avatar (`SteamOpenId__WebApiKey`; boşsa login çalışır ama profil placeholder'a düşer). **Steam sidecar'ın tek credential'ı budur** — bot hesabı gerekmez (T133, 08 §9.1) |
 | `STEAM_OPENID_REALM` / `_RETURN_TO` / `_REVERIFY_RETURN_TO` / `_FRONTEND_CALLBACK` | backend | Steam OpenID 2.0 (08 §2.1). **`appsettings.json` default'u `https://skinora.com`** — override edilmezse gerçek login ölü bir domaine yönlenir |
 | `PUBLIC_ORIGIN` | backend | Tarayıcıya bakan tek origin → `Cors__AllowedOrigins__0` |
@@ -856,3 +857,165 @@ Servis hiçbir gas miktarını sabit varsaymaz (yönetici kararı, ⚠ PARA; 08 
 3. **Tavanın üstünde bekleme (`FEE_ABOVE_CAP`):** gas pahalılaşınca (yeni hesaba yakıt, ilk kez token alan adres) aynı 0,50 $ tavanı daha az gas başı fiyata izin verir; gönderim ücret düşünce kendiliğinden çıkar. **Sepolia provası:** Sepolia'nın bahşiş medyanı ~1 gwei'dir (taban 16 wei) — yeni depozitten sweep ≈ 0,61 $, ilk kez alan adrese iade ≈ 0,89 $ tutar ve 0,50 $ tavanında bekler. Provada `blockchain.ethereum.fee_cap_usd_per_transfer`'i geçici olarak `1.00` yapın, prova bitince `0.50`'ye döndürüp veritabanından teyit edin. Mainnet'te bugünkü bahşişle (~0,01 gwei) aynı akış ~0,01 $'dır.
 4. **Elle müdahale gerekmez:** T159 provasındaki geçici çareler (depozite elle ETH, alıcı adresine önceden token) artık gereksizdir. Bir depozite dışarıdan ETH gönderilirse servis onu depozitin kendi ETH'si sayar (yakıt 21.000 gas'a düşer) ve `ethereum-deposit-native-eth` çalar — yapmayın.
 5. **`gas-fee-fallback-charged` (warning, backend, iki ağ — T160b):** bir kesinti canlı tahmin olmadan yazıldı ve **sonradan düzeltilmez** (08 §3.1a). Etiketler: `network`, `flow` (`refund`, `hot-wallet refund`, `payout`), `reason` (`unavailable` — 3 denemede tahmin gelmedi; `rejected` — tahmin `max_charged_gas_fee_usdt`'yi aştı; `no_sender` — depozit adresi yok), `basis` (`measured` / `static`). Sırayla: (a) backend log'unda "charged without a live estimate" satırı ve önceki "asking again" satırlarının `Failure`'ı; (b) o ağın servisi ayakta mı, `estimate-fee` log'unda hangi kod (`FEE_ESTIMATE_SIMULATION_FAILED`, `RPC_ALL_PROVIDERS_FAILED`, `ETH_PRICE_UNAVAILABLE`, TronGrid hatası); (c) `basis="static"` tekrarlıyorsa ayarın (`blockchain.refund_gas_fee_estimate_usdt` / `blockchain.ethereum.refund_gas_fee_estimate_usdt`) ağın bugünkü tarifesine yakın olduğunu kontrol edin — süreç yeniden başladıysa ölçüm bellekten silinmiştir ya da ölçüm ayarın üstündedir (yedek min(ölçülen, ayar) olduğu için ayar kesilir, aradaki farkı platform üstlenir); (d) iade onaylanınca satırın `GasFee`'sini gerçekleşen ücretle karşılaştırın (Ethereum `RealizedFeeWei`). Alarm son yedekten 1 saat sonra kendiliğinden kapanır.
+
+---
+
+## K. Deneme yayını — bu PC, Docker Desktop + Cloudflare Tunnel (T161)
+
+> **Bağlam (proje sahibi kararı, 2026-10-21).** Kiralık sunucu yok. Deneme yayını proje sahibinin bilgisayarında, **mevcut Docker Desktop** ve **Cloudflare Tunnel** ile yapılır; yalnız test ağları (TRON Nile + Ethereum Sepolia). **Modemde port açılmaz** — dış trafik yalnız tünelden gelir: cloudflared Cloudflare'a **dışarı doğru** bağlanır ve isteği compose iç ağından edge'e (`skinora-reverse-proxy:80`) iletir. Alan adı `skinora.com` henüz alınmadı; tünelin gerçekten bağlanması T162'dir. Gerçek ağ (mainnet) için sunucu kararı sonra verilir — aynı compose orada da çalışır (§K.6).
+>
+> Deneme yayını, geliştirme stack'inin (`-f docker-compose.yml`, proje `escrow`) **yanında** çalışır ve ona dokunmaz: ayrı proje adı, ayrı container'lar, ayrı ağ, ayrı volume'ler, ayrı `.env.trial`, ayrı `secrets/trial/`.
+
+### K.1 Geliştirme stack'inden farkı
+
+| Konu | Geliştirme (`-f docker-compose.yml`) | Deneme yayını (`+ -f docker-compose.trial.yml`) |
+|---|---|---|
+| Compose projesi | dizin adı (`escrow`) | **`skinora-trial`** (overlay'deki `name:`; `-p` verilirse o geçer) |
+| Container adları | sabit (`skinora-backend` …) | projeden türer (`skinora-trial-skinora-backend-1` …) — çakışmaz |
+| Volume'ler | `escrow_skinora-db-data` … | `skinora-trial_skinora-db-data` … — **ayrı veritabanı** |
+| Ağ | otomatik alt ağ | **`172.30.161.0/24`** (`TRIAL_NETWORK_SUBNET`); backend'in `X-Forwarded-For` güveni (`ReverseProxy__KnownNetworks__0`) bu aralığa sabitlenir |
+| Değerler | `.env` | **`.env.trial`** (`--env-file`; `.env.*` gitignored). İçinde **`SKINORA_TRIAL_STACK=1`** işareti zorunludur: yoksa overlay render bile etmez (§K.4) |
+| Docker secret'lar | `secrets/` | **`secrets/trial/`** ([`secrets/README.md`](../secrets/README.md)) |
+| Host portları | hepsi `127.0.0.1` (§K.2) | iç servis portu **yok**; yalnız operatör için `127.0.0.1:8090` (edge), `127.0.0.1:3011` (Grafana), `127.0.0.1:3012` (Uptime Kuma) |
+| Ortam modu | `.env`'den | **zorlanır**: `ASPNETCORE_ENVIRONMENT=Production`, `NODE_ENV=production` |
+| Grafana parolası | boşsa `admin` | **boşsa render bile edilmez** (`GRAFANA_ADMIN_PASSWORD must be set`) |
+| Tünel | yok | `skinora-cloudflared` (profil `tunnel`), token'sız açılmaz (§K.5) |
+
+### K.2 Port politikası (T161 kabul kriteri)
+
+- **`docker-compose.yml` (geliştirme ve gelecekteki sunucu):** her host portu `127.0.0.1`'e bağlıdır — veritabanı (1433), Redis (6379), backend (5000), frontend (3000), sidecar'lar (5100/5200/5300), Loki (3100), Prometheus (9090), Grafana (3001), Uptime Kuma (3002). Bu portlar yalnız bu makineden açılır, LAN'dan ya da internetten **açılmaz**. Servisler birbirine compose ağıyla ulaşır; host portuna ihtiyaçları yoktur. Ayarı olan tek servis edge'dir: `NGINX_BIND_ADDRESS` (varsayılan `127.0.0.1`).
+- **`docker-compose.trial.yml`:** iç servislerin portları `ports: !reset []` ile tamamen kaldırılır; yalnız üç operatör portu `127.0.0.1`'de kalır. Dış trafik **yalnız** tünelden gelir.
+- **`docker-compose.override.yml`** artık port yayımlamaz: compose override'daki port listesini taban dosyanınkine **ekler**, yani oradaki çıplak `"5000:5000"` aynı porta ikinci bir `0.0.0.0` bağı açardı.
+- **CI kapısı:** `scripts/compose-exposure.test.mjs` (job "3c. Script test") üç kombinasyonu `docker compose config` ile render eder ve `127.0.0.1` dışına bağlı her portta, deneme yayınında port yayımlayan her iç serviste, sabit container adında, `secrets/trial/` dışından gelen secret'ta Grafana parolasız render'da ve `.env.trial` işareti (`SKINORA_TRIAL_STACK`) olmayan render'da **kırmızı** olur. Metin değil render edilmiş model okunur: `!reset` etiketi YAML anchor'ı (`<<: *x`) üzerinden verildiğinde compose onu **sessizce düşürür** ve taban portlar kalır (Compose v5.1.0'da ölçüldü) — overlay etiketleri bu yüzden her serviste tek tek yazılıdır.
+- **E2E stack'i (`docker-compose.e2e.yml`) kapsam dışıdır:** sabit test değerleri taşır, CI runner'ında host portlarına bağlanan Playwright/harness tarafından kullanılır ve deneme yayınıyla aynı anda çalıştırılmaz.
+
+### K.3 Ön koşullar
+
+| Gereken | Not |
+|---|---|
+| Docker Desktop + Compose ≥ 2.24 | `!reset` / `!override` etiketleri. Bu makinede v5.1.0 |
+| .NET 9 SDK + `dotnet-ef` 9.0.3 | Yalnız migration **betiğini üretmek** için (host'tan veritabanına bağlanılmaz — deneme yayınında DB portu yok) |
+| Deneme yayınına **ayrı** testnet cüzdanları | TRON: `HD_WALLET_MNEMONIC`, sıcak/soğuk cüzdan; Ethereum: `secrets/trial/` altındaki tohum ve anahtarlar. **Geliştirme stack'inin cüzdanları paylaşılmaz:** iki veritabanı aynı tohumdan aynı indeksleri (0, 1, 2 …) türetir ve iki stack aynı depozit adreslerini izler; iki imzacı aynı sıcak cüzdandan gönderir (Ethereum'da aynı hesabın nonce'u iki ayrı günlükle yarışır, günlük çıkış tavanları ikiye bölünmez) |
+| Yeni sırlar | `JWT_SECRET`, `WEBHOOK_SECRET`/`BLOCKCHAIN_WEBHOOK_SECRET`, `ETHEREUM_WEBHOOK_SECRET`, `*_INTERNAL_KEY` (≥ 32, servis başına ayrı), `MSSQL_SA_PASSWORD`, `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD` — hepsi `openssl rand -hex 32` ile **yeniden** üretilir, `.env`'den kopyalanmaz |
+| `STEAM_API_KEY`, `TRON_API_KEY`, Ethereum RPC URL'leri | §G.0, §J.1 ile aynı |
+| Bilgisayar açık ve uyumaz | Deneme yayını bu makine kadar ayaktadır; Windows uyku/hazırda bekletme kapatılır (Güç seçenekleri), Docker Desktop "Start when you sign in" açık |
+
+**RAM (ölçüldü 2026-10-21, Docker/WSL2 sınırı 3 GB):** tam deneme yığını (12 servis, ethereum dahil) boştayken ≈ **1,56 GiB** tutar (db 829 MiB, backend 183, uptime-kuma 125, grafana 83, frontend 79 …); sığar, OOM ya da yeniden başlama yok. **Yığın açıkken imaj derlemesi yapmayın:** frontend'i sıfırdan derlemek (`build --no-cache`) kullanılabilir belleği 431 MB'a, swap'ı 1024/1024 MB'a (tamamen dolu) çekti ve veritabanını swap'a itti (RSS 829 → 334 MiB). Önce derleyin, sonra açın: `$TRIAL build` yığın **durmuşken** (`$TRIAL down`), ardından `$TRIAL up -d --wait`. Güncelleme gerekiyorsa aynı sıra. Soğuk backend + frontend derlemesi yığın açıkken denenmedi; kaçının.
+
+### K.4 Kurulum adımları
+
+Komutlar Git Bash içindir (`MSYS_NO_PATHCONV=1`, `/opt/...` yollarının Windows yoluna çevrilmesini önler). Bütün komutlar **repo kökünden** ve **aynı önekle** koşulur. `-f docker-compose.trial.yml` ya da `-p` unutulursa komut geliştirme projesine gider. `--env-file .env.trial` unutulursa komut **trial projesine** gider ama değerleri geliştirme `.env`'inden alırdı (aynı TRON tohumu, anahtarlar, DB parolası); bunu overlay'deki `SKINORA_TRIAL_STACK` kapısı keser: işaret yalnız `.env.trial`'da tanımlıdır, yoksa komut `SKINORA_TRIAL_STACK is not set` hatasıyla durur (`config`, `up`, `down` dahil):
+
+```bash
+TRIAL="docker compose -p skinora-trial --env-file .env.trial -f docker-compose.yml -f docker-compose.trial.yml"
+# Ethereum açıksa her komuta --profile ethereum, tünel açıksa --profile tunnel eklenir.
+
+# 1) Değerler — şablondan, deneme yayınına özgü değerlerle
+cp .env.example .env.trial
+echo 'SKINORA_TRIAL_STACK=1' >> .env.trial     # zorunlu işaret; .env.example'a KONMAZ (hook yalnız .env.example'ı commit'e bırakır)
+#    §A'daki 19 + §B secret'ları (K.3: hepsi YENİ) + test ağı değerleri:
+#    TRON_NETWORK=nile, TRON_USDT_CONTRACT=<Nile>, TRONSCAN_TX_BASE_URL=https://nile.tronscan.org/#/transaction/
+#    ETHEREUM_NETWORK=sepolia, ETHERSCAN_TX_BASE_URL=https://sepolia.etherscan.io/tx/
+#    GRAFANA_ADMIN_PASSWORD=<yeni>   (boşsa overlay render bile etmez)
+#    PUBLIC_ORIGIN ve STEAM_OPENID_* → T162'ye kadar http://localhost:8090,
+#    T162'de https://skinora.com (tünelin public hostname'i)
+#    ASPNETCORE_ENVIRONMENT / NODE_ENV yazılsa da overlay Production'a zorlar.
+#    NGINX_* deneme yayınında etkisizdir (portlar overlay'den gelir).
+
+# 2) Sırlar — dosya olarak taşınanlar
+umask 077; mkdir -p secrets/trial
+: > secrets/trial/cloudflare_tunnel_token.txt          # T162'de token yazılır
+#    --profile ethereum için: secrets/trial/ethereum_*.txt (secrets/README.md)
+
+# 3) Render kontrolü — uyarısız ve hatasız olmalı
+$TRIAL config --quiet
+
+# 4) Veritabanı + şema (host'tan bağlantı YOK — betik container içinde koşar)
+$TRIAL up -d --wait skinora-db
+SA=$(grep '^MSSQL_SA_PASSWORD=' .env.trial | cut -d= -f2-)
+(cd backend && dotnet ef migrations script --idempotent \
+   --project src/Skinora.Shared/Skinora.Shared.csproj \
+   --startup-project src/Skinora.API/Skinora.API.csproj \
+   --context AppDbContext -o "${TMPDIR:-/tmp}/trial-migrate.sql")
+MSYS_NO_PATHCONV=1 $TRIAL cp "${TMPDIR:-/tmp}/trial-migrate.sql" skinora-db:/tmp/migrate.sql
+MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$SA" -C -b -Q "IF DB_ID('Skinora') IS NULL CREATE DATABASE [Skinora]"
+MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$SA" -C -b -I -d Skinora -i /tmp/migrate.sql > /dev/null
+#    Doğrula: migration sayısı repo'daki dosya sayısına eşit (§G.0a adım 2'deki türetme)
+MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$SA" -C -h -1 -d Skinora -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __EFMigrationsHistory"
+
+# 5) Tüm stack
+$TRIAL up -d --build --wait
+#    (§G.5 tuzakları burada da geçerli: yeniden kurulumdan sonra
+#     $TRIAL restart skinora-reverse-proxy skinora-grafana)
+
+# 6) Yerel duman testi (yalnız bu makineden)
+curl -s http://127.0.0.1:8090/nginx-health                              # ok
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/health   # 200
+
+# 7) Süper admin — önce tarayıcıdan Steam ile bir kez giriş (Users satırı oluşsun)
+MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "$SA" -C -d Skinora -v SteamId="<steamid64>" \
+  -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
+```
+
+**Ölçülen iki tuzak (2026-10-21, adım 4):**
+- **BOM:** `dotnet ef migrations script` dosyayı UTF-8 **BOM**'la yazar; `sqlcmd -i /dev/stdin` (stdin'den okuma) BOM'u tanımaz ve ilk satırda `Incorrect syntax near ''` ile durur. Dosyayı `docker compose cp` ile container'a kopyalayıp `-i <dosya>` ile okutmak BOM'u doğru işler. (`01-super-admin.sql` BOM'suzdur; stdin yolu onun için çalışır.)
+- **`QUOTED_IDENTIFIER`:** `sqlcmd` bu ayarı varsayılan olarak **kapalı** açar; filtreli indeksler `CREATE INDEX failed because the following SET options have incorrect settings: 'QUOTED_IDENTIFIER'` ile reddedilir. `-I` bayrağı zorunludur. Betik idempotenttir — yarıda kalırsa düzeltilip yeniden koşulur (her migration kendi transaction'ında).
+
+### K.5 Tünel (T162'de bağlanır)
+
+1. **Cloudflare'da:** Zero Trust → Networks → Tunnels → *Create a tunnel* (Cloudflared). Kurulum ekranındaki **token**'ı kopyalayın — `cloudflared service install` komutunu **çalıştırmayın** (Windows servisi değil, compose içindeki container kullanılır).
+2. **Token'ı dosyaya yazın** (tek satır, tırnaksız): `secrets/trial/cloudflare_tunnel_token.txt`. Token env değişkeni olarak taşınmaz (`docker inspect` göstermesin diye); cloudflared onu `TUNNEL_TOKEN_FILE` ile Docker secret'tan okur.
+3. **Public hostname:** tünelin *Public Hostname* sekmesinde `skinora.com` (gerekirse `www`) → Service **`http://skinora-reverse-proxy:80`**. Container adı değil **servis adı** yazılır — deneme yayınında container adları projeden türer.
+4. **Başlatın:** `$TRIAL --profile tunnel up -d --wait`. Önce `skinora-tunnel-preflight` koşar; token dosyası boşsa `TUNNEL_TOKEN_MISSING` yazıp **1** ile çıkar ve cloudflared **hiç başlatılmaz** (fail-closed — boş token'la yeniden başlama döngüsüne girmez). Token doluysa `$TRIAL --profile tunnel logs skinora-cloudflared` içinde `Registered tunnel connection` satırları görünür.
+5. **cloudflared host'ta port açmaz.** Kendi metrik ucu container içindedir; yayımlanmaz.
+
+**T162'ye kalanlar (bu görevde bilerek yapılmadı):**
+- **Gerçek istemci IP'si.** Tünel arkasında nginx'in gördüğü adres cloudflared container'ıdır; `X-Forwarded-For`'un son halkası o olur ve `ForwardLimit=1` ile backend **her kullanıcıyı aynı IP** görür → `auth` rate limit kovası tek kovaya düşer, geo-block ve VPN sinyali etkisizleşir. T162: nginx'te `real_ip_header CF-Connecting-IP;` + `set_real_ip_from 172.30.161.0/24;` (yalnız cloudflared'in ağı), ardından §B `REVERSE_PROXY_*` ölçümünün tünel üzerinden tekrarı.
+- **`https` şeması.** TLS Cloudflare kenarında biter; cloudflared → nginx düz HTTP'dir ve nginx `X-Forwarded-Proto $scheme` = `http` gönderir. Oturum çerezinin `Secure` bayrağı ve OpenID `return_to` doğrulaması gerçek alan adında `https` görmelidir (T162 kabul kriteri).
+
+### K.6 Gelecekteki Linux sunucu (gerçek ağ — karar sonra)
+
+Aynı `docker-compose.yml` çalışır; iki seçenek:
+
+| Seçenek | Nasıl | Host güvenlik duvarı |
+|---|---|---|
+| **(a) Tünel (önerilen)** | Bu bölümün aynısı: overlay ya da eşdeğer bir üretim overlay'i, cloudflared dışarı bağlanır | Gelen trafikte **yalnız SSH** (tercihen yalnız yönetici IP'sinden); 80/443 bile açılmaz |
+| **(b) Doğrudan 80/443** | `.env`'de `NGINX_BIND_ADDRESS=0.0.0.0`; sertifika nginx'te (T162 kapsamı) | Gelen trafikte 22 + 80 + 443; geri kalan her şey `deny` |
+
+**⚠ Docker, ufw'yu atlar.** Docker yayımlanan portlar için kendi iptables zincirlerini (`DOCKER`, `DOCKER-USER`) ufw'nun `INPUT` kurallarından **önce** işler; `0.0.0.0`'a yayımlanmış bir port, `ufw deny` olsa bile internetten açılır. Bu yüzden taban dosya iç portları `127.0.0.1`'e bağlar ve bunun için bir ayar sunmaz. Ek kısıt gerekiyorsa ufw değil `DOCKER-USER` zinciri kullanılır.
+
+**Doğrulama (sunucuda):** `ss -ltnp` → `127.0.0.1` dışında yalnız 22 (ve (b)'de 80/443) dinlenir; ayrıca **başka bir makineden** `nmap -Pn -p- <sunucu-ip>` aynı sonucu vermelidir. Yerel tarama yetmez: kural "makine ne dinliyor" değil "dışarıdan ne açılıyor" sorusudur.
+
+### K.7 T161 ölçümü (2026-10-21, bu PC)
+
+Yığın `-p skinora-t161` proje adıyla (geliştirme projesi `escrow`'a dokunmadan), §K.4 adımlarıyla kuruldu: migration 60/60 (repo'daki migration dosyası sayısı 60), `up -d --build --wait` → 11 servis `healthy` (+ render servisi `Exited (0)`). Ölçüm, geliştirme stack'i kapalıyken; aynı makinede başka ajanların testcontainers konteynerleri çalışıyordu.
+
+| Kontrol | Komut | Sonuç |
+|---|---|---|
+| Docker'ın yayımladığı portlar | `docker ps --format '{{.Names}} {{.Ports}}'` | yalnız `reverse-proxy 127.0.0.1:8090->80`, `grafana 127.0.0.1:3011->3000`, `uptime-kuma 127.0.0.1:3012->3001`; db, redis, backend, frontend, iki sidecar, loki, prometheus yalnız container portu (`1433/tcp`, `5000/tcp` …) — host'a bağ **yok** |
+| Host'ta Docker'ın dinlediği soketler | `Get-NetTCPConnection -State Listen` (sahibi `com.docker.backend`) · `netstat -ano` | projeye ait yalnız `127.0.0.1:3011`, `127.0.0.1:3012`, `127.0.0.1:8090`. Listede görünen `[::]:64110` / `[::]:64120` başka bir ajanın testcontainers konteynerleri (`testcontainers-ryuk-*`, `epic_tesla`) — bu projeden değil. `0.0.0.0:80` PID 4 (Windows System/http.sys) — Docker değil |
+| LAN adresinden erişim | `TcpClient.Connect` → `127.0.0.1` ve Wi-Fi adresi `192.168.1.104`, portlar 8090 3011 3012 1433 6379 5000 5100 5200 3100 9090 | `127.0.0.1`: 8090/3011/3012 **açık**, diğerleri kapalı · `192.168.1.104`: **hepsi kapalı** |
+| Edge duman testi | `curl http://127.0.0.1:8090/nginx-health` · `/health` · `/` · Grafana `/api/health` | `ok` · 200 · 307 (frontend yönlendirmesi) · 200 |
+| İç anahtar, iç ağdan | backend container'ından `curl http://skinora-steam-sidecar:5100/api/inventory/<id>` ve `POST http://skinora-blockchain-sidecar:5200/api/wallet/derive` | anahtarsız **401** · doğru anahtarla 503 (`HD_WALLET_NOT_CONFIGURED` — rota çalıştı, tohum ölçümde bilerek boştu) |
+| İç anahtarsız açılış | `$TRIAL run --rm --no-deps -e INTERNAL_KEY= skinora-steam-sidecar` · `-e INTERNAL_KEY=<13 karakterlik test değeri> skinora-blockchain-sidecar` | `refused to start: INTERNAL_KEY_MISSING`, çıkış **1** · `refused to start: INTERNAL_KEY_TOO_SHORT`, çıkış **1** |
+| Token'sız tünel | boş ve yalnız boşluklu `cloudflare_tunnel_token.txt` ile `$TRIAL --profile tunnel up -d skinora-cloudflared` | preflight `TUNNEL_TOKEN_MISSING`, `exit 1`; `up` çıkışı 1; cloudflared **`Created`** (hiç başlatılmadı) |
+| Token'lı tünel (sahte değer) | `not-a-real-token` | preflight `tunnel token present`; cloudflared başladı, `Provided Tunnel token is not valid.` (token dosyadan okundu); container env'inde yalnız `TUNNEL_TOKEN_FILE=/run/secrets/cloudflare_tunnel_token`; port **yok** |
+| Ağ ve güven aralığı | `docker network inspect` · backend env | `172.30.161.0/24` · `ReverseProxy__KnownNetworks__0=172.30.161.0/24`, `ASPNETCORE_ENVIRONMENT=Production` |
+| Temizlik | `$TRIAL --profile tunnel --profile ethereum down -v --rmi local --remove-orphans` | `skinora-t161` container/volume/ağ **0**; `escrow_*` volume'leri **8** (dokunulmadı) |
+
+**Bu ölçümün söylemediği:** dışarıdan (internetten ya da LAN'daki başka bir cihazdan) tarama yapılmadı — LAN kontrolü bu makinenin kendi Wi-Fi adresine bağlanma denemesidir. Docker Desktop `127.0.0.1` bağını host'un loopback'ine kurar; Wi-Fi adresinde dinleyen soket yoktur (`Get-NetTCPConnection`). Modemde port yönlendirme yoktur (sahip kararı). Gerçek dış tarama T162'de, tünel bağlandıktan sonra alan adı üzerinden yapılır.
+
+**Bağımsız doğrulamanın ek gözlemleri (2026-10-21):**
+- **Bu makinede IIS (HTTP.sys, PID 4) `0.0.0.0:80` dinliyor** (Sarus/ICA uygulamaları) ve `192.168.1.104:80` LAN'dan 200 döner. Skinora'dan değildir ve modemde yönlendirme yoktur; ama deneme yayını bu makinede olacağı için sahibin bilmesi gerekir.
+- **Geçersiz ama boş olmayan tünel token'ı** cloudflared'ı `restart: unless-stopped` yüzünden yeniden başlatma döngüsüne sokar (~2 dk'da 9 yeniden başlama); port açmaz, sır sızdırmaz, yalnız log gürültüsüdür. Preflight bilerek yalnız boş token'ı keser.
+- **Yerel E2E stack'i (`docker-compose.e2e.yml`) portları `0.0.0.0`'da bırakır** (14333 DB — bilinen `sa` parolası —, 5000, 5100–5300, 8080). Bu PC'de E2E koşulurken koşu boyunca LAN'dan erişilebilir; E2E'yi ağa güvenmediğiniz bir yerde koşmayın.
+
+### K.8 Durdurma ve silme
+
+- **Durdur (veri kalır):** `$TRIAL down` — tünel profiliyle başlatıldıysa `$TRIAL --profile tunnel down`.
+- **Sil (veritabanı dahil, geri dönüşü yok):** `$TRIAL down -v`. Yalnız `skinora-trial_*` volume'lerini siler. **Öneksiz `docker compose down -v` koşmayın** — geliştirme projesinin volume'lerini siler.
+- Geliştirme stack'i bu komutlardan etkilenmez; iki proje aynı anda çalışabilir (port çakışması yoktur: deneme yayını iç port yayımlamaz, operatör portları 8090/3011/3012).

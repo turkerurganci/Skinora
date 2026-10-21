@@ -1,6 +1,7 @@
 import express from 'express';
 import Redis from 'ioredis';
 import { config } from './config/index.js';
+import { InternalKeyError, requireInternalKey } from './config/internalKey.js';
 import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { buildRouter } from './api/routes.js';
@@ -25,6 +26,21 @@ import {
   RedisLimitedAccountCache,
   type LimitedAccountCache,
 } from './cache/LimitedAccountCache.js';
+
+// T161 — fail closed before anything is built or listens: without its internal
+// key (05 §3.4) the service does not start (config/internalKey.ts). The error
+// carries the code; the stack trace on stderr is the container's last word.
+const internalKey = startupInternalKey();
+
+function startupInternalKey(): string {
+  try {
+    return requireInternalKey(config.internalKey);
+  } catch (err) {
+    const code = err instanceof InternalKeyError ? err.code : 'STARTUP_FAILED';
+    logger.fatal({ code }, `Steam sidecar refused to start: ${code}`);
+    throw err;
+  }
+}
 
 // T133 — the sidecar is a READ-ONLY Steam proxy. It boots with no Steam
 // account of any kind: the bot pool, its credentials and the trade offer
@@ -113,6 +129,7 @@ app.use(correlationMiddleware);
 // Routes
 app.use(
   buildRouter({
+    internalKey,
     inventoryService,
     tradeHoldService,
     limitedAccountService,

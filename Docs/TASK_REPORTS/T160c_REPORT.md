@@ -310,6 +310,7 @@ ETH 2.444,861904, TRX 0,3313 (T159b). Eski ekran Ethereum'da gerçek giderin **%
 
 - Merge commit `9985a2b7`, rebase değil; ebeveynler `c5dab67c` + `2e502e99`.
 - Düzeltme commit'i push edildikten sonra main'e T166 (#366, `e7e8acf1`) birleşti ve PR yine çakıştı. İkinci merge commit'i (rebase değil) aynı yöntemle çözüldü. Kod çakışması yok; i18n dosyaları otomatik birleşti. 02 ve 07 başlıkları T166 ile aynı gün v4.17'de çakıştı, bu yüzden ikisi de **v4.18** oldu (iki görev başlıkta). `STATUS_CHANGELOG`'u T166 bütünüyle yeniden yazmıştı; main'in sürümü alındı, bu dalın girişleri üstüne eklendi.
+- Bu düzeltme CI'da koşarken main'e T161 (#367, `d81d91f1`) birleşti. Üçüncü merge commit'i de aynı yöntemle yapıldı. Kod çakışması yok; `sidecar-blockchain/src/index.ts` otomatik birleşti, sidecar 613/613 yeşil. 05 başlığı T161 ile v3.30'da çakıştı → **v3.31**. `plan/11_F9.md` T161 ile v1.20'de çakıştı → **v1.21**: main'in dosyası alındı, "T160c kararları" paragrafı T175 bloğunun altına yeniden eklendi. `IMPLEMENTATION_STATUS` satırlarında T161 main'den, T160c bu daldan. `STATUS_CHANGELOG`'a T161 ve T166 merge teyitleri eklendi.
 - Kod çakışması yok (T160b dosyaları otomatik birleşti). T160b'nin min(ölçülen, sabit) yedeği değişmedi.
 - Çakışan belgelerde iki tarafın satırları da korundu:
   - 02/05/08 başlıkları: main'in bir üstü, v4.17 / v3.30 / v3.44.
@@ -333,7 +334,7 @@ Blob ilk commit'te LF'ye normalize edilmişti. Bu turdaki diff yalnız "T160c ka
 
 ### Devir kaydı
 
-`STATUS_CHANGELOG`'a T160b (#364) merge teyidi işlendi: main `2e502e99`, CI `39582270230` ✓, Docker Publish `39582270184` ✓. Ayrıca T166 (#366): main `e7e8acf1`, CI `39600854571` ✓, Docker Publish `39600854541` ✓.
+`STATUS_CHANGELOG`'a T160b (#364) merge teyidi işlendi: main `2e502e99`, CI `39582270230` ✓, Docker Publish `39582270184` ✓. Ayrıca T166 (#366): main `e7e8acf1`, CI `39600854571` ✓, Docker Publish `39600854541` ✓. T161 (#367): main `d81d91f1`, CI `39607353309` ✓, Docker Publish `39607353298` ✓.
 
 ### Yeni ⚠ kararlar (öneriyle kaydedildi — ⚠ PARA)
 
@@ -349,7 +350,7 @@ Blob ilk commit'te LF'ye normalize edilmişti. Bu turdaki diff yalnız "T160c ka
 - **Ethereum, sahipsiz yakıt:** bir isteğin yakıtı gönderilip token transferi hiç imzalanmazsa (satır FAILED), o yakıt sayılmaz. Bu depozitten sonraki gönderim "kendi yakıtı yok → 0" der. Gider bu durumda eksik kalır.
 - **FAILED satırlar:** defter yalnız onaylanmış iadeleri ve onaylanmış toplamaları gider sayar. Zincirde geri dönen bir iadenin / toplamanın yakıtı ve ücreti AD38'de görünmez.
 - **Uyuyan staking yolu (T149):** delegasyon / geri alma işlemlerinin Bandwidth'i sayılmaz (staking kapalı, kullanılmıyor).
-- **`sidecar-fake`** yeni alanları dönmüyor. e2e'de satırlar "ölçülmedi" görünür; e2e advisory, akış değişmedi.
+- **`sidecar-fake`:** Ethereum durum cevabı yeni alanları döndürüyor (sözleşme örneğiyle aynı biçim). TRON sweep / iade cevabında `platformSpendSun` yok. e2e'de TRON satırları "ölçülmedi" görünür; e2e advisory, akış değişmedi.
 
 ### Düzeltme turu test sonuçları
 
@@ -364,5 +365,6 @@ Blob ilk commit'te LF'ye normalize edilmişti. Bu turdaki diff yalnız "T160c ka
 | sidecar-ethereum | ✓ 882/882 | tsc ✓, eslint ✓, prettier (`--end-of-line auto`) ✓ |
 | sidecar-blockchain | ✓ 597/597 | tsc ✓, eslint ✓, prettier ✓ (`npm ci` ile) |
 | Frontend | ✓ 392/392 | `npm ci` (main'in next 16.3.8'i), `tsc --noEmit` ✓, `eslint` ✓, `i18n:check` 4 dil 1593 anahtar eşit ✓, prettier (`--end-of-line auto`) ✓, `vitest run` ✓ |
+| **İlk dal CI'ı (`6063f781`, run 39604924156)** | ✗ → düzeltildi | Tek kırmızı: `sidecar-fake` sözleşme testi (`contracts.test.ts`). Bu test Ethereum durum örneğinin biçimini sahte servisle karşılaştırıyor. Örneğe iki alan eklenmişti, sahte serviste yoktu. `sidecar-fake/src/networks.ts` aynı alanları döndürüyor; sidecar-fake 120/120 |
 | **T166 merge'ünden sonra (`e7e8acf1`)** | ✓ | Build 0 hata. Unit 2345/2345 (Auth 96, API 138 — T166 testleri dahil). `AdminWalletOverviewTests` (LocalDB) 8/8. `dotnet format` çıkış 0. Frontend tsc / eslint ✓, i18n 1591 anahtar eşit (T166 iki anahtar kaldırdı), vitest 401/401. Tam integration suite'i T166 sonrası CI'da koşar |
 | Bozma (bu tur) | 6 / 6 öldü | F1-M1…M4, M8, S3 (yukarıda) |

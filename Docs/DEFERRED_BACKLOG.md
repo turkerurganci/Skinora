@@ -4,7 +4,7 @@
 >
 > **Oluşturulma:** 2026-06-13 · iki-turlu çok-ajanlı kaynak taraması (status doc + 115 task report + repo/auto memory + backend/frontend kod + sidecar + discovery docs + gate-check/audit/GPT-review raporları). Her kalem kod veya rapor kanıtıyla doğrulandı.
 >
-> **Durum (2026-10-21, T160c düzeltme turu — iade kesinti kalıntısı, PR [#365](https://github.com/turkerurganci/Skinora/pull/365), yeniden doğrulama bekliyor; main `e7e8acf1` (T160a + T160b + T166) dala birleştirildi):** **51 aktif / 159 çözülmüş** (dosyanın kendi sayımıyla, §1'den itibaren; main 52/158 → `RefundGasDeductionDustStaysOnDeposit` ✅, §4). **Açık 🔴 YOK.** Yeni satır yok.
+> **Durum (2026-10-21, T160c düzeltme turu — iade kesinti kalıntısı, PR [#365](https://github.com/turkerurganci/Skinora/pull/365), yeniden doğrulama bekliyor; main `d81d91f1` (T160a + T160b + T166 + T161) dala birleştirildi):** **51 aktif / 159 çözülmüş** (dosyanın kendi sayımıyla, §1'den itibaren; main 52/158 → `RefundGasDeductionDustStaysOnDeposit` ✅, §4). **Açık 🔴 YOK.** Yeni satır yok.
 >
 > **Durum (2026-10-21, T166 — küçük düzeltmeler, PR [#366](https://github.com/turkerurganci/Skinora/pull/366), doğrulama PASS; main `2e502e99` (T160b) dala birleştirildi):** **52 aktif / 158 çözülmüş** (dosyanın kendi sayımıyla, §1'den itibaren; main 51/158 → +1). **Açık 🔴 YOK.** Yeni 🟡 `TosNotAcceptedAccountCannotSelfDelete` (§4, hedef T168, KVKK silme hakkı). `uptime-cache-scaleout` ⚪ satırı güncellendi (sabit uptime kalktı).
 >

@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.30** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160c — §3.3 iade kesintisi kalıntısı sweep'le ve ayrı toplama transferiyle sıcak cüzdana taşınır (iki ağ, ⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.31** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160c — §3.3 iade kesintisinin toplanması ve gerçek gider (⚠ PARA); T161 — §3.4 port kuralı uygulandı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -415,8 +415,8 @@ Tüm internal servisler Docker internal network üzerinde haberleşir — dış 
 
 | Katman | Uygulama |
 |---|---|
-| Authentication | Shared API key — her istekte `X-Internal-Key` header'ı |
-| Network | Docker internal network — port'lar dışarıya açılmaz |
+| Authentication | Shared API key — her istekte `X-Internal-Key` header'ı. **Fail-closed (T161):** üç servis de iç anahtar boşsa ya da 32 karakterden kısaysa açılmaz; anahtarsız "dev modu" yoktur |
+| Network | Docker internal network — port'lar dışarıya açılmaz. **Uygulandı (T161):** `docker-compose.yml` her host portunu `127.0.0.1`'e bağlar (yalnız edge `NGINX_BIND_ADDRESS` ile açılabilir); deneme yayını (`docker-compose.trial.yml`) iç servis portu hiç yayımlamaz; CI `docker compose config` çıktısını tarar (`scripts/compose-exposure.test.mjs`) |
 | Key rotation | API key environment variable olarak tanımlı, deploy sırasında değiştirilebilir |
 
 **Inbound (Sidecar / Blockchain → .NET webhook callback):**
@@ -874,6 +874,7 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 | `skinora-prometheus` | Prometheus | 9090 | Metrik toplama |
 | `skinora-grafana` | Grafana | 3001 | Dashboard, alerting |
 | `skinora-uptime-kuma` | Uptime Kuma | 3002 | Uptime monitoring |
+| `skinora-cloudflared` (T161; yalnız deneme yayını, compose profili `tunnel`) | cloudflared | — (port yok, dışa doğru bağlanır) | Cloudflare Tunnel — dış trafiği edge'e (`skinora-reverse-proxy:80`) iç ağdan iletir; token Docker secret, token yoksa açılmaz (DEPLOY_RUNBOOK §K) |
 
 ### 8.2 Ortamlar
 
@@ -887,7 +888,8 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 
 | Aşama | Hosting | Gerekçe |
 |---|---|---|
-| MVP / Başlangıç | VPS (Hetzner, DigitalOcean, Contabo) | Düşük maliyet, tam kontrol, Docker Compose ile deploy |
+| Deneme yayını (F9, proje sahibi kararı 2026-10-21) | Proje sahibinin bilgisayarı — Docker Desktop + Cloudflare Tunnel, yalnız test ağları | Kiralık sunucu yok; modemde port açılmaz. Ayrı compose projesi `skinora-trial` (DEPLOY_RUNBOOK §K) |
+| MVP / Başlangıç (gerçek ağ — sunucu kararı mainnet öncesi) | VPS (Hetzner, DigitalOcean, Contabo) | Düşük maliyet, tam kontrol, Docker Compose ile deploy |
 | Büyüme | VPS + managed DB | Veritabanı güvenilirliği artırılır |
 | Ölçek | Kubernetes (gerekirse) | Container image'lar aynı kalır, orchestration değişir |
 

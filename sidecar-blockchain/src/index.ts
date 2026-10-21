@@ -1,5 +1,6 @@
 import express from 'express';
 import { config } from './config/index.js';
+import { InternalKeyError, requireInternalKey } from './config/internalKey.js';
 import { logger } from './logger.js';
 import { publishTronGridDailyRequestBudget } from './metrics.js';
 import { correlationMiddleware } from './api/middleware.js';
@@ -17,6 +18,21 @@ import { TransferGuard, parseLimitUnits } from './transfer/TransferGuard.js';
 import { TronResourceClient } from './tron/TronResourceClient.js';
 import { TrxPriceService } from './fee/TrxPriceService.js';
 import { FeeEstimationService } from './fee/FeeEstimationService.js';
+
+// T161 — fail closed before anything is built or listens: without its internal
+// key (05 §3.4) the service does not start (config/internalKey.ts). The error
+// carries the code; the stack trace on stderr is the container's last word.
+const internalKey = startupInternalKey();
+
+function startupInternalKey(): string {
+  try {
+    return requireInternalKey(config.internalKey);
+  } catch (err) {
+    const code = err instanceof InternalKeyError ? err.code : 'STARTUP_FAILED';
+    logger.fatal({ code }, `Blockchain sidecar refused to start: ${code}`);
+    throw err;
+  }
+}
 
 const app = express();
 const walletManager = new WalletManager();
@@ -161,6 +177,7 @@ app.use(correlationMiddleware);
 // Routes
 app.use(
   createRouter({
+    internalKey,
     walletManager,
     monitorRegistry,
     postCancelMonitorRegistry,
