@@ -31,8 +31,8 @@
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
 | 1 | `next` danışmasız sürüme yükseltildi (`npm audit --omit=dev` critical/high 0, transitive dahil) | ✓ | `frontend/` içinde `npm audit --omit=dev` → `found 0 vulnerabilities`; `npm ls next` → `next@16.3.8`. Eski aralık: `next 9.3.4-canary.0 - 16.3.7` critical. Override gerekmedi (non-force `npm audit fix` yetti). |
-| 2 | CI'da frontend audit adımı var ve critical/high'da kırmızı | ✓ | `ci.yml` lint job: `Frontend npm audit (blocking — prod highs)` = `npm audit --omit=dev --audit-level=high`, continue-on-error yok. Kırmızı olma kanıtı: main'deki eski `package.json` + `package-lock.json` scratch dizinine alınıp aynı komut koşuldu → **çıkış 1** (`9 vulnerabilities (1 low, 2 moderate, 5 high, 1 critical)`); yeni lock → **çıkış 0**. Dal CI'ında adımın yeşil koştuğu: aşağıda CI satırı. |
-| 3 | frontend build + lint + i18n + vitest + E2E yeşil | ✓ (E2E CI'da) | Lokal: `npm run build` ✓ (Next.js 16.3.8 Turbopack, uyarısız); `npm run lint` 0 hata 0 uyarı; `npx tsc --noEmit` 0; `npm run i18n:check` → `4 locales, 1578 keys each, identical key sets` (20 advisory uyarı, öncekiyle aynı); `npm test` → **41 dosya, 391/391**. E2E: 11 suite dal CI'ında (aşağıda). |
+| 2 | CI'da frontend audit adımı var ve critical/high'da kırmızı | ✓ | `ci.yml` lint job: `Frontend npm audit (blocking — prod highs)` = `npm audit --omit=dev --audit-level=high`, continue-on-error yok. Kırmızı olma kanıtı: main'deki eski `package.json` + `package-lock.json` scratch dizinine alınıp aynı komut koşuldu → **çıkış 1** (`9 vulnerabilities (1 low, 2 moderate, 5 high, 1 critical)`); yeni lock → **çıkış 0**. Dal CI'ında (run `39563408752`) adım `found 0 vulnerabilities` ile yeşil. |
+| 3 | frontend build + lint + i18n + vitest + E2E yeşil | ✓ | Lokal: `npm run build` ✓ (Next.js 16.3.8 Turbopack, uyarısız); `npm run lint` 0 hata 0 uyarı; `npx tsc --noEmit` 0; `npm run i18n:check` → `4 locales, 1578 keys each, identical key sets` (20 advisory uyarı, öncekiyle aynı); `npm test` → **41 dosya, 391/391**. E2E: CI run `39563408752` 11/11 success. |
 | 4 | DEFERRED_BACKLOG `FrontendNextAdvisories` kapandı, sayımlar güncel | ✓ | Satır Öne Çıkanlar + §7'de ✅ (dosyanın kendi kuralı: çözülen satır yerinde ✅ olur); sayaç `awk` ile: önce `51/156`, sonra `51/157` (−1 🔴, +1 ⚪). |
 
 ## Test Sonuçları
@@ -42,7 +42,7 @@
 | Frontend build | ✓ | `npm run build` → `▲ Next.js 16.3.8 (Turbopack)`, `ƒ Proxy (Middleware)`, deprecation uyarısı yok |
 | Lint / tsc / i18n | ✓ | eslint 0/0 · tsc 0 · i18n parity 4×1578 |
 | npm audit (prod) | ✓ 0 | `npm audit --omit=dev --audit-level=high` çıkış 0 |
-| E2E (11 suite) | bkz. CI | Dal CI'ındaki 11 `E2E … (advisory)` job'u — sonuçlar Commit & PR bölümünde |
+| E2E (11 suite) | ✓ 11/11 | CI run `39563408752`, 11 `E2E … (advisory)` job'unun hepsi `success` |
 
 Not: lokal `npm run format:check` 290 dosyada uyarı veriyor — `core.autocrlf` CRLF artefaktı (bilinen; CI LF yetkili). Değişen `client.ts` için `prettier --check --end-of-line auto` → temiz.
 
@@ -62,9 +62,9 @@ Not: lokal `npm run format:check` 290 dosyada uyarı veriyor — `core.autocrlf`
 ## Commit & PR
 - Branch: `task/T160a-nextjs-guvenlik`
 - Commit: `f2db4394` — T160a: next 16.2.3 -> 16.3.8, middleware -> proxy, CI frontend npm audit (prod high)
-- Commit: (rapor + status) — T160a: rapor, status, backlog, merge teyitleri
+- Commit: `f118bd83` — T160a: rapor, status, backlog, merge teyitleri
 - PR: #363
-- CI: bkz. son mesaj / PR (rapor commit'inden sonraki run)
+- CI: ✓ PASS — run `39563408752` (HEAD `f118bd83`), `success`; `Frontend npm audit (blocking — prod highs)` → `found 0 vulnerabilities`; frontend build + Docker build (frontend) ✓; **E2E 11/11 success** (happy-path UI dahil). İlk run `39563063416` (`f2db4394`) concurrency ile iptal edildi (yeni push).
 
 ## Known Limitations / Follow-up
 - **Dev-only high (`braces`)**: `npm audit` (dev dahil) 5 high gösteriyor, hepsi tek kök `braces@3.0.3` (GHSA-vfj7-8cjw-p6xm, etkilenen aralık `*`, npm'de düzeltme yok), `eslint-config-next@16.3.8` → `@next/eslint-plugin-next` → `fast-glob@3.3.1` → `micromatch` altında. Lint aracı, üretim imajına girmez; CI adımı `--omit=dev` ile bilerek kapsam dışı. Backlog ⚪ `FrontendDevToolingBracesAdvisory`.
