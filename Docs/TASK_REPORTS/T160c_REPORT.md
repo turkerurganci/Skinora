@@ -223,9 +223,9 @@ Betik her bozmayı uygulayıp ilgili test sınıfını koştu ve dosyayı geri y
 ## Commit & PR
 
 - Branch: `task/T160c-iade-kesinti-kalintisi`
-- Commit: (aşağıda doldurulur)
-- PR: (aşağıda doldurulur)
-- CI: (aşağıda doldurulur)
+- Commit: `182517cb` — T160c: iade kesinti kalıntısı sıcak cüzdana toplanıyor (⚠ PARA) (+ rapor/PR no commit'i)
+- PR: #365
+- CI: dal CI'ı yöneticinin son mesajında (run ID + sonuç)
 
 ---
 
