@@ -2108,6 +2108,10 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasPrecision(38)
                         .HasColumnType("decimal(38,0)");
 
+                    b.Property<decimal?>("RefundFeeRecovered")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<int>("RetryCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -2164,6 +2168,10 @@ namespace Skinora.Shared.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("[Type] = 'BUYER_REFUND'");
 
+                    b.HasIndex(new[] { "TransactionId" }, "UQ_BlockchainTransactions_RefundFeeSweep_InFlight")
+                        .IsUnique()
+                        .HasFilter("[Type] = 'REFUND_FEE_SWEEP' AND [Status] IN ('PENDING', 'DETECTED')");
+
                     b.HasIndex(new[] { "TransactionId" }, "UQ_BlockchainTransactions_SellerPayout_TransactionId")
                         .IsUnique()
                         .HasFilter("[Type] = 'SELLER_PAYOUT'");
@@ -2176,6 +2184,8 @@ namespace Skinora.Shared.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_BlockchainTransactions_EventIndex", "([EventIndex] IS NULL) OR ([EventIndex] >= 0)");
 
+                            t.HasCheckConstraint("CK_BlockchainTransactions_RefundFeeRecovered", "(RefundFeeRecovered IS NULL) OR (Type IN ('SWEEP', 'REFUND_FEE_SWEEP') AND RefundFeeRecovered > 0)");
+
                             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Confirmed", "(Status <> 'CONFIRMED') OR (ConfirmedAt IS NOT NULL AND (Network <> 'TRON' OR ConfirmationCount >= 20))");
 
                             t.HasCheckConstraint("CK_BlockchainTransactions_Status_Detected", "(Status <> 'DETECTED') OR (ConfirmationCount = 0)");
@@ -2187,6 +2197,8 @@ namespace Skinora.Shared.Persistence.Migrations
                             t.HasCheckConstraint("CK_BlockchainTransactions_Type_BuyerPayment", "(Type <> 'BUYER_PAYMENT') OR (PaymentAddressId IS NOT NULL AND ActualTokenAddress IS NULL)");
 
                             t.HasCheckConstraint("CK_BlockchainTransactions_Type_Outbound", "(Type NOT IN ('SELLER_PAYOUT', 'BUYER_REFUND', 'EXCESS_REFUND', 'LATE_PAYMENT_REFUND', 'INCORRECT_AMOUNT_REFUND')) OR (PaymentAddressId IS NULL AND ActualTokenAddress IS NULL)");
+
+                            t.HasCheckConstraint("CK_BlockchainTransactions_Type_RefundFeeSweep", "(Type <> 'REFUND_FEE_SWEEP') OR (PaymentAddressId IS NOT NULL AND ActualTokenAddress IS NULL AND RefundFeeRecovered IS NOT NULL AND RefundFeeRecovered = Amount)");
 
                             t.HasCheckConstraint("CK_BlockchainTransactions_Type_SpamTokenIncoming", "(Type <> 'SPAM_TOKEN_INCOMING') OR (ActualTokenAddress IS NOT NULL AND PaymentAddressId IS NOT NULL)");
 
@@ -2370,6 +2382,9 @@ namespace Skinora.Shared.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("RefundFeeSweepNextCheckAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()

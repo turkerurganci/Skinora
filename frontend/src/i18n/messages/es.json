@@ -2082,6 +2082,17 @@
         "by": "Iniciada por"
       }
     },
+    "refundFees": {
+      "heading": "Comisiones de red de reembolsos",
+      "intro": "Comisiones de red retenidas de los reembolsos de los compradores. La plataforma paga la comisión de la cadena; lo retenido pasa a la billetera caliente con el barrido de la venta, o por separado cuando aporta más de lo que cuesta.",
+      "withheld": "Retenido a compradores",
+      "collected": "En la billetera caliente",
+      "inTransit": "En camino",
+      "onDeposits": "Aún en depósitos",
+      "refundChainCost": "Comisión de cadena de esos reembolsos",
+      "collectionChainCost": "Comisión de cadena de las recolecciones",
+      "ariaLabel": "Comisiones de red de reembolsos en {network}"
+    },
     "outboundRows": {
       "heading": "Transferencias salientes recientes",
       "empty": "Aún no hay transferencias salientes.",
@@ -2103,7 +2114,8 @@
       "WRONG_TOKEN_REFUND": "Reembolso por token equivocado",
       "INCORRECT_AMOUNT_REFUND": "Reembolso por importe incorrecto",
       "LATE_PAYMENT_REFUND": "Reembolso por pago tardío",
-      "SWEEP": "Barrido (sweep)"
+      "SWEEP": "Barrido (sweep)",
+      "REFUND_FEE_SWEEP": "Recolección de comisiones de reembolso"
     },
     "outboundStatus": {
       "DETECTED": "Detectada",

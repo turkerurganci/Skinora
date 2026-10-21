@@ -245,6 +245,111 @@ public class AdminWalletOverviewTests : IntegrationTestBase
         Assert.Single(t.RecentOutbound);
     }
 
+    [Fact]
+    public async Task T160c_RefundFeeBooks_Show_Withheld_Collected_InTransit_OnDeposits_And_Chain_Cost_Per_Network()
+    {
+        const string tronDeposit = "TDepositRefundFeeBooks000000000000";
+        const string ethDeposit = "0x00000000000000000000000000000000000000b1";
+        var tx = NewTransaction(_seller.Id, network: BlockchainNetwork.TRON);
+        var ethTx = NewTransaction(_seller.Id, network: BlockchainNetwork.ETHEREUM);
+        await using (var seed = CreateContext())
+        {
+            seed.Set<Transaction>().AddRange(tx, ethTx);
+            await seed.SaveChangesAsync();
+            var pa = NewPaymentAddress(tx.Id, BlockchainNetwork.TRON, tronDeposit, 9101);
+            var ethPa = NewPaymentAddress(ethTx.Id, BlockchainNetwork.ETHEREUM, ethDeposit, 9102);
+            seed.Set<PaymentAddress>().AddRange(pa, ethPa);
+            await seed.SaveChangesAsync();
+
+            seed.Set<BlockchainTransaction>().AddRange(
+                // Withheld on the deposit, carried by the sale's sweep.
+                Refund(tx.Id, BlockchainTransactionType.EXCESS_REFUND, tronDeposit, 1.37m, sun: 6_400_000),
+                // Sent by the hot wallet: its fee is in the hot wallet already.
+                Refund(tx.Id, BlockchainTransactionType.BUYER_REFUND, TronHot, 0.83m, sun: 3_100_000),
+                // Withheld on the deposit, collected separately (confirmed).
+                Refund(tx.Id, BlockchainTransactionType.LATE_PAYMENT_REFUND, tronDeposit, 2.41m, sun: 13_000_000),
+                // Withheld on the deposit, its collection is on its way.
+                Refund(tx.Id, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND, tronDeposit, 0.59m, sun: 2_200_000),
+                // Withheld on the deposit, not collected yet.
+                Refund(tx.Id, BlockchainTransactionType.EXCESS_REFUND, tronDeposit, 0.31m, sun: 1_900_000),
+                // Not final: nothing withheld yet.
+                Refund(tx.Id, BlockchainTransactionType.EXCESS_REFUND, tronDeposit, 9.99m, sun: null,
+                    status: BlockchainTransactionStatus.PENDING),
+                Carrier(tx.Id, pa.Id, BlockchainTransactionType.SWEEP, tronDeposit, amount: 52.37m, recovered: 1.37m,
+                    BlockchainTransactionStatus.CONFIRMED, sun: 14_000_000),
+                Carrier(tx.Id, pa.Id, BlockchainTransactionType.REFUND_FEE_SWEEP, tronDeposit, amount: 2.41m, recovered: 2.41m,
+                    BlockchainTransactionStatus.CONFIRMED, sun: 6_270_000),
+                Carrier(tx.Id, pa.Id, BlockchainTransactionType.REFUND_FEE_SWEEP, tronDeposit, amount: 0.59m, recovered: 0.59m,
+                    BlockchainTransactionStatus.PENDING, sun: null),
+                Refund(ethTx.Id, BlockchainTransactionType.BUYER_REFUND, ethDeposit, 0.09m, sun: null,
+                    network: BlockchainNetwork.ETHEREUM, wei: 61_000_000_000_000m));
+            await seed.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext();
+        var overview = await Service(ctx, new FakeBlockchainServiceRegistry()).GetAsync(CancellationToken.None);
+
+        var tron = Block(overview, BlockchainNetwork.TRON).RefundFees;
+        Assert.Equal("5.51", tron.Withheld);          // 1.37 + 0.83 + 2.41 + 0.59 + 0.31
+        Assert.Equal("4.61", tron.Collected);         // 0.83 (hot wallet) + 1.37 (sweep) + 2.41 (collection)
+        Assert.Equal("0.59", tron.InTransit);
+        Assert.Equal("0.31", tron.OnDeposits);
+        Assert.Equal("26.6", tron.RefundChainCost);   // 6.4 + 3.1 + 13.0 + 2.2 + 1.9 TRX
+        Assert.Equal("6.27", tron.CollectionChainCost); // the sale's own sweep is not counted
+
+        var eth = Block(overview, BlockchainNetwork.ETHEREUM).RefundFees;
+        Assert.Equal("0.09", eth.Withheld);
+        Assert.Equal("0", eth.Collected);
+        Assert.Equal("0.09", eth.OnDeposits);
+        Assert.Equal("0.000061", eth.RefundChainCost);
+        Assert.Equal("0", eth.CollectionChainCost);
+    }
+
+    private static BlockchainTransaction Refund(
+        Guid transactionId, BlockchainTransactionType type, string from, decimal fee, long? sun,
+        BlockchainTransactionStatus status = BlockchainTransactionStatus.CONFIRMED,
+        BlockchainNetwork network = BlockchainNetwork.TRON, decimal? wei = null) => new()
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transactionId,
+            Network = network,
+            Type = type,
+            TxHash = status == BlockchainTransactionStatus.PENDING ? null : "refund-" + Guid.NewGuid().ToString("N"),
+            FromAddress = from,
+            ToAddress = network == BlockchainNetwork.TRON ? SellerWallet : EthColdLower,
+            Amount = 10m,
+            GasFee = fee,
+            Token = StablecoinType.USDT,
+            Status = status,
+            ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
+            ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? DateTime.UtcNow : null,
+            RealizedFeeSun = sun,
+            RealizedFeeWei = wei,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+    private static BlockchainTransaction Carrier(
+        Guid transactionId, Guid paymentAddressId, BlockchainTransactionType type, string from,
+        decimal amount, decimal recovered, BlockchainTransactionStatus status, long? sun) => new()
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = transactionId,
+            PaymentAddressId = paymentAddressId,
+            Network = BlockchainNetwork.TRON,
+            Type = type,
+            TxHash = status == BlockchainTransactionStatus.PENDING ? null : "carry-" + Guid.NewGuid().ToString("N"),
+            FromAddress = from,
+            ToAddress = TronHot,
+            Amount = amount,
+            RefundFeeRecovered = recovered,
+            Token = StablecoinType.USDT,
+            Status = status,
+            ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
+            ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? DateTime.UtcNow : null,
+            RealizedFeeSun = sun,
+            CreatedAt = DateTime.UtcNow,
+        };
+
     private BlockchainTransaction Outbound(
         Guid transactionId, BlockchainNetwork network, BlockchainTransactionStatus status,
         DateTime createdAt, string? hash = null,

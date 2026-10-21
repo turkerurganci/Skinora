@@ -423,7 +423,9 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             // model as a refund (deposit index/address), but the destination is
             // the platform hot wallet (the row's ToAddress) and the sidecar runs
             // it through energy delegation, so it gets its own endpoint + body.
-            BlockchainTransactionType.SWEEP => (
+            // T160c — REFUND_FEE_SWEEP is the same deposit → hot wallet send
+            // (pinned destination), carrying withheld refund fees.
+            BlockchainTransactionType.SWEEP or BlockchainTransactionType.REFUND_FEE_SWEEP => (
                 "api/transfer/sweep",
                 new SweepBody(
                     network,

@@ -159,13 +159,13 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(CancelledByType), Enum.Parse<CancelledByType>(valueName)));
     }
 
-    // ── BlockchainTransactionType (10) ──────────────────────────────
+    // ── BlockchainTransactionType (11) ──────────────────────────────
 
     [Fact]
-    public void BlockchainTransactionType_ShouldHave10Values()
+    public void BlockchainTransactionType_ShouldHave11Values()
     {
         var values = Enum.GetValues<BlockchainTransactionType>();
-        Assert.Equal(10, values.Length);
+        Assert.Equal(11, values.Length);
     }
 
     [Theory]
@@ -179,6 +179,7 @@ public class EnumTests
     [InlineData(nameof(BlockchainTransactionType.LATE_PAYMENT_REFUND))]
     [InlineData(nameof(BlockchainTransactionType.INCORRECT_AMOUNT_REFUND))]
     [InlineData(nameof(BlockchainTransactionType.SWEEP))]
+    [InlineData(nameof(BlockchainTransactionType.REFUND_FEE_SWEEP))]
     public void BlockchainTransactionType_ShouldContainExpectedValue(string valueName)
     {
         Assert.True(Enum.IsDefined(typeof(BlockchainTransactionType), Enum.Parse<BlockchainTransactionType>(valueName)));

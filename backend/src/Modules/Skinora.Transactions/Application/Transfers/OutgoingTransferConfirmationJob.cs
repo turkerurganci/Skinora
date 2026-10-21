@@ -48,6 +48,8 @@ public sealed class OutgoingTransferConfirmationJob
         // no transaction-state transition (only SELLER_PAYOUT emits
         // PayoutCompletedEvent below), so it simply flips to CONFIRMED.
         BlockchainTransactionType.SWEEP,
+        // T160c — collection of withheld refund fees; confirms like a sweep.
+        BlockchainTransactionType.REFUND_FEE_SWEEP,
     ];
 
     private readonly AppDbContext _db;

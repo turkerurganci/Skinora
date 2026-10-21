@@ -2082,6 +2082,17 @@
         "by": "Başlatan"
       }
     },
+    "refundFees": {
+      "heading": "İade ağ ücretleri",
+      "intro": "Alıcıların iadelerinden kesilen ağ ücretleri. Zincir ücretini platform öder; kesilen tutar satışın sweep'iyle, ya da maliyetinden fazla getirecekse ayrıca sıcak cüzdana taşınır.",
+      "withheld": "Alıcılardan kesilen",
+      "collected": "Sıcak cüzdanda",
+      "inTransit": "Yolda",
+      "onDeposits": "Hâlâ depozitlerde",
+      "refundChainCost": "Bu iadelerin zincir ücreti",
+      "collectionChainCost": "Ayrı toplamaların zincir ücreti",
+      "ariaLabel": "{network} iade ağ ücretleri"
+    },
     "outboundRows": {
       "heading": "Son giden transferler",
       "empty": "Henüz giden transfer yok.",
@@ -2103,7 +2114,8 @@
       "WRONG_TOKEN_REFUND": "Yanlış token iadesi",
       "INCORRECT_AMOUNT_REFUND": "Hatalı tutar iadesi",
       "LATE_PAYMENT_REFUND": "Geç ödeme iadesi",
-      "SWEEP": "Toplama (sweep)"
+      "SWEEP": "Toplama (sweep)",
+      "REFUND_FEE_SWEEP": "İade kesinti toplama"
     },
     "outboundStatus": {
       "DETECTED": "Tespit edildi",

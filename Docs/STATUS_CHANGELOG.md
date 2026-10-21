@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T160 F8 Gate Check ✓ PASS (GATE_CHECK_F8.md); T159b merge teyidi; tag `phase/F8-pass` sahip onayından sonra
+
 **Önceki güncelleme:** 2026-10-21 — T159b ✓ Tamamlandı, doğrulama PASS (Sepolia giden bacağı elle müdahalesiz; T159b_REPORT.md, PR #360); T159a ve #359 merge teyitleri; sırada T160 (F8 Gate Check)
 
 **Önceki güncelleme:** 2026-10-21 — T159b ✓ Tamamlandı, doğrulama PASS (Sepolia giden bacağı elle müdahalesiz: sweep, iade, yanlış token, reddedilen ödeme kesintisi; rapor [`T159b_REPORT.md`](TASK_REPORTS/T159b_REPORT.md), PR [#360](https://github.com/turkerurganci/Skinora/pull/360), doğrulanan HEAD `7a5602e5`, Opus high, 27/27 hash zincirden okundu, 5 × S4). Merge teyitleri: T159a main `eb66ffe6` → CI `39522975375` ✓ (2. deneme; 1. deneme OutboxTests kararsızlığı, #359 ile giderildi), Docker Publish `39522975374` ✓; #359 main `5be40559` → CI `39529062386` ✓, Docker Publish `39529062379` ✓. Yeni backlog satırları: `RefundGasEstimateSingleAttempt` 🟡 ⚠ PARA, `StackStartReconciliationBeforePaymentServices` 🟡, `EthereumMultiPaymentRefundNotProven` ⚪ (47 aktif / 156 çözülmüş). Sırada T160 (F8 Gate Check)

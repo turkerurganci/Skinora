@@ -583,7 +583,11 @@ export class TransferService {
       signer: 'DEPOSIT',
     };
     return this.submit(`transfer:${request.blockchainTransactionId}`, identity, (id) => {
-      this.requireToken(request.token, 'USDT', 'sweep');
+      // T160c — USDT (the sale's sweep and the refund fees it withheld) or
+      // USDC (the refund fee a wrong-token refund withheld in the token it
+      // returned). Either way the destination is the pinned hot wallet, and
+      // the signer policy allows USDC for no other deposit flow but a
+      // wrong-token refund.
       this.deps.guard.assertSweepDestination(request.toHotWalletAddress);
       const deposit = this.depositOf(request.depositIndex, request.depositAddress);
       return {
@@ -593,8 +597,8 @@ export class TransferService {
         signer: 'DEPOSIT',
         depositIndex: request.depositIndex,
         from: deposit,
-        contract: this.contractOf('USDT'),
-        token: 'USDT',
+        contract: this.contractOf(request.token),
+        token: request.token,
         recipient: canonicalAddress(request.toHotWalletAddress),
         amountUnits: units,
         capFlow: 'SWEEP',
@@ -1307,7 +1311,14 @@ export class TransferService {
     tx: Transaction,
     plan: Pick<
       SendPlan,
-      'signer' | 'depositIndex' | 'from' | 'contract' | 'recipient' | 'amountUnits' | 'refundType'
+      | 'purpose'
+      | 'signer'
+      | 'depositIndex'
+      | 'from'
+      | 'contract'
+      | 'recipient'
+      | 'amountUnits'
+      | 'refundType'
     >,
     capWei: bigint | null,
   ): JournalAttempt {
@@ -1317,7 +1328,8 @@ export class TransferService {
         contract: plan.contract,
         recipient: plan.recipient,
         amountUnits: plan.amountUnits,
-        wrongTokenRefund: plan.refundType === 'WRONG_TOKEN_REFUND',
+        // T160c — a sweep may move USDC too (the fee a wrong-token refund withheld).
+        wrongTokenRefund: plan.refundType === 'WRONG_TOKEN_REFUND' || plan.purpose === 'SWEEP',
         feeCapWei: capWei ?? undefined,
       },
       this.deps.policy,
@@ -1420,6 +1432,7 @@ export class TransferService {
       : this.sign(
           tx,
           {
+            purpose: record.purpose,
             signer: record.signer,
             depositIndex: record.depositIndex,
             from: record.from,

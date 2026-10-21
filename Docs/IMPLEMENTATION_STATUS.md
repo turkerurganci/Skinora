@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T160 F8 Gate Check ✓ PASS (GATE_CHECK_F8.md); T159b merge teyidi; tag `phase/F8-pass` sahip onayından sonra · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-21 — T160c ⏳ yapım bitti, doğrulama bekliyor (iade kesinti kalıntısı sweep + `REFUND_FEE_SWEEP` ile sıcak cüzdana; T160c_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -362,7 +362,7 @@
 |---|---|---|
 | T160a | Next.js güvenlik yükseltmesi + CI frontend audit (F9'un ilk işi; F8 gate devri) | ⬚ Bekliyor |
 | T160b | İade gas tahmininde yeniden deneme + yedek ücret (F8 gate devri, ⚠ PARA) | ⬚ Bekliyor |
-| T160c | İade kesinti kalıntısının sweep ile toplanması (F8 gate devri, ⚠ PARA) | ⬚ Bekliyor |
+| T160c | İade kesinti kalıntısının sweep ile toplanması (F8 gate devri, ⚠ PARA) | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T160c_REPORT.md)) |
 | T161 | Sunucu sıkılaştırma | ⬚ Bekliyor |
 | T162 | HTTPS + alan adı (skinora.com) | ⬚ Bekliyor |
 | T163 | İmza sırları Docker secret + çevrimdışı yedek | ⬚ Bekliyor |

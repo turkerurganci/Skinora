@@ -156,6 +156,57 @@ describe("WalletsOverview — one section per network", () => {
     expect(tron().getByRole("button", { name: "Review transfer" })).toBeInTheDocument();
   });
 
+  it("T160c: shows each network's refund-fee books in its own section, chain cost in its own asset", async () => {
+    await renderOverview([
+      tronWallets(),
+      ethWallets({
+        refundFees: {
+          withheld: "0.09",
+          collected: "0",
+          inTransit: "0",
+          onDeposits: "0.09",
+          refundChainCost: "0.000061",
+          collectionChainCost: "0",
+        },
+        recentOutbound: [
+          {
+            id: "o10",
+            transactionId: "t10",
+            type: "REFUND_FEE_SWEEP",
+            status: "PENDING",
+            token: "USDC",
+            amount: 0.37,
+            toAddress: ETH_HOT,
+            txHash: null,
+            retryCount: 0,
+            createdAt: "2026-10-21T10:00:00Z",
+          },
+        ],
+      }),
+    ]);
+
+    const tronBooks = within(tron().getByTestId("refund-fees-TRON"));
+    expect(tronBooks.getByRole("heading", { level: 3 })).toHaveTextContent("Refund network fees");
+    expect(tronBooks.getByText("Withheld from buyers").nextSibling).toHaveTextContent("7.31 USDT");
+    expect(tronBooks.getByText("In the hot wallet").nextSibling).toHaveTextContent("4.06 USDT");
+    expect(tronBooks.getByText("Still on deposits").nextSibling).toHaveTextContent("3.25 USDT");
+    expect(tronBooks.getByText("Chain fee of those refunds").nextSibling).toHaveTextContent(
+      "21.4 TRX",
+    );
+    expect(tronBooks.getByText("Chain fee of separate collections").nextSibling).toHaveTextContent(
+      "6.27 TRX",
+    );
+
+    const ethBooks = within(eth().getByTestId("refund-fees-ETHEREUM"));
+    expect(ethBooks.getByText("Still on deposits").nextSibling).toHaveTextContent("0.09 USDT");
+    expect(ethBooks.getByText("Chain fee of those refunds").nextSibling).toHaveTextContent(
+      "0.000061 ETH",
+    );
+    expect(ethBooks.queryByText(/TRX/)).toBeNull();
+    // The new outbound type has its own label.
+    expect(eth().getByText("Refund-fee collection")).toBeInTheDocument();
+  });
+
   it("links recent hashes to the explorer of their own network", async () => {
     await renderOverview([
       tronWallets(),

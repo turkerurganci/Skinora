@@ -36,6 +36,15 @@ public class PaymentAddress : BaseEntity, ISoftDeletable
     /// </summary>
     public long? MonitorFromBlock { get; set; }
 
+    /// <summary>
+    /// T160c — earliest UTC instant <c>RefundFeeSweepQueueJob</c> looks at
+    /// this deposit's uncollected refund fees again. NULL = at the next run.
+    /// Set when collecting would cost more than it brings (or the cost could
+    /// not be priced), so a deposit whose fees are not worth moving yet is not
+    /// re-priced every run.
+    /// </summary>
+    public DateTime? RefundFeeSweepNextCheckAt { get; set; }
+
     // --- ISoftDeletable ---
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }

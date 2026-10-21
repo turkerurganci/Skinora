@@ -22,5 +22,16 @@ public enum BlockchainTransactionType
     // refund (WP2) must keep its funds until the buyer-refund window closes
     // (05 §3.3 line 323), so sweeping eagerly at PAYMENT_RECEIVED would break
     // the common cancelled-after-payment refund.
-    SWEEP
+    SWEEP,
+
+    // T160c — deposit → hot wallet transfer of the refund network fees that
+    // were withheld from the buyer's refunds (02 §4.7, 05 §3.3) and that the
+    // transaction's own SWEEP could not carry: the transaction never reached a
+    // sweep (cancelled / refunded), the fee is in another token (a wrong-token
+    // refund, USDC), or the refund confirmed after the sweep was queued.
+    // Produced by RefundFeeSweepQueueJob; same deposit-anchored shape as SWEEP
+    // (PaymentAddressId NOT NULL) and the same sidecar endpoint, but a
+    // separate type so the rules that read "the" SWEEP (payout gate, refund
+    // source, monitor disarm) never see it.
+    REFUND_FEE_SWEEP
 }

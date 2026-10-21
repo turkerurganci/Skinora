@@ -86,6 +86,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
         BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
         BlockchainTransactionType.LATE_PAYMENT_REFUND,
         BlockchainTransactionType.SWEEP,
+        BlockchainTransactionType.REFUND_FEE_SWEEP,
     ];
 
     private readonly AppDbContext _db;

@@ -347,6 +347,7 @@ public static class TransactionsModule
         // buyer-refund window, owner decision); the dispatch + confirmation
         // jobs above settle it and reconciliation credits the hot wallet inflow.
         services.AddScoped<SweepQueueJob>();
+        services.AddScoped<RefundFeeSweepQueueJob>();
         // T129 — the end-of-window settlement check. Produces neither transfer
         // row itself: it stamps the clearance both producers above now require,
         // or refunds the buyer when the trade turns out to have been reversed.

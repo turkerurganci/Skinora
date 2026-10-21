@@ -2082,6 +2082,17 @@
         "by": "Initiated by"
       }
     },
+    "refundFees": {
+      "heading": "Refund network fees",
+      "intro": "Network fees withheld from buyers' refunds. The platform pays the chain fee; what was withheld is moved to the hot wallet with the sale's sweep, or separately when that is worth more than it costs.",
+      "withheld": "Withheld from buyers",
+      "collected": "In the hot wallet",
+      "inTransit": "On its way",
+      "onDeposits": "Still on deposits",
+      "refundChainCost": "Chain fee of those refunds",
+      "collectionChainCost": "Chain fee of separate collections",
+      "ariaLabel": "Refund network fees on {network}"
+    },
     "outboundRows": {
       "heading": "Recent outbound transfers",
       "empty": "No outbound transfers yet.",
@@ -2103,7 +2114,8 @@
       "WRONG_TOKEN_REFUND": "Wrong-token refund",
       "INCORRECT_AMOUNT_REFUND": "Incorrect-amount refund",
       "LATE_PAYMENT_REFUND": "Late-payment refund",
-      "SWEEP": "Sweep"
+      "SWEEP": "Sweep",
+      "REFUND_FEE_SWEEP": "Refund-fee collection"
     },
     "outboundStatus": {
       "DETECTED": "Detected",

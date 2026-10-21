@@ -126,6 +126,40 @@ public class HttpBlockchainTransferClientTests
     }
 
     [Fact]
+    public async Task T160c_RefundFeeSweep_Uses_The_Sweep_Endpoint_And_Carries_Its_Token()
+    {
+        string? path = null;
+        string? body = null;
+        var handler = new RecordingHandler(async (req, _) =>
+        {
+            path = req.RequestUri!.AbsolutePath;
+            body = await req.Content!.ReadAsStringAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new { txHash = "tx-fee-sweep-1" }),
+            };
+        });
+        var sut = BuildClient(handler);
+
+        var result = await sut.BroadcastAsync(new TransferBroadcastRequest(
+            BlockchainTransactionId: Guid.NewGuid(),
+            Type: BlockchainTransactionType.REFUND_FEE_SWEEP,
+            Token: StablecoinType.USDC,
+            Amount: 0.37m,
+            ToAddress: "THotWallet000000000000000000000000000",
+            DepositIndex: 9,
+            DepositAddress: "TDeposit000000000000000000000000000000"), CancellationToken.None);
+
+        Assert.Equal(TransferBroadcastStatus.Success, result.Status);
+        Assert.Equal("/api/transfer/sweep", path);
+        Assert.Contains("\"toHotWalletAddress\":\"THotWallet000000000000000000000000000\"", body);
+        Assert.Contains("\"depositIndex\":9", body);
+        Assert.Contains("\"amount\":\"0.37\"", body);
+        Assert.Contains("\"token\":\"USDC\"", body);
+        Assert.DoesNotContain("refundType", body);
+    }
+
+    [Fact]
     public async Task Sweep_Throws_When_DepositIndex_Missing()
     {
         var handler = new RecordingHandler((_, _) =>
@@ -617,6 +651,7 @@ public class HttpBlockchainTransferClientTests
     [Theory]
     [InlineData(BlockchainTransactionType.SELLER_PAYOUT, "api/transfer/payout")]
     [InlineData(BlockchainTransactionType.SWEEP, "api/transfer/sweep")]
+    [InlineData(BlockchainTransactionType.REFUND_FEE_SWEEP, "api/transfer/sweep")]
     [InlineData(BlockchainTransactionType.BUYER_REFUND, "api/transfer/refund")]
     public async Task Fee_Cap_Travels_In_The_Body_When_Set_And_Is_Omitted_Otherwise(
         BlockchainTransactionType type, string path)

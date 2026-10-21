@@ -8,6 +8,7 @@ using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
+using Skinora.Transactions.Application.Transfers;
 using Skinora.Transactions.Domain.Entities;
 using Skinora.Users.Domain.Entities;
 
@@ -40,7 +41,28 @@ public sealed record NetworkWalletsDto(
     IReadOnlyList<PlatformWalletDto> Wallets,
     OutboundQueueDto Outbound,
     IReadOnlyList<ColdTransferDto> RecentColdTransfers,
-    IReadOnlyList<OutboundRowDto> RecentOutbound);
+    IReadOnlyList<OutboundRowDto> RecentOutbound,
+    RefundFeeBooksDto RefundFees);
+
+/// <summary>
+/// T160c — the refund network fees withheld from buyers, and where they are
+/// (02 §4.7, 06 §3.8 <c>RefundFeeRecovered</c>). Stablecoin amounts are decimal
+/// strings in USDT terms (a wrong-token refund withholds USDC, counted 1:1 —
+/// T159a); chain costs are in the network's native asset.
+/// </summary>
+/// <param name="Withheld">Σ <c>GasFee</c> of the network's confirmed refunds — what buyers paid for their refunds' chain fees (income).</param>
+/// <param name="Collected">Part of it in the hot wallet: kept by refunds the hot wallet sent, plus confirmed sweeps / collections that carried it.</param>
+/// <param name="InTransit">Part of it carried by a sweep / collection that is queued or broadcast, not final.</param>
+/// <param name="OnDeposits">Still on deposits: withheld − collected − in transit (waiting for a sweep, or not worth collecting yet).</param>
+/// <param name="RefundChainCost">Chain fee those refunds actually paid, native asset (expense; refunds not measured yet are left out).</param>
+/// <param name="CollectionChainCost">Chain fee the separate collections paid, native asset (expense; the sale's own sweep is not counted — it moves anyway).</param>
+public sealed record RefundFeeBooksDto(
+    string Withheld,
+    string Collected,
+    string InTransit,
+    string OnDeposits,
+    string RefundChainCost,
+    string CollectionChainCost);
 
 /// <param name="Role"><c>HOT</c>, <c>COLD</c> or <c>FUEL</c>.</param>
 /// <param name="Address">Display form (Ethereum: EIP-55); null = not configured / not provisioned.</param>
@@ -101,6 +123,7 @@ public sealed class AdminWalletOverviewService : IAdminWalletOverviewService
         BlockchainTransactionType.INCORRECT_AMOUNT_REFUND,
         BlockchainTransactionType.LATE_PAYMENT_REFUND,
         BlockchainTransactionType.SWEEP,
+        BlockchainTransactionType.REFUND_FEE_SWEEP,
     ];
 
     private readonly AppDbContext _db;
@@ -276,6 +299,8 @@ public sealed class AdminWalletOverviewService : IAdminWalletOverviewService
                 b.TxHash, b.RetryCount, b.CreatedAt))
             .ToListAsync(cancellationToken);
 
+        var refundFees = await RefundFeeBooksAsync(network, policy, cancellationToken);
+
         return new NetworkWalletsDto(
             network,
             configured,
@@ -286,7 +311,83 @@ public sealed class AdminWalletOverviewService : IAdminWalletOverviewService
             wallets,
             new OutboundQueueDto(pending?.Count ?? 0, pending?.Oldest, inFlight),
             cold,
-            recent);
+            recent,
+            refundFees);
+    }
+
+    /// <summary>
+    /// T160c — the network's refund-fee books from the ledger rows
+    /// (<see cref="RefundFeeLedger"/>). Summed in memory: a handful of
+    /// columns per refund / collection row, and the decimal sums stay exact
+    /// on every provider.
+    /// </summary>
+    private async Task<RefundFeeBooksDto> RefundFeeBooksAsync(
+        BlockchainNetwork network, BlockchainNetworkPolicy policy, CancellationToken cancellationToken)
+    {
+        var rows = await _db.Set<BlockchainTransaction>().AsNoTracking().IgnoreQueryFilters()
+            .Where(b => b.Network == network
+                && ((RefundFeeLedger.RefundTypes.Contains(b.Type)
+                        && b.Status == BlockchainTransactionStatus.CONFIRMED
+                        && b.GasFee > 0m)
+                    || (RefundFeeLedger.CollectionTypes.Contains(b.Type)
+                        && b.Status != BlockchainTransactionStatus.FAILED
+                        && b.RefundFeeRecovered > 0m)))
+            .Select(b => new
+            {
+                b.Type,
+                b.Status,
+                b.GasFee,
+                b.FromAddress,
+                b.RefundFeeRecovered,
+                b.RealizedFeeSun,
+                b.RealizedFeeWei,
+                Deposit = b.Transaction.PaymentAddress == null ? null : b.Transaction.PaymentAddress.Address,
+            })
+            .ToListAsync(cancellationToken);
+
+        decimal withheld = 0m, keptByHotWallet = 0m, carried = 0m, inTransit = 0m;
+        decimal refundCostUnits = 0m, collectionCostUnits = 0m;
+        foreach (var r in rows)
+        {
+            var nativeUnits = network == BlockchainNetwork.TRON
+                ? r.RealizedFeeSun is { } sun ? sun : 0m
+                : r.RealizedFeeWei ?? 0m;
+            if (RefundFeeLedger.RefundTypes.Contains(r.Type))
+            {
+                withheld += r.GasFee!.Value;
+                if (r.Deposit is null || !BlockchainAddress.AreEqual(r.FromAddress, r.Deposit))
+                {
+                    keptByHotWallet += r.GasFee.Value;
+                }
+                refundCostUnits += nativeUnits;
+            }
+            else if (r.Status == BlockchainTransactionStatus.CONFIRMED)
+            {
+                carried += r.RefundFeeRecovered!.Value;
+                if (r.Type == BlockchainTransactionType.REFUND_FEE_SWEEP) collectionCostUnits += nativeUnits;
+            }
+            else
+            {
+                inTransit += r.RefundFeeRecovered!.Value;
+            }
+        }
+
+        var collected = keptByHotWallet + carried;
+        var onDeposits = Math.Max(0m, withheld - collected - inTransit);
+        return new RefundFeeBooksDto(
+            Format(withheld, StablecoinDecimals),
+            Format(collected, StablecoinDecimals),
+            Format(inTransit, StablecoinDecimals),
+            Format(onDeposits, StablecoinDecimals),
+            Format(ToNative(refundCostUnits, policy.NativeAssetDecimals), policy.NativeAssetDecimals),
+            Format(ToNative(collectionCostUnits, policy.NativeAssetDecimals), policy.NativeAssetDecimals));
+    }
+
+    private static decimal ToNative(decimal units, int decimals)
+    {
+        var divisor = 1m;
+        for (var i = 0; i < decimals; i++) divisor *= 10m;
+        return units / divisor;
     }
 
     private static PlatformWalletDto Wallet(

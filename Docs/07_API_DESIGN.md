@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.16** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-19 — T157 — admin uçları ağ başına: AD33–AD39 (§9.32–§9.34), AD6/AD7 network; 409/422 kapatma kuralları. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.17** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160c — §9.33 AD38 `refundFees` (iade kesintisi defteri) ve `REFUND_FEE_SWEEP` giden satırı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -2731,7 +2731,8 @@ Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR",
 | `wallets[]` | `role` (`HOT`, `COLD`, Ethereum'da `FUEL`), `address` (gösterim biçimi — Ethereum EIP-55; `null` = tanımsız), `configuredAddress`, `addressMismatch` (backend'in `…_HOT_WALLET_ADDRESS` ayarı servisin imzaladığı adresten farklı), `balances` (`[{symbol, amount}]` — yerel varlık + USDT + USDC; `null` = okunamadı), `nativeFloor` ve `belowNativeFloor` (sıcak ve yakıt cüzdanının ETH/TRX alarm tabanı) |
 | `outbound` | `pendingCount`, `oldestPendingAt`, `inFlightCount` — o ağın giden satırları |
 | `recentColdTransfers[]` | Son 10 sıcak→soğuk aktarım (`ColdWalletTransfer`) |
-| `recentOutbound[]` | Son 20 giden satır (ödeme, iade, sweep) |
+| `recentOutbound[]` | Son 20 giden satır (ödeme, iade, sweep, T160c'den beri iade kesintisi toplaması `REFUND_FEE_SWEEP`) |
+| `refundFees` | **T160c** — iadelerde alıcıdan kesilen ağ ücretinin defteri (02 §4.7, 05 §3.3, 06 §3.8 `RefundFeeRecovered`); ondalık metin. `withheld` (onaylanmış iadelerin `GasFee` toplamı — gelir), `collected` (sıcak cüzdanda: sıcak cüzdandan çıkan iadelerin kesintisi + onaylanmış sweep / toplamaların taşıdığı), `inTransit` (yoldaki sweep / toplamaların taşıdığı), `onDeposits` (hâlâ depozitlerde: kesilen − sıcak cüzdanda − yolda), USDT cinsinden (yanlış token kesintisi USDC, 1:1); `refundChainCost` ve `collectionChainCost` (iadelerin ve ayrı toplamaların zincirde ödediği ücret — gider; ölçülmemiş satır sayılmaz; satışın kendi sweep'i sayılmaz) ağın yerel varlığında (`nativeAsset`) |
 
 Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity) okunur; bir ağın cevabı ötekini etkilemez. **Yakıt cüzdanının adresi yapılandırmada yoktur** (anahtardan türer): backend onu yalnız Ethereum servisinden alır (`POST /api/wallet/platform`, 08 §3.7.5); servis cevap vermezse `FUEL` satırı `address: null` ile listelenir, tahmin edilmez.
 

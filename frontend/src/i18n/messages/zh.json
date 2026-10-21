@@ -2082,6 +2082,17 @@
         "by": "发起人"
       }
     },
+    "refundFees": {
+      "heading": "退款网络费",
+      "intro": "从买家退款中扣除的网络费。链上费用由平台支付；扣除的金额随该笔交易的归集转入热钱包，或在收益大于成本时单独归集。",
+      "withheld": "向买家扣除",
+      "collected": "已在热钱包",
+      "inTransit": "转账中",
+      "onDeposits": "仍在充值地址",
+      "refundChainCost": "这些退款的链上费用",
+      "collectionChainCost": "单独归集的链上费用",
+      "ariaLabel": "{network} 退款网络费"
+    },
     "outboundRows": {
       "heading": "最近的出款转账",
       "empty": "暂无出款转账。",
@@ -2103,7 +2114,8 @@
       "WRONG_TOKEN_REFUND": "错误代币退款",
       "INCORRECT_AMOUNT_REFUND": "金额错误退款",
       "LATE_PAYMENT_REFUND": "逾期付款退款",
-      "SWEEP": "归集（sweep）"
+      "SWEEP": "归集（sweep）",
+      "REFUND_FEE_SWEEP": "退款费用归集"
     },
     "outboundStatus": {
       "DETECTED": "已检测",

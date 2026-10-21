@@ -77,6 +77,18 @@ public class BlockchainTransaction
     /// </summary>
     public decimal? RealizedFeeWei { get; set; }
 
+    /// <summary>
+    /// T160c — the part of <see cref="Amount"/> that carries refund network
+    /// fees withheld from the buyer (the <see cref="GasFee"/> of the
+    /// transaction's confirmed, deposit-sourced refunds) to the hot wallet.
+    /// <c>SWEEP</c>: what the sweep carries on top of <c>TotalAmount</c>
+    /// (NULL when nothing was folded in); <c>REFUND_FEE_SWEEP</c>: always
+    /// equal to <see cref="Amount"/>; every other type NULL. The platform's
+    /// refund-fee books read it: withheld (refund <c>GasFee</c>) − carried
+    /// (this column) = still waiting on the deposit.
+    /// </summary>
+    public decimal? RefundFeeRecovered { get; set; }
+
     public BlockchainTransactionStatus Status { get; set; }
     public long? BlockNumber { get; set; }
     public int ConfirmationCount { get; set; }
