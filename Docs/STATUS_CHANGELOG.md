@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T159a ✓ Tamamlandı, doğrulama PASS (T159a_REPORT.md); T157 merge teyidi (main `e0e9a9d8`, CI ✓); sırada T159b
+
 **Önceki güncelleme:** 2026-10-20 — T157 ✓ Tamamlandı, yeniden doğrulama PASS (admin ekranları ağ başına + kapatma aracı; rapor [`T157_REPORT.md`](TASK_REPORTS/T157_REPORT.md), PR [#354](https://github.com/turkerurganci/Skinora/pull/354)); T159a ⏳ sahip kararı uygulandı: reddedilen ödeme iadelerinde gas iki ağda alıcıdan; doğrulama bekliyordu. **2026-10-21 merge teyidi (T157):** main `e0e9a9d8` → CI `39495423338` ✓, Docker Publish `39495423270` ✓.
 
 **Önceki güncelleme:** 2026-10-19 — **T159 ✓ Tamamlandı — doğrulama KOŞULLU PASS (giden bacak T159a sonrası T159b ile yeniden koşulacak)** (Sepolia canlı provası; rapor [`T159_REPORT.md`](TASK_REPORTS/T159_REPORT.md), PR [#355](https://github.com/turkerurganci/Skinora/pull/355), doğrulanan HEAD `1f1d38ae`, CI `39196090612` ✓). Merge yöneticide.
