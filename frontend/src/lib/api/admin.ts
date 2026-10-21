@@ -1113,10 +1113,23 @@ export interface RefundFeeBooks {
   inTransit: string;
   /** Still on deposits (waiting for a sweep, or not worth collecting yet). */
   onDeposits: string;
-  /** Chain fee those refunds paid, native asset (expense). */
+  /**
+   * T160c düzeltme turu — native asset the PLATFORM spent for those refunds
+   * (expense): TRON the TRX sent to the deposit (activation, burn top-up) +
+   * those sends' fees; Ethereum the fuel ETH + the fuel's fee (a hot-wallet
+   * refund: its receipt fee). Unmeasured rows count with their receipt fee.
+   */
   refundChainCost: string;
-  /** Chain fee the separate collections paid, native asset (expense). */
+  /** Same, for the separate collections (the sale's own sweep is not counted). */
   collectionChainCost: string;
+  /** USDT value of `refundChainCost`, each row at its confirmation price (measured rows only). */
+  refundChainCostUsdt: string;
+  /** USDT value of `collectionChainCost`, same rule. */
+  collectionChainCostUsdt: string;
+  /** `withheld` − both USDT expenses; negative = a loss. An upper bound while `costUnmeasured` > 0. */
+  netUsdt: string;
+  /** Refund / collection rows whose spend or its USDT value is not recorded. */
+  costUnmeasured: number;
 }
 
 export interface NetworkWallets {

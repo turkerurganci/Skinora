@@ -89,6 +89,34 @@ public class BlockchainTransaction
     /// </summary>
     public decimal? RefundFeeRecovered { get; set; }
 
+    /// <summary>
+    /// T160c düzeltme turu (F1, ⚠ PARA) — what the PLATFORM spent in the
+    /// network's native asset for this transfer, in its smallest unit (SUN /
+    /// wei), as its service measured it. Not the transfer's own receipt fee
+    /// (<see cref="RealizedFeeSun"/> / <see cref="RealizedFeeWei"/>): a deposit
+    /// pays that out of the native asset the platform sent it, and what it
+    /// does not burn stays there, never collected. So a deposit send costs
+    /// what left the platform's wallets for it — TRON: the TRX the hot wallet
+    /// sent the deposit (activation, burn / Bandwidth top-up, fixed fallback)
+    /// plus the fee those sends burned, reported with the broadcast; Ethereum:
+    /// the fuel's value plus the fuel transaction's own fee (0 when the
+    /// deposit needed no fuel of its own), reported with the final status. A
+    /// hot-wallet send (Ethereum payout, refund after the sweep) pays its own
+    /// fee: the receipt fee. NULL = not measured (an older service, a lost
+    /// journal, a TRON hot-wallet payout). <c>decimal(38,0)</c>, exact.
+    /// </summary>
+    public decimal? PlatformNetworkCost { get; set; }
+
+    /// <summary>
+    /// T160c düzeltme turu (F1) — <see cref="PlatformNetworkCost"/> in USDT,
+    /// valued once, when the row is CONFIRMED, at the native-asset price the
+    /// service reported with that final status read (the same price feed the
+    /// fee estimate uses — Binance, CoinGecko fallback), rounded to 6
+    /// decimals. NULL when the cost or the price was not available then;
+    /// never revalued later (a later price would not be the cost).
+    /// </summary>
+    public decimal? PlatformNetworkCostUsdt { get; set; }
+
     public BlockchainTransactionStatus Status { get; set; }
     public long? BlockNumber { get; set; }
     public int ConfirmationCount { get; set; }

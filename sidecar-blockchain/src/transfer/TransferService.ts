@@ -13,6 +13,7 @@ import {
   DelegationOutcome,
 } from '../wallet/EnergyDelegationService.js';
 import { TransferGuard } from './TransferGuard.js';
+import type { TrxPriceService } from '../fee/TrxPriceService.js';
 
 export type TokenSymbol = 'USDT' | 'USDC';
 
@@ -74,6 +75,25 @@ export interface TransferServiceDeps {
    * requires it — calling <c>sweep()</c> without one throws
    * <c>DELEGATION_NOT_WIRED</c>. */
   energyDelegation?: EnergyDelegationService;
+  /**
+   * T160c düzeltme turu (F1) — the TRX/USDT price the status read reports
+   * (`nativePriceUsdt`), so the backend values a transfer's platform spend at
+   * the price when it confirms it. The same instance the fee estimate uses
+   * (index.ts). Absent → no price is reported.
+   */
+  priceService?: Pick<TrxPriceService, 'getPrice'>;
+}
+
+/** T160c düzeltme turu — the status read never waits on the price feed longer than this. */
+const STATUS_PRICE_BUDGET_MS = 5_000;
+
+/**
+ * GET /api/transfer/status — the chain's answer plus, T160c düzeltme turu,
+ * `nativePriceUsdt`: TRX/USDT at this read (6 decimals) once the transaction is
+ * in a block; null while it is not, or when no price answered in time.
+ */
+export interface TransferStatusWithPrice extends TransactionStatusResult {
+  nativePriceUsdt: string | null;
 }
 
 export interface SweepResult extends SendTransferResult {
@@ -84,6 +104,14 @@ export interface SweepResult extends SendTransferResult {
   delegationMode: DelegationMode;
   delegationAmountSun: number;
   fallbackAmountSun: number;
+  /**
+   * T160c düzeltme turu (F1) — SUN this call cost the hot wallet: the TRX it
+   * sent the deposit (activation, burn / Bandwidth top-up, fallback) plus the
+   * fee each of those sends burned. The deposit's own transfer burns out of
+   * that TRX (its receipt fee is not on top); what it does not burn stays on
+   * the deposit, never collected. The backend's accounting reads this.
+   */
+  platformSpendSun: number;
 }
 
 /**
@@ -123,6 +151,7 @@ export class TransferService {
   private readonly hotWalletPrivateKey: string;
   private readonly decimalsPower: bigint;
   private readonly energyDelegation?: EnergyDelegationService;
+  private readonly priceService?: Pick<TrxPriceService, 'getPrice'>;
   private readonly guard: TransferGuard;
 
   constructor(deps: TransferServiceDeps) {
@@ -133,6 +162,7 @@ export class TransferService {
     this.hotWalletPrivateKey = deps.hotWalletPrivateKey;
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
     this.energyDelegation = deps.energyDelegation;
+    this.priceService = deps.priceService;
     this.guard = deps.guard;
   }
 
@@ -283,11 +313,35 @@ export class TransferService {
       delegationMode: outcome.mode,
       delegationAmountSun: outcome.delegationAmountSun,
       fallbackAmountSun: outcome.fallbackAmountSun,
+      platformSpendSun: outcome.platformSpendSun,
     };
   }
 
-  async getStatus(txHash: string): Promise<TransactionStatusResult> {
-    return this.client.getTransactionStatus(txHash);
+  async getStatus(txHash: string): Promise<TransferStatusWithPrice> {
+    const status = await this.client.getTransactionStatus(txHash);
+    const nativePriceUsdt = status.confirmations >= 0 ? await this.statusPriceUsdt() : null;
+    return { ...status, nativePriceUsdt };
+  }
+
+  /** Measurement only: a price feed that fails or hangs never fails the status read. */
+  private async statusPriceUsdt(): Promise<string | null> {
+    if (!this.priceService) return null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const quote = await Promise.race([
+        this.priceService.getPrice(),
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), STATUS_PRICE_BUDGET_MS);
+        }),
+      ]);
+      return quote && Number.isFinite(quote.priceUsdt) && quote.priceUsdt > 0
+        ? quote.priceUsdt.toFixed(6)
+        : null;
+    } catch {
+      return null;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   resolveContract(token: TokenSymbol): string {

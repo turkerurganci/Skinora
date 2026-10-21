@@ -87,13 +87,26 @@ function WalletRow({ wallet, data }: { wallet: PlatformWallet; data: NetworkWall
 function RefundFeeBooksSection({ data, label }: { data: NetworkWallets; label: string }) {
   const t = useTranslations("adminWallets.refundFees");
   const books = data.refundFees;
-  const rows: Array<{ term: string; amount: string; unit: string }> = [
+  const rows: Array<{ term: string; amount: string; unit: string; usdt?: string }> = [
     { term: t("withheld"), amount: books.withheld, unit: "USDT" },
     { term: t("collected"), amount: books.collected, unit: "USDT" },
     { term: t("inTransit"), amount: books.inTransit, unit: "USDT" },
     { term: t("onDeposits"), amount: books.onDeposits, unit: "USDT" },
-    { term: t("refundChainCost"), amount: books.refundChainCost, unit: data.nativeAsset },
-    { term: t("collectionChainCost"), amount: books.collectionChainCost, unit: data.nativeAsset },
+    // T160c düzeltme turu — what the platform spent, in its own asset and in
+    // USDT at each transfer's confirmation price.
+    {
+      term: t("refundChainCost"),
+      amount: books.refundChainCost,
+      unit: data.nativeAsset,
+      usdt: books.refundChainCostUsdt,
+    },
+    {
+      term: t("collectionChainCost"),
+      amount: books.collectionChainCost,
+      unit: data.nativeAsset,
+      usdt: books.collectionChainCostUsdt,
+    },
+    { term: t("net"), amount: books.netUsdt, unit: "USDT" },
   ];
   return (
     <div className="flex flex-col gap-2" data-testid={`refund-fees-${data.network}`}>
@@ -108,10 +121,24 @@ function RefundFeeBooksSection({ data, label }: { data: NetworkWallets; label: s
             <dt className="text-gray-600">{r.term}</dt>
             <dd className="tabular-nums">
               {r.amount} {r.unit}
+              {r.usdt !== undefined && (
+                <span className="text-gray-500"> {t("inUsdt", { amount: r.usdt })}</span>
+              )}
             </dd>
           </div>
         ))}
       </dl>
+      <p className="text-xs text-gray-500">
+        {data.network === "TRON" ? t("costNoteTRON") : t("costNoteETHEREUM")}
+      </p>
+      {books.costUnmeasured > 0 && (
+        <p
+          className="text-xs text-amber-700"
+          data-testid={`refund-fees-unmeasured-${data.network}`}
+        >
+          {t("unmeasured", { count: books.costUnmeasured })}
+        </p>
+      )}
     </div>
   );
 }

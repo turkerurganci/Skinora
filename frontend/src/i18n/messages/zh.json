@@ -2089,8 +2089,13 @@
       "collected": "已在热钱包",
       "inTransit": "转账中",
       "onDeposits": "仍在充值地址",
-      "refundChainCost": "这些退款的链上费用",
-      "collectionChainCost": "单独归集的链上费用",
+      "refundChainCost": "平台为这些退款支付的链上支出",
+      "collectionChainCost": "平台为单独归集支付的链上支出",
+      "net": "净额（扣除额 − 链上支出）",
+      "inUsdt": "（≈ {amount} USDT）",
+      "costNoteTRON": "链上支出是离开平台钱包的金额，而不仅是退款本身的手续费：热钱包发送到充值地址的 TRX（账户激活、燃烧充值）及这些发送的手续费。充值地址未燃烧的 TRX 留在原处，不会归集。USDT 金额按每笔转账确认时的 TRX 价格计算。",
+      "costNoteETHEREUM": "链上支出是离开平台钱包的金额，而不仅是退款本身的手续费：发送到充值地址的燃料 ETH 及燃料交易本身的手续费（从热钱包退款：其自身手续费）。充值地址用这笔燃料支付退款手续费；未消耗的部分留在原处，不会归集。USDT 金额按每笔转账确认时的 ETH 价格计算。",
+      "unmeasured": "{count} 笔转账的支出或价格未测得：未计入 USDT 金额，在原生资产合计中按收据手续费（下限）计入。",
       "ariaLabel": "{network} 退款网络费"
     },
     "outboundRows": {

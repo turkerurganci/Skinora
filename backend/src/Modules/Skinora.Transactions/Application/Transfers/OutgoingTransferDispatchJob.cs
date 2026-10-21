@@ -447,13 +447,21 @@ public sealed class OutgoingTransferDispatchJob
         row.Status = BlockchainTransactionStatus.DETECTED;
         row.NextAttemptAt = null;
         row.ErrorMessage = null;
+        // T160c düzeltme turu (F1) — TRON deposit sends report, with the
+        // broadcast, the TRX this call cost the hot wallet (activation + top-up
+        // + their fees). Recorded now: the TRX has already left. Ethereum's
+        // spend arrives with the final status (OutgoingTransferConfirmationJob).
+        if (result.PlatformSpendSun is { } spendSun)
+        {
+            row.PlatformNetworkCost = spendSun;
+        }
         // `RetryCount` and `ConfirmationCount` are preserved — confirmation
         // job flips DETECTED → CONFIRMED once the solidity node catches up.
 
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation(
-            "Outbound transfer broadcast OK — row {Id} ({Type}) → txHash {TxHash}",
-            row.Id, row.Type, result.TxHash);
+            "Outbound transfer broadcast OK — row {Id} ({Type}) → txHash {TxHash}; platform spend {PlatformSpendSun} SUN",
+            row.Id, row.Type, result.TxHash, result.PlatformSpendSun);
     }
 
     private async Task HandleDeferredAsync(

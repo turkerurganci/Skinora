@@ -334,6 +334,43 @@ public sealed class RefundFeeSweepQueueJobTests : IDisposable
         Assert.False(await AnyCollectionAsync(tx));
     }
 
+    /// <summary>
+    /// T160c düzeltme turu (F3) — the sweep must be CONFIRMED. A FAILED sweep
+    /// that had folded the fee in (the admin re-drives it: its Amount still
+    /// counts the fee) must not be "collected" from under it, and here the
+    /// collection WOULD pay (1.37 withheld &gt; 1.20 estimated) — so only the
+    /// CONFIRMED rule stops it. The control below is the same deposit with a
+    /// confirmed sweep that carried nothing: the same fee is collected.
+    /// </summary>
+    [Theory]
+    [InlineData(TransactionStatus.ITEM_DELIVERED)]
+    [InlineData(TransactionStatus.COMPLETED)]
+    public async Task A_Failed_Sweep_Keeps_Its_Folded_Fee_Even_When_Collecting_Would_Pay(TransactionStatus status)
+    {
+        var (tx, deposit) = await SeedAsync(status);
+        AddSweep(tx, deposit, BlockchainTransactionStatus.FAILED, recovered: 1.37m);
+        AddRefund(tx, deposit, BlockchainTransactionType.EXCESS_REFUND, net: 5.63m, fee: 1.37m);
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.False(await AnyCollectionAsync(tx));
+        Assert.Empty(_tronEstimator.Requests); // not even priced
+    }
+
+    [Fact]
+    public async Task Control_The_Same_Fee_Behind_A_Confirmed_Sweep_That_Carried_Nothing_Is_Collected()
+    {
+        var (tx, deposit) = await SeedAsync(TransactionStatus.COMPLETED);
+        AddSweep(tx, deposit, BlockchainTransactionStatus.CONFIRMED, recovered: null);
+        AddRefund(tx, deposit, BlockchainTransactionType.EXCESS_REFUND, net: 5.63m, fee: 1.37m);
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(1.37m, (await SingleCollectionAsync(tx)).Amount);
+    }
+
     [Fact]
     public async Task A_Failed_Collection_Is_Not_Retried_Under_A_New_Id()
     {

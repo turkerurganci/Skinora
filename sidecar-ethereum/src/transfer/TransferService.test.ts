@@ -426,7 +426,24 @@ describe('status (GET /api/transfer/status/:txHash)', () => {
       confirmations: -1,
       finalized: false,
       realizedFeeWei: null,
+      platformSpendWei: null,
+      nativePriceUsdt: null,
     });
+  });
+
+  it('T160c düzeltme turu — a final hot-wallet send reports its receipt fee as the platform spend; no price → null price, the status still answers', async () => {
+    chain.receiptGasUsed = 63_209n;
+    chain.receiptEffectiveGasPrice = 3_000_000_011n;
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.mine();
+    finalizeAll();
+    price = null; // the feed is down when the final status is read
+    const status = await service.status(txHash);
+    expect(status.contractRet).toBe('SUCCESS');
+    expect(status.platformSpendWei).toBe((63_209n * 3_000_000_011n).toString());
+    expect(status.platformSpendWei).toBe(status.realizedFeeWei);
+    expect(status.nativePriceUsdt).toBeNull();
   });
 
   it('mined above finalized → not final; at finalized → SUCCESS, final', async () => {

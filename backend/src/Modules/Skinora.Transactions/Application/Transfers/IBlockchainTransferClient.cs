@@ -138,11 +138,19 @@ public sealed record TransferBroadcastRequest(
     decimal? FeeCapUsd = null,
     bool FromHotWallet = false);
 
+/// <param name="PlatformSpendSun">
+/// T160c düzeltme turu (F1) — TRON deposit sends (sweep, refunds, refund-fee
+/// collection): the SUN this call cost the hot wallet — the TRX it sent the
+/// deposit (activation, burn / Bandwidth top-up, fixed fallback) plus the fee
+/// those sends burned (the service's <c>platformSpendSun</c>). Null for every
+/// other send and when the service did not report it.
+/// </param>
 public sealed record TransferBroadcastResult(
     TransferBroadcastStatus Status,
     string? TxHash,
     string? ErrorCode,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    long? PlatformSpendSun = null);
 
 public enum TransferBroadcastStatus
 {
@@ -188,6 +196,18 @@ public enum TransferBroadcastStatus
 /// <c>realizedFeeWei</c> decimal string. NULL for TRON, and when the service
 /// did not report a well-formed value.
 /// </param>
+/// <param name="PlatformSpendWei">
+/// T160c düzeltme turu (F1) — Ethereum, final only: the ETH that left the
+/// platform's wallets for the send, wei (deposit send: fuel value + fuel fee;
+/// hot-wallet send: the receipt fee) — the service's <c>platformSpendWei</c>.
+/// NULL when not reported or malformed.
+/// </param>
+/// <param name="NativePriceUsdt">
+/// T160c düzeltme turu (F1) — final only: the native-asset/USDT price the
+/// service reported with this read (<c>nativePriceUsdt</c>); the confirmation
+/// job values the row's platform spend at it. NULL when absent, malformed or
+/// not positive.
+/// </param>
 public sealed record TransferStatusResult(
     TransferStatusOutcome Outcome,
     long? BlockNumber,
@@ -198,7 +218,9 @@ public sealed record TransferStatusResult(
     long? EnergyUsageTotal = null,
     long? OriginEnergyUsage = null,
     string? TxHash = null,
-    decimal? RealizedFeeWei = null);
+    decimal? RealizedFeeWei = null,
+    decimal? PlatformSpendWei = null,
+    decimal? NativePriceUsdt = null);
 
 public enum TransferStatusOutcome
 {

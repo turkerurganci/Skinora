@@ -32,6 +32,14 @@ export interface RefundResult extends SendTransferResult {
   delegationMode: DelegationMode;
   delegationAmountSun: number;
   fallbackAmountSun: number;
+  /**
+   * T160c düzeltme turu (F1) — SUN this call cost the hot wallet: the TRX it
+   * sent the deposit (activation, burn / Bandwidth top-up, fallback) plus the
+   * fee each of those sends burned. The deposit's own transfer burns out of
+   * that TRX (its receipt fee is not on top); what it does not burn stays on
+   * the deposit, never collected. The backend's accounting reads this.
+   */
+  platformSpendSun: number;
 }
 
 export interface RefundServiceDeps {
@@ -141,6 +149,7 @@ export class RefundService {
       delegationMode: outcome.mode,
       delegationAmountSun: outcome.delegationAmountSun,
       fallbackAmountSun: outcome.fallbackAmountSun,
+      platformSpendSun: outcome.platformSpendSun,
     };
   }
 

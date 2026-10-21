@@ -183,7 +183,14 @@ public sealed class OutgoingTransferConfirmationJob
                 if (policy.ReportsFeeInWei)
                 {
                     row.RealizedFeeWei = status.RealizedFeeWei;
+                    // T160c düzeltme turu (F1) — what the platform spent (fuel
+                    // value + fuel fee for a deposit send, the receipt fee for a
+                    // hot-wallet send), reported with the final status.
+                    row.PlatformNetworkCost = status.PlatformSpendWei;
                 }
+                // T160c düzeltme turu (F1) — valued once, at the price the
+                // service reported with this final read; never revalued.
+                row.PlatformNetworkCostUsdt = PlatformCostUsdt(row.PlatformNetworkCost, status.NativePriceUsdt, policy);
 
                 // WP1 — a confirmed SELLER_PAYOUT means the seller is paid on
                 // chain (03 §2.4 step 6). Publish PayoutCompletedEvent in the
@@ -300,6 +307,19 @@ public sealed class OutgoingTransferConfirmationJob
             "Outbound transfer row {Id} ({Type}) landed as {Reported} (stored {Stored}) — a same-nonce replacement; the row now carries the on-chain hash",
             row.Id, row.Type, reported, row.TxHash);
         row.TxHash = reported;
+    }
+
+    /// <summary>
+    /// T160c düzeltme turu (F1) — the platform spend (native smallest unit) in
+    /// USDT at <paramref name="price"/> (USDT per whole native unit), rounded to
+    /// 6 decimals away from zero. NULL when either is missing.
+    /// </summary>
+    internal static decimal? PlatformCostUsdt(decimal? units, decimal? price, BlockchainNetworkPolicy policy)
+    {
+        if (units is not { } cost || price is not { } perUnit) return null;
+        var divisor = 1m;
+        for (var i = 0; i < policy.NativeAssetDecimals; i++) divisor *= 10m;
+        return decimal.Round(cost / divisor * perUnit, 6, MidpointRounding.AwayFromZero);
     }
 
     private static string? TruncateError(string? message)

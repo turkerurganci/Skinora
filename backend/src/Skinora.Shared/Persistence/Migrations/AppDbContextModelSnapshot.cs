@@ -2101,6 +2101,14 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<Guid?>("PaymentAddressId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal?>("PlatformNetworkCost")
+                        .HasPrecision(38)
+                        .HasColumnType("decimal(38,0)");
+
+                    b.Property<decimal?>("PlatformNetworkCostUsdt")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<long?>("RealizedFeeSun")
                         .HasColumnType("bigint");
 

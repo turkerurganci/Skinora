@@ -171,6 +171,14 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.Property(b => b.RefundFeeRecovered)
             .HasPrecision(18, 6);
 
+        // T160c düzeltme turu — what the platform spent for the transfer
+        // (native smallest unit, exact integer) and its USDT value at the
+        // confirmation price. NULL = not measured; 0 is a real answer.
+        builder.Property(b => b.PlatformNetworkCost)
+            .HasPrecision(38, 0);
+        builder.Property(b => b.PlatformNetworkCostUsdt)
+            .HasPrecision(18, 6);
+
         builder.Property(b => b.Status)
             .IsRequired();
 

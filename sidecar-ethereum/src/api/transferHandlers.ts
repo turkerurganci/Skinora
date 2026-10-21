@@ -326,7 +326,10 @@ function expectationOf(query: Record<string, unknown>): TransferExpectation | nu
 
 /**
  * GET /api/transfer/status/:txHash[?contract=&from=&to=&amount=] →
- *   200 `{ txHash, blockNumber, contractRet, confirmations, finalized, realizedFeeWei }` —
+ *   200 `{ txHash, blockNumber, contractRet, confirmations, finalized, realizedFeeWei,
+ *       platformSpendWei, nativePriceUsdt }` — the last two (T160c düzeltme turu) once final:
+ *       the ETH the platform spent for the send (fuel value + fuel fee for a deposit send,
+ *       the receipt fee for a hot-wallet send) and the ETH/USDT price at this read;
  *       `txHash` is the attempt that is in a block (a fee bump changes it); `realizedFeeWei`
  *       (gasUsed × effectiveGasPrice) once final, else null;
  *   404 `TRANSFER_NOT_FOUND`, 409 `TRANSFER_NONCE_CONFLICT`, 400 bad hash — row-specific, the

@@ -233,7 +233,32 @@ export interface TransferStatus {
    * the receipt has no effective price). `contracts/transfer-status/`.
    */
   readonly realizedFeeWei: string | null;
+  /**
+   * T160c düzeltme turu (F1) — the ETH that left the PLATFORM's wallets for
+   * this transfer, wei, as a decimal string; null until final and when it
+   * cannot be measured. A hot-wallet send pays its own fee: the receipt's
+   * `gasUsed × effectiveGasPrice`. A deposit send (sweep, refund before the
+   * sweep, refund-fee collection) is paid from fuel: the fuel's value (what
+   * the deposit received; its unspent part stays there, T153 — never
+   * collected) plus the fuel transaction's own fee. The token transfer's fee
+   * is NOT added on top — the deposit paid it out of that fuel. A deposit send
+   * without a fuel of its own (the deposit already held ETH an earlier fuel
+   * brought, counted with that one) is `"0"`. Null for a hash the journal does
+   * not hold (who paid is unknown), a fuel not found on chain, or a receipt
+   * without an effective price.
+   */
+  readonly platformSpendWei: string | null;
+  /**
+   * T160c düzeltme turu (F1) — the ETH/USDT price when this final status was
+   * read (the price service the fee cap and the estimate use), a decimal
+   * string with 6 decimals; null when not final or no price. The backend
+   * values {@link platformSpendWei} at it once, when it confirms the row.
+   */
+  readonly nativePriceUsdt: string | null;
 }
+
+/** T160c düzeltme turu — the status read never waits on the price feed longer than this. */
+const STATUS_PRICE_BUDGET_MS = 5_000;
 
 /** T153 — the fuel wallet (08 §3.7.5). */
 export interface FuelDeps {
@@ -672,6 +697,8 @@ export class TransferService {
         confirmations: -1,
         finalized: false,
         realizedFeeWei: null,
+        platformSpendWei: null,
+        nativePriceUsdt: null,
       };
     }
     const finalized = this.deps.finalizedHead();
@@ -688,7 +715,62 @@ export class TransferService {
         final && receipt.effectiveGasPrice !== null
           ? (receipt.gasUsed * receipt.effectiveGasPrice).toString()
           : null,
+      platformSpendWei: final ? await this.platformSpendOf(record, receipt) : null,
+      nativePriceUsdt: final ? await this.statusPriceUsdt() : null,
     };
+  }
+
+  /**
+   * T160c düzeltme turu (F1) — see {@link TransferStatus.platformSpendWei}.
+   * Measurement only: never a reason to fail the status read.
+   */
+  private async platformSpendOf(
+    record: JournalRecord | null | undefined,
+    receipt: TransactionReceipt,
+  ): Promise<string | null> {
+    if (!record) return null;
+    if (record.signer === 'HOT') {
+      return receipt.effectiveGasPrice === null
+        ? null
+        : (receipt.gasUsed * receipt.effectiveGasPrice).toString();
+    }
+    if (record.signer !== 'DEPOSIT') return null;
+    const fuel = this.deps.journal.get(TransferService.fuelIdOf(record.id));
+    if (!fuel) return '0';
+    try {
+      const fuelReceipt = await this.findMined(fuel);
+      if (!fuelReceipt || fuelReceipt.effectiveGasPrice === null) return null;
+      // A reverted fuel delivered nothing but its fee was still paid.
+      const value = fuelReceipt.status === 1 ? BigInt(fuel.amountUnits) : 0n;
+      return (value + fuelReceipt.gasUsed * fuelReceipt.effectiveGasPrice).toString();
+    } catch (err) {
+      logger.warn(
+        { id: record.id, reason: (err as Error).message },
+        'Fuel receipt unreadable — the platform spend of this transfer is not reported (T160c)',
+      );
+      return null;
+    }
+  }
+
+  /** T160c düzeltme turu (F1) — ETH/USDT now, 6 decimals; null when the feed does not answer in time. */
+  private async statusPriceUsdt(): Promise<string | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const micros = await Promise.race([
+        this.deps.prices.ethUsdMicros(),
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), STATUS_PRICE_BUDGET_MS);
+        }),
+      ]);
+      if (micros === null || micros <= 0n) return null;
+      const whole = micros / 1_000_000n;
+      const fraction = (micros % 1_000_000n).toString().padStart(6, '0');
+      return `${whole}.${fraction}`;
+    } catch {
+      return null;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   /**

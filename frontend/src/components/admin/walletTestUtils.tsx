@@ -96,6 +96,10 @@ export function tronWallets(overrides: Partial<NetworkWallets> = {}): NetworkWal
       onDeposits: "3.25",
       refundChainCost: "21.4",
       collectionChainCost: "6.27",
+      refundChainCostUsdt: "7.09",
+      collectionChainCostUsdt: "2.08",
+      netUsdt: "-1.86",
+      costUnmeasured: 0,
     },
     ...overrides,
   };
@@ -146,6 +150,10 @@ export function ethWallets(overrides: Partial<NetworkWallets> = {}): NetworkWall
       onDeposits: "0.07",
       refundChainCost: "0.00021",
       collectionChainCost: "0.00004",
+      refundChainCostUsdt: "0.51",
+      collectionChainCostUsdt: "0.1",
+      netUsdt: "-0.49",
+      costUnmeasured: 0,
     },
     ...overrides,
   };

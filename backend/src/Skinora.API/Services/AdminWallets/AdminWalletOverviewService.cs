@@ -46,23 +46,42 @@ public sealed record NetworkWalletsDto(
 
 /// <summary>
 /// T160c — the refund network fees withheld from buyers, and where they are
-/// (02 §4.7, 06 §3.8 <c>RefundFeeRecovered</c>). Stablecoin amounts are decimal
-/// strings in USDT terms (a wrong-token refund withholds USDC, counted 1:1 —
-/// T159a); chain costs are in the network's native asset.
+/// (02 §4.7, 06 §3.8 <c>RefundFeeRecovered</c>), against what the platform
+/// spent on the chain for those refunds and for the separate collections.
+/// Stablecoin amounts are decimal strings in USDT terms (a wrong-token refund
+/// withholds USDC, counted 1:1 — T159a).
+/// <para>
+/// T160c düzeltme turu (F1, ⚠ PARA) — the expense is the platform's REAL
+/// spend (<c>BlockchainTransaction.PlatformNetworkCost</c>), not the
+/// transfer's receipt fee: TRON — the TRX the hot wallet sent the deposit
+/// (activation, burn top-up, fallback) + the fees those sends burned;
+/// Ethereum — the fuel's value + the fuel's own fee (a hot-wallet refund:
+/// its receipt fee). The USDT figures are each row's spend valued at the
+/// native price its service reported when the row was confirmed
+/// (<c>PlatformNetworkCostUsdt</c>), summed — never revalued at today's price.
+/// </para>
 /// </summary>
 /// <param name="Withheld">Σ <c>GasFee</c> of the network's confirmed refunds — what buyers paid for their refunds' chain fees (income).</param>
 /// <param name="Collected">Part of it in the hot wallet: kept by refunds the hot wallet sent, plus confirmed sweeps / collections that carried it.</param>
 /// <param name="InTransit">Part of it carried by a sweep / collection that is queued or broadcast, not final.</param>
 /// <param name="OnDeposits">Still on deposits: withheld − collected − in transit (waiting for a sweep, or not worth collecting yet).</param>
-/// <param name="RefundChainCost">Chain fee those refunds actually paid, native asset (expense; refunds not measured yet are left out).</param>
-/// <param name="CollectionChainCost">Chain fee the separate collections paid, native asset (expense; the sale's own sweep is not counted — it moves anyway).</param>
+/// <param name="RefundChainCost">Native asset the platform spent for those refunds (expense). A row whose spend was not measured contributes its receipt fee — a lower bound — and is counted in <paramref name="CostUnmeasured"/>.</param>
+/// <param name="CollectionChainCost">Native asset the platform spent for the separate collections (expense; the sale's own sweep is not counted — it moves anyway). Same lower-bound rule.</param>
+/// <param name="RefundChainCostUsdt">USDT value of the refunds' spend at each row's confirmation price (rows with a valued spend only).</param>
+/// <param name="CollectionChainCostUsdt">USDT value of the collections' spend, same rule.</param>
+/// <param name="NetUsdt">Withheld − both USDT expenses: positive = the refund fees covered the chain spend, negative = a loss. An upper bound while <paramref name="CostUnmeasured"/> is above 0.</param>
+/// <param name="CostUnmeasured">Refund / collection rows in these books whose spend or its USDT value is not recorded (left out of the USDT figures).</param>
 public sealed record RefundFeeBooksDto(
     string Withheld,
     string Collected,
     string InTransit,
     string OnDeposits,
     string RefundChainCost,
-    string CollectionChainCost);
+    string CollectionChainCost,
+    string RefundChainCostUsdt,
+    string CollectionChainCostUsdt,
+    string NetUsdt,
+    int CostUnmeasured);
 
 /// <param name="Role"><c>HOT</c>, <c>COLD</c> or <c>FUEL</c>.</param>
 /// <param name="Address">Display form (Ethereum: EIP-55); null = not configured / not provisioned.</param>
@@ -341,17 +360,28 @@ public sealed class AdminWalletOverviewService : IAdminWalletOverviewService
                 b.RefundFeeRecovered,
                 b.RealizedFeeSun,
                 b.RealizedFeeWei,
+                b.PlatformNetworkCost,
+                b.PlatformNetworkCostUsdt,
                 Deposit = b.Transaction.PaymentAddress == null ? null : b.Transaction.PaymentAddress.Address,
             })
             .ToListAsync(cancellationToken);
 
         decimal withheld = 0m, keptByHotWallet = 0m, carried = 0m, inTransit = 0m;
         decimal refundCostUnits = 0m, collectionCostUnits = 0m;
+        decimal refundCostUsdt = 0m, collectionCostUsdt = 0m;
+        var unmeasured = 0;
         foreach (var r in rows)
         {
-            var nativeUnits = network == BlockchainNetwork.TRON
+            // T160c düzeltme turu (F1) — the platform's spend; the receipt fee
+            // stands in (a lower bound) only for a row whose spend was not measured.
+            var receiptUnits = network == BlockchainNetwork.TRON
                 ? r.RealizedFeeSun is { } sun ? sun : 0m
                 : r.RealizedFeeWei ?? 0m;
+            var nativeUnits = r.PlatformNetworkCost ?? receiptUnits;
+            var isExpense = RefundFeeLedger.RefundTypes.Contains(r.Type)
+                || (r.Type == BlockchainTransactionType.REFUND_FEE_SWEEP
+                    && r.Status == BlockchainTransactionStatus.CONFIRMED);
+            if (isExpense && (r.PlatformNetworkCost is null || r.PlatformNetworkCostUsdt is null)) unmeasured++;
             if (RefundFeeLedger.RefundTypes.Contains(r.Type))
             {
                 withheld += r.GasFee!.Value;
@@ -360,11 +390,16 @@ public sealed class AdminWalletOverviewService : IAdminWalletOverviewService
                     keptByHotWallet += r.GasFee.Value;
                 }
                 refundCostUnits += nativeUnits;
+                refundCostUsdt += r.PlatformNetworkCostUsdt ?? 0m;
             }
             else if (r.Status == BlockchainTransactionStatus.CONFIRMED)
             {
                 carried += r.RefundFeeRecovered!.Value;
-                if (r.Type == BlockchainTransactionType.REFUND_FEE_SWEEP) collectionCostUnits += nativeUnits;
+                if (r.Type == BlockchainTransactionType.REFUND_FEE_SWEEP)
+                {
+                    collectionCostUnits += nativeUnits;
+                    collectionCostUsdt += r.PlatformNetworkCostUsdt ?? 0m;
+                }
             }
             else
             {
@@ -374,13 +409,18 @@ public sealed class AdminWalletOverviewService : IAdminWalletOverviewService
 
         var collected = keptByHotWallet + carried;
         var onDeposits = Math.Max(0m, withheld - collected - inTransit);
+        var net = withheld - refundCostUsdt - collectionCostUsdt;
         return new RefundFeeBooksDto(
             Format(withheld, StablecoinDecimals),
             Format(collected, StablecoinDecimals),
             Format(inTransit, StablecoinDecimals),
             Format(onDeposits, StablecoinDecimals),
             Format(ToNative(refundCostUnits, policy.NativeAssetDecimals), policy.NativeAssetDecimals),
-            Format(ToNative(collectionCostUnits, policy.NativeAssetDecimals), policy.NativeAssetDecimals));
+            Format(ToNative(collectionCostUnits, policy.NativeAssetDecimals), policy.NativeAssetDecimals),
+            Format(refundCostUsdt, StablecoinDecimals),
+            Format(collectionCostUsdt, StablecoinDecimals),
+            Format(net, StablecoinDecimals),
+            unmeasured);
     }
 
     private static decimal ToNative(decimal units, int decimals)

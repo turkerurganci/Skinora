@@ -170,6 +170,15 @@ public sealed class RefundFeeSweepQueueJob
                     || t.PaymentAddress.RefundFeeSweepNextCheckAt <= now)
                 && !t.IsOnHold
                 && !t.HasActiveDispute
+                // T160c düzeltme turu (F6) — the narrow test first: only a
+                // transaction with a confirmed, fee-withholding refund from its
+                // deposit can owe anything (most sales never refund). Without it
+                // every completed sale with a confirmed sweep reached the two
+                // sums below on every 10-minute run; the result is the same.
+                && t.BlockchainTransactions.Any(b => RefundFeeLedger.RefundTypes.Contains(b.Type)
+                    && b.Status == BlockchainTransactionStatus.CONFIRMED
+                    && b.GasFee > 0m
+                    && b.FromAddress == t.PaymentAddress.Address)
                 && (t.BlockchainTransactions.Any(b => b.Type == BlockchainTransactionType.SWEEP
                         && b.Status == BlockchainTransactionStatus.CONFIRMED)
                     || (TerminalWithoutSweep.Contains(t.Status)

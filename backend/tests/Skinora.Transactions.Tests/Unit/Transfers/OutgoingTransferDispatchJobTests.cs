@@ -109,6 +109,24 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Equal(0, reloaded.RetryCount);
         Assert.Null(reloaded.NextAttemptAt);
         Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+        Assert.Null(reloaded.PlatformNetworkCost); // nothing reported → not measured, not 0
+    }
+
+    [Fact]
+    public async Task T160c_Tron_Broadcast_Records_What_The_Send_Cost_The_Hot_Wallet()
+    {
+        // T159b senaryo 6 (Nile): 1 SUN + 1.1 TRX activation + a 1.611499 TRX burn top-up.
+        var fixture = await SeedRefundAsync(BlockchainTransactionType.INCORRECT_AMOUNT_REFUND, amount: 2.30m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-006", null, null, PlatformSpendSun: 2_711_500L);
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+        Assert.Equal(2_711_500m, reloaded.PlatformNetworkCost);
+        Assert.Null(reloaded.PlatformNetworkCostUsdt); // valued at confirmation, not here
     }
 
     [Fact]

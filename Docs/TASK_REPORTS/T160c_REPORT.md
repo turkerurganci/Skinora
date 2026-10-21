@@ -1,6 +1,8 @@
 # T160c — İade kesinti kalıntısının toplanması (⚠ PARA)
 
-**Faz:** F9 | **Durum:** ⏳ Yapım bitti — doğrulama bekliyor | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor | **Tarih:** 2026-10-21
+
+> **Düzeltme turu (doğrulama ✗ FAIL, HEAD `c5dab67c`):** bulgular F1–F7 ve ne yapıldığı raporun sonundaki **"Düzeltme turu"** bölümünde. Kısaca: AD38'deki gider artık platformun gerçek zincir harcaması (F1, bloke edici); "zararına toplama yok" sahip kararı olarak kaydedildi (F2); sweep `CONFIRMED` şartı ve USDC imza bayrağı testle korunuyor (F3, F7); `origin/main` dala merge edildi (F4). Aşağıdaki ilk yapım bölümleri yapım anını anlatır; değişen yerler düzeltme turu bölümünde.
 
 ---
 
@@ -135,8 +137,8 @@ TRON servisi (`sidecar-blockchain`) ve `sidecar-fake` değişmedi (ikisi de swee
 
 | # | Kriter | Sonuç | Kanıt |
 |---|---|---|---|
-| 1 | Reddedilen ödeme iadesinde alıcıdan kesilen gas tutarı (USDT/USDC) depozitte kalmaz, sweep ile sıcak cüzdana taşınır (iki ağ) | ✓ (ekonomik olmayan kalıntı hariç — ⚠ (iii), açık soru 1) | USDT: `SweepQueueJobTests` T160c (sweep `Amount = TotalAmount + Σ GasFee`, `RefundFeeRecovered`); USDT/USDC ayrı toplama: `RefundFeeSweepQueueJobTests` (5 iade türü × iptal/iade durumları, TRON ve Ethereum, USDC iki ağda); gönderim: `OutgoingTransferDispatchJobTests` T160c, `HttpBlockchainTransferClientTests` T160c (sweep ucu, USDC gövdesi); Ethereum imzacısı USDC sweep: `TransferService.test.ts` T160c (3); mutabakat: `ReconciliationServiceTests` T160c |
-| 2 | Muhasebe kaydı platform geliri/gider dengesini gösterir | ✓ | `RefundFeeRecovered` kolonu (06 §3.8) + AD38 `refundFees` (kesilen / sıcak cüzdanda / yolda / depozitte + iadelerin ve toplamaların zincir ücreti): `AdminWalletOverviewTests.T160c_RefundFeeBooks_…` (SQL Server, migration'la), `WalletsOverview.test.tsx` T160c |
+| 1 | Reddedilen ödeme iadesinde alıcıdan kesilen gas tutarı (USDT/USDC) depozitte kalmaz, sweep ile sıcak cüzdana taşınır (iki ağ) | ✓ — sahip kararıyla (2026-10-21, modal): zararına toplama yapılmaz; ekonomik olmayan kalıntı depozitte kalır ve AD38'de "hâlâ depozitlerde" görünür (düzeltme turu F2) | USDT: `SweepQueueJobTests` T160c (sweep `Amount = TotalAmount + Σ GasFee`, `RefundFeeRecovered`); USDT/USDC ayrı toplama: `RefundFeeSweepQueueJobTests` (5 iade türü × iptal/iade durumları, TRON ve Ethereum, USDC iki ağda); gönderim: `OutgoingTransferDispatchJobTests` T160c, `HttpBlockchainTransferClientTests` T160c (sweep ucu, USDC gövdesi); Ethereum imzacısı USDC sweep: `TransferService.test.ts` T160c (3); mutabakat: `ReconciliationServiceTests` T160c |
+| 2 | Muhasebe kaydı platform geliri/gider dengesini gösterir | ✓ (düzeltme turu F1) | Gelir: `RefundFeeRecovered` kolonu (06 §3.8) + AD38 `refundFees` (kesilen / sıcak cüzdanda / yolda / depozitte). **Gider artık platformun gerçek zincir harcaması** (`PlatformNetworkCost`, USDT'si onay anı fiyatıyla `PlatformNetworkCostUsdt`), denge tek sayı: `netUsdt`; ölçülmeyen satır `costUnmeasured`. `AdminWalletOverviewTests.T160c_RefundFeeBooks_Expense_Is_What_Left_The_Platform_At_The_Confirmation_Price` (SQL Server, migration'la, üretim onay işiyle — T159b sayıları), `…_Show_Withheld_Collected_…` (ölçülmemiş satır), `WalletsOverview.test.tsx` T160c |
 | 3 | DEFERRED_BACKLOG `RefundGasDeductionDustStaysOnDeposit` kapandı | ✓ | `Docs/DEFERRED_BACKLOG.md` §4 satırı ✅ + Durum satırı |
 
 ---
@@ -198,14 +200,14 @@ Betik her bozmayı uygulayıp ilgili test sınıfını koştu ve dosyayı geri y
 6. **Tek seferde tek token** (büyüğü önce); yolda işlem başına en çok bir toplama (filtreli tekil indeks).
 7. **USDC kesintisi USDC olarak toplanır;** Ethereum imzacısı sweep'te USDC'ye izin verir (hedef sabit sıcak cüzdan). Ethereum sıcak cüzdanındaki USDC AD39 ile soğuğa aktarılamaz (yalnız USDT, K2) — küçük tutar sıcak cüzdanda kalır.
 8. **`BUYER_REFUND` kesintisi de toplanır** — kriter "reddedilen ödeme" diyor, ama aynı depozitte aynı para; backlog satırı da `BUYER_REFUND`'ı anıyordu.
-9. **Defter görünümü:** zincir ücreti yerel varlıkta gösterilir, USD'ye çevrilmez (gerçekleşen ücretin anlık kuru saklanmıyor); yanlış token kesintisi USDT toplamına 1:1 girer.
+9. **Defter görünümü:** ~~zincir ücreti yerel varlıkta gösterilir, USD'ye çevrilmez~~ — **düzeltme turunda değişti (F1):** gider platformun gerçek harcamasıdır, yerel varlıkta ve onay anı fiyatıyla USDT'de gösterilir, `netUsdt` dengeyi verir. Yanlış token kesintisi USDT toplamına 1:1 girer (değişmedi).
 10. **T160c'den önce kalmış kalıntı** da aynı kuralla toplanır (prova DB'lerinde; canlıda yok).
 11. **Toplayıcı 10 dakikada bir, tur başına 20 depozit;** fiyatı sorulan depozit 24 sa / 30 dk geri çekilir (TronGrid kotası).
 12. **`CK_…_RefundFeeRecovered`'da `<= Amount` yok** (SQLite metin karşılaştırması yanlış ret üretirdi; kodda sağlanıyor).
 
 ---
 
-## Açık soru (sahip — bloke etmez)
+## Açık soru (sahip — bloke etmez) — **cevaplandı: (a), proje sahibi kararı 2026-10-21 (modal)**
 
 1. **Tek iadeli, sweep'e ulaşmamış depozitlerde kalıntının bir kısmı toplanmayacak.** Ayrı toplama da bir depozit transferidir ve maliyeti iadenin kendi ücretine yakındır (TRON: iade ücreti ~7,5–14 TRX — depozit açılışı + alıcının adresine göre enerji; sıcak cüzdana toplama ~6,4 TRX. Ethereum: ikisi de yakıt + token gas'ı). Kural "maliyet < tutar" olduğu için alıcının adresi boş olan iadelerin kesintisi toplanır, adresinde zaten USDT olan alıcıların iadelerinde kalıntı çoğu zaman depozitte kalır (defterde "hâlâ depozitlerde" olarak görünür). Seçenekler: (a) bugünkü kural (önerilen — toplama hiç zarar etmez, kalıntı görünür); (b) sweep'e ulaşmayacak depozitten yapılan iadede alıcıdan toplama maliyetini de kesmek (kesinti kuralını değiştirir — sahip kararı gerekir); (c) kalıntıyı zararına da toplamak (platform transfer başına küçük zarar eder). Kod (a)'yı uygular; (b)/(c) karar verilirse ayrı görev.
 
@@ -245,3 +247,120 @@ Betik her bozmayı uygulayıp ilgili test sınıfını koştu ve dosyayı geri y
 - **Main CI startup check:** son 3 run `success` — 39546534805, 39546534823 (`fc3e8840`, #362), 39545306202 (`5ad1e6b7`, #361).
 - **Yönetici düzeni:** yapım alt ajanı; doğrulama ve merge yöneticide (INSTRUCTIONS §3.3).
 - **T160b ile ilişki:** iade gas tahmininin yeniden denemesi T160b'de; bu görev yalnız kaydedilmiş `GasFee`'i okur ve toplama maliyeti için `IGasFeeEstimator` arayüzünü çağırır (dosyasına dokunmadan).
+
+---
+
+## Düzeltme turu (doğrulama ✗ FAIL, HEAD `c5dab67c`, 2026-10-21)
+
+Doğrulama raporu yedi bulgu verdi (S1 ×2, S4 ×5); bloke eden yalnız F1. Hepsi aşağıda.
+
+### F1 (S1 ⚠ PARA, bloke edici) — gider artık platformun gerçek zincir harcaması
+
+**Kural.** Gider, bu transfer için **platform cüzdanlarından çıkan yerel varlıktır** (`BlockchainTransaction.PlatformNetworkCost`, en küçük birimde). Depozit, kendi transferinin ücretini platformun ona gönderdiği TRX'ten / yakıt ETH'sinden öder. Bu yüzden "makbuz ücreti + yakıt ücreti + yakıt değeri" toplamı makbuz ücretini **iki kez** sayardı. Doğru toplam:
+
+| Gönderim | Gider (`PlatformNetworkCost`) | Kim ölçer, ne zaman |
+|---|---|---|
+| TRON depozit gönderimi (sweep, iadeler, `REFUND_FEE_SWEEP`) | Sıcak cüzdanın bu çağrıda depozite gönderdiği TRX (hesap açma 1 SUN, yakma / Bandwidth takviyesi, sabit yedek) + bu gönderimlerin yaktığı ücret (`gettransactioninfobyid.fee`; hesap açmada hesap oluşturma ücreti). Depozitin yakmadığı TRX orada kalır, toplanmaz, yani giderdir. | `sidecar-blockchain` `EnergyDelegationService` → sweep / iade cevabında `platformSpendSun` → `OutgoingTransferDispatchJob` gönderimde yazar |
+| Ethereum depozit gönderimi | İsteğin `fuel:<id>` yakıtının değeri (yakıt geri döndüyse 0) + yakıt işleminin makbuz ücreti (`gasUsed × effectiveGasPrice`). Kendi yakıtı yoksa `0` (depozitteki ETH'yi daha önceki bir yakıt getirdi, o sayıldı). Yakılmayan yakıt depozitte kalır (T153 "artık ETH toplanmaz"), yani giderdir. | `sidecar-ethereum` `TransferService.status` (kesin durumda) → `platformSpendWei` → `OutgoingTransferConfirmationJob` onayda yazar |
+| Sıcak cüzdan gönderimi (Ethereum payout, sweep sonrası iade) | Makbuz ücreti | Aynı alan (`platformSpendWei` = `realizedFeeWei`) |
+| Ölçülmeyen satır (eski servis, kayıp günlük, TRON payout) | NULL | AD38'de makbuz ücretiyle **alt sınır** olarak girer, `costUnmeasured` sayar |
+
+**USDT karşılığı.** Satır `CONFIRMED` olurken, servisin o kesin durum okumasıyla bildirdiği yerel varlık fiyatıyla (`nativePriceUsdt`) **bir kez** hesaplanır: `PlatformNetworkCostUsdt = cost / 10^decimals × fiyat`, 6 ondalığa sıfırdan uzağa yuvarlanır. Sonradan bugünkü fiyatla yeniden değerlenmez. Fiyat kaynağı ücret tahminiyle aynıdır (TRON `TrxPriceService`, Ethereum `EthPriceService`: Binance, yedek CoinGecko, 5 dk önbellek). Durum okuması fiyat için en çok 5 sn bekler. Fiyat gelmezse harcama yine yazılır, USDT NULL kalır ve `costUnmeasured` artar. Ekranda her ağın kendi açıklaması bunu yazıyor ("USDT karşılıkları her transferin onaylandığı andaki TRX / ETH fiyatıyladır").
+
+**AD38 (`refundFees`) yeni alanlar:** `refundChainCostUsdt`, `collectionChainCostUsdt`, `netUsdt` (= `withheld` − iki USDT gideri; negatif = zarar; `costUnmeasured` > 0 iken üst sınır), `costUnmeasured`. `refundChainCost` / `collectionChainCost` artık `PlatformNetworkCost` toplamı. Frontend: satır etiketleri "Bu iadeler için platformun zincir harcaması", "≈ … USDT", "Net (kesilen − zincir harcaması)", ağ başına açıklama, ölçülmeyen satır uyarısı (4 dil, 1593 anahtar eşit).
+
+**Yeniden hesap (T159b ölçülmüş sayıları; entegrasyon testiyle pinlendi):**
+
+| Senaryo | Kesilen | Eski ekran gideri (makbuz) | Yeni gider (platform harcaması) | Eski net | Yeni net |
+|---|---|---|---|---|---|
+| Sepolia 2 — `BUYER_REFUND` (yakıt 168.966.002.534.490 wei + 204.600 gas × 1 gwei; makbuz 152.417 gas) | 0,50 | 0,000152417 ETH ≈ 0,372639 USDT | 0,000373566002534490 ETH = **0,913317 USDT** | +0,127 (kâr gibi) | **−0,413317 (zarar)** |
+| Sepolia 4c — `LATE_PAYMENT_REFUND` (yakıt ≈ 168.940 × 1,000000015 gwei + 204.600 gas; makbuz 152.393 gas) | 0,92 | ≈ 0,372580 USDT | 0,913254 USDT | +0,547 | +0,006746 (başabaş) |
+| İkisi birlikte (Ethereum bloğu) | 1,42 | 0,00030481 ETH ≈ 0,745218 | 0,00074710600506859 ETH = 1,826571 | +0,674782 | **−0,406571** |
+| Nile 6 — `INCORRECT_AMOUNT_REFUND` (makbuz 0; hesap açma 1 SUN + 1,1 TRX; 1,611499 TRX yakma takviyesi depozitte kaldı) | 0,37 | 0 TRX | 2,7115 TRX = 0,898320 USDT | +0,37 | **−0,52832** |
+
+ETH 2.444,861904, TRX 0,3313 (T159b). Eski ekran Ethereum'da gerçek giderin **%40,8**'ini gösteriyordu (doğrulayıcının %41'i). TRON'da Nile kontratı enerjiyi sahibinden karşıladığı için makbuz 0, harcamanın tamamı hesap açma ve takviyedir. Fikstürler sabitlerden farklı: harcama ≠ makbuz, fiyat ≠ test sabiti `ETH_USD`, 4c'nin yakıt değeri senaryo 2'ninkinden farklı.
+
+**Testler:**
+- Backend: `AdminWalletOverviewTests.T160c_RefundFeeBooks_Expense_Is_What_Left_The_Platform_At_The_Confirmation_Price` (SQL Server + migration; DETECTED satırlar **üretim `OutgoingTransferConfirmationJob`'undan** geçer, sonra AD38 okunur); mevcut `…_Show_Withheld_…` testine ölçülmeyen satır (`costUnmeasured` 6 / 1, USDT 0, net üst sınır) eklendi; `OutgoingTransferConfirmationJobTests.T160c_Ethereum_Confirmation_Records_The_Platform_Spend_And_Values_It_At_The_Reported_Price`, `T160c_Tron_Confirmation_Values_The_Spend_The_Broadcast_Recorded_And_Keeps_It`, `T160c_Without_A_Price_The_Spend_Is_Kept_And_Left_Unvalued`; `OutgoingTransferDispatchJobTests.T160c_Tron_Broadcast_Records_What_The_Send_Cost_The_Hot_Wallet` (+ ölçüm yoksa NULL); `HttpBlockchainTransferClientTests.GetStatus_Ethereum_Reads_The_Platform_Spend_And_The_Price_Or_Records_Nothing` (7 vaka: JSON sayı, negatif, 7. ondalık, null → kaydedilmez, durum yine Confirmed), `GetStatus_Tron_Reads_The_Price_But_Never_A_Wei_Spend`, `Broadcast_Reads_Platform_Spend_Sun_Without_Ever_Failing_A_Sent_Transfer` (6 vaka; bozuk ölçüm gönderilmiş transferi asla "ayrıştırılamadı → yeniden dene"ye çevirmez); `EthereumFeeWeiContractTests` sözleşme örneğinin yeni alanları.
+- `sidecar-ethereum`: `Fuel.test.ts` "platformSpendWei is the ETH that left the platform" (Sepolia tarifesi: harcama = yakıt cüzdanının ETH kaybı, makbuz ≈ %40; kendi yakıtı yok → `"0"`; geri dönen yakıt → yalnız ücreti; kesin değil → null), `TransferService.test.ts` sıcak cüzdan payout'u (harcama = makbuz, fiyat yok → null, durum yine cevaplanır); sözleşme örnekleri `contracts/transfer-status/{confirmed,unknown}.response.json` yeni alanlarla.
+- `sidecar-blockchain`: `EnergyDelegationService.test.ts` "platformSpendSun" (yeni depozit + yakma: 1 + 1.100.000 + 7.071.349 + 267.000 = 8.438.350 SUN; hiçbir şey gönderilmedi → 0; sabit yedek + ücreti), `TronResourceClient.test.ts` `getTransactionLanding` (`fee` okuma; yok/metin/negatif → 0; bloksuz → null), `TransferService.test.ts` (sweep cevabı harcamayı taşır; durum fiyatı 6 ondalık; fiyat hatası → null; bloksuzken fiyat sorulmaz).
+
+**Bozma (F1):** her biri geri alındı, `git status` yalnız gerçek değişiklikler.
+
+| # | Bozma | Sonuç |
+|---|---|---|
+| F1-M1 | AD38 gideri yine makbuz ücretinden (`nativeUnits = receiptUnits`) | öldü — `T160c_RefundFeeBooks_Expense_…` kırmızı |
+| F1-M2 | Onay işi `PlatformSpendWei`'yi yazmıyor | öldü — entegrasyon testi + 2 birim test kırmızı |
+| F1-M3 | Ethereum servisi depozit gönderiminde harcama yerine makbuz ücretini bildiriyor | öldü — `Fuel.test.ts` 3 kırmızı |
+| F1-M4 | TRON servisi gönderilen TRX'in ücretini harcamaya eklemiyor | öldü — `EnergyDelegationService.test.ts` 2 kırmızı |
+
+### F2 (S1 ⚠ PARA — sahip kararı) — "zararına toplama yok"
+
+**Proje sahibi kararı 2026-10-21 (modal):** ayrı toplama yalnız tahmini ücret kalıntıdan küçükse yapılır. Kalan depozitte kalır ve admin ekranında görünür. Kod zaten böyleydi; değişmedi. Karar 02 §4.7, 05 §3.3, 08 §3.4, `plan/11_F9.md` "T160c kararları" (xi) ve DOC_CHANGELOG'a yazıldı.
+
+**Kabul kriteri 1 bu kararla nasıl karşılanıyor:** sweep'e ulaşan her işlemde kalıntı **0**: sweep kesintiyi ek maliyetsiz taşır. Sweep'e ulaşmayan işlemde ve USDC kesintisinde kalıntı, toplama kendini ödediği anda toplanır. Ödemiyorsa sahip kararıyla depozitte kalır, 24 saatte bir yeniden fiyatlanır ve AD38'de "hâlâ depozitlerde" satırında tutarıyla görünür. Gider tarafı artık gerçek olduğu için "toplamaya değer mi" sorusunun sonucu da ekranda `netUsdt` olarak görünür. Kriterin "depozitte kalmaz" ifadesi, bu sahip kararıyla "kendini ödemeyen kalıntı hariç" olarak okunur.
+
+### F3 (S4) — sweep `CONFIRMED` şartı testle korunuyor
+
+- `RefundFeeSweepQueueJobTests.A_Failed_Sweep_Keeps_Its_Folded_Fee_Even_When_Collecting_Would_Pay` (ITEM_DELIVERED ve COMPLETED): FAILED sweep, katlanmış 1,37 USDT. Toplama ekonomik (1,37 > tahmin 1,20). Toplama yok, fiyat bile sorulmuyor.
+- Kontrol: `Control_The_Same_Fee_Behind_A_Confirmed_Sweep_That_Carried_Nothing_Is_Collected`. Aynı ücret CONFIRMED (hiçbir şey taşımamış) sweep'in arkasında 1,37 olarak toplanıyor. Yani fikstür ekonomik.
+- **Bozma M8** (sweep `Any(...)` içinden `&& b.Status == CONFIRMED` kaldırıldı): **öldü, 2 kırmızı** (iki vaka). Geri alındı.
+
+### F4 (S4, süreç) — `origin/main` dala merge edildi
+
+- Merge commit `9985a2b7`, rebase değil; ebeveynler `c5dab67c` + `2e502e99`.
+- Kod çakışması yok (T160b dosyaları otomatik birleşti). T160b'nin min(ölçülen, sabit) yedeği değişmedi.
+- Çakışan belgelerde iki tarafın satırları da korundu:
+  - 02/05/08 başlıkları: main'in bir üstü, v4.17 / v3.30 / v3.44.
+  - `DOC_CHANGELOG`: T160c girişi T160b girişlerinin üstünde.
+  - `IMPLEMENTATION_STATUS`: T160a / T160b satırları main'den, T160c satırı bu dal.
+  - `STATUS_CHANGELOG`: iki eski başlık da arşivde.
+  - `DEFERRED_BACKLOG`: main'in iki Durum satırı korundu, üstüne yeni satır.
+- **Backlog sayımı:** dosyanın kendi yöntemiyle, §1'den itibaren `| 🔴/🟡/⚪ |` aktif ve `| ✅ |` çözülmüş satırlar sayıldı → **50 aktif / 159 çözülmüş**. main 51/158 idi, `RefundGasDeductionDustStaysOnDeposit` ✅.
+
+### F5 (bilgi) — `plan/11_F9.md` CRLF
+
+Blob ilk commit'te LF'ye normalize edilmişti. Bu turdaki diff yalnız "T160c kararları" satırı (1 satır). Eski satır normalizasyonu geri alınmadı: geri almak dosyayı yeniden CRLF'li index'e taşırdı, `text=auto` kuralına aykırı olurdu.
+
+### F6 (bilgi) — aday sorgusu daraltıldı
+
+`RefundFeeSweepQueueJob.Candidates`'e ilk koşul olarak ucuz bir EXISTS eklendi: "depozitten çıkmış, onaylanmış, `GasFee > 0` bir iade var". Satışların çoğu hiç iade görmez. Bu satışlar artık iki alt sorgu toplamına hiç ulaşmaz; sonuç aynı (`RefundFeeSweepQueueJobTests` 37/37, `SweepQueueJobTests` yeşil). Bilinen sınırlama: bu koşul için özel bir indeks eklenmedi, sorgu planı ölçülmedi. Ölçek büyürse izlenmeli. TRON'da "bedava" toplamanın paylaşılan enerjiyi kullanması (F6'nın ikinci yarısı) staking kapalıyken geçerli değil: her transfer yakar, tahmin bunu fiyatlar.
+
+### F7 (bilgi) — USDC imza bayrağı testli
+
+`Fuel.test.ts` "the USDC flag the signer is given, per flow": imzacıya giden `wrongTokenRefund` bayrağı gerçek politika çalışırken okunuyor. `EXCESS_REFUND` / `INCORRECT_AMOUNT_REFUND` / `BUYER_REFUND` (USDT) → false, `WRONG_TOKEN_REFUND` (USDC) → true, sweep → true. **Bozma S3** (bayrak her akışta `true`): **öldü, 3 kırmızı**. Geri alındı.
+
+### Devir kaydı
+
+`STATUS_CHANGELOG`'a T160b (#364) merge teyidi işlendi: main `2e502e99`, CI `39582270230` ✓, Docker Publish `39582270184` ✓.
+
+### Yeni ⚠ kararlar (öneriyle kaydedildi — ⚠ PARA)
+
+13. **Gider = platform cüzdanlarından çıkan yerel varlık** (yukarıdaki tablo). Depozit transferinin makbuz ücreti ayrıca eklenmez. Depozitte kalan yakıt / TRX gider sayılır.
+14. **USDT değeri onay anı fiyatıyla, bir kez.** Kaynak servisin ücret tahminindeki fiyattır. Yeniden değerleme yok. Fiyat yoksa USDT NULL kalır, `costUnmeasured` sayar.
+15. **Ölçülmeyen satır** AD38 yerel varlık toplamına makbuz ücretiyle (alt sınır) girer, USDT toplamlarına girmez. Ekran sayısını yazar.
+16. **TRON harcaması gönderim cevabıyla, Ethereum'unki kesin durumla gelir.** TRON'da gönderim zaten eşzamanlıdır ve TRX gönderim anında çıkar. Gönderim yoluna ek bekleme eklenmedi: ücret, mevcut blok yoklamasıyla (`gettransactioninfobyid`) aynı cevaptan okunuyor. Fiyat gönderim yolunda değil, durum okumasında soruluyor; böylece gönderim çağrısı backend zaman aşımına yaklaşmaz.
+17. **Ölçüm kayıt engeli değildir.** Bozuk / eksik alan loglanır, NULL yazılır. Gönderilmiş transfer "yeniden dene"ye, kesin durum "okunamadı"ya dönmez.
+
+### Kalan sınırlamalar (yeni)
+
+- **TRON, yarıda kalan çağrı:** hesap açma ya da takviye gönderilip çağrı sonra hata verirse (ör. `TRANSFER_WINDOW_ELAPSED`), o TRX hiçbir satıra yazılmaz. Sonraki deneme yalnız eksik kısmı gönderir, yani gider eksik kalır. Seyrek; kalıcı bir harcama defteri (Ethereum'daki günlük gibi) TRON servisinde yok.
+- **Ethereum, sahipsiz yakıt:** bir isteğin yakıtı gönderilip token transferi hiç imzalanmazsa (satır FAILED), o yakıt sayılmaz. Bu depozitten sonraki gönderim "kendi yakıtı yok → 0" der. Gider bu durumda eksik kalır.
+- **FAILED satırlar:** defter yalnız onaylanmış iadeleri ve onaylanmış toplamaları gider sayar. Zincirde geri dönen bir iadenin / toplamanın yakıtı ve ücreti AD38'de görünmez.
+- **Uyuyan staking yolu (T149):** delegasyon / geri alma işlemlerinin Bandwidth'i sayılmaz (staking kapalı, kullanılmıyor).
+- **`sidecar-fake`** yeni alanları dönmüyor. e2e'de satırlar "ölçülmedi" görünür; e2e advisory, akış değişmedi.
+
+### Düzeltme turu test sonuçları
+
+| Tür | Sonuç | Detay |
+|---|---|---|
+| Backend Release/Debug build | ✓ 0 hata | `dotnet build Skinora.sln` |
+| Backend Unit (CI filtresi) | ✓ 2324/2324 | Shared 572 · Platform 161 · Fraud 19 · Users 49 · Auth 92 · Steam 59 · Disputes 25 · Realtime 44 · Notifications 150 (Testcontainers'lı 16'sı LocalDB ile) · API 121 · Transactions 1032. Tam koşuda API'nin `ReconciliationServiceTests.T158_Ethereum_BalanceSnapshot_IsReadInChunksOfTen_…` bir kez kırmızı çıktı. Bu teste dokunulmadı; sınıf tek başına 3/3, API unit yeniden 121/121 geçti. Yük altında görülen kararsızlık |
+| Backend Contract | ✓ 98/98 | Shared 5 · Transactions 69 · API 24 (sözleşme örneklerinin yeni alanları dahil) |
+| Backend Integration (LocalDB, SQL Server 2019) | ✓ Shared 16/16 · Transactions 735/735 · API 752/752 | API'ye 1 yeni test eklendi (751 → 752). Docker kullanılmadı |
+| Migration | ✓ | `T160c_PlatformNetworkCost` (2 kolon). `has-pending-model-changes` → "No changes". `UseMigrations` entegrasyon testleri (AdminWalletOverview, InitialMigration) yeşil |
+| `dotnet format --verify-no-changes --severity error` (CI'daki komut) | ✓ çıkış 0 | |
+| sidecar-ethereum | ✓ 882/882 | tsc ✓, eslint ✓, prettier (`--end-of-line auto`) ✓ |
+| sidecar-blockchain | ✓ 597/597 | tsc ✓, eslint ✓, prettier ✓ (`npm ci` ile) |
+| Frontend | ✓ 392/392 | `npm ci` (main'in next 16.3.8'i), `tsc --noEmit` ✓, `eslint` ✓, `i18n:check` 4 dil 1593 anahtar eşit ✓, prettier (`--end-of-line auto`) ✓, `vitest run` ✓ |
+| Bozma (bu tur) | 6 / 6 öldü | F1-M1…M4, M8, S3 (yukarıda) |
