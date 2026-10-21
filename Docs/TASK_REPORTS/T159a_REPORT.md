@@ -1,6 +1,6 @@
 # T159a — Ethereum gas tarifesine uyum (T159 B1)
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor — yapım bitti + sahip kararı uygulandı (2026-10-20), doğrulama bekliyor | **Tarih:** 2026-10-19 · 2026-10-20
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — doğrulama PASS (2026-10-21) | **Tarih:** 2026-10-19 · 2026-10-20
 
 ---
 
@@ -171,9 +171,9 @@ Servisler değişmedi: TRON `RefundService` ve Ethereum `TransferService.deposit
 | `sidecar-ethereum/src/testing/FakeEthereumChain.ts` | `GasTariff`, `MAINNET_GAS_TARIFF`, `SEPOLIA_T159_GAS_TARIFF`, gas tükenmesi, düz ETH tahmini |
 | `infra/grafana/provisioning/alerting/rules.yml` | `ethereum-gas-estimate-abnormal` (critical); `ethereum-transfer-wait` açıklaması |
 | Testler: `Fuel.test.ts`, `TransferService.test.ts`, `SignerPolicy.test.ts`, `TxJournal.test.ts`, `FeeEstimationService.test.ts`, `feeMath.test.ts`, `alertRuleWiring.test.ts`, `wiring.test.ts` | Aşağıda |
-| `Docs/08_INTEGRATION_SPEC.md` (v3.38) | §3.7.5 (T142 sayıları ölçüm; "Uygulandı (T159a)"; T153 (xviii) uyarlaması), §3.7.6 imzacı, §3.7.7 tavan ve T154 md. 3, §3.7.8 üç satır |
-| `Docs/05_TECHNICAL_ARCHITECTURE.md` (v3.26) | §3.3a yeni bekleme sebepleri |
-| `Docs/11_IMPLEMENTATION_PLAN.md` (v1.18) | §F8 "T159a kararları" (⚠), görev T159a |
+| `Docs/08_INTEGRATION_SPEC.md` (v3.40; kapanışta §3.4 gas notu kodla birebir yapıldı, v3.41) | §3.7.5 (T142 sayıları ölçüm; "Uygulandı (T159a)"; T153 (xviii) uyarlaması), §3.7.6 imzacı, §3.7.7 tavan ve T154 md. 3, §3.7.8 üç satır |
+| `Docs/05_TECHNICAL_ARCHITECTURE.md` (v3.27) | §3.3a yeni bekleme sebepleri |
+| `Docs/plan/11_F8.md` (v1.20) | §F8 "T159a kararları" (⚠), görev T159a |
 | `Docs/DEPLOY_RUNBOOK.md` | §J.7 "Gas tahmini", §J.2 alarm satırı, §D adım 8.4 |
 | `Docs/IMPLEMENTATION_STATUS.md`, `.claude/memory/MEMORY.md` | T159a satırı |
 
@@ -196,11 +196,11 @@ Gas tarifesi turunda backend değişmedi (yeni bekleme sebepleri genel `deferred
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| sidecar-ethereum unit | ✓ 828/828 | `npx vitest run` (32 dosya) |
+| sidecar-ethereum unit | ✓ 868/868 | `npx vitest run` (36 dosya; HEAD `791b75c4`, T157 main birleştirmesi dahil) |
 | tsc | ✓ | `npx tsc --noEmit -p .` |
 | ESLint | ✓ | `npm run lint` |
 | Prettier | ✓ | `npm run format:check` |
-| Backend unit (CI filtresi `FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract`) | ✓ 2.198/2.198 | Shared 563, Platform 157, Auth 92, Users 49, Fraud 19, Steam 59, Disputes 25, Transactions 932, Realtime 44, Notifications 150, API 108 (sahip kararı turu) |
+| Backend unit (CI filtresi `FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract`) | ✓ 2.315/2.315 | Shared 571, Platform 161, Auth 92, Users 49, Fraud 19, Steam 59, Disputes 25, Transactions 932, Realtime 44, Notifications 150, API 113 (HEAD `791b75c4`; fark main'den gelen testler) |
 | Backend integration (ilgili) | ✓ | API `.Integration` 628/628; Transactions `NetworkChoiceLifecycleTests` + `PaymentBlockchainEntityTests` + Webhooks/Transfers entegrasyon 37/37 (Testcontainers) |
 | `dotnet format --verify-no-changes --severity error` | ✓ | |
 | e2e | `tsc` / ESLint / Prettier ✓ | Yığın yerelde koşulmadı (Docker paralel ajanda) — CI e2e advisory |
@@ -228,8 +228,17 @@ Gas tarifesi turunda backend değişmedi (yeni bekleme sebepleri genel `deferred
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
+| Doğrulama durumu | ✓ PASS (2026-10-21, bağımsız alt ajan Opus high, HEAD `791b75c4`) |
+| Kabul kriterleri | 5/5 karşılandı (a–e; ⚠ PARA hesabı elle kontrol edildi, çift kesinti ya da hiç kesmeme yolu yok) |
+| Bozma (mutation) | 14/14 yakalandı (M1–M9 sidecar, B1–B5 backend) |
+| Bulgu sayısı | 4 (hepsi S4, birleştirmeyi engellemez) |
+
+Bulgular:
+
+1. **S4 · ⚠ PARA · kapsam dışı, önceden var:** alıcıdan kesilen gas tutarı depozitte token olarak kalıyor; sweep `TotalAmount` taşıdığı için toplanmıyor (TRON `BUYER_REFUND`'da da vardı). Karar F8 gate'te sahibe sorulacak; `DEFERRED_BACKLOG.md`'ye işlendi.
+2. **S4:** yakıt cüzdanı 0 wei iken yakıt probu her depozit akışında koşup `GAS_ESTIMATE_UNAVAILABLE` ile bekletiyor (doğru etiket `FUEL_WALLET_LOW`; yakıt gerekmeyen gönderim beklememeli). Para kaybı yok; `DEFERRED_BACKLOG.md`'ye işlendi.
+3. **S4 · belge nüansı:** 08 §3.4 notu "brüt tutarın transferiyle" diyordu; kod fazla ödemede tüm gelen tutarı fiyatlıyor (etkisiz). Not kapanışta kodla birebir düzeltildi (08 v3.41, DOC_CHANGELOG).
+4. **S4 · yalnız rapor:** test sayıları ve belge sürümleri HEAD'e göre eskimişti; bu kapanışta düzeltildi.
 
 ## Altyapı Değişiklikleri
 
@@ -243,7 +252,7 @@ Gas tarifesi turunda backend değişmedi (yeni bekleme sebepleri genel `deferred
 - Kod commit'i: `1dba9f87`; belgeler `ab842186`; main birleştirmesi `202478f2` (T159 #355 sonrası; secret-guard yanlış pozitifi BYPASS_LOG'da, `d0e0ab22`)
 - Sahip kararı turu (2026-10-20): main birleştirmesi `d5c39bde` (#357 belge düzeni — başlık zincirleri `DOC_CHANGELOG.md`'ye, plan değişikliği `plan/11_F8.md`'ye; #358 hafıza); kod + test + belge `a220afec`
 - PR: [#356](https://github.com/turkerurganci/Skinora/pull/356)
-- CI: `39201495741` ✓ success (HEAD `d0e0ab22`; Lint, Build, Unit, Integration, Contract, Migration dry-run, JS test, Docker build sidecar-ethereum yeşil). Bu satırı ekleyen commit için yeni koşu PR sayfasında.
+- CI: dal CI `39498394400` ✓ success (HEAD `791b75c4`; Lint, Build, Unit, Integration, Contract, Migration dry-run, Docker build, vitest ve E2E yeşil; CI Gate success). Daha önceki koşu `39201495741` ✓ (HEAD `d0e0ab22`). Kapanış commit'i için yeni koşu PR sayfasında.
 
 ## Known Limitations / Açık sorular
 
