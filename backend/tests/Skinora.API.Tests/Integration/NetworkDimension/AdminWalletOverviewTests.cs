@@ -431,6 +431,57 @@ public class AdminWalletOverviewTests : IntegrationTestBase
         Assert.Equal(0, tron.CostUnmeasured);
     }
 
+    /// <summary>
+    /// T160c kapanış (S4-2, ⚠ PARA) — the net is withheld minus BOTH expenses:
+    /// a separate collection's measured spend is subtracted too. 1.37 withheld;
+    /// the refund cost 0.898320 (Nile senaryo 6); the sale's sweep carried
+    /// 0.40 of it at no cost, the confirmed collection the other 0.97 for
+    /// 2.000003 TRX = 0.662601 → net −0.190921. Without the collection term it
+    /// would read +0.47168 (a profit). The sale's own sweep is never an expense.
+    /// </summary>
+    [Fact]
+    public async Task T160c_RefundFeeBooks_Net_Subtracts_The_Measured_Collection_Spend_Too()
+    {
+        const string tronDeposit = "TDepositNetCollection0000000000000";
+        var tx = NewTransaction(_seller.Id, network: BlockchainNetwork.TRON);
+        await using (var seed = CreateContext())
+        {
+            seed.Set<Transaction>().Add(tx);
+            await seed.SaveChangesAsync();
+            var pa = NewPaymentAddress(tx.Id, BlockchainNetwork.TRON, tronDeposit, 9111);
+            seed.Set<PaymentAddress>().Add(pa);
+            await seed.SaveChangesAsync();
+
+            var refund = Refund(tx.Id, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND, tronDeposit, 1.37m, sun: 0);
+            refund.PlatformNetworkCost = 2_711_500m;
+            refund.PlatformNetworkCostUsdt = 0.898320m;
+            var collection = Carrier(tx.Id, pa.Id, BlockchainTransactionType.REFUND_FEE_SWEEP, tronDeposit,
+                amount: 0.97m, recovered: 0.97m, BlockchainTransactionStatus.CONFIRMED, sun: 0);
+            collection.PlatformNetworkCost = 2_000_003m;
+            collection.PlatformNetworkCostUsdt = 0.662601m;
+            // A sale's sweep with a measured spend: not an expense of the refund fees.
+            var sweep = Carrier(tx.Id, pa.Id, BlockchainTransactionType.SWEEP, tronDeposit,
+                amount: 50.40m, recovered: 0.40m, BlockchainTransactionStatus.CONFIRMED, sun: 0);
+            sweep.PlatformNetworkCost = 8_438_350m;
+            sweep.PlatformNetworkCostUsdt = 2.795626m;
+            seed.Set<BlockchainTransaction>().AddRange(refund, collection, sweep);
+            await seed.SaveChangesAsync();
+        }
+
+        await using var ctx = CreateContext();
+        var overview = await Service(ctx, new FakeBlockchainServiceRegistry()).GetAsync(CancellationToken.None);
+
+        var tron = Block(overview, BlockchainNetwork.TRON).RefundFees;
+        Assert.Equal("1.37", tron.Withheld);
+        Assert.Equal("1.37", tron.Collected);
+        Assert.Equal("2.7115", tron.RefundChainCost);
+        Assert.Equal("0.89832", tron.RefundChainCostUsdt);
+        Assert.Equal("2.000003", tron.CollectionChainCost);
+        Assert.Equal("0.662601", tron.CollectionChainCostUsdt);
+        Assert.Equal("-0.190921", tron.NetUsdt);
+        Assert.Equal(0, tron.CostUnmeasured);
+    }
+
     /// <summary>Answers each hash with its own status (T160c düzeltme turu).</summary>
     private sealed class HashStatusStub(Dictionary<string, TransferStatusResult> statuses) : IBlockchainTransferClient
     {
