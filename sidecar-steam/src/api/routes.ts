@@ -22,6 +22,11 @@ const STEAM_ID64_REGEX = /^7656119[0-9]{10}$/;
  * only local write is a cache invalidation, which touches nothing upstream.
  */
 export interface RouterDeps {
+  /**
+   * T161 — the X-Internal-Key every /api route requires (05 §3.4). Required:
+   * the router cannot be built without one (fail closed, config/internalKey.ts).
+   */
+  internalKey: string;
   inventoryService?: InventoryService;
   tradeHoldService?: TradeHoldService;
   limitedAccountService?: LimitedAccountService;
@@ -33,8 +38,8 @@ export interface RouterDeps {
   health?: HealthDeps;
 }
 
-export function buildRouter(deps: RouterDeps = {}): Router {
-  const { inventoryService, tradeHoldService, limitedAccountService, health } = deps;
+export function buildRouter(deps: RouterDeps): Router {
+  const { internalKey, inventoryService, tradeHoldService, limitedAccountService, health } = deps;
   const router = Router();
 
   // Health check — no auth required
@@ -45,7 +50,7 @@ export function buildRouter(deps: RouterDeps = {}): Router {
 
   // Authenticated API routes
   const apiRouter = Router();
-  apiRouter.use(internalKeyAuth);
+  apiRouter.use(internalKeyAuth(internalKey));
 
   apiRouter.get('/inventory/:steamId', inventoryGetHandler(inventoryService));
   apiRouter.delete('/inventory/:steamId/cache', inventoryInvalidateHandler(inventoryService));
