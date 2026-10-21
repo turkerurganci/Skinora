@@ -48,9 +48,31 @@ printf '%s\n' "<12 ya da 24 kelime>" > secrets/ethereum_hd_mnemonic.txt
 : > secrets/ethereum_fuel_wallet_private_key.txt    # T153'e kadar boş
 ```
 
+### Deneme yayını (T161 — `secrets/trial/`, DEPLOY_RUNBOOK §K)
+
+Deneme yayını (`docker-compose.trial.yml`, proje `skinora-trial`) geliştirme
+sırlarını **kullanmaz**: overlay bütün secret'ları `secrets/trial/` altından
+bağlar. Dizin `secrets/*` kuralıyla gitignored'dır ve `pre-commit` aynı
+korumayı sürdürür.
+
+| Dosya | İçerik | Zorunlu mu |
+|---|---|---|
+| `secrets/trial/ethereum_hd_mnemonic.txt`, `secrets/trial/ethereum_hot_wallet_private_key.txt`, `secrets/trial/ethereum_fuel_wallet_private_key.txt` | Yukarıdaki üç Ethereum dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve anahtarlar (iki veritabanı aynı tohumdan aynı indeksleri türetir ve aynı depozit adreslerini izler; iki imzacı aynı Ethereum hesabının nonce'unu yarıştırır) | Yalnız `--profile ethereum` ile, kurallar yukarıdaki gibi |
+| `secrets/trial/cloudflare_tunnel_token.txt` | Cloudflare Tunnel token'ı — tek satır, tırnaksız (Cloudflare Zero Trust → Networks → Tunnels) | Yalnız `--profile tunnel` ile. **Boşsa tünel açılmaz:** `skinora-tunnel-preflight` `TUNNEL_TOKEN_MISSING` ile çıkar ve cloudflared başlatılmaz. T162'ye kadar boş dosya olarak durabilir |
+
+```bash
+umask 077
+mkdir -p secrets/trial
+: > secrets/trial/cloudflare_tunnel_token.txt    # T162'de token yazılır
+```
+
+Linux sunucuda cloudflared konteyneri uid `65532` ile çalışır; token dosyası o
+kullanıcının okuyabileceği izinde olmalıdır (`chmod 444` dosya, `chmod 700`
+dizin) — okuyamazsa tünel açılmaz.
+
 ### Başka dosya
 
-**Ethereum dışında beklenen bir dosya yoktur (T133).** Tek beklenen dosya
+**Ethereum ve deneme yayını dışında beklenen bir dosya yoktur (T133, T161).** Tek beklenen dosya
 `secrets/steam-bots.json` idi: Steam escrow bot'unun hesap adı, parolası ve iki
 Mobile Authenticator sırrı. Platform artık hiçbir Steam hesabı çalıştırmıyor ve
 trade offer göndermiyor (05 §3.2, 02 §2.1) — Steam sidecar'ın tek kimlik bilgisi

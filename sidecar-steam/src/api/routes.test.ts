@@ -25,6 +25,7 @@ vi.mock('../logger.js', () => ({
 }));
 
 import { buildRouter } from './routes.js';
+import type { Request, Response, NextFunction } from 'express';
 import { resetHealthCacheForTests } from '../health/HealthController.js';
 import { correlationMiddleware } from './middleware.js';
 import {
@@ -47,6 +48,18 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/**
+ * T161 — every /api route requires the internal key (fail closed; there is no
+ * "no key, skip auth" mode any more). These suites test the routes behind it,
+ * so they present the key the way the backend does; the key check itself is
+ * covered in middleware.test.ts and at the end of this file.
+ */
+const TEST_INTERNAL_KEY = 'test-internal-key-'.padEnd(64, 'k');
+function presentKey(req: Request, _res: Response, next: NextFunction): void {
+  req.headers['x-internal-key'] = TEST_INTERNAL_KEY;
+  next();
+}
+
 // ---------------------------------------------------------------------------
 // T67 — GET /api/inventory/:steamId + DELETE /api/inventory/:steamId/cache
 // ---------------------------------------------------------------------------
@@ -59,7 +72,7 @@ async function startInventoryApp(
   const app = express();
   app.use(express.json());
   app.use(correlationMiddleware);
-  app.use(buildRouter({ inventoryService: service }));
+  app.use(presentKey, buildRouter({ internalKey: TEST_INTERNAL_KEY, inventoryService: service }));
   const server = await new Promise<import('http').Server>((resolve) => {
     const s = app.listen(0, () => resolve(s));
   });
@@ -227,7 +240,7 @@ describe('GET /api/inventory/:steamId (T67)', () => {
     const app = express();
     app.use(express.json());
     app.use(correlationMiddleware);
-    app.use(buildRouter({}));
+    app.use(presentKey, buildRouter({ internalKey: TEST_INTERNAL_KEY }));
     const server = await new Promise<import('http').Server>((resolve) => {
       const s = app.listen(0, () => resolve(s));
     });
@@ -357,7 +370,7 @@ async function startTradeHoldApp(
   const app = express();
   app.use(express.json());
   app.use(correlationMiddleware);
-  app.use(buildRouter({ tradeHoldService: service }));
+  app.use(presentKey, buildRouter({ internalKey: TEST_INTERNAL_KEY, tradeHoldService: service }));
   const server = await new Promise<import('http').Server>((resolve) => {
     const s = app.listen(0, () => resolve(s));
   });
@@ -448,7 +461,7 @@ describe('GET /api/trade-hold/:steamId (WP6)', () => {
     const app = express();
     app.use(express.json());
     app.use(correlationMiddleware);
-    app.use(buildRouter({}));
+    app.use(presentKey, buildRouter({ internalKey: TEST_INTERNAL_KEY }));
     const server = await new Promise<import('http').Server>((resolve) => {
       const s = app.listen(0, () => resolve(s));
     });
@@ -474,7 +487,10 @@ async function startLimitedAccountApp(
   const app = express();
   app.use(express.json());
   app.use(correlationMiddleware);
-  app.use(buildRouter({ limitedAccountService: service }));
+  app.use(
+    presentKey,
+    buildRouter({ internalKey: TEST_INTERNAL_KEY, limitedAccountService: service }),
+  );
   const server = await new Promise<import('http').Server>((resolve) => {
     const s = app.listen(0, () => resolve(s));
   });
@@ -550,7 +566,7 @@ describe('GET /api/account-limited/:steamId (08 §2.2a)', () => {
     const app = express();
     app.use(express.json());
     app.use(correlationMiddleware);
-    app.use(buildRouter({}));
+    app.use(presentKey, buildRouter({ internalKey: TEST_INTERNAL_KEY }));
     const server = await new Promise<import('http').Server>((resolve) => {
       const s = app.listen(0, () => resolve(s));
     });
@@ -606,7 +622,7 @@ describe('retired custody surface (T133)', () => {
     const app = express();
     app.use(express.json());
     app.use(correlationMiddleware);
-    app.use(buildRouter({}));
+    app.use(presentKey, buildRouter({ internalKey: TEST_INTERNAL_KEY }));
     const server = await new Promise<import('http').Server>((resolve) => {
       const s = app.listen(0, () => resolve(s));
     });
@@ -629,7 +645,9 @@ describe('retired custody surface (T133)', () => {
     app.use(express.json());
     app.use(correlationMiddleware);
     app.use(
+      presentKey,
       buildRouter({
+        internalKey: TEST_INTERNAL_KEY,
         // WP5 — stub the outbound probe. /health now really reaches Steam, and a
         // unit test must not: it would be slow, flaky, and would report the
         // network rather than the route.
@@ -662,5 +680,73 @@ describe('retired custody surface (T133)', () => {
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T161 — the internal key guards every /api route (05 §3.4, fail closed)
+// ---------------------------------------------------------------------------
+
+describe('internal key on the built router (T161)', () => {
+  async function startBareApp(): Promise<{ url: string; close: () => Promise<void> }> {
+    resetHealthCacheForTests();
+    const app = express();
+    app.use(express.json());
+    app.use(correlationMiddleware);
+    // No presentKey here: requests carry only what the test sends.
+    app.use(
+      buildRouter({
+        internalKey: TEST_INTERNAL_KEY,
+        health: { fetchImpl: () => Promise.resolve({ ok: true, status: 200 }) },
+      }),
+    );
+    const server = await new Promise<import('http').Server>((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    const port = (server.address() as AddressInfo).port;
+    return {
+      url: `http://127.0.0.1:${port}`,
+      close: () => new Promise((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  it.each([
+    ['no header', undefined],
+    ['a wrong key', 'wrong-key-'.padEnd(64, 'w')],
+    ['a prefix of the key', TEST_INTERNAL_KEY.slice(0, 32)],
+  ])('refuses /api with %s (401)', async (_label, key) => {
+    const ctx = await startBareApp();
+    try {
+      for (const path of [
+        `/api/inventory/${VALID_STEAM_ID}`,
+        `/api/trade-hold/${VALID_STEAM_ID}?accessToken=tok`,
+        `/api/account-limited/${VALID_STEAM_ID}`,
+      ]) {
+        const res = await fetch(`${ctx.url}${path}`, {
+          headers: key === undefined ? undefined : { 'X-Internal-Key': key },
+        });
+        expect(res.status, path).toBe(401);
+      }
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('lets the right key through to the route, and /health needs none', async () => {
+    const ctx = await startBareApp();
+    try {
+      const res = await fetch(`${ctx.url}/api/inventory/${VALID_STEAM_ID}`, {
+        headers: { 'X-Internal-Key': TEST_INTERNAL_KEY },
+      });
+      // 503 = the route ran (no inventory service wired), not 401.
+      expect(res.status).toBe(503);
+      expect((await fetch(`${ctx.url}/health`)).status).toBe(200);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  it('cannot be built without a key', () => {
+    expect(() => buildRouter({ internalKey: '' })).toThrow(/needs a key/);
   });
 });
