@@ -52,7 +52,11 @@ describe("PaymentInfoBlock", () => {
       "Only send USDT on the TRON (TRC-20) network.",
     );
     expect(screen.queryByTestId("payment-evm-warning")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/exchange/i);
+    // K9 — the old "do not send from an exchange" ban is gone from the
+    // warnings. T167 — paying from an exchange is the expected path, so the
+    // block now explains what a Turkish exchange does instead (MASAK).
+    expect(screen.getByRole("note", { name: "Important" }).textContent).not.toMatch(/exchange/i);
+    expect(screen.getByTestId("masak-buyer-full")).toBeInTheDocument();
   });
 
   it("Ethereum: no fee line even if one were sent; the same-0x-address warning is shown", () => {

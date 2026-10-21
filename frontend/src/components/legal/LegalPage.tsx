@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { Footer } from "@/components/layout/Footer";
@@ -10,6 +11,12 @@ export interface LegalPageProps {
   namespace: "legal.privacy" | "legal.terms" | "legal.support";
   /** Ordered section ids resolved against `${namespace}.sections.${id}.{heading,body}`. */
   sectionKeys: readonly string[];
+  /**
+   * T167 — optional content rendered under a section's body, keyed by section
+   * id (the support page's MASAK section carries lists and live addresses that
+   * a single paragraph cannot hold).
+   */
+  sectionExtras?: Readonly<Record<string, ReactNode>>;
 }
 
 /**
@@ -18,7 +25,7 @@ export interface LegalPageProps {
  * The structured copy lives in i18n placeholders; the authoritative legal
  * text is authored in WP17 (content-authoring).
  */
-export function LegalPage({ namespace, sectionKeys }: LegalPageProps) {
+export function LegalPage({ namespace, sectionKeys, sectionExtras }: LegalPageProps) {
   const t = useTranslations(namespace);
   const tCommon = useTranslations("legal");
   const locale = useLocale();
@@ -53,13 +60,14 @@ export function LegalPage({ namespace, sectionKeys }: LegalPageProps) {
 
         <div className="mt-8 space-y-8">
           {sectionKeys.map((key) => (
-            <section key={key}>
+            <section key={key} id={key} className="scroll-mt-4">
               <h2 className="text-xl font-semibold text-gray-900">
                 {tDynamicOrKey(t, `sections.${key}.heading`)}
               </h2>
               <p className="mt-2 text-base leading-relaxed text-gray-700">
                 {tDynamicOrKey(t, `sections.${key}.body`)}
               </p>
+              {sectionExtras?.[key]}
             </section>
           ))}
         </div>

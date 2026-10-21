@@ -904,6 +904,10 @@
           "heading": "Disputas de transacciones",
           "body": "Si un intercambio no se completa como se esperaba, el comprador puede abrir una disputa desde la página de la transacción por problemas como el pago, la entrega o la recepción de un objeto incorrecto. Primero se ejecutan comprobaciones automáticas, y los casos no resueltos se escalan a los administradores de la plataforma para revisión manual. Una disputa puede resolverse a favor del comprador o del vendedor, incluido el reembolso de los fondos en custodia a la billetera del comprador cuando proceda."
         },
+        "masak": {
+          "heading": "Exchanges en Türkiye y reglas de MASAK",
+          "body": "Según la normativa de MASAK, los exchanges de criptomonedas en Türkiye aplican un periodo de espera y límites de importe a los retiros a billeteras externas, y te piden declarar la otra parte de una transferencia que envías o recibes. Tu exchange trata las direcciones de pago de Skinora como billeteras externas. Estas reglas las aplica tu exchange, no Skinora; el resumen siguiente es información práctica, no asesoramiento legal."
+        },
         "faq": {
           "heading": "Preguntas frecuentes",
           "body": "Aquí estará disponible orientación sobre el inicio de sesión con Steam, el envío y la aceptación de ofertas de intercambio, los pagos y confirmaciones en stablecoin, las comisiones y tarifas de gas, los reembolsos y la seguridad de la cuenta. Hasta entonces, contacta con soporte para obtener ayuda con cualquiera de estos temas."
@@ -2251,6 +2255,32 @@
       "SIDECAR_UNAVAILABLE": "El servicio de firma no respondió. Es posible que la transferencia se haya firmado y enviado. Antes de reintentar, compruebe la última salida de la billetera caliente en el explorador (Etherscan / Tronscan).",
       "NETWORK_UNAVAILABLE": "La red no está disponible. No se envió nada.",
       "TRANSFER_DEFERRED": "La transferencia se aplazó (por ejemplo, la comisión supera el límite). No se envió nada. Inténtelo más tarde."
+    }
+  },
+  "masak": {
+    "buyer": {
+      "title": "¿Vas a pagar desde un exchange en Türkiye?",
+      "holdInAdvance": "Ten los USDT en tu cuenta con antelación: los exchanges envían las criptomonedas que compraste, canjeaste o depositaste a una billetera externa como pronto 48 horas después, y al menos 72 horas después en tu primer retiro del exchange. Si el plazo de pago es más corto que esta espera, los USDT recién comprados no llegarán a tiempo.",
+      "dailyLimit": "Los retiros de criptomonedas de valor estable como USDT tienen un límite de 3.000 $ al día y 50.000 $ al mes (tu exchange puede aplicar el doble en algunos casos). El límite se aplica al TOTAL diario y mensual, no a una sola transferencia: los retiros que ya hiciste ese mismo día reducen lo que te queda. Si el importe a enviar supera lo que queda, no puedes enviar el pago en una sola transferencia desde un exchange turco.",
+      "declare": "Tu exchange te pide declarar el destinatario: el destinatario es Skinora y la dirección es la dirección de pago de esta transacción. Cada transacción tiene una dirección de pago distinta: no envíes a una dirección que guardaste para una transacción anterior.",
+      "description": "Tu exchange pide una descripción de la operación de al menos 20 caracteres, por ejemplo \"Pago de compra de artículo CS2 en Skinora\".",
+      "source": "Estas reglas las aplica tu exchange según la normativa de MASAK, no Skinora. Esto es un resumen práctico, no asesoramiento legal.",
+      "short": "¿Vas a pagar desde un exchange en Türkiye? Compra los USDT ahora: los exchanges envían las criptomonedas recién compradas, canjeadas o depositadas a una billetera externa como pronto 48 horas después (72 horas en el primer retiro) y limitan los retiros de USDT a 3.000 $ al día. Si el plazo de pago es más corto que esta espera, los USDT comprados después no llegarán a tiempo.",
+      "helpLink": "Detalles"
+    },
+    "seller": {
+      "title": "¿Vas a recibir el pago en un exchange en Türkiye?",
+      "declare": "Tu exchange puede pedirte que declares el remitente del pago de Skinora: el remitente es Skinora. Los pagos de Skinora siempre salen de la misma dirección en cada red; si tu exchange guarda tu declaración para esta dirección, puedes reutilizarla en pagos posteriores.",
+      "addressLabel": "Dirección de envío de pagos de Skinora ({network})",
+      "addressUnavailable": "La dirección de envío no se puede mostrar ahora. Cuando llegue el pago, podrás ver el remitente en el hash de la transacción.",
+      "changeNote": "Si esta dirección cambia, verás la nueva aquí; actualiza el registro en tu exchange."
+    },
+    "help": {
+      "buyerHeading": "Si eres el comprador",
+      "sellerHeading": "Si eres el vendedor",
+      "paymentWindow": "El plazo de pago es el tiempo que el vendedor eligió en el anuncio y aparece como cuenta atrás en la página de la transacción. La espera de tu exchange puede ser más larga, así que compra los USDT antes de aceptar la transacción.",
+      "refund": "Los reembolsos también salen de una dirección de Skinora (la dirección de depósito de la transacción o la billetera caliente). Si tu dirección de reembolso está en un exchange turco, el exchange puede pedirte una declaración del remitente: el remitente es Skinora.",
+      "sources": "Fuente: Comunicado General de MASAK (n.º 29), Boletín Oficial de Türkiye 28.06.2025, número 32940, artículo 4; Reglamento sobre Medidas para la Prevención del Blanqueo de Capitales y la Financiación del Terrorismo, artículo 24/A."
     }
   }
 }

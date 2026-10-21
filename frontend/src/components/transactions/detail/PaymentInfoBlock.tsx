@@ -5,6 +5,7 @@ import { formatStablecoin } from "@/lib/utils/format";
 import { networkLabel, networkMeta } from "@/lib/utils/blockchain";
 import { showsNetworkFeeLine } from "@/lib/transactions/networkChoice";
 import { BlockchainNetwork } from "@/types/enums";
+import { BuyerExchangeNotice } from "@/components/masak";
 import { asFreezeReason, computeWarningSeconds } from "./helpers";
 
 export interface PaymentInfoBlockProps {
@@ -34,6 +35,9 @@ export interface PaymentInfoBlockProps {
  *     back to the sender); in its place the network warning, plus on Ethereum
  *     the note that the same `0x` address exists on other EVM networks
  *     (08 §3.0 "Yanlış ağ").
+ *   - T167: below the warnings, what a Turkish exchange does to this
+ *     withdrawal (48/72-hour wait, 3,000 $ daily stablecoin limit, recipient
+ *     declaration, 20-character description — MASAK Tebliğ 29 m. 4).
  */
 export function PaymentInfoBlock({
   payment,
@@ -154,6 +158,8 @@ export function PaymentInfoBlock({
           <li>{t("warnings.noOtherToken")}</li>
         </ul>
       </div>
+      {/* T167 — the buyer's exchange rules (MASAK Tebliğ 29 m. 4; Yönetmelik m. 24/A-6). */}
+      <BuyerExchangeNotice variant="full" />
     </section>
   );
 }
