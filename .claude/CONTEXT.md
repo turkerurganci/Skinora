@@ -161,6 +161,8 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `scripts/git-hooks/pre-push` | main/develop direct push bloklama + bypass auto-log |
 | `scripts/git-hooks/install.sh` | `git config core.hooksPath scripts/git-hooks` ile hook kurulumu |
 | `scripts/git-hooks/README.md` | Hook onboarding, test, bypass, devre dışı bırakma rehberi |
+| `docker-compose.trial.yml` | T161 — deneme yayını overlay'i (`-p skinora-trial`, `.env.trial`, `secrets/trial/`): iç port yayımlamaz, Production zorlar, Cloudflare tüneli (`tunnel` profili, token'sız açılmaz). DEPLOY_RUNBOOK §K |
+| `scripts/compose-exposure.test.mjs` | T161 — CI port kapısı: compose dosyalarını `docker compose config` ile render eder, `127.0.0.1` dışı her yayında kırmızı |
 
 ### Frontend — Next.js (T13)
 

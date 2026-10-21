@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T160a ✓ Tamamlandı, doğrulama PASS (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363)
+
 **Önceki güncelleme:** 2026-10-21 — T160a ⏳ yapım bitti, doğrulama bekliyor (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363); T160 + #362 merge teyitleri
 
 **Önceki güncelleme:** 2026-10-21 — T160 F8 Gate Check ✓ PASS (GATE_CHECK_F8.md); T159b merge teyidi; tag `phase/F8-pass` sahip onayından sonra. **Merge teyitleri (T160a dalında işlendi):** T160 (#361) main `5ad1e6b7` → CI `39545306202` ✓, Docker Publish `39545306158` ✓; #362 (F9 yönetici düzeni + F8 devir notu) main `fc3e8840` → CI `39546534823` ✓, Docker Publish `39546534805` ✓.
