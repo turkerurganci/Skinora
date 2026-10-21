@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T160c ⏳ yapım bitti, doğrulama bekliyor (iade kesinti kalıntısı sweep + `REFUND_FEE_SWEEP` ile sıcak cüzdana; T160c_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-21 — T160c ⏳ düzeltme turu, yeniden doğrulama bekliyor (muhasebe gideri platformun gerçek zincir harcaması; T160c_REPORT.md, PR #365) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -360,9 +360,9 @@
 
 | # | Task | Durum |
 |---|---|---|
-| T160a | Next.js güvenlik yükseltmesi + CI frontend audit (F9'un ilk işi; F8 gate devri) | ⬚ Bekliyor |
-| T160b | İade gas tahmininde yeniden deneme + yedek ücret (F8 gate devri, ⚠ PARA) | ⬚ Bekliyor |
-| T160c | İade kesinti kalıntısının sweep ile toplanması (F8 gate devri, ⚠ PARA) | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T160c_REPORT.md)) |
+| T160a | Next.js güvenlik yükseltmesi + CI frontend audit (F9'un ilk işi; F8 gate devri) | ✓ Tamamlandı — doğrulama PASS (4/4, 5 × S4): `next` 16.2.3 → 16.3.8, `npm audit --omit=dev` 0, CI'da frontend audit (prod high'da kırmızı), `middleware.ts` → `proxy.ts` ([rapor](TASK_REPORTS/T160a_REPORT.md), PR [#363](https://github.com/turkerurganci/Skinora/pull/363)) |
+| T160b | İade gas tahmininde yeniden deneme + yedek ücret (F8 gate devri, ⚠ PARA) | ✓ Tamamlandı — doğrulama PASS (4/4, 6 × S4; B1–B4 düzeltme turunda kapandı): iade gas tahmini geçici hatada 3 çağrı / 12 sn; yedek min(son ölçülen tahmin ≤ 6 sa, ağın sabit ayarı), ölçüm yoksa ayar; `gas-fee-fallback-charged` alarmı (seriler açılışta) ([rapor](TASK_REPORTS/T160b_REPORT.md), PR [#364](https://github.com/turkerurganci/Skinora/pull/364)) |
+| T160c | İade kesinti kalıntısının sweep ile toplanması (F8 gate devri, ⚠ PARA) | ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor ([rapor](TASK_REPORTS/T160c_REPORT.md), PR [#365](https://github.com/turkerurganci/Skinora/pull/365)) |
 | T161 | Sunucu sıkılaştırma | ⬚ Bekliyor |
 | T162 | HTTPS + alan adı (skinora.com) | ⬚ Bekliyor |
 | T163 | İmza sırları Docker secret + çevrimdışı yedek | ⬚ Bekliyor |

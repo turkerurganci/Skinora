@@ -4,7 +4,17 @@
 
 ## Güncelleme geçmişi
 
-**Önceki güncelleme:** 2026-10-21 — T160 F8 Gate Check ✓ PASS (GATE_CHECK_F8.md); T159b merge teyidi; tag `phase/F8-pass` sahip onayından sonra
+**Önceki güncelleme:** 2026-10-21 — T160b ✓ Tamamlandı, doğrulama PASS (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek min(son ölçülen, sabit ayar), alarmlı; T160b_REPORT.md, PR #364). **Merge teyidi (T160c dalında işlendi):** T160b (#364) main `2e502e99` → CI `39582270230` ✓, Docker Publish `39582270184` ✓.
+
+**Önceki güncelleme:** 2026-10-21 — T160c ⏳ yapım bitti, doğrulama bekliyor (iade kesinti kalıntısı sweep + `REFUND_FEE_SWEEP` ile sıcak cüzdana; T160c_REPORT.md)
+
+**Önceki güncelleme:** 2026-10-21 — T160b ⏳ yapım bitti, doğrulama bekliyor (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek son ölçülen tahmin ya da ayar, alarmlı; PR #364)
+
+**Önceki güncelleme:** 2026-10-21 — T160a ✓ Tamamlandı, doğrulama PASS (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363). **Merge teyidi (T160b dalında işlendi):** T160a (#363) main `50868b13` → CI `39572533083` ✓, Docker Publish `39572533142` ✓.
+
+**Önceki güncelleme:** 2026-10-21 — T160a ⏳ yapım bitti, doğrulama bekliyor (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363); T160 + #362 merge teyitleri
+
+**Önceki güncelleme:** 2026-10-21 — T160 F8 Gate Check ✓ PASS (GATE_CHECK_F8.md); T159b merge teyidi; tag `phase/F8-pass` sahip onayından sonra. **Merge teyitleri (T160a dalında işlendi):** T160 (#361) main `5ad1e6b7` → CI `39545306202` ✓, Docker Publish `39545306158` ✓; #362 (F9 yönetici düzeni + F8 devir notu) main `fc3e8840` → CI `39546534823` ✓, Docker Publish `39546534805` ✓.
 
 **Önceki güncelleme:** 2026-10-21 — T159b ✓ Tamamlandı, doğrulama PASS (Sepolia giden bacağı elle müdahalesiz; T159b_REPORT.md, PR #360); T159a ve #359 merge teyitleri; sırada T160 (F8 Gate Check)
 

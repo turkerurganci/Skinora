@@ -45,10 +45,9 @@ public sealed class EthereumFeeWeiContractTests
             sent.Add(await request.Content!.ReadAsStringAsync(ct));
             return Json(LoadExample("estimate-fee", "response.json").ToJsonString());
         });
-        var resolver = new ChargedGasFeeResolver(
+        var resolver = ChargedGasFeeResolverFactory.Create(
             new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, gasFee: estimator),
-            new DefaultSettings(),
-            NullLogger<ChargedGasFeeResolver>.Instance);
+            new DefaultSettings());
 
         var amount = decimal.Parse(Text(expected, "amount"), NumberStyles.Number, CultureInfo.InvariantCulture);
         if (expected["fromAddress"] is null)
@@ -124,6 +123,60 @@ public sealed class EthereumFeeWeiContractTests
 
         Assert.Null(await estimator.EstimateFeeUsdtAsync(Request, CancellationToken.None));
     }
+
+    // -------------------- T160b — T159b's "block not found" --------------------
+
+    [Fact]
+    public async Task T160b_The_T159b_Block_Not_Found_Answer_Is_Retryable()
+    {
+        // The exact body the service answered twice in T159b (B1), as its
+        // handler test produces it: 502 + retryable: true.
+        var estimator = BuildEstimator((_, _) => Task.FromResult(BlockNotFound()));
+
+        var attempt = await estimator.EstimateFeeAsync(Request, CancellationToken.None);
+
+        Assert.Null(attempt.FeeUsdt);
+        Assert.True(attempt.Retryable);
+        Assert.Contains("FEE_ESTIMATE_SIMULATION_FAILED", attempt.Failure);
+    }
+
+    [Fact]
+    public async Task T160b_After_Block_Not_Found_The_Refund_Is_Asked_Again_And_The_Measured_Fee_Charged_Not_The_Fallback()
+    {
+        // Before T160b the single attempt charged the 0.50 fallback here. The
+        // second answer is a mainnet-like deposit refund (0.09) — apart from
+        // the 0.50 setting so a fallback cannot pass for it.
+        var second = LoadExample("estimate-fee", "response.json");
+        second["feeWei"] = "34400000000000";
+        second["ethPriceUsdt"] = "2364.48";
+        second["feeUsdt"] = "0.09";
+        var calls = 0;
+        var estimator = BuildEstimator((_, _) => Task.FromResult(
+            Interlocked.Increment(ref calls) == 1 ? BlockNotFound() : Json(second.ToJsonString())));
+        var resolver = ChargedGasFeeResolverFactory.Create(
+            new FakeBlockchainServiceRegistry().With(BlockchainNetwork.ETHEREUM, gasFee: estimator),
+            new DefaultSettings(),
+            new GasFeeEstimateRetryPolicy(MaxAttempts: 3, Delays: [TimeSpan.Zero], Budget: TimeSpan.FromSeconds(12)));
+
+        var resolved = await resolver.ResolveRefundFeeAsync(
+            BlockchainNetwork.ETHEREUM, Request.FromAddress, Request.ToAddress, Request.Amount,
+            StablecoinType.USDT, CancellationToken.None);
+
+        Assert.Equal(2, calls);
+        Assert.Equal(0.09m, resolved.FeeUsdt);
+        Assert.Equal(GasFeeSource.RuntimeEstimate, resolved.Source);
+        Assert.NotEqual(
+            BlockchainNetworkSettingsProvider.EthereumDefaults.RefundGasFeeFallbackUsdt, resolved.FeeUsdt);
+    }
+
+    private static HttpResponseMessage BlockNotFound() =>
+        new(HttpStatusCode.BadGateway)
+        {
+            Content = new StringContent(
+                LoadExample("estimate-fee", "error.block-not-found.json").ToJsonString(),
+                Encoding.UTF8,
+                "application/json"),
+        };
 
     [Fact]
     public async Task Tron_Answers_Are_Not_Asked_For_Wei()

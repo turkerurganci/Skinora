@@ -321,6 +321,17 @@ jobs:
         working-directory: sidecar-ethereum
         run: npm audit --omit=dev --audit-level=high
 
+      # T160a — the frontend is the internet-facing server (Next.js SSR +
+      # Image Optimization + middleware), so its prod tree gets the same strict
+      # gate as the Ethereum service: any prod advisory of HIGH or above fails
+      # CI. F8 Gate Check found next@16.2.3 carrying 3 critical RCE advisories
+      # with no frontend audit step to catch them (backlog
+      # FrontendNextAdvisories). Dev-only tooling (eslint-config-next →
+      # fast-glob → braces) is out of scope via --omit=dev.
+      - name: Frontend npm audit (blocking — prod highs)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
   # ----------------------------------------------------------------------------
   # 2. Build  (09 §21.4 step 2)
   # ----------------------------------------------------------------------------
