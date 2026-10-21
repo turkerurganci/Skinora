@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v4.15** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-21 — T166 — USDC ürün yüzeyinden kalktı (yalnız yanlış token iadesinde kalır); ToS + 18+ kabulü sunucuda zorunlu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
+**Versiyon: v4.17** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-21 — T166 — USDC ürün yüzeyinden kalktı (yalnız yanlış token iadesinde kalır); ToS + 18+ kabulü sunucuda zorunlu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -219,7 +219,7 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Koruma eşiği | Satıcıya gönderim gas fee'si komisyonun belirli bir yüzdesini aşarsa, aşan kısım satıcının alacağından düşülür (TRON; Ethereum'da uygulanmaz — yukarıdaki satır) |
 | Varsayılan eşik | %10 |
 | Eşik esnekliği | Admin tarafından değiştirilebilir |
-| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (TRON: transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a; Ethereum: gas tahmini wei cinsinden + canlı ETH/USDT kuru — 08 §3.7.7, T154). Hesaplama yapılamazsa admin ayarlarındaki fallback değerler kullanılır; para akışı hesaplamaya asla bloke olmaz |
+| Gas fee tutarının kaynağı | Kesilen/split'e giren tutar sabit değildir: gönderim öncesi zincirden hesaplanır (TRON: transfer simülasyonu + platform enerji kaynakları + güncel zincir fiyatları + canlı TRX/USDT kuru — 08 §3.1a; Ethereum: gas tahmini wei cinsinden + canlı ETH/USDT kuru — 08 §3.7.7, T154). Hesaplama yapılamazsa iadede tahmin geçici hatada kısa süre yeniden sorulur (12 sn içinde en çok 3 kez); yine yoksa aynı ağ, gönderen ve token için son ölçülen tahmin (en çok 6 sa eski) ile admin ayarlarındaki fallback değerden **küçüğü**, ölçüm yoksa fallback değer kullanılır ve alarm verilir — alıcı yedekte T160b öncesinden fazla ödemez (T160b, öneriyle kaydedildi — ⚠ PARA — 08 §3.1a); payout'ta doğrudan fallback. Para akışı hesaplamaya asla bloke olmaz |
 | Satıcıya kalan tutar sıfır ya da altındaysa | Gas tahmini fiyatı ve platformun payını birlikte aşarsa satıcıya gönderilecek bir şey kalmaz — ödeme gönderilmez. İşlem ödeme kuyruğunu tıkamadan bekletilir ve 1 sa → 4 sa → 12 sa → her 24 sa arayla yeniden fiyatlanır: sıcak cüzdanın enerjisi yenilendikçe tahmin düşer ve ödeme kendiliğinden çıkar. Üçüncü ertelemede admin'e bir kez alarm gider; denemeler sürer. En düşük satış fiyatını gas maliyetinin üstünde tutmak bu durumu seyrekleştirir (DEPLOY_RUNBOOK §A) |
 
 ---

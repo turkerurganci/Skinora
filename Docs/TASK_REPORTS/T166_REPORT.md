@@ -1,6 +1,6 @@
 # T166 — Küçük düzeltmeler (tek PR)
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ✓ Tamamlandı (doğrulama PASS) | **Tarih:** 2026-10-21
 
 ---
 
@@ -39,7 +39,7 @@ Ağ geçidinin hariç tutulması ölçüme dayanıyor: Docker Desktop'ta yayıml
 - **Backend testleri — yeni:** `DiagnosticsEnvironmentGateTests`, `TosAcceptanceGateTests`, `ReverseProxyTrustVerifierTests`, `AgeGateConfigDiagnosticHookTests`; **değişen:** `TosAcceptEndpointTests` (+ yaş damgası eksik testi), `AuthSteamEndpointTests` (güvenilen/güvenilmeyen eş + TCP eşi test seam'i), `HeaderCountryResolverTests`, `PlatformPublicEndpointTests`, `TransactionParamsServiceTests`, `TransactionCreationServiceTests` (+ USDC reddi), 20 uç test sınıfının kullanıcı tohumu (kabul etmiş hesap) + `AuthSessionEndpointTests`
 - **Frontend:** `components/auth/TosRepromptGate.tsx` (+ yeni `TosRepromptGate.test.tsx`), `components/landing/TrustSignals.tsx`, `lib/api/platform.ts`, `components/transactions/new/{Step2Details,NewTransactionForm}.tsx`, `Step2Details.test.tsx`, `i18n/messages/{en,es,tr,zh}.json`
 - **Altyapı:** `nginx/nginx.conf`, `e2e/src/db.ts`
-- **Doküman:** `07_API_DESIGN.md` v4.17, `02_PRODUCT_REQUIREMENTS.md` v4.15, `04_UI_SPECS.md` v4.12, `DEPLOY_RUNBOOK.md` (§B, §F, §G.5), `DOC_CHANGELOG.md`, `DEFERRED_BACKLOG.md` (`uptime-cache-scaleout` satırı), `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`
+- **Doküman:** `07_API_DESIGN.md` v4.17, `02_PRODUCT_REQUIREMENTS.md` v4.17, `04_UI_SPECS.md` v4.12, `DEPLOY_RUNBOOK.md` (§B, §F, §G.5), `DOC_CHANGELOG.md`, `DEFERRED_BACKLOG.md` (`uptime-cache-scaleout` satırı), `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`
 
 ## Kabul Kriterleri Kontrolü
 
@@ -83,9 +83,11 @@ Ağ geçidinin hariç tutulması ölçüme dayanıyor: Docker Desktop'ta yayıml
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici düzeni — ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız doğrulama (Opus high, izole alt ajan), HEAD `52e705cb`, 6/6 kabul kriteri |
+| Bulgu sayısı | 4 × S4 (B1–B4), bloke eden yok. Rapor: `T166_VALIDATION.md` (f9-handoff) |
+| Düzeltme gerekli mi | B2 kapanışta düzeltildi (`docker-compose.yml` `skinora-network` `ipam` alt ağı 172.20.0.0/16 sabitlendi + DEPLOY_RUNBOOK §B cümlesi; `docker compose config --quiet` geçerli). B1: T161 backend portunu kapatınca kapanır (öneri: backend tarafında da ağ geçidini dışarıda tut, §F(b)'ye doğrudan backend portu sınaması). B3: cloudflared T162. B4: DEFERRED_BACKLOG 🟡 `TosNotAcceptedAccountCannotSelfDelete` (hedef T168) |
+
+Kapanışta `origin/main` (T160a #363 + T160b #364, `2e502e99`) merge commit ile dala alındı; 6 belge çakışması iki tarafı koruyarak çözüldü, kod çakışması yoktu.
 
 ## Altyapı Değişiklikleri
 

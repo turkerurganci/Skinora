@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T166 ⏳ yapım bitti, doğrulama bekliyor (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; T166_REPORT.md, PR #366) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-21 — T166 ✓ Tamamlandı, doğrulama PASS (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; compose alt ağı sabit; T166_REPORT.md, PR #366) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -361,14 +361,14 @@
 | # | Task | Durum |
 |---|---|---|
 | T160a | Next.js güvenlik yükseltmesi + CI frontend audit (F9'un ilk işi; F8 gate devri) | ✓ Tamamlandı — doğrulama PASS (4/4, 5 × S4): `next` 16.2.3 → 16.3.8, `npm audit --omit=dev` 0, CI'da frontend audit (prod high'da kırmızı), `middleware.ts` → `proxy.ts` ([rapor](TASK_REPORTS/T160a_REPORT.md), PR [#363](https://github.com/turkerurganci/Skinora/pull/363)) |
-| T160b | İade gas tahmininde yeniden deneme + yedek ücret (F8 gate devri, ⚠ PARA) | ⬚ Bekliyor |
+| T160b | İade gas tahmininde yeniden deneme + yedek ücret (F8 gate devri, ⚠ PARA) | ✓ Tamamlandı — doğrulama PASS (4/4, 6 × S4; B1–B4 düzeltme turunda kapandı): iade gas tahmini geçici hatada 3 çağrı / 12 sn; yedek min(son ölçülen tahmin ≤ 6 sa, ağın sabit ayarı), ölçüm yoksa ayar; `gas-fee-fallback-charged` alarmı (seriler açılışta) ([rapor](TASK_REPORTS/T160b_REPORT.md), PR [#364](https://github.com/turkerurganci/Skinora/pull/364)) |
 | T160c | İade kesinti kalıntısının sweep ile toplanması (F8 gate devri, ⚠ PARA) | ⬚ Bekliyor |
 | T161 | Sunucu sıkılaştırma | ⬚ Bekliyor |
 | T162 | HTTPS + alan adı (skinora.com) | ⬚ Bekliyor |
 | T163 | İmza sırları Docker secret + çevrimdışı yedek | ⬚ Bekliyor |
 | T164 | Veritabanı yedeği ve geri dönüş planı | ⬚ Bekliyor |
 | T165 | Bildirim kanalları ve dış alarm | ⬚ Bekliyor |
-| T166 | Küçük düzeltmeler (tek PR) | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor: `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
+| T166 | Küçük düzeltmeler (tek PR) | ✓ Tamamlandı — doğrulama PASS (6/6, 4 × S4; B2 kapanışta düzeltildi): `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
 | T167 | MASAK akışı | ⬚ Bekliyor |
 | T168 | Hukuk metinleri | ⬚ Bekliyor |
 | T169 | Kalan sahip kararları | ⬚ Bekliyor |

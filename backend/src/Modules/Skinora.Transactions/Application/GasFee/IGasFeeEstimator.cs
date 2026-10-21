@@ -24,6 +24,22 @@ public interface IGasFeeEstimator
         GasFeeEstimateRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// T160b — one estimate attempt with the failure's kind: whether asking
+    /// again may give an answer (<see cref="GasFeeEstimateAttempt.Retryable"/>:
+    /// the service said <c>retryable</c>, a 5xx / 408 / 429, a transport error,
+    /// the client's own timeout) or will not (a rejected request, an answer
+    /// that cannot be believed). <see cref="ChargedGasFeeResolver"/> retries a
+    /// refund's estimate on the first kind only. The default reads
+    /// <see cref="EstimateFeeUsdtAsync"/> and calls every failure final — an
+    /// estimator that cannot tell is never retried.
+    /// </summary>
+    async Task<GasFeeEstimateAttempt> EstimateFeeAsync(
+        GasFeeEstimateRequest request, CancellationToken cancellationToken) =>
+        await EstimateFeeUsdtAsync(request, cancellationToken) is { } fee
+            ? GasFeeEstimateAttempt.Estimated(fee)
+            : GasFeeEstimateAttempt.Failed(retryable: false, "no estimate");
+
+    /// <summary>
     /// T149 — what sweeping one fresh deposit to the hot wallet will cost the
     /// platform, priced now (TRON: <c>POST /api/transfer/estimate-sweep-fee</c>
     /// — activation + the burn top-up for the whole transfer with its 10%
@@ -34,6 +50,20 @@ public interface IGasFeeEstimator
     /// </summary>
     Task<SweepCostEstimate?> EstimateSweepCostAsync(
         StablecoinType token, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// T160b — the outcome of one estimate call: the fee, or why there is none
+/// and whether asking again can change that.
+/// </summary>
+/// <param name="FeeUsdt">The estimate; <c>null</c> when the call failed.</param>
+/// <param name="Retryable">A failure that may clear on its own (a lagging node, an outage) — never set with a fee.</param>
+/// <param name="Failure">Short reason for the logs (status + code, or the exception kind).</param>
+public sealed record GasFeeEstimateAttempt(decimal? FeeUsdt, bool Retryable, string? Failure)
+{
+    public static GasFeeEstimateAttempt Estimated(decimal fee) => new(fee, false, null);
+
+    public static GasFeeEstimateAttempt Failed(bool retryable, string failure) => new(null, retryable, failure);
 }
 
 /// <summary>
