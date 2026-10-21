@@ -1278,3 +1278,50 @@ groups:
             of 20 addresses under the 10-second client timeout; a slow provider
             (ethereum-rpc-latency-high) or the service being down shows up here
             (DEPLOY_RUNBOOK §J).
+
+      - uid: gas-fee-fallback-charged
+        title: Gas Fee Charged Without A Live Estimate
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (sum by (network, flow, basis) (increase(skinora_backend_gas_fee_fallback_charged_total[1h]))) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: A refund deduction or payout split was priced without a live gas estimate
+          description: >-
+            The backend could not get the network's gas estimate (after three tries
+            within 12 s for a refund — T160b), refused one above
+            max_charged_gas_fee_usdt, or had no deposit address to price, and wrote the
+            fee from its fallback instead. Labels: network; flow (refund, hot-wallet
+            refund, payout); basis (measured = the last estimate of the same kind,
+            at most 6 h old; static = the blockchain.*_gas_fee_estimate_usdt
+            setting). The amount is fixed on the row and not corrected later
+            (08 §3.1a): check the service's estimate-fee log and the RPC provider,
+            and compare the row's GasFee with the realized fee (DEPLOY_RUNBOOK §J
+            "Gas tahmini"). The alarm clears an hour after the last fallback.

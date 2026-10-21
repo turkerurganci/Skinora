@@ -5,7 +5,9 @@ namespace Skinora.Transactions.Application.GasFee;
 /// <summary>
 /// The single answer to "how much gas do we charge the user for this outbound
 /// transfer?" — runtime estimate first (<see cref="IGasFeeEstimator"/>),
-/// static <c>blockchain.*_gas_fee_estimate_usdt</c> setting as fallback, so
+/// static <c>blockchain.*_gas_fee_estimate_usdt</c> setting as fallback (T160b:
+/// a refund's estimate is retried on a retryable failure and its fallback is
+/// the last measured estimate of the same kind while fresh), so
 /// consumers (<c>PaymentRefundToBuyerConsumer</c>, <c>AmountValidationService</c>,
 /// <c>SellerPayoutQueueJob</c>) never carry the fallback logic themselves and
 /// an estimator outage degrades to the pre-round behaviour instead of
@@ -16,7 +18,8 @@ public interface IChargedGasFeeResolver
     /// <summary>
     /// Fee charged on a refund-family transfer (deposit → recipient). Without a
     /// <paramref name="fromDepositAddress"/> there is no sender to price, so no
-    /// estimate is asked for and the static refund setting is charged.
+    /// estimate is asked for and the refund fallback is charged (T160b: the last
+    /// measured deposit refund while fresh, else the static refund setting).
     /// <paramref name="network"/> is the transfer's network (T148): its service
     /// prices it and its fallback / ceiling apply.
     /// </summary>
@@ -66,8 +69,17 @@ public enum GasFeeSource
     StaticFallback,
 
     /// <summary>
+    /// T160b — refund only: the estimator stayed silent after its retries and
+    /// the last measured estimate of the same network, sender and token (at
+    /// most <see cref="MeasuredGasFeeCache.Ttl"/> old) was charged instead of
+    /// the static setting.
+    /// </summary>
+    MeasuredFallback,
+
+    /// <summary>
     /// An estimate came back but exceeded <c>blockchain.max_charged_gas_fee_usdt</c>,
-    /// so it was refused and the static setting used instead. Distinct from
+    /// so it was refused and the fallback used instead (T160b: for a refund
+    /// the last measured estimate while fresh, else the static setting). Distinct from
     /// <see cref="StaticFallback"/> on purpose: that one means the estimator
     /// was silent, this one means it spoke and was not believed — which is an
     /// operator signal, not routine degradation.

@@ -162,10 +162,9 @@ public sealed class BlockchainSidecarEstimateFeeContractTests
             new HttpClient(handler) { BaseAddress = new Uri(baseUrl) },
             new BlockchainSidecarOptions { BaseUrl = baseUrl },
             NullLogger<HttpSidecarGasFeeEstimator>.Instance);
-        var resolver = new ChargedGasFeeResolver(
+        var resolver = ChargedGasFeeResolverFactory.Create(
             FakeBlockchainServiceRegistry.ForTron(gasFee: estimator),
-            new StubSettings(),
-            NullLogger<ChargedGasFeeResolver>.Instance);
+            new StubSettings());
         return (resolver, sent);
     }
 

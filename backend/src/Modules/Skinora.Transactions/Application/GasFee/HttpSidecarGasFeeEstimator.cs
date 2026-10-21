@@ -58,6 +58,19 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
     public BlockchainNetwork Network => _policy.Network;
 
     public async Task<decimal?> EstimateFeeUsdtAsync(
+        GasFeeEstimateRequest request, CancellationToken cancellationToken) =>
+        (await EstimateFeeAsync(request, cancellationToken)).FeeUsdt;
+
+    /// <summary>
+    /// T160b — the estimate with the failure's kind (<see cref="GasFeeEstimateAttempt"/>).
+    /// Retryable: the service's own <c>retryable</c> flag when its envelope
+    /// carries one; otherwise a 5xx, 408 or 429; a transport error; this
+    /// client's timeout. Final: a 4xx (the request was refused), and an answer
+    /// that came back but cannot be believed (unparsable, negative, Ethereum
+    /// wei that does not give its <c>feeUsdt</c>) — asking again would get the
+    /// same answer. The caller's own cancellation is final too.
+    /// </summary>
+    public async Task<GasFeeEstimateAttempt> EstimateFeeAsync(
         GasFeeEstimateRequest request, CancellationToken cancellationToken)
     {
         var body = new EstimateFeeBody(
@@ -83,10 +96,12 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
             if (!response.IsSuccessStatusCode)
             {
                 var error = await ReadErrorAsync(response, cancellationToken);
+                var status = (int)response.StatusCode;
+                var retryable = error?.Retryable ?? IsTransientStatus(status);
                 _logger.LogWarning(
-                    "Gas fee estimate returned HTTP {StatusCode} {ErrorCode} for {To} ({Token}): {ErrorMessage} — falling back to static setting.",
-                    (int)response.StatusCode, error?.Error, request.ToAddress, request.Token, error?.Message);
-                return null;
+                    "Gas fee estimate returned HTTP {StatusCode} {ErrorCode} (retryable {Retryable}) for {To} ({Token}): {ErrorMessage}",
+                    status, error?.Error, retryable, request.ToAddress, request.Token, error?.Message);
+                return GasFeeEstimateAttempt.Failed(retryable, $"HTTP {status} {error?.Error}".TrimEnd());
             }
 
             var answer = await response.Content.ReadFromJsonAsync<JsonElement>(
@@ -100,9 +115,9 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
                 || fee < 0m)
             {
                 _logger.LogWarning(
-                    "Gas fee estimate returned unparsable feeUsdt '{FeeUsdt}' — falling back to static setting.",
+                    "Gas fee estimate returned unparsable feeUsdt '{FeeUsdt}' — not charged.",
                     payload?.FeeUsdt);
-                return null;
+                return GasFeeEstimateAttempt.Failed(retryable: false, "unparsable feeUsdt");
             }
 
             if (_policy.ReportsTronResourceUsage)
@@ -124,9 +139,9 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
                     || derived != fee)
                 {
                     _logger.LogError(
-                        "Gas fee estimate on {Network} for {To} ({Token}): feeUsdt {FeeUsdt} does not follow from feeWei '{FeeWei}' at ETH price '{EthPrice}' — falling back to static setting.",
+                        "Gas fee estimate on {Network} for {To} ({Token}): feeUsdt {FeeUsdt} does not follow from feeWei '{FeeWei}' at ETH price '{EthPrice}' — not charged.",
                         _policy.Network, request.ToAddress, request.Token, fee, wei?.FeeWei, wei?.EthPriceUsdt);
-                    return null;
+                    return GasFeeEstimateAttempt.Failed(retryable: false, "feeUsdt does not follow from feeWei");
                 }
 
                 _logger.LogInformation(
@@ -140,17 +155,27 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
                     "Gas fee estimate {FeeUsdt} USDT for {To} ({Token}) on {Network}.",
                     fee, request.ToAddress, request.Token, _policy.Network);
             }
-            return fee;
+            return GasFeeEstimateAttempt.Estimated(fee);
         }
         catch (Exception ex) when (
             ex is HttpRequestException or TaskCanceledException or JsonException)
         {
+            // A transport error and this client's own timeout may clear; the
+            // caller cancelling, or a body that is not JSON, will not.
+            var retryable = ex is HttpRequestException
+                || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested);
             _logger.LogWarning(ex,
-                "Gas fee estimate call failed for {To} ({Token}) — falling back to static setting.",
-                request.ToAddress, request.Token);
-            return null;
+                "Gas fee estimate call failed for {To} ({Token}) (retryable {Retryable}).",
+                request.ToAddress, request.Token, retryable);
+            return GasFeeEstimateAttempt.Failed(retryable, ex.GetType().Name);
         }
     }
+
+    // T160b — without a retryable flag in the envelope (a proxy's page, an
+    // older service) the status decides: the outage family may clear, any
+    // other answer is the request's own.
+    private static bool IsTransientStatus(int status) =>
+        status >= 500 || status == 408 || status == 429;
 
     /// <summary>
     /// T149 — <c>POST /api/transfer/estimate-sweep-fee</c>: the TRX one sweep
@@ -247,7 +272,7 @@ public sealed class HttpSidecarGasFeeEstimator : IGasFeeEstimator
         string Amount,
         string Token);
 
-    private sealed record ErrorEnvelope(string? Error, string? Message);
+    private sealed record ErrorEnvelope(string? Error, string? Message, bool? Retryable);
 
     // T149 — sidecar-blockchain/contracts/estimate-fee/sweep.request.json is
     // the body both sides replay.

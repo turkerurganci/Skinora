@@ -212,6 +212,16 @@ describe('POST /api/transfer/estimate-fee — failures map to the backend fallba
     expect(await res.json()).toMatchObject({ error: 'FEE_ESTIMATE_SIMULATION_FAILED' });
   });
 
+  it("T160b — T159b's lagging node (eth_estimateGas: block not found) → 502 retryable, exactly the body the backend's retry test replays", async () => {
+    // The backend retries the estimate on `retryable: true`
+    // (EthereumFeeWeiContractTests reads the same file).
+    gas = new RpcError('eth_estimateGas: block not found: 0xb67b27', 'rpc', 'publicnode');
+    const res = await post(example('estimate-fee/refund.request.json'));
+    gas = 46_201n;
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual(example('estimate-fee/error.block-not-found.json'));
+  });
+
   it('an unexpected error → 500 INTERNAL_ERROR, nothing leaked', async () => {
     gas = new Error('secret-ish internals');
     const res = await post(VALID);
