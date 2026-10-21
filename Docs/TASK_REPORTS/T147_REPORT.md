@@ -1,6 +1,6 @@
 # T147 — İşlem akışında ağ seçimi
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor (yapım bitti, T148 sonrası entegrasyon yapıldı, bağımsız doğrulama bekliyor) | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS (PR #344) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-18
 
 ---
 

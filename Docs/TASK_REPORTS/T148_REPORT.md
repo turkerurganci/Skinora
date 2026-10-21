@@ -1,6 +1,6 @@
 # T148 — Ağ başına sidecar sözleşmesi ve ayarlar
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor (doğrulama tur 1 ✗ FAIL → düzeltme turu 1 yapıldı, yeniden doğrulama bekliyor) | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (PR #343) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-18
 
 ---
 

@@ -1,6 +1,6 @@
 # T159 — Sepolia canlı provası + TRON regresyonu
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor | **Tarih:** 2026-10-19 (prova 01:50–03:25 UTC)
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — doğrulama KOŞULLU PASS; giden bacak T159b'de müdahalesiz ✓ (PR #355, #360) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-19 (prova 01:50–03:25 UTC)
 
 ---
 

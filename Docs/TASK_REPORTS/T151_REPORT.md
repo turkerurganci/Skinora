@@ -1,6 +1,6 @@
 # T151 — Ethereum ödeme izleyicisi [RİSKLİ]
 
-**Faz:** F8 | **Durum:** ⏳ Doğrulama bekliyor | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS (PR #347) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-18
 
 ---
 

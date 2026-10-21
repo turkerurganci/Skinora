@@ -1,6 +1,6 @@
 # T158 — Ethereum kurulumu: ayarlar, sırlar, alarmlar, runbook
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor — doğrulama ✗ FAIL → düzeltme turu bitti, yeniden doğrulama bekliyor | **Tarih:** 2026-10-19
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme → tur 2 ✓ PASS (PR #353) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-19
 
 ---
 

@@ -1,6 +1,6 @@
 # T152 — Ethereum gönderim servisi [ÇOK RİSKLİ]
 
-**Faz:** F8 | **Durum:** ⏳ Devam ediyor (bağımsız doğrulama ✗ FAIL → düzeltme turu 2 bitti, yeniden doğrulama bekliyor) | **Tarih:** 2026-10-18
+**Faz:** F8 | **Durum:** ✓ Tamamlandı — tur 1 ✗ FAIL → düzeltme turu 2 → tur 2 ✓ PASS (PR #349) (başlık F8 Gate Check'te bayattan düzeltildi) | **Tarih:** 2026-10-18
 
 ---
 
