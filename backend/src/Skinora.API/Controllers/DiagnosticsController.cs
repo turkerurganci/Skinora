@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Skinora.API.Filters;
 using Skinora.API.RateLimiting;
 using Skinora.Auth.Configuration;
 using Skinora.Shared.Exceptions;
@@ -8,8 +9,11 @@ namespace Skinora.API.Controllers;
 
 /// <summary>
 /// Internal diagnostics endpoints for development/testing.
-/// Will be restricted or removed in production (T06+).
+/// T166 — <see cref="DevelopmentOnlyAttribute"/>: outside the Development
+/// environment this controller is removed from the application model, so
+/// every <c>/api/v1/_diag/*</c> route returns 404.
 /// </summary>
+[DevelopmentOnly]
 [ApiController]
 [Route("api/v1/_diag")]
 public class DiagnosticsController : ControllerBase

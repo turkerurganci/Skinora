@@ -410,6 +410,11 @@ builder.Services.AddHealthChecks()
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<ApiResponseWrapperFilter>();
+
+    // T166 — [DevelopmentOnly] controllers (/api/v1/_diag/*) are not even
+    // registered outside Development: every such route is a plain 404.
+    options.Conventions.Add(
+        new DevelopmentOnlyControllerConvention(builder.Environment.IsDevelopment()));
 })
 .AddJsonOptions(options =>
 {
