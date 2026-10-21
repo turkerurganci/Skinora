@@ -183,7 +183,7 @@ Skinora: CS2 item ticaretinde alıcı ve satıcı arasında güvenli, otomatik b
 | `frontend/src/i18n/routing.ts` | next-intl routing config (4 dil, fallback EN) |
 | `frontend/src/i18n/request.ts` | next-intl server request config |
 | `frontend/src/i18n/messages/` | 4 dil dosyası (en, zh, es, tr) |
-| `frontend/src/middleware.ts` | i18n middleware |
+| `frontend/src/proxy.ts` | i18n proxy (Next 16 "middleware" adı; T160a) |
 | `frontend/Dockerfile` | Multi-stage Next.js standalone build |
 
 ### Steam Sidecar — Node.js (T14)
