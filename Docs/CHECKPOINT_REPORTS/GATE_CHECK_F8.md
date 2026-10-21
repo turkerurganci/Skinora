@@ -317,7 +317,15 @@ Tahmini bütün F8 (T141–T160): 60 sa 30 dk net + 6–10 düzeltme turu (≈ 1
 
 ---
 
+### Sahip onayı (2026-10-21, modal)
+
+- **Onaylandı:** "Sahip onayı bekleyen kararlar" listesinin tamamı (PARA 23, GÜVENLİK 7, Diğer) olduğu gibi.
+- **F9'a zorunlu iş olarak alındı** (`Docs/plan/11_F9.md` T160a–c):
+  - **T160a — F9'un ilk işi:** `next` yükseltmesi + CI'a frontend audit adımı (F8-N4, backlog `FrontendNextAdvisories`). F8 tag'i bunu beklemez.
+  - **T160b — F9 başında, canlı öncesi:** iade gas tahmininde yeniden deneme + yedek ücretin ölçülen tarifeye yaklaştırılması (PARA 21, backlog `RefundGasEstimateSingleAttempt`).
+  - **T160c — F9'da, canlı öncesi:** reddedilen ödeme iadesinde alıcıdan kesilen gas kalıntısının sweep ile sıcak cüzdana toplanması (PARA 20, backlog `RefundGasDeductionDustStaysOnDeposit`).
+
 ### Faz Tag
 
-- Tag: `phase/F8-pass` — **atılmadı.** Sahip yukarıdaki "Sahip onayı bekleyen kararlar" listesine baktıktan sonra yönetici bu gate PR'ının squash-merge commit'i üzerinde atar (`git tag phase/F8-pass <merge-sha>` + `git push origin phase/F8-pass`).
+- Tag: `phase/F8-pass` — sahip onayından sonra yönetici bu gate PR'ının squash-merge commit'i üzerinde atar (`git tag phase/F8-pass <merge-sha>` + `git push origin phase/F8-pass`).
 - Ölçüm commit'i: `c1026b8c`.
