@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { InfoScreen, TosModal } from "@/components/auth";
+import { AccountManagementSection } from "@/components/settings/AccountManagementSection";
 import { ApiError, refreshAccessToken } from "@/lib/api/client";
 import { acceptTos } from "@/lib/api/auth";
 import { sanitizeReturnUrl } from "@/lib/auth/returnUrl";
@@ -207,6 +208,7 @@ export default function SteamCallbackPage() {
             errorMessage={tosError}
             onAccept={({ tosVersion }) => void handleAcceptTos(tosVersion)}
             onAgeRejected={() => router.replace(localePath("/auth/age-gate"))}
+            declineSlot={<AccountManagementSection />}
           />
         )}
       </>

@@ -32,6 +32,19 @@ vi.mock("next/navigation", () => ({
 const { getMe, acceptTos } = vi.hoisted(() => ({ getMe: vi.fn(), acceptTos: vi.fn() }));
 vi.mock("@/lib/api/auth", () => ({ getMe, acceptTos }));
 
+// T168 — the decline path reuses the settings account-management section.
+const { deleteAccount, deactivateAccount, signOut } = vi.hoisted(() => ({
+  deleteAccount: vi.fn(),
+  deactivateAccount: vi.fn(),
+  signOut: vi.fn(),
+}));
+vi.mock("@/lib/api/settings", () => ({
+  DELETE_ACCOUNT_CONFIRMATION: "SİL",
+  deleteAccount,
+  deactivateAccount,
+}));
+vi.mock("@/lib/auth/signOut", () => ({ signOut }));
+
 function me(tosAccepted: boolean, tosAcceptedVersion: string | null) {
   return { tosAccepted, tosAcceptedVersion };
 }
@@ -118,6 +131,51 @@ describe("TosRepromptGate (T166)", () => {
 
     await waitFor(() => expect(getMe).toHaveBeenCalled());
     expect(screen.queryByTestId("tos-submit")).toBeNull();
+  });
+
+  it("T168 — first-time: declining the terms offers account closure and deletion", async () => {
+    // jsdom has no modal dialog; the confirm modal only needs `open` to flip.
+    if (!HTMLDialogElement.prototype.showModal) {
+      HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+        this.open = true;
+      };
+      HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+        this.open = false;
+      };
+    }
+    getMe.mockResolvedValue(me(false, null));
+    deleteAccount.mockResolvedValue({ deletedAt: "2026-10-21T00:00:00Z", message: "ok" });
+    signOut.mockResolvedValue(undefined);
+
+    renderGate();
+
+    await waitFor(() => expect(screen.getByTestId("tos-decline-toggle")).toBeTruthy());
+    expect(screen.queryByTestId("tos-decline-panel")).toBeNull();
+    fireEvent.click(screen.getByTestId("tos-decline-toggle"));
+
+    const panel = screen.getByTestId("tos-decline-panel");
+    expect(panel).toHaveTextContent(messages.auth.tos.decline.description);
+    expect(panel).toHaveTextContent(messages.settings.accountManagement.deactivate.button);
+
+    fireEvent.click(
+      screen.getAllByText(messages.settings.accountManagement.delete.button)[0] as HTMLElement,
+    );
+    fireEvent.change(screen.getByPlaceholderText("SİL"), { target: { value: "SİL" } });
+    // The opener and the confirm button share the label; confirm is the dialog's submit.
+    fireEvent.click(document.querySelector("dialog button[type=submit]") as HTMLButtonElement);
+
+    await waitFor(() => expect(deleteAccount).toHaveBeenCalledWith("SİL"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/en"));
+    expect(acceptTos).not.toHaveBeenCalled();
+  });
+
+  it("T168 — re-prompt (accepted before): no decline path, settings are reachable normally", async () => {
+    getMe.mockResolvedValue(me(true, "0.9"));
+
+    renderGate();
+
+    await waitFor(() => expect(screen.getByTestId("tos-submit")).toBeTruthy());
+    expect(screen.queryByTestId("tos-decline-toggle")).toBeNull();
   });
 
   it("renders nothing for an account on the current version", async () => {

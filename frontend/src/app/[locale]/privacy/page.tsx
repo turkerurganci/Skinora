@@ -1,14 +1,6 @@
 import { LegalPage } from "@/components/legal";
-
-const SECTIONS = [
-  "dataWeCollect",
-  "howWeUse",
-  "dataSharing",
-  "dataRetention",
-  "yourRights",
-  "contact",
-] as const;
+import { PRIVACY_SECTIONS } from "@/lib/legal/sections";
 
 export default function PrivacyPage() {
-  return <LegalPage namespace="legal.privacy" sectionKeys={SECTIONS} />;
+  return <LegalPage namespace="legal.privacy" sectionKeys={PRIVACY_SECTIONS} showContents />;
 }

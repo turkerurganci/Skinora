@@ -1,15 +1,6 @@
 import { LegalPage } from "@/components/legal";
-
-const SECTIONS = [
-  "acceptance",
-  "serviceDescription",
-  "userObligations",
-  "fees",
-  "liability",
-  "termination",
-  "contact",
-] as const;
+import { TERMS_SECTIONS } from "@/lib/legal/sections";
 
 export default function TermsPage() {
-  return <LegalPage namespace="legal.terms" sectionKeys={SECTIONS} />;
+  return <LegalPage namespace="legal.terms" sectionKeys={TERMS_SECTIONS} showContents />;
 }

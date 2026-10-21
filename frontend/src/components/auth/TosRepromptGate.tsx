@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AccountManagementSection } from "@/components/settings/AccountManagementSection";
 import { TosModal } from "./TosModal";
 import { acceptTos, getMe } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
@@ -103,6 +104,11 @@ export function TosRepromptGate() {
       onAgeRejected={
         mode === "first" ? () => router.replace(`/${locale}/auth/age-gate`) : undefined
       }
+      // T168 — declining the terms must not take away account closure /
+      // deletion (KVKK erasure; the server exempts exactly U13/U14 from the
+      // ToS gate). Only for first-time acceptance: a re-prompted account has
+      // accepted before and reaches the settings page normally.
+      declineSlot={mode === "first" ? <AccountManagementSection /> : undefined}
     />
   );
 }

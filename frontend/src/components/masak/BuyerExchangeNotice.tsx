@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { useOperatorValues } from "@/components/legal/useOperatorValues";
 
 export interface BuyerExchangeNoticeProps {
   /**
@@ -27,6 +28,8 @@ export interface BuyerExchangeNoticeProps {
  */
 export function BuyerExchangeNotice({ variant }: BuyerExchangeNoticeProps) {
   const t = useTranslations("masak.buyer");
+  const tMasak = useTranslations("masak");
+  const operator = useOperatorValues();
   const locale = useLocale();
   const helpHref = `/${locale}/support#masak`;
 
@@ -59,6 +62,9 @@ export function BuyerExchangeNotice({ variant }: BuyerExchangeNoticeProps) {
         </li>
         <li data-testid="masak-buyer-limit">{t("dailyLimit")}</li>
         <li data-testid="masak-buyer-declare">{t("declare")}</li>
+        {/* T168 — Yönetmelik 24/A-6: a legal person is declared by its
+            trade name and address (DEFERRED_BACKLOG MasakDeclarationEntityDetails). */}
+        <li data-testid="masak-buyer-entity">{tMasak("entityDetails", operator)}</li>
         <li>{t("description")}</li>
       </ul>
       <p className="mt-2 text-xs text-blue-800">
