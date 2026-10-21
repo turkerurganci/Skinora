@@ -40,4 +40,16 @@ public sealed class PlatformController : ControllerBase
         var result = await _service.GetMaintenanceAsync(cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>
+    /// P3 — <c>GET /platform/payout-sources</c> (07 §10.3, T167): the fixed
+    /// address each network's seller payouts leave from, so a seller can
+    /// declare it to their exchange (MASAK — Tedbirler Yönetmeliği m. 24/A-6).
+    /// </summary>
+    [HttpGet("payout-sources")]
+    [RateLimit("public")]
+    public ActionResult<PlatformPayoutSourcesResponse> GetPayoutSources()
+    {
+        return Ok(_service.GetPayoutSources());
+    }
 }

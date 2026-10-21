@@ -904,6 +904,10 @@
           "heading": "Transaction disputes",
           "body": "If a trade does not complete as expected, the buyer can open a dispute from the transaction page for issues such as payment, delivery, or receiving the wrong item. Automatic checks run first, and unresolved cases are escalated to platform admins for manual review. A dispute may be resolved in the buyer's or the seller's favor, including a refund of escrowed funds to the buyer's wallet where appropriate."
         },
+        "masak": {
+          "heading": "Exchanges in Türkiye and MASAK rules",
+          "body": "Under MASAK regulation, crypto exchanges in Türkiye apply a waiting period and amount limits to withdrawals to external wallets, and ask you to declare the other party of a transfer you send or receive. Your exchange treats Skinora's payment addresses as external wallets. Your exchange applies these rules, not Skinora; the summary below is practical information, not legal advice."
+        },
         "faq": {
           "heading": "Common questions",
           "body": "Guidance on Steam sign-in, sending and accepting trade offers, stablecoin payments and confirmations, commissions and gas fees, refunds, and account safety will be available here. Until then, contact support for help with any of these topics."
@@ -2251,6 +2255,31 @@
       "SIDECAR_UNAVAILABLE": "The signing service did not answer. The transfer may have been signed and sent. Before trying again, check the hot wallet's latest outgoing transaction on the explorer (Etherscan / Tronscan).",
       "NETWORK_UNAVAILABLE": "The network is unavailable. Nothing was sent.",
       "TRANSFER_DEFERRED": "The transfer was deferred (for example the fee is above the cap). Nothing was sent. Try again later."
+    }
+  },
+  "masak": {
+    "buyer": {
+      "title": "Paying from an exchange in Türkiye?",
+      "holdInAdvance": "Have the USDT in your account in advance: exchanges send crypto you bought or deposited to an external wallet no earlier than 48 hours later, and at least 72 hours later on your first withdrawal from the exchange. If the payment window is shorter than this wait, newly bought USDT will not arrive in time.",
+      "dailyLimit": "Withdrawals of stable-value crypto such as USDT are limited to 3,000 $ a day and 50,000 $ a month (your exchange may apply double in some cases). If the amount to send is above this limit, you cannot send the payment in one transfer from a Turkish exchange.",
+      "declare": "Your exchange asks you to declare the recipient: the recipient is Skinora, the address is this transaction's payment address. Every transaction has a different payment address — do not send to an address you saved for an earlier transaction.",
+      "description": "Your exchange asks for a transaction description of at least 20 characters, for example \"Skinora CS2 item purchase payment\".",
+      "source": "Your exchange applies these rules under MASAK regulation, not Skinora. This is a practical summary, not legal advice.",
+      "short": "Paying from an exchange in Türkiye? Buy the USDT now: exchanges send newly bought or deposited crypto to an external wallet no earlier than 48 hours later (72 hours on the first withdrawal) and limit USDT withdrawals to 3,000 $ a day. If the payment window is shorter than this wait, USDT bought later will not arrive in time.",
+      "helpLink": "Details"
+    },
+    "seller": {
+      "title": "Receiving the payout on an exchange in Türkiye?",
+      "declare": "Your exchange may ask you to declare the sender of the payout from Skinora: the sender is Skinora. Skinora's payouts always leave from the same address on each network; if your exchange keeps your declaration for this address, you can reuse it for later payouts.",
+      "addressLabel": "Skinora payout sender address ({network})",
+      "addressUnavailable": "The sender address cannot be shown right now. When the payout arrives, you can see the sender from the transaction hash.",
+      "changeNote": "If this address changes, the new address appears here; update the record at your exchange."
+    },
+    "help": {
+      "buyerHeading": "If you are the buyer",
+      "sellerHeading": "If you are the seller",
+      "paymentWindow": "The payment window is the time the seller chose in the listing and shows as a countdown on the transaction page. Your exchange's wait can be longer, so buy the USDT before you accept the transaction.",
+      "sources": "Source: MASAK General Communiqué (No. 29), Official Gazette of Türkiye 28.06.2025, issue 32940, article 4; Regulation on Measures Regarding Prevention of Laundering Proceeds of Crime and Financing of Terrorism, article 24/A."
     }
   }
 }

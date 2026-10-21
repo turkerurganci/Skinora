@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.17** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T166 — ToS+18+ sunucuda zorunlu (403 TOS_NOT_ACCEPTED), yeni ilan yalnız USDT, P1 platformUptimePercent kalktı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.18** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T167 — P3 `GET /platform/payout-sources`: ağ başına sabit payout gönderim adresi (MASAK beyanı). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -2815,6 +2815,29 @@ Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity)
 > **Semantik:** `active: true` "frontend'in kullanıcıya göstermesi gereken bir durum var" anlamına gelir. `type` değeri durumun ciddiyetini ve etkisini belirler. `PLANNED_MAINTENANCE`'te platform tam işlevseldir, yalnızca bilgilendirme amaçlı banner gösterilir.
 
 Frontend sayfa yüklemesinde P2'yi çağırır. Anlık değişiklikler RT2 ile push edilir.
+
+### 10.3 P3 — `GET /platform/payout-sources`
+
+**Amaç (T167 — MASAK):** Satıcıya ödemenin hangi adresten çıkacağını önceden göstermek. Türk borsası, hiçbir kripto varlık hizmet sağlayıcısında kayıtlı olmayan bir cüzdandan gelen transferde müşterisinden göndericiyi beyan etmesini ister (Tedbirler Yönetmeliği m. 24/A-6). Skinora'nın her payout'u bir ağda hep o ağın **sıcak cüzdanından** çıkar (05 §3.3; T167'de kodda ölçüldü — payout ucu depozit indeksi almaz, yalnız sıcak anahtarla imzalar), dolayısıyla satıcı tek bir adresi bir kez beyan edebilir. Kullanım: S07 satıcı görünümü (ITEM_DELIVERED, COMPLETED ödeme özeti), S08 "Satıcı Ödeme Adresi" bölümü, destek sayfası `#masak` bölümü (04 §7.3).
+
+| Konu | Değer |
+|------|-------|
+| Auth | Public |
+| Cache | Yok — adresler dağıtım yapılandırmasıdır (ortam değişkeni, `IPlatformWalletAddressProvider`); istemci 1 sa bayat tutar |
+
+**Response (200) `data`:**
+```json
+{
+  "sources": [
+    { "network": "TRON", "address": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8" },
+    { "network": "ETHEREUM", "address": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed" }
+  ]
+}
+```
+
+- Yalnız sıcak cüzdan adresi yapılandırılmış ağlar listelenir (enum sırası); yapılandırılmamış ağ `null` değerle değil, **hiç** gönderilmez. Hiçbiri yoksa `sources: []`.
+- `address` gösterim biçimindedir (Ethereum EIP-55, 06 §1.4). Soğuk cüzdan ve yakıt cüzdanı **gösterilmez** — payout onlardan çıkmaz.
+- **Herkese açık olmasının gerekçesi** (öneriyle kaydedildi — ⚠ GÜVENLİK): adres, payout alan her satıcının zincirde gördüğü adrestir; gizli değildir. Sayfa yardım metninde oturumsuz da okunur. Bedeli: sıcak cüzdan bakiyesinin herkesçe izlenebilmesi (zaten zincirde açık).
 
 ---
 

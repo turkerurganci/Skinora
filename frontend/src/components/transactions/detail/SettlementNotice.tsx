@@ -6,6 +6,8 @@ import { CountdownTimer } from "@/components/common";
 import { formatDate } from "@/lib/utils/format";
 import { asFreezeReason, computeWarningSeconds } from "./helpers";
 import type { PanelRole } from "./helpers";
+import type { BlockchainNetwork } from "@/types/enums";
+import { PayoutSourceNotice } from "@/components/masak";
 
 export interface SettlementNoticeProps {
   role: PanelRole;
@@ -16,6 +18,12 @@ export interface SettlementNoticeProps {
    * simply becomes eligible for its final check (02 §4.5.1).
    */
   timeout?: TransactionDetailTimeout | null;
+  /**
+   * T167 — the transaction's network; the seller view names the address the
+   * payout will leave from, so it can be declared to an exchange before it
+   * lands (Tedbirler Yönetmeliği m. 24/A-6). Ignored in the buyer view.
+   */
+  network?: BlockchainNetwork | null;
 }
 
 /**
@@ -36,7 +44,7 @@ export interface SettlementNoticeProps {
  *     waiting for anything, and a ticking clock would read as a deadline of
  *     their own.
  */
-export function SettlementNotice({ role, timeout }: SettlementNoticeProps) {
+export function SettlementNotice({ role, timeout, network }: SettlementNoticeProps) {
   const t = useTranslations("transactionDetail.actions.itemDelivered");
   const locale = useLocale();
 
@@ -92,6 +100,7 @@ export function SettlementNotice({ role, timeout }: SettlementNoticeProps) {
           )}
         </div>
       )}
+      {network && <PayoutSourceNotice network={network} />}
     </div>
   );
 }

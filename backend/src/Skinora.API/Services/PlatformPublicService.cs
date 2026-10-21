@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Domain.Entities;
@@ -28,13 +30,16 @@ public sealed class PlatformPublicService : IPlatformPublicService
 
     private readonly AppDbContext _db;
     private readonly IMemoryCache _cache;
+    private readonly IPlatformWalletAddressProvider _walletAddresses;
 
     public PlatformPublicService(
         AppDbContext db,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        IPlatformWalletAddressProvider walletAddresses)
     {
         _db = db;
         _cache = cache;
+        _walletAddresses = walletAddresses;
     }
 
     public async Task<PlatformStatsResponse> GetStatsAsync(CancellationToken cancellationToken)
@@ -86,6 +91,19 @@ public sealed class PlatformPublicService : IPlatformPublicService
 
         _cache.Set(MaintenanceCacheKey, response, MaintenanceCacheTtl);
         return response;
+    }
+
+    public PlatformPayoutSourcesResponse GetPayoutSources()
+    {
+        var sources = new List<PlatformPayoutSourceDto>();
+        foreach (var network in Enum.GetValues<BlockchainNetwork>())
+        {
+            var hot = _walletAddresses.For(network).HotWalletAddress;
+            if (string.IsNullOrWhiteSpace(hot)) continue;
+            sources.Add(new PlatformPayoutSourceDto(network, BlockchainAddress.ToDisplay(hot.Trim())!));
+        }
+
+        return new PlatformPayoutSourcesResponse(sources);
     }
 
     private static string? Read(Dictionary<string, string?> map, string key) =>

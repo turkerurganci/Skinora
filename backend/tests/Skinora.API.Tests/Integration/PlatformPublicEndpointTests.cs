@@ -16,6 +16,7 @@ using Skinora.API.RateLimiting;
 using Skinora.API.Services;
 using Skinora.API.Startup;
 using Skinora.API.Tests.Common;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Domain.Seed;
@@ -181,12 +182,76 @@ public sealed class PlatformPublicEndpointTests : IClassFixture<PlatformPublicEn
     // Factory
     // ============================================================
 
+    // ============================================================
+    // P3 — GET /platform/payout-sources (T167)
+    // ============================================================
+
+    private const string TronHot = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8";
+    private const string EthHotLower = "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed";
+    private const string EthHotChecksum = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
+
+    [Fact]
+    public async Task PayoutSources_Anonymous_ReturnsOneFixedAddressPerConfiguredNetwork_EthereumInEip55()
+    {
+        _factory.WalletAddresses.Pairs[BlockchainNetwork.TRON] =
+            new PlatformWalletAddresses(BlockchainNetwork.TRON, TronHot, "TColdNotShown000000000000000000000");
+        _factory.WalletAddresses.Pairs[BlockchainNetwork.ETHEREUM] =
+            new PlatformWalletAddresses(BlockchainNetwork.ETHEREUM, EthHotLower, null);
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/v1/platform/payout-sources");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sources = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("sources");
+        Assert.Equal(2, sources.GetArrayLength());
+        Assert.Equal("TRON", sources[0].GetProperty("network").GetString());
+        Assert.Equal(TronHot, sources[0].GetProperty("address").GetString());
+        Assert.Equal("ETHEREUM", sources[1].GetProperty("network").GetString());
+        // 06 §1.4 — stored lowercase, shown EIP-55 so a copied address keeps its checksum.
+        Assert.Equal(EthHotChecksum, sources[1].GetProperty("address").GetString());
+        // The cold wallet is never part of the payload — payouts do not leave from it.
+        Assert.DoesNotContain("TColdNotShown", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task PayoutSources_UnconfiguredNetwork_IsLeftOut_NotSentAsNull()
+    {
+        _factory.WalletAddresses.Pairs[BlockchainNetwork.TRON] =
+            new PlatformWalletAddresses(BlockchainNetwork.TRON, TronHot, null);
+        _factory.WalletAddresses.Pairs[BlockchainNetwork.ETHEREUM] =
+            new PlatformWalletAddresses(BlockchainNetwork.ETHEREUM, "  ", null);
+
+        var client = _factory.CreateClient();
+        var sources = (await (await client.GetAsync("/api/v1/platform/payout-sources"))
+                .Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("sources");
+
+        Assert.Equal(1, sources.GetArrayLength());
+        Assert.Equal("TRON", sources[0].GetProperty("network").GetString());
+    }
+
+    [Fact]
+    public async Task PayoutSources_NothingConfigured_ReturnsEmptyList()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/v1/platform/payout-sources");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sources = (await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions))
+            .GetProperty("data").GetProperty("sources");
+        Assert.Equal(0, sources.GetArrayLength());
+    }
+
     public sealed class Factory : WebApplicationFactory<Program>
     {
         private const string TestSecret = "t63a-platform-test-secret-key-minimum-32-chars-padding!!";
         private readonly SqliteConnection _connection;
         private int _userSuffix;
         private const string SteamIdPrefix = "76561198777641";
+
+        /// <summary>T167 — P3 reads the platform's hot wallet addresses from here.</summary>
+        public StubPlatformWalletAddressProvider WalletAddresses { get; } = new();
 
         public Factory()
         {
@@ -281,6 +346,10 @@ public sealed class PlatformPublicEndpointTests : IClassFixture<PlatformPublicEn
 
         public void Reset()
         {
+            WalletAddresses.HotWalletAddress = null;
+            WalletAddresses.ColdWalletAddress = null;
+            WalletAddresses.Pairs.Clear();
+
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -385,6 +454,9 @@ public sealed class PlatformPublicEndpointTests : IClassFixture<PlatformPublicEn
 
                 services.RemoveAll<IRateLimiterStore>();
                 services.AddSingleton<IRateLimiterStore, InMemoryRateLimiterStore>();
+
+                services.RemoveAll<IPlatformWalletAddressProvider>();
+                services.AddSingleton<IPlatformWalletAddressProvider>(WalletAddresses);
             });
         }
 

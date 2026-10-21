@@ -10,6 +10,7 @@ import { CancelModal, CountdownTimer } from "@/components/common";
 import {
   asFreezeReason,
   computeWarningSeconds,
+  detailNetwork,
   isActivePartyRow,
   panelRowFor,
   type PanelRole,
@@ -406,7 +407,9 @@ function PrimaryActionPanel({
 
     // ITEM_DELIVERED — the settlement window (02 §4.5.1).
     case "itemDeliveredSeller":
-      return <SettlementNotice role="seller" timeout={detail.timeout} />;
+      return (
+        <SettlementNotice role="seller" timeout={detail.timeout} network={detailNetwork(detail)} />
+      );
     case "itemDeliveredBuyer":
       return <SettlementNotice role="buyer" timeout={detail.timeout} />;
 
