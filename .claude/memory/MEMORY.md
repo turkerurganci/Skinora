@@ -67,8 +67,8 @@
 - [e2e-prettier-crlf-local-artifact.md](e2e-prettier-crlf-local-artifact.md) — yerel e2e prettier CRLF uyarısı bulgu değil
 - [wp5-validation-pass.md](wp5-validation-pass.md) — WP5 admin dispute doğrulama PASS (2026-06-17)
 - [project_playbook_template.md](project_playbook_template.md) — Skinora metodu → public template, v1.1.0
-- [project_f8_yonetici_duzeni.md](project_f8_yonetici_duzeni.md) — F8 yönetici düzeni; F8 bitene kadar sürer
-- [project_f8_devir_notu.md](project_f8_devir_notu.md) — F8 kaldığı yer (2026-10-20): açık PR'lar, kalan T159a/T159b/T160, bekleyen PARA sorusu, ⚠ listesinin yeri
+- [project_f8_yonetici_duzeni.md](project_f8_yonetici_duzeni.md) — F8 yönetici düzeni; 2026-10-21'de F9 için aynen uzatıldı (sahip: "F8 gibi çalışacağız")
+- [project_f8_devir_notu.md](project_f8_devir_notu.md) — F8 BİTTİ (2026-10-21, phase/F8-pass): F9'a devreden T160a–c, devir/maliyet dosyalarının yeri
 - [feedback_model_by_task_weight.md](feedback_model_by_task_weight.md) — alt ajan: model+effort birlikte (haiku/sonnet/opus tablosu)
 - [project_backlog_round_2026_10_02.md](project_backlog_round_2026_10_02.md) — 2026-10-02 dört backlog satırı, #331
 - [project_wallet_policy_round.md](project_wallet_policy_round.md) — cüzdan politikası turu (2026-09), #324/#325
