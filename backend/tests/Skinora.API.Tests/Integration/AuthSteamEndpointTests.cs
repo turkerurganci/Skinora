@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Medallion.Threading;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -181,8 +182,12 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         _factory.ValidatorFake.SteamIdToReturn = SteamId;
         _factory.ValidatorFake.IsValid = true;
 
+        // T166 — the country header counts only when the request arrives from
+        // our reverse proxy (socket peer inside ReverseProxy:KnownNetworks,
+        // 10.0.0.0/8 in this factory).
         var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
         var request = new HttpRequestMessage(HttpMethod.Get, BuildCallbackUrl());
+        request.Headers.Add(Factory.TestSocketPeerHeader, TrustedProxyPeer);
         request.Headers.Add("X-Country-Code", "IR");
         var response = await client.SendAsync(request);
 
@@ -192,6 +197,56 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         using var verifyScope = _factory.Services.CreateScope();
         var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AppDbContext>();
         Assert.False(await verifyDb.Set<User>().AnyAsync(u => u.SteamId == SteamId));
+    }
+
+    [Theory]
+    [InlineData("203.0.113.7")] // a client reaching the backend directly
+    [InlineData(null)]          // no socket peer at all
+    public async Task Callback_CountryHeaderFromUntrustedPeer_IsIgnored(string? peer)
+    {
+        // T166 — the bypass this closes: before the trust check a client in a
+        // banned country could not be told apart from one claiming to be in
+        // it. Here the banned list contains the header's OWN value, so the
+        // only way the login is NOT geo-blocked is that the header was
+        // ignored — the strongest form of the assertion (a forged allowed
+        // country would pass either way).
+        await SeedBannedCountriesAsync("IR");
+
+        _factory.ValidatorFake.SteamIdToReturn = SteamId;
+        _factory.ValidatorFake.IsValid = true;
+
+        var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
+        var request = new HttpRequestMessage(HttpMethod.Get, BuildCallbackUrl());
+        if (peer is not null) request.Headers.Add(Factory.TestSocketPeerHeader, peer);
+        request.Headers.Add("X-Country-Code", "IR");
+        // Forging the forwarding chain does not help either: trust is decided
+        // by the socket peer, never by these headers.
+        request.Headers.Add("X-Forwarded-For", TrustedProxyPeer);
+        request.Headers.Add("CF-IPCountry", "IR");
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.DoesNotContain("error=geo_blocked", response.Headers.Location!.ToString());
+    }
+
+    private const string TrustedProxyPeer = "10.0.0.5";
+
+    private async Task SeedBannedCountriesAsync(string value)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Set<Skinora.Platform.Domain.Entities.SystemSetting>().Add(
+            new Skinora.Platform.Domain.Entities.SystemSetting
+            {
+                Id = Guid.NewGuid(),
+                Key = "auth.banned_countries",
+                Value = value,
+                IsConfigured = true,
+                DataType = "string",
+                Category = "AccessControl",
+                Description = "test",
+            });
+        await db.SaveChangesAsync();
     }
 
     [Fact]
@@ -379,6 +434,23 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             => Task.FromResult(NextResult);
     }
 
+    private sealed class SocketPeerFromHeaderStartupFilter : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                if (context.Request.Headers.TryGetValue(Factory.TestSocketPeerHeader, out var peer)
+                    && System.Net.IPAddress.TryParse(peer.ToString(), out var ip))
+                {
+                    context.Connection.RemoteIpAddress = ip;
+                }
+                return nextMiddleware();
+            });
+            next(app);
+        };
+    }
+
     private sealed class NoopBackgroundJobScheduler : IBackgroundJobScheduler
     {
         public string Schedule<T>(Expression<Action<T>> methodCall, TimeSpan delay)
@@ -393,6 +465,13 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
 
     public sealed class Factory : WebApplicationFactory<Program>
     {
+        /// <summary>
+        /// T166 test seam: TestServer has no socket, so a startup filter sets
+        /// <c>Connection.RemoteIpAddress</c> from this header BEFORE the app
+        /// pipeline runs — i.e. it plays the role of the TCP peer.
+        /// </summary>
+        public const string TestSocketPeerHeader = "X-Test-Socket-Peer";
+
         private readonly SqliteConnection _connection;
 
         public FakeSteamOpenIdValidator ValidatorFake { get; } = new();
@@ -445,6 +524,10 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
             // bir tuzaktı — kapatmak semptomu değil tuzağı kaldırıyor.
             builder.UseSetting("RateLimit:Enabled", "false");
 
+            // T166 — the reverse proxy lives in 10.0.0.0/8 for this host; the
+            // country header is believed only from a socket peer in it.
+            builder.UseSetting("ReverseProxy:KnownNetworks:0", "10.0.0.0/8");
+
             builder.UseSetting("Jwt:Secret", "integration-jwt-secret-key-minimum-32-characters!!");
             builder.UseSetting("Jwt:Issuer", "skinora");
             builder.UseSetting("Jwt:Audience", "skinora-client");
@@ -462,6 +545,8 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
 
             builder.ConfigureServices(services =>
             {
+                services.AddSingleton<IStartupFilter, SocketPeerFromHeaderStartupFilter>();
+
                 // --- EF Core — strip SqlServer stack and re-add SQLite ---
                 var efDescriptors = services
                     .Where(d =>

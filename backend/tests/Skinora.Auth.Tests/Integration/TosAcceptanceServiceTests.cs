@@ -21,7 +21,12 @@ public class TosAcceptanceServiceTests : IntegrationTestBase
 
     private TosAcceptanceService CreateSut() => new(Context, _clock);
 
-    private async Task<Guid> CreateUserAsync(bool alreadyAccepted = false)
+    /// <param name="ageConfirmed">
+    /// With <paramref name="alreadyAccepted"/>, also stamp the 18+ attestation.
+    /// <c>false</c> reproduces an acceptance made before T30 added
+    /// <c>AgeConfirmedAt</c> (T166).
+    /// </param>
+    private async Task<Guid> CreateUserAsync(bool alreadyAccepted = false, bool ageConfirmed = true)
     {
         var user = new User
         {
@@ -30,6 +35,7 @@ public class TosAcceptanceServiceTests : IntegrationTestBase
             SteamDisplayName = "Tester",
             TosAcceptedVersion = alreadyAccepted ? "0.9" : null,
             TosAcceptedAt = alreadyAccepted ? DateTime.UtcNow.AddDays(-1) : null,
+            AgeConfirmedAt = alreadyAccepted && ageConfirmed ? DateTime.UtcNow.AddDays(-1) : null,
         };
         Context.Set<User>().Add(user);
         await Context.SaveChangesAsync();
@@ -101,6 +107,23 @@ public class TosAcceptanceServiceTests : IntegrationTestBase
             CreateSut().AcceptAsync(userId, "0.9", ageOver18: true, default));
 
         Assert.Equal("TOS_ALREADY_ACCEPTED", ex.ErrorCode);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task AcceptAsync_SameVersion_WhenAgeStampMissing_CompletesAttestation()
+    {
+        // T166 — "same version" is a duplicate only when the account already
+        // satisfies the whole rule (ToS + 18+). An account with a ToS stamp but
+        // no age stamp is rejected by the server-side gate; re-sending its own
+        // version must complete the attestation instead of answering 409.
+        var userId = await CreateUserAsync(alreadyAccepted: true, ageConfirmed: false);
+
+        await CreateSut().AcceptAsync(userId, "0.9", ageOver18: true, default);
+
+        var user = await Context.Set<User>().AsNoTracking().SingleAsync(u => u.Id == userId);
+        Assert.Equal("0.9", user.TosAcceptedVersion);
+        Assert.NotNull(user.AgeConfirmedAt);
     }
 
     [Fact]

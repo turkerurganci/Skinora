@@ -35,7 +35,10 @@ public sealed class TransactionParamsService : ITransactionParamsService
     public const int DefaultPaymentTimeoutMaxHours = 72;
     public const int DefaultPaymentTimeoutDefaultHours = 24;
 
-    private static readonly string[] _supportedStablecoins = ["USDT", "USDC"];
+    // 11 §F8 K2 (T166) — USDT only. USDC stays a known token for the
+    // wrong-token refund path (AmountValidationService) and for existing
+    // records, but is no longer offered for a new listing.
+    private static readonly string[] _supportedStablecoins = ["USDT"];
 
     private readonly ITransactionLimitsProvider _limitsProvider;
     private readonly IBlockchainNetworkAvailability _networks;

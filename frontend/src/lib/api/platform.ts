@@ -5,7 +5,6 @@ import { apiClient } from "./client";
  */
 export interface PlatformStats {
   totalCompletedTransactions: number;
-  platformUptimePercent: number;
 }
 
 /**

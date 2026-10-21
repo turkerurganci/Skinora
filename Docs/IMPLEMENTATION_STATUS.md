@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T160b ✓ Tamamlandı, doğrulama PASS (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek min(son ölçülen, sabit ayar), alarmlı; T160b_REPORT.md, PR #364) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-21 — T166 ✓ Tamamlandı, doğrulama PASS (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; compose alt ağı sabit; T166_REPORT.md, PR #366) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -368,7 +368,7 @@
 | T163 | İmza sırları Docker secret + çevrimdışı yedek | ⬚ Bekliyor |
 | T164 | Veritabanı yedeği ve geri dönüş planı | ⬚ Bekliyor |
 | T165 | Bildirim kanalları ve dış alarm | ⬚ Bekliyor |
-| T166 | Küçük düzeltmeler (tek PR) | ⬚ Bekliyor |
+| T166 | Küçük düzeltmeler (tek PR) | ✓ Tamamlandı — doğrulama PASS (6/6, 4 × S4; B2 kapanışta düzeltildi): `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
 | T167 | MASAK akışı | ⬚ Bekliyor |
 | T168 | Hukuk metinleri | ⬚ Bekliyor |
 | T169 | Kalan sahip kararları | ⬚ Bekliyor |

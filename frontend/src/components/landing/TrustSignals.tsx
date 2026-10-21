@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { usePlatformStats } from "@/lib/hooks/usePlatformStats";
 import { cn } from "@/lib/utils/cn";
-import { formatNumber, formatPercent } from "@/lib/utils/format";
+import { formatNumber } from "@/lib/utils/format";
 
 export interface TrustSignalsProps {
   className?: string;
@@ -20,8 +20,6 @@ export function TrustSignals({ className }: TrustSignalsProps) {
 
   const formattedCount =
     data !== undefined ? formatNumber(data.totalCompletedTransactions, locale) : null;
-  const formattedUptime =
-    data !== undefined ? formatPercent(data.platformUptimePercent, locale) : null;
 
   return (
     <section
@@ -35,13 +33,14 @@ export function TrustSignals({ className }: TrustSignalsProps) {
         >
           {t("title")}
         </h2>
-        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {/* T166 — the "platform uptime" card is gone: it showed a fixed 99.9
+            configuration constant as if it were a measurement. */}
+        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
           <TrustCard
             label={t("totalTransactions")}
             value={formattedCount}
             loading={data === undefined}
           />
-          <TrustCard label={t("uptime")} value={formattedUptime} loading={data === undefined} />
           <TrustCard label={t("automation.title")} value={t("automation.body")} loading={false} />
         </div>
       </div>

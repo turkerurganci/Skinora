@@ -63,9 +63,10 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
   const [draft] = useState(readWizardDraft);
 
   const [item, setItem] = useState<SteamInventoryItem | null>(draft?.item ?? null);
-  const [stablecoin, setStablecoin] = useState<StablecoinType>(
-    draft?.stablecoin ?? params.supportedStablecoins[0] ?? StablecoinType.USDT,
-  );
+  // T166 (11 §F8 K2) — the token is not a choice any more: always the one
+  // the backend offers (USDT). A draft saved before T166 may still say USDC;
+  // it is deliberately NOT restored, or the create call would be rejected.
+  const stablecoin: StablecoinType = params.supportedStablecoins[0] ?? StablecoinType.USDT;
   const [price, setPrice] = useState(draft?.price ?? "");
   const [paymentTimeoutHours, setPaymentTimeoutHours] = useState(
     draft?.paymentTimeoutHours ?? params.paymentTimeout.defaultHours,
@@ -311,7 +312,6 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
             acceptedNetworks={acceptedNetworks}
             onToggleNetwork={toggleNetwork}
             onChangeItem={() => setStep(1)}
-            onChangeStablecoin={setStablecoin}
             onChangePrice={setPrice}
             onChangeTimeout={setPaymentTimeoutHours}
           />

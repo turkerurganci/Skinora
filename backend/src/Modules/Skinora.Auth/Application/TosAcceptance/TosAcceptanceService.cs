@@ -46,7 +46,13 @@ public sealed class TosAcceptanceService : ITosAcceptanceService
         // is a re-acceptance after a ToS version bump → allowed: the accepted
         // version + timestamp are re-stamped, but the original 18+ attestation
         // (AgeConfirmedAt) is the first-acceptance age gate and is preserved.
-        if (user.TosAcceptedAt is not null
+        //
+        // T166 — "same version" is a duplicate only when the account already
+        // satisfies the whole rule. An account carrying a ToS stamp but no
+        // age stamp (accepted before T30 added AgeConfirmedAt) is rejected by
+        // the server-side gate; it must be able to complete the attestation
+        // with the version it already holds, or it could never get past 409.
+        if (TosAcceptanceRule.IsSatisfied(user.TosAcceptedAt, user.AgeConfirmedAt)
             && string.Equals(user.TosAcceptedVersion, tosVersion, StringComparison.Ordinal))
         {
             throw new DomainException("TOS_ALREADY_ACCEPTED",

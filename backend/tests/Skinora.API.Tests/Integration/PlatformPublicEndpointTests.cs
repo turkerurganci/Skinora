@@ -53,7 +53,7 @@ public sealed class PlatformPublicEndpointTests : IClassFixture<PlatformPublicEn
     // ============================================================
 
     [Fact]
-    public async Task Stats_Anonymous_Returns200_WithUptimeAndZeroCount()
+    public async Task Stats_Anonymous_Returns200_WithZeroCount_AndNoUptimeField()
     {
         var client = _factory.CreateClient();
         var response = await client.GetAsync("/api/v1/platform/stats");
@@ -63,7 +63,8 @@ public sealed class PlatformPublicEndpointTests : IClassFixture<PlatformPublicEn
             .GetProperty("data");
 
         Assert.Equal(0, data.GetProperty("totalCompletedTransactions").GetInt32());
-        Assert.Equal(99.9m, data.GetProperty("platformUptimePercent").GetDecimal());
+        // T166 — the fixed "99.9" uptime constant is gone from the contract.
+        Assert.False(data.TryGetProperty("platformUptimePercent", out _));
     }
 
     [Fact]

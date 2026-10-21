@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.16** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-19 — T157 — admin uçları ağ başına: AD33–AD39 (§9.32–§9.34), AD6/AD7 network; 409/422 kapatma kuralları. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.17** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T166 — ToS+18+ sunucuda zorunlu (403 TOS_NOT_ACCEPTED), yeni ilan yalnız USDT, P1 platformUptimePercent kalktı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -55,7 +55,7 @@ Bugünkü API tek ağlıdır: hiçbir istek ağ taşımaz ve `payment.network` m
 
 | Konu | Hedef sözleşme | Görev |
 |---|---|---|
-| Değer kümesi | `network`: `"TRON"` \| `"ETHEREUM"` (06 §2.25 — enum T145'te kodda). Token alanı (`stablecoin`) yalnız `"USDT"` kabul eder (11 §F8 K2); `"USDC"` → 400 `VALIDATION_ERROR` | T145 ✓ (enum), T166 |
+| Değer kümesi | `network`: `"TRON"` \| `"ETHEREUM"` (06 §2.25 — enum T145'te kodda). Token alanı (`stablecoin`) yalnız `"USDT"` kabul eder (11 §F8 K2); `"USDC"` → 400 `VALIDATION_ERROR` | T145 ✓ (enum), T166 ✓ |
 | Kullanıcı adresleri | §5.3 / §5.4 gövdesi `network` alır; doğrulayıcı ağa göre seçilir (TRON base58check; EVM `0x` + 40 hex, karışık harfte EIP-55 sağlaması zorunlu, tümü küçük harfte gövdede `confirmLowercase: true` zorunlu — yoksa 400 `INVALID_WALLET_ADDRESS`). Cooldown ve `X-ReAuth-Token` ağ başına işler. §5.1 `GET /users/me` yanıtı `wallets: [{ network, type: "PAYOUT" \| "REFUND", address, changedAt }]` döner. **Uygulandı (T146):** `network` verilmezse `TRON` (arayüz ağ seçimini T156'da getirene kadar bugünkü istemci çalışsın diye; tanınmayan değer 400 `VALIDATION_ERROR`) (öneriyle kaydedildi — ⚠); onay kuralı tümü **büyük** harfli adrese de uygulanır — tek harfli girdide sağlama kanıtı yoktur (11 §F8 T145 kararı iv) (öneriyle kaydedildi — ⚠); ayrıntılar §5.3 | T146 ✓ |
 | İlan oluşturma (§7.2) | Gövde `acceptedNetworks: ["TRON", "ETHEREUM"]` taşır (en az bir, tekrarsız). Her ağ için profilde ödeme adresi olmalı; yoksa 422 `SELLER_WALLET_ADDRESS_MISSING` + `details.network`. Ağın ödeme adresi cooldown'daysa 422 `PAYOUT_ADDRESS_COOLDOWN_ACTIVE` + `details.network`. **Uygulandı (T147):** alan verilmezse `["TRON"]` (öneriyle kaydedildi — ⚠); boş liste, tekrar ya da tanınmayan değer 400 `VALIDATION_ERROR`; ağın biçim/yaptırım hatası da `details.network` taşır; servisi olmayan ya da donmuş ağ 503 `NETWORK_UNAVAILABLE` + `details.network` (öneriyle kaydedildi — ⚠) | T147 ✓ |
 | Form parametreleri (§7.4) | `supportedStablecoins: ["USDT"]`; `supportedNetworks`: yeni işlem için açık olan ağlar (sağlık dondurmasındaki ağ listede yer almaz). **`supportedNetworks` uygulandı (T148):** servisi yapılandırılmış ∧ sağlık dondurmasında olmayan ağlar, enum sırasıyla | T148 ✓, T147, T166 |
@@ -152,7 +152,7 @@ Backend: `ApiResponse<T>` generic wrapper + global action filter.
 | 201 | Kaynak oluşturma (POST) — `Location` header ile |
 | 400 | Validation hatası |
 | 401 | Kimlik doğrulama gerekli |
-| 403 | Yetki yok |
+| 403 | Yetki yok — ayrıca `TOS_NOT_ACCEPTED`: hesap Kullanım Şartları + 18+ beyanını kabul etmeden yetkili uçlar reddedilir (T166, §4.4) |
 | 404 | Kaynak bulunamadı |
 | 409 | Conflict (geçersiz state geçişi, duplicate) |
 | 422 | İş kuralı ihlali |
@@ -410,7 +410,9 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 
 **Versiyon davranışı (WP11 — T30 reprompt):** İstenen `tosVersion` kullanıcının kayıtlı `tosAcceptedVersion`'ından **farklıysa** (ilk kabul veya versiyon yükseltme) kabul kaydedilir/güncellenir; `tosAcceptedVersion` + `tosAcceptedAt` yeniden damgalanır, ilk kabuldeki 18+ beyanı (`ageConfirmedAt`) **korunur**. İstenen versiyon **aynı** ise 409 döner (gerçek mükerrer). İstemci, mevcut sürümle eşleşmeyen kabulde re-prompt eder (`tosAcceptedVersion` `/auth/me`'den okunur, §4.5).
 
-**Hatalar:** 409 `TOS_ALREADY_ACCEPTED` (yalnızca **aynı** versiyon yeniden gönderildiğinde), 400 `VALIDATION_ERROR` (ageOver18 false/eksik veya tosVersion eksik)
+**Hatalar:** 409 `TOS_ALREADY_ACCEPTED` (yalnızca **aynı** versiyon yeniden gönderildiğinde **ve** hesap kabul kuralını zaten karşılıyorsa — aşağıya bkz.), 400 `VALIDATION_ERROR` (ageOver18 false/eksik veya tosVersion eksik)
+
+**Sunucu tarafı zorunluluk (T166):** kabul yalnız istemcinin modalına bırakılmaz. Hesap **iki damgayı birden** (`tosAcceptedAt` + `ageConfirmedAt`) taşımadıkça yetki gerektiren her uç 403 `TOS_NOT_ACCEPTED` döner (rolden bağımsız; adminler de Steam hesabıdır). Kapsam dışı: anonim uçlar ve oturum yüzeyi (`/auth/*` — `me`, `tos/accept`, `refresh`, `logout`, `steam/re-verify`, `check-authenticator`), çünkü kabul etmemiş hesap durumunu okuyabilmeli, kabul edebilmeli ve çıkış yapabilmelidir. **Sürüm zorunlu tutulmaz** — yeni sürümde yeniden onay istemcide kalır (WP11); sunucunun yetkili "geçerli sürüm" bilgisi yoktur ve uydurulması iki tarafın ayrıştığı anda tüm hesapları kilitlerdi (öneriyle kaydedildi — ⚠ GÜVENLİK; sürüm kararı T168 ile yeniden ele alınabilir). Yalnız ToS damgası olup 18+ damgası olmayan hesap (T30 öncesi kabul) aynı sürümü yeniden gönderdiğinde 409 değil 200 alır ve beyan tamamlanır — aksi hâlde çıkışı olmayan bir kilit oluşurdu. SignalR hub'ları (§11) MVC dışında olduğu için bu kapının dışındadır; yalnız hesabın kendi işlem/bildirim olaylarını iter ve kapıdan geçmemiş bir hesabın işlemi olamaz.
 
 ### 4.5 A4 — `GET /auth/me`
 
@@ -444,7 +446,7 @@ Set-Cookie: refreshToken=...; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/au
 |-------|----------|
 | `role` | `"user"` veya `"admin"` — routing kararı |
 | `mobileAuthenticatorActive` | İşlem başlatma kontrolü |
-| `tosAccepted` | `false` → ToS modal |
+| `tosAccepted` | `false` → ToS modal. **T166:** `true` yalnız hesap hem ToS'u kabul etmiş hem 18+ beyanını vermişse (§4.4 sunucu kapısıyla aynı kural) — yani `false` tam olarak "yetkili uçlar 403 `TOS_NOT_ACCEPTED` döner" demektir |
 | `tosAcceptedVersion` | Kabul edilen ToS versiyonu (`null` = hiç kabul edilmemiş). İstemci mevcut sürümle karşılaştırır; uyuşmazsa re-prompt (WP11/T30, §4.4) |
 | `isSuspended` | `true` → kısıtlı oturum (SuspendedHeader + S03d), fon-akışı mutation'ları reddedilir (T105a, 02 §14.0, 03 §2.1) |
 | `hasSellerWallet` / `hasRefundWallet` | Kullanıcının **herhangi bir ağda** kayıtlı ödeme / iade adresi var mı (T146 — adresler ağ başına, §5.1 `wallets[]`). Hangi ağın ilanda kullanılabileceği bu bayrakla değil, ağ başına kontrolle belirlenir (T147: §7.2 kabul edilen her ağın adresini ayrı denetler) (öneriyle kaydedildi — ⚠) |
@@ -1070,7 +1072,7 @@ Kişisel veriler temizlenir, işlem geçmişi + AuditLog anonim korunur (03 §10
 | Field | Zorunlu | Açıklama |
 |-------|---------|----------|
 | `itemAssetId` | Evet | Steam asset ID |
-| `stablecoin` | Evet | `USDT` veya `USDC`. **F8 hedefi:** yalnız `USDT` (T166) |
+| `stablecoin` | Evet | Yalnız `USDT` (11 §F8 K2 — **uygulandı, T166**). `USDC` → 400 `VALIDATION_ERROR`; enum değeri yanlış token iadesi ve mevcut kayıtlar için kalır |
 | `acceptedNetworks` *(T147)* | Hayır | İlanın kabul ettiği ağlar: `"TRON"` / `"ETHEREUM"` (büyük/küçük harfe duyarlı enum adı), en az bir, tekrarsız. **Verilmezse `["TRON"]`** — ağ seçen arayüz T156'da gelene kadar bugünkü gövde aynı çalışır (öneriyle kaydedildi — ⚠). Her ağın ödeme adresi profilden okunur ve ilana sabitlenir (06 §3.5b) |
 | `price` | Evet | String, 2 ondalık |
 | `paymentTimeoutHours` | Evet | Admin min-max aralığında |
@@ -1160,12 +1162,12 @@ Uygun değilse `eligible: false` + `reasons: ["CONCURRENT_LIMIT_REACHED"]`. Her 
   "commissionRate": 0.02,
   "paymentTimeout": { "minHours": 6, "maxHours": 72, "defaultHours": 24 },
   "openLinkEnabled": false,
-  "supportedStablecoins": ["USDT", "USDC"],
+  "supportedStablecoins": ["USDT"],
   "supportedNetworks": ["TRON"]
 }
 ```
 
-> **F8 (§1.3):** `supportedNetworks` **uygulandı (T148)** — yeni işlem için açık ağlar: servisi yapılandırılmış ve sağlık dondurmasında olmayan ağlar (05 §3.3a). Ethereum servisi gelince (T150) ve sağlıklıyken `["TRON", "ETHEREUM"]` olur — **T151:** "sağlıklı" Ethereum için servisin `/health`'te `acceptsPayments: true` yayınlaması ve son yoklamanın başarılı olması demektir (ilk yoklamadan önce Ethereum listede yoktur; 05 §3.3a kod düzeyi kapı); bir ağın servisi düşerse o ağ listeden çıkar, diğeri kalır. Alıcının bu ağlardan birini seçmesi T147'de; `supportedStablecoins: ["USDT"]` T166'da.
+> **F8 (§1.3):** `supportedNetworks` **uygulandı (T148)** — yeni işlem için açık ağlar: servisi yapılandırılmış ve sağlık dondurmasında olmayan ağlar (05 §3.3a). Ethereum servisi gelince (T150) ve sağlıklıyken `["TRON", "ETHEREUM"]` olur — **T151:** "sağlıklı" Ethereum için servisin `/health`'te `acceptsPayments: true` yayınlaması ve son yoklamanın başarılı olması demektir (ilk yoklamadan önce Ethereum listede yoktur; 05 §3.3a kod düzeyi kapı); bir ağın servisi düşerse o ağ listeden çıkar, diğeri kalır. Alıcının bu ağlardan birini seçmesi T147'de; `supportedStablecoins: ["USDT"]` **uygulandı (T166)**.
 
 ### 7.5 T5 — `GET /transactions/:id`
 
@@ -2765,10 +2767,11 @@ Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity)
 **Response (200) `data`:**
 ```json
 {
-  "totalCompletedTransactions": 12480,
-  "platformUptimePercent": 99.9
+  "totalCompletedTransactions": 12480
 }
 ```
+
+> **T166:** `platformUptimePercent` kaldırıldı. Ölçüm değil, yapılandırma sabitiydi (`Platform:UptimePercent = 99.9`) ve açılış sayfası onu ölçülmüş bir değer gibi gösteriyordu. Gerçek bir değer heartbeat geçmişi gerektirir (06 §3.23) ve izleme işine (F9 T170) aittir.
 
 ### 10.2 P2 — `GET /platform/maintenance`
 
