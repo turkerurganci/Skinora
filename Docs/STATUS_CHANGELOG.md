@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T161 ✓ Tamamlandı, doğrulama PASS (portlar 127.0.0.1, deneme yayını projesi + Cloudflare tüneli, sidecar iç anahtar zorunlu, `.env.trial` işaret kapısı; T161_REPORT.md, PR #367) **Merge teyidi (T163 dalında işlendi):** T161 (#367) main `d81d91f1` → CI `39607353309` ✓, Docker Publish `39607353298` ✓.
+
 **Önceki güncelleme:** 2026-10-21 — T166 ✓ Tamamlandı, doğrulama PASS (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; compose alt ağı sabit; T166_REPORT.md, PR #366). **Merge teyitleri (T161 dalında işlendi):** T160b (#364) main `2e502e99` → CI `39582270230` ✓, Docker Publish `39582270184` ✓; T166 (#366) main `e7e8acf1` → CI `39600854571` ✓, Docker Publish `39600854541` ✓
 
 **Önceki güncelleme:** 2026-10-21 — T166 ⏳ yapım bitti, doğrulama bekliyor (_diag, ToS/18+ sunucu kapısı, ülke başlığı güveni, uptime, USDC, yaş eşiği; T166_REPORT.md, PR #366)
