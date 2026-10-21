@@ -273,9 +273,9 @@ Yok (repo). Yerel ortam: `escrow_skinora-ethereum-tx-journal` biriminde yeni gö
 ## Commit & PR
 
 - Dal: `task/T159b-sepolia-giden-bacak` (`origin/main` `eb66ffe6`'dan)
-- Commit: rapor + durum + hafıza (kod yok)
-- PR: #PR_NO
-- CI: CI_RESULT
+- Commit: `f5cc3a92` — rapor + durum + hafıza (kod yok); PR numarası + BYPASS_LOG satırı ayrı commit'te
+- PR: #360
+- CI: PR #360 sayfasındaki son koşu (bu satırı ekleyen commit için)
 
 ## Known Limitations / Açık sorular
 
