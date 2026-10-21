@@ -85,9 +85,9 @@ Proje sahibi kararı (2026-10-21, modal): **kiralık sunucu yok.** Deneme yayın
 
 ## Commit & PR
 - Branch: `task/T161-sunucu-sikilastirma`
-- Commit: COMMIT_LINE
-- PR: PR_LINE
-- CI: CI_LINE
+- Commit: `0eac6569` — T161: portlar 127.0.0.1, deneme yayını overlay'i + Cloudflare tüneli, sidecar iç anahtar zorunlu · `af6883f7` — runbook §K, plan, rapor + status + memory · CRLF düzeltmesi (11_F9.md) + bu satır
+- PR: #367 (https://github.com/turkerurganci/Skinora/pull/367)
+- CI: izleniyor (son durum yönetici bildiriminde)
 
 ## Known Limitations / Follow-up
 - **Tünel arkasında gerçek istemci IP'si (T162).** cloudflared → nginx → backend zincirinde `X-Forwarded-For`'un son halkası cloudflared olur; `ForwardLimit=1` ile backend herkesi tek IP görür (rate limit tek kova, geo-block/VPN sinyali etkisiz). T162 kriterine yazıldı: nginx `real_ip_header CF-Connecting-IP` + `set_real_ip_from 172.30.161.0/24`. Tünel bu görevde bağlanmadığı için bugün etkisi yok.
