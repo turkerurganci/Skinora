@@ -139,6 +139,8 @@ describe("support page — MASAK section", () => {
     expect(section).toHaveTextContent("Exchanges in Türkiye and MASAK rules");
     expect(section).toHaveTextContent("48 hours");
     expect(section).toHaveTextContent("3,000 $ a day");
+    expect(section).toHaveTextContent("daily and monthly TOTAL");
+    expect(section).toHaveTextContent("Refunds also come from a Skinora address");
     expect(await screen.findByTestId("payout-source-TRON")).toHaveTextContent(TRON_HOT);
     expect(screen.getByTestId("masak-help-source")).toHaveTextContent(
       "Official Gazette of Türkiye 28.06.2025, issue 32940, article 4",
@@ -160,6 +162,7 @@ describe("MASAK copy — the official figures in every locale", () => {
     expect(buyer.dailyLimit).toMatch(/3[.,]000 \$/);
     expect(buyer.dailyLimit).toMatch(/50[.,]000 \$/);
     expect(buyer.description).toMatch(/20/);
+    expect((messages as typeof en).masak.help.refund).toMatch(/Skinora/);
     expect((messages as typeof en).masak.help.sources).toMatch(/32940/);
   });
 });

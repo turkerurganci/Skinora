@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.18** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T167 — P3 `GET /platform/payout-sources`: ağ başına sabit payout gönderim adresi (MASAK beyanı). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.19** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T167 kapanışı — P3 herkese açık listesine, S07/S08 izlenebilirliğine ve rate limit satırına eklendi. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -100,7 +100,7 @@ PATCH kullanılmaz — MVP için PUT yeterli.
 | Token yenileme | `POST /api/v1/auth/refresh` — cookie'den refresh token okunur |
 | Access token storage | JavaScript belleğinde (memory), cookie'ye yazılmaz |
 
-**Public endpoint'ler (auth gerektirmeyen):** P1, P2, A1, A2, T5 (public varyant), U5.
+**Public endpoint'ler (auth gerektirmeyen):** P1, P2, P3, A1, A2, T5 (public varyant), U5.
 
 ### 2.4 Response Envelope (K4)
 
@@ -252,8 +252,8 @@ X-RateLimit-Reset: 1710600000
 | S03 | — | U17 (A7 otomatik tetiklenir) |
 | S05 | T1, U2, N2 | — |
 | S06 | S1, T3, T4 | T2 |
-| S07 | T5, T5a | T6, T6a, T6b, T7, T8, T9, T10, T11 |
-| S08 | U1 | U3, U4, A5, A6 |
+| S07 | T5, T5a, P3 | T6, T6a, T6b, T7, T8, T9, T10, T11 |
+| S08 | U1, P3 | U3, U4, A5, A6 |
 | S09 | U5 | — |
 | S10 | U6 | U7, U8, U9, U10, U10b, U11, U12, U13, U14, U15, U16, U17 |
 | S11 | N1 | N3, N4 |
@@ -2823,6 +2823,7 @@ Frontend sayfa yüklemesinde P2'yi çağırır. Anlık değişiklikler RT2 ile p
 | Konu | Değer |
 |------|-------|
 | Auth | Public |
+| Rate limit | Public grubu (§2.9: 1 dk'da 30; kodda `[RateLimit("public")]`) |
 | Cache | Yok — adresler dağıtım yapılandırmasıdır (ortam değişkeni, `IPlatformWalletAddressProvider`); istemci 1 sa bayat tutar |
 
 **Response (200) `data`:**

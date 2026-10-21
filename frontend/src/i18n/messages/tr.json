@@ -2260,12 +2260,12 @@
   "masak": {
     "buyer": {
       "title": "Türkiye'deki bir borsadan ödeyecekseniz",
-      "holdInAdvance": "USDT'nin hesabınızda önceden hazır olması gerekir: borsalar, aldığınız ya da yatırdığınız kriptoyu harici bir cüzdana en erken 48 saat sonra gönderir; borsadan ilk çekiminizde bu süre en az 72 saattir. Ödeme süresi bu bekleme süresinden kısaysa yeni alınan USDT zamanında gelmez.",
-      "dailyLimit": "USDT gibi sabit değerli kripto çekimlerinde günlük 3.000 $ ve aylık 50.000 $ sınırı vardır (borsanız bazı durumlarda iki katını uygulayabilir). Gönderilecek tutar bu sınırı aşıyorsa ödemeyi tek seferde bir Türk borsasından gönderemezsiniz.",
+      "holdInAdvance": "USDT'nin hesabınızda önceden hazır olması gerekir: borsalar, aldığınız, takas ettiğiniz ya da yatırdığınız kriptoyu harici bir cüzdana en erken 48 saat sonra gönderir; borsadan ilk çekiminizde bu süre en az 72 saattir. Ödeme süresi bu bekleme süresinden kısaysa yeni alınan USDT zamanında gelmez.",
+      "dailyLimit": "USDT gibi sabit değerli kripto çekimlerinde günlük 3.000 $ ve aylık 50.000 $ sınırı vardır (borsanız bazı durumlarda iki katını uygulayabilir). Sınır tek bir transfere değil günlük ve aylık TOPLAMA uygulanır: aynı gün yaptığınız önceki çekimler kalan payınızı düşürür. Gönderilecek tutar kalan payı aşıyorsa ödemeyi tek seferde bir Türk borsasından gönderemezsiniz.",
       "declare": "Borsanız alıcıyı beyan etmenizi ister: alıcı Skinora'dır, adres bu işlemin ödeme adresidir. Her işlemin ödeme adresi farklıdır — önceki bir işlem için kaydettiğiniz adrese göndermeyin.",
       "description": "Borsanız en az 20 karakterlik bir işlem açıklaması ister; örneğin \"Skinora CS2 eşya satın alma ödemesi\".",
       "source": "Bu kuralları borsanız MASAK düzenlemesi gereği uygular, Skinora değil. Bu bilgi pratik bir özettir, hukuki tavsiye değildir.",
-      "short": "Türkiye'deki bir borsadan ödeyecekseniz USDT'yi şimdiden alın: borsalar yeni alınan ya da yatırılan kriptoyu harici bir cüzdana en erken 48 saat sonra (ilk çekimde 72 saat) gönderir ve USDT çekimlerine günlük 3.000 $ sınırı uygular. Ödeme süresi bu bekleme süresinden kısaysa sonradan alınan USDT zamanında gelmez.",
+      "short": "Türkiye'deki bir borsadan ödeyecekseniz USDT'yi şimdiden alın: borsalar yeni alınan, takas edilen ya da yatırılan kriptoyu harici bir cüzdana en erken 48 saat sonra (ilk çekimde 72 saat) gönderir ve USDT çekimlerine günlük 3.000 $ sınırı uygular. Ödeme süresi bu bekleme süresinden kısaysa sonradan alınan USDT zamanında gelmez.",
       "helpLink": "Ayrıntılar"
     },
     "seller": {
@@ -2279,6 +2279,7 @@
       "buyerHeading": "Alıcıysanız",
       "sellerHeading": "Satıcıysanız",
       "paymentWindow": "Ödeme süresi, satıcının ilanda seçtiği süredir ve işlem sayfasında geri sayım olarak görünür. Borsanızın bekleme süresi bundan uzun olabileceği için USDT'yi işlemi kabul etmeden önce alın.",
+      "refund": "İadeler de Skinora'nın adresinden gelir (işlemin depozit adresi ya da sıcak cüzdan). İade adresiniz bir Türk borsasındaysa borsa sizden gönderici beyanı isteyebilir: gönderici Skinora'dır.",
       "sources": "Kaynak: MASAK Genel Tebliği (Sıra No: 29), Resmî Gazete 28.06.2025, sayı 32940, madde 4; Suç Gelirlerinin Aklanmasının ve Terörün Finansmanının Önlenmesine Dair Tedbirler Hakkında Yönetmelik, madde 24/A."
     }
   }

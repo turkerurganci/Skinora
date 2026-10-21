@@ -1,6 +1,6 @@
 # T167 — MASAK akışı
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-10-21
 
 ---
 
@@ -105,9 +105,11 @@ Aşağıdaki metinler yalnız kayıt içindir; Skinora'nın kapsama girip girmed
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici, ayrı alt ajan) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız doğrulama (Opus high, izole alt ajan), HEAD `422e5570`, 5/5 kabul kriteri |
+| Bulgu sayısı | 6 × S4 (S4-1…S4-6), bloke eden yok. Rapor: `T167_VALIDATION.md` (f9-handoff) |
+| Düzeltme gerekli mi | S4-1/2/3/5/6 kapanışta kapandı; S4-4 T168'e devredildi (aşağıda) |
+
+Kapanış düzeltmeleri: **S4-6** `Docs/STATUS_CHANGELOG.md` satır sonları CRLF'ye geri alındı (yalnız içerik farkı kaldı). **S4-2** bekleme cümlesine "takas ettiğiniz" eklendi (Tebliğ 29 m. 4/3: "alım, takas veya yatırma"), 4 dil. **S4-3** 3.000 $ / 50.000 $ sınırının tek transfere değil günlük/aylık TOPLAMA uygulandığı, aynı gün önceki çekimlerin kalan payı düşürdüğü yazıldı, 4 dil. **S4-5** yardım bölümüne `masak.help.refund` eklendi: iadeler de Skinora adresinden gelir, iade adresi Türk borsasındaysa borsa gönderici beyanı isteyebilir, 4 dil. **S4-1** `07_API_DESIGN.md` v4.19: P3 herkese açık listede, S07/S08 izlenebilirlik satırlarında, §10.3'te rate limit satırı. `origin/main` (T161 #367, `d81d91f1`) merge commit ile dala alındı; 3 belge çakışması (MEMORY, IMPLEMENTATION_STATUS, STATUS_CHANGELOG) iki tarafı koruyarak çözüldü, kod çakışması yoktu.
 
 ## Altyapı Değişiklikleri
 
@@ -133,6 +135,7 @@ Aşağıdaki metinler yalnız kayıt içindir; Skinora'nın kapsama girip girmed
 ## Known Limitations / Follow-up
 
 - **T169 girdisi (sahibe bilgi):** Tebliğ 29 m. 4/4 günlük 3.000 $ sabit değerli kripto çekim sınırı nedeniyle, toplamı (fiyat + komisyon + TRON ağ ücreti) 3.000 $'ı (24/A-1 uygulanırsa 6.000 $) aşan bir satış Türk borsasından tek transferle ödenemez; platform "tam tutarı tek seferde gönderin" kuralını uygular. T169'daki "en yüksek işlem tutarı" kararında dikkate alınmalı. Bu görevde sınır koymadık (karar T169'un).
+- **S4-4 (T168):** DEFERRED_BACKLOG ⚪ `MasakDeclarationEntityDetails` (hedef T168) — şirket unvanı ve adresi netleşince beyan metinlerine eklenecek.
 - **Şirket bilgisi:** 24/A-6 beyanı ad/unvan + bir tanımlayıcı (adres, vergi no vb.) ister. Metinler göndericiyi/alıcıyı "Skinora" olarak verir; şirket unvanı ve tanımlayıcı T168 (hukuk metinleri, şirket bilgisi) sonrasında yardım bölümüne eklenebilir.
 - **TRON servisinde açılış denetimi yok:** Ethereum servisi sıcak anahtarın `ETHEREUM_HOT_WALLET_ADDRESS`'i kontrol ettiğini açılışta doğrular (`checkWalletKeys`); TRON servisi sıcak cüzdan anahtarı ile `HOT_WALLET_ADDRESS` uyumunu denetlemez. Uyuşmazsa işlem `owner_address` ≠ imzacı olduğu için zincirde reddedilir — payout **başka bir adresten çıkmaz**, ama her payout başarısız olur. İsteğe bağlı küçük iş (T171 kurulum günü kontrol listesine ya da backlog'a).
 - **Adres değişimi:** Sıcak cüzdan değişirse (T171 yeni mainnet cüzdanları, anahtar sızıntısı) P3 yeni adresi döner ve metin "borsanızdaki kaydı güncelleyin" der; satıcıya proaktif bildirim yok.

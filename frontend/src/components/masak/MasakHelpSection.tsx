@@ -23,6 +23,7 @@ export function MasakHelpSection() {
           <li>{tBuyer("dailyLimit")}</li>
           <li>{tBuyer("declare")}</li>
           <li>{tBuyer("description")}</li>
+          <li>{tHelp("refund")}</li>
         </ul>
       </div>
       <div>

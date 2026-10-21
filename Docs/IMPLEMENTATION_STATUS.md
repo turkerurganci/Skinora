@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T167 ⏳ yapım bitti, doğrulama bekliyor (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-21 — T167 ✓ Tamamlandı, doğrulama PASS (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -369,7 +369,7 @@
 | T164 | Veritabanı yedeği ve geri dönüş planı | ⬚ Bekliyor |
 | T165 | Bildirim kanalları ve dış alarm | ⬚ Bekliyor |
 | T166 | Küçük düzeltmeler (tek PR) | ✓ Tamamlandı — doğrulama PASS (6/6, 4 × S4; B2 kapanışta düzeltildi): `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
-| T167 | MASAK akışı | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor ([rapor](TASK_REPORTS/T167_REPORT.md), PR [#368](https://github.com/turkerurganci/Skinora/pull/368)) |
+| T167 | MASAK akışı | ✓ Tamamlandı — doğrulama PASS (5/5, 6 × S4; bağımsız doğrulama Opus high, HEAD `422e5570`; S4-1/2/3/5/6 kapanışta kapandı, S4-4 T168'e): Tebliğ 29 notları ödeme ekranlarında ve yardımda, P3 payout gönderim adresi, payout tek adres + depozit işlem başına kodda ölçüldü ([rapor](TASK_REPORTS/T167_REPORT.md), PR [#368](https://github.com/turkerurganci/Skinora/pull/368)) |
 | T168 | Hukuk metinleri | ⬚ Bekliyor |
 | T169 | Kalan sahip kararları | ⬚ Bekliyor |
 | T170 | İzleme | ⬚ Bekliyor |

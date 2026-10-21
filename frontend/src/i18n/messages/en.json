@@ -2260,12 +2260,12 @@
   "masak": {
     "buyer": {
       "title": "Paying from an exchange in Türkiye?",
-      "holdInAdvance": "Have the USDT in your account in advance: exchanges send crypto you bought or deposited to an external wallet no earlier than 48 hours later, and at least 72 hours later on your first withdrawal from the exchange. If the payment window is shorter than this wait, newly bought USDT will not arrive in time.",
-      "dailyLimit": "Withdrawals of stable-value crypto such as USDT are limited to 3,000 $ a day and 50,000 $ a month (your exchange may apply double in some cases). If the amount to send is above this limit, you cannot send the payment in one transfer from a Turkish exchange.",
+      "holdInAdvance": "Have the USDT in your account in advance: exchanges send crypto you bought, swapped or deposited to an external wallet no earlier than 48 hours later, and at least 72 hours later on your first withdrawal from the exchange. If the payment window is shorter than this wait, newly bought USDT will not arrive in time.",
+      "dailyLimit": "Withdrawals of stable-value crypto such as USDT are limited to 3,000 $ a day and 50,000 $ a month (your exchange may apply double in some cases). The limit applies to the daily and monthly TOTAL, not to a single transfer: withdrawals you already made the same day reduce your remaining allowance. If the amount to send is above what is left, you cannot send the payment in one transfer from a Turkish exchange.",
       "declare": "Your exchange asks you to declare the recipient: the recipient is Skinora, the address is this transaction's payment address. Every transaction has a different payment address — do not send to an address you saved for an earlier transaction.",
       "description": "Your exchange asks for a transaction description of at least 20 characters, for example \"Skinora CS2 item purchase payment\".",
       "source": "Your exchange applies these rules under MASAK regulation, not Skinora. This is a practical summary, not legal advice.",
-      "short": "Paying from an exchange in Türkiye? Buy the USDT now: exchanges send newly bought or deposited crypto to an external wallet no earlier than 48 hours later (72 hours on the first withdrawal) and limit USDT withdrawals to 3,000 $ a day. If the payment window is shorter than this wait, USDT bought later will not arrive in time.",
+      "short": "Paying from an exchange in Türkiye? Buy the USDT now: exchanges send newly bought, swapped or deposited crypto to an external wallet no earlier than 48 hours later (72 hours on the first withdrawal) and limit USDT withdrawals to 3,000 $ a day. If the payment window is shorter than this wait, USDT bought later will not arrive in time.",
       "helpLink": "Details"
     },
     "seller": {
@@ -2279,6 +2279,7 @@
       "buyerHeading": "If you are the buyer",
       "sellerHeading": "If you are the seller",
       "paymentWindow": "The payment window is the time the seller chose in the listing and shows as a countdown on the transaction page. Your exchange's wait can be longer, so buy the USDT before you accept the transaction.",
+      "refund": "Refunds also come from a Skinora address (the transaction's deposit address or the hot wallet). If your refund address is at a Turkish exchange, the exchange may ask you for a sender declaration: the sender is Skinora.",
       "sources": "Source: MASAK General Communiqué (No. 29), Official Gazette of Türkiye 28.06.2025, issue 32940, article 4; Regulation on Measures Regarding Prevention of Laundering Proceeds of Crime and Financing of Terrorism, article 24/A."
     }
   }
