@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.33** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T169 — §8.6 şifreleme: şimdilik BitLocker + şifreli makine dışı yedek, ücretli SQL Server'da TDE. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.34** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T165: §9.3 para alarmı kategorisi (Telegram + e-posta), §9.5 dış izleme (heartbeat + UptimeRobot) ve açık sağlık ucu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -963,13 +963,16 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 | Bileşen | Karar |
 |---|---|
 | Araç | **Grafana Alerting** |
-| Kanal | Telegram bot (admin'e) |
+| Kanal | Telegram bot (operatörün sohbetine; backend'in kullanıcı bildirimleriyle aynı bot — T165) + e-posta (Grafana SMTP → Resend SMTP, T165) |
 
 | Seviye | Koşul | Aksiyon |
 |---|---|---|
+| **Para alarmı** (T165, etiket `category: money`, önem derecesinden bağımsız) | Zincir / sağlayıcı / sweep / payout / iade arızaları, onay kapısında bekleyen ödeme-iade (T169), sıcak cüzdan limiti ve yakıt, ücret kesintisi yedeği, backend'in para ile ilgili admin olayları | **Telegram + Email birlikte**, sürdükçe 4 sa'te bir hatırlatma (DEPLOY_RUNBOOK §P.4) |
 | Critical | Servis down, DB bağlantısı koptu, blockchain/Steam erişilemiyor | Anında Telegram + Email |
 | Warning | Hata oranı yükseldi, yanıt süresi arttı, disk %80+, job queue birikiyor | Telegram |
 | Info | Günlük özet, deployment tamamlandı | Sadece log |
+
+Para ile ilgili backend admin bildirimleri ayrıca her admin'in panel gelen kutusuna ve admin'in kendi bağladığı e-posta / Telegram kanalına gider (05 §7). Kanal sağlayıcısı seçili ama sırrı eksik olan kanal kapalı gibi davranır ve `notification-channel-misconfigured` alarmı verir (T165).
 
 ### 9.4 Hata Takibi
 
@@ -984,8 +987,9 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 
 | Bileşen | Karar |
 |---|---|
-| Dış monitoring | **Uptime Kuma** (self-hosted) — HTTP/TCP check, bildirim entegrasyonları |
-| İç monitoring | `/health` endpoint — DB, Redis, Steam API, Tron node bağlantılarını kontrol eder |
+| Dış monitoring (T165) | **Healthchecks.io** heartbeat — bu makineden dakikada bir ping (`skinora-heartbeat`, ping yalnız site sağlıklıyken); ping durursa e-posta + Telegram. **UptimeRobot** — dışarıdan `https://<alan-adı>/api/health` (tünel/DNS yolu). İkisi de ücretsiz plan; seçim ve kurulum DEPLOY_RUNBOOK §P.5 |
+| Herkese açık sağlık ucu (T165) | `/api/health` (nginx `/health`'i de buna yönlendirir) — yalnız `{"status": …}`, DB + Redis; kontrol adı / hata metni yok |
+| İç monitoring | **Uptime Kuma** (self-hosted, aynı makine — makine düşünce o da düşer) ve ayrıntılı `/health` (yalnız compose ağı içinden) — DB, Redis bağlantılarını kontrol eder |
 
 ### 9.6 Maliyet
 
