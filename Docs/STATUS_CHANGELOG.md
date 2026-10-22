@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T168 ⏳ yapım bitti, doğrulama bekliyor (hukuk metinleri 4 dil, şirket alanları işaretli + taslak etiketi kalır, kabul etmeyen hesap kendini silebilir; T168_REPORT.md)
+
 **Önceki güncelleme:** 2026-10-21 — T167 ✓ Tamamlandı, doğrulama PASS (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368). **Merge teyidi (T168 dalında işlendi):** T167 (#368) main `daf0e301` → CI `39615975640` ✓, Docker Publish `39615975624` ✓.
 
 **Önceki güncelleme:** 2026-10-21 — T167 ⏳ yapım bitti, doğrulama bekliyor (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368)

@@ -1,6 +1,6 @@
 # T168 — Hukuk metinleri
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor | **Tarih:** 2026-10-21 (düzeltme turu 2026-10-22)
 
 ---
 
@@ -58,9 +58,9 @@ Kriterler `plan/11_F9.md` v1.21 (sahip kararıyla uyarlanmış metin).
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici düzeni — ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | 1. tur ✗ FAIL (HEAD `9ce1f5f3`, 2026-10-22) → düzeltme turu yapıldı, yeniden doğrulama bekliyor |
+| Bulgu sayısı | 3 × S1 ⚠ HUKUK (B1–B3) + 6 × S4 |
+| Düzeltme gerekli mi | Evet — aşağıda "Düzeltme turu" |
 
 ## Altyapı Değişiklikleri
 
@@ -73,8 +73,11 @@ Kriterler `plan/11_F9.md` v1.21 (sahip kararıyla uyarlanmış metin).
 - Branch: `task/T168-hukuk-metinleri`
 - Commit: `f84195a0` — T168: Şartları kabul etmemiş hesap kendini kapatabilir/silebilir (ToS kapısı muafiyeti, KVKK silme hakkı)
 - Commit: `5f1012a0` — T168: Hukuk metinleri — kullanım şartları, gizlilik/KVKK aydınlatma, destek (4 dil)
+- Commit: `9ce1f5f3` — T168: Yapım raporu (T168_REPORT.md)
+- Commit (düzeltme turu): `7aafbf01` — T168: Düzeltme turu — yeniden onayda kapat/sil yolu, giriş kayıtları 1 yıl, iptal/iade metni
 - PR: #370
-- CI: ✓ PASS — run `39622520437` (kod HEAD `5f1012a0`); rapor commit'inin run'ı aşağıda son satırda
+- CI (1. tur): ✓ PASS — run `39625283885` (HEAD `9ce1f5f3`)
+- CI (düzeltme turu): rapor commit'inin run'ı PR'da izlenir (yönetici/doğrulayıcı `gh run list --branch task/T168-hukuk-metinleri`)
 
 ## Doldurulmayı bekleyen işletmeci alanları
 
@@ -93,7 +96,7 @@ Doldururken ayrıca: `LEGAL_TEXT_DATE` güncellenir; sözleşme esaslı değişt
 ## ⚠ Kararlar (öneriyle kaydedildi — faz sonu listesine)
 
 1. **⚠ GÜVENLİK/HUKUK — ToS muafiyeti yalnız U13/U14 (öneriyle kaydedildi — ⚠).** Kapı uç başına açıldı, controller düzeyinde değil; diğer `/users/me` uçları 403'te (testle).
-2. **⚠ GÜVENLİK — "Şartları kabul etmiyorum" yalnız ilk kabulde (öneriyle kaydedildi — ⚠).** Daha önce kabul etmiş ve sürüm artışında yeniden sorulan hesap ayarlara zaten ulaşıyor (sürüm sunucuda zorunlu değil).
+2. ~~⚠ GÜVENLİK — "Şartları kabul etmiyorum" yalnız ilk kabulde.~~ **Düzeltme turunda geri alındı (doğrulama B3):** gerekçe yanlıştı — yeniden onay penceresi tam ekran ve `/settings`'i de örtüyor. Seçenek artık iki modda da var.
 3. **⚠ GÜVENLİK — ToS sürümü şimdi artırılmadı (öneriyle kaydedildi — ⚠).** Gerçek kullanıcı yok (deneme yayını); sürüm, taslak etiketi kalktığında (şirket bilgisi) artırılır. 07 §4.4'e yazıldı.
 4. **⚠ HUKUK — İşletmeci kaydı kodda bir TypeScript sabiti, ortam değişkeni değil (öneriyle kaydedildi — ⚠).** Hukuk metni değişikliği commit ve inceleme gerektirmeli; `NEXT_PUBLIC_*` zaten derleme anında gömülüyor, env'in esneklik avantajı yok.
 5. **⚠ HUKUK — Gerekli alanlar: unvan, adres, vergi dairesi, vergi no, mahkeme yeri; MERSİS ve KEP isteğe bağlı (öneriyle kaydedildi — ⚠)** — şahıs işletmesinde ikisi yok.
@@ -116,10 +119,79 @@ Doldururken ayrıca: `LEGAL_TEXT_DATE` güncellenir; sözleşme esaslı değişt
 4. **Uygulanacak hukuk ve mahkeme.** Türk hukuku + işletmeci merkezinin mahkemeleri; tüketici hakem heyeti/mahkemesi hakkı saklı. Yabancı kullanıcılar için ayrı bir hüküm istenir mi?
 5. **7518 / SPK.** Metinlerde Skinora'nın lisanslı olduğu ya da lisans gerekmediği yazılmadı (test: 4 dilde "lisanslı/licensed/licenciad/持牌" yok). T167'nin "saklama hizmeti / platform tanımı Skinora'ya uygulanır mı" sorusu T175 öncesi hukukçuya sorulacak.
 6. **Yurt dışına aktarımın hukuki dayanağı** (KVKK yurt dışı aktarım kuralları; sağlayıcılarla sözleşme) hukukçuya sorulacak — metin bugün yalnız aktarımın olduğunu söylüyor.
+7. **Giriş kayıtlarının hukuki dayanağı (düzeltme turu).** Metin "güvenlik ve dolandırıcılık tespiti için 1 yıl" diyor, kanun atfı yok. 5651 sayılı Kanun'daki trafik bilgisi saklama yükümlülüğünün Skinora'ya uygulanıp uygulanmadığı (yer sağlayıcı mı?) hukukçuya sorulacak; uygulanıyorsa süre ve atıf eklenir.
+8. **02 §7 iptal cooldown'u (düzeltme turu).** Ürün belgesi her ödeme sonrası satıcı iptalinde "itibar cezası ve cooldown" diyor; kod cooldown'u yalnız pencere içindeki sorumlu iptal sayısı `cancel_limit_count`'u aşınca uygular (`CancelCooldownEvaluator`). Hukuk metni bugün kodu anlatıyor; 02 §7 değiştirilmedi. Hangisi doğru?
+
+## Düzeltme turu (2026-10-22)
+
+Bağımsız doğrulama ✗ FAIL verdi (HEAD `9ce1f5f3`; 3 × S1 ⚠ HUKUK + 6 × S4).
+
+**Ön kontroller:** working tree temiz, HEAD `9ce1f5f3` = `origin/task/T168-hukuk-metinleri`. `origin/main` hâlâ `daf0e301` (dalın tabanı) — merge gerekmedi. Main CI son 3 run: `39615975640` ✓, `39615975624` ✓, `39607353298` ✓. Docker kullanılmadı.
+
+### B1 — Teslimat süresi 12 sa ↔ ayar 60 dk (⚠ HUKUK) — T169'a bağımlı
+
+- **Bu dalda ayar değiştirilmedi** (yönetici talimatı): paralel T169 dalı seed/migration, `.env.example`, deneme yayını env'i ve DEPLOY_RUNBOOK örneğini 720 dk'ya çekiyor (sahip kararı listesi "teslimat süresi 720 dk ⚠"). **T168, T169'dan SONRA birleştirilmeli**; aksi hâlde metin ile davranış ayrışır.
+- **Metni ayardan okumak yapılmadı.** `delivery_timeout_minutes`'ı ön yüze veren herkese açık bir uç yok (`grep delivery_timeout frontend/src` → 0; ayar yalnız `SystemSettingsCatalog`/seed ve teslimat süresi hattında okunuyor). Okumak için yeni anonim bir uç ve hukuk sayfalarının istemcide veri çekmesi gerekirdi; ucuz değil, ayrıca sözleşme metnini çalışan bir ayara bağlamak (admin değiştirince sözleşme sessizce değişir) istenen bir şey değil. Metin sabit "12 saat" kalır; `legal.test.tsx` "delivery window 12 hours" testi bekçidir.
+- 02 §22 notunda süre, ayarın T169'da 720 dk olacağıyla birlikte yazıldı (S4-5 ile aynı satır).
+
+### B2 — Silmede giriş kayıtları (⚠ HUKUK, KVKK aydınlatma)
+
+Kod ölçüldü:
+- `backend/src/Modules/Skinora.Users/Application/Account/AccountLifecycleService.cs:100`: "TransactionHistory / AuditLog / UserLoginLog rows are untouched".
+- Silinen/anonimleşen: `AnonymizeUserInPlace` (Steam ID, ad, foto, e-posta, trade URL…), `UserWalletAddress` satırları silinir, bildirim kanalları maskelenir, refresh token satırlarında `DeviceInfo` ve `IpAddress` null'lanır (`backend/src/Modules/Skinora.Auth/Application/Session/AuthAccountAnonymizer.cs:73-74`).
+- `UserLoginLog` (`backend/src/Modules/Skinora.Users/Domain/Entities/UserLoginLog.cs:13-22`): `IpAddress`, `UserAgent`, `HasVpnSignal` (Tor çıkış düğümü sinyali), `CreatedAt`. **`DeviceFingerprint` sütunu var ama hiçbir kod yazmıyor** (`backend/src/Modules/Skinora.Auth/Application/SteamAuthentication/LoginAuditService.cs:22-28` yalnız IP, UserAgent, VPN sinyali yazar; `grep DeviceFingerprint backend/src` → yalnız okuyan `MultiAccountDetector`) — bu yüzden metin "cihaz parmak izi" demiyor.
+- Süre: `retention.user_login_log_days` = 365 (`backend/src/Modules/Skinora.Platform/Infrastructure/Persistence/SystemSettingSeed.cs:115`; `backend/src/Skinora.API/Retention/UserLoginLogRetentionCleanupJob.cs:32-35` varsayılan 365); job `CreatedAt` eşiğine göre hard delete eder (aynı dosya :58-77), kayıtlı (`RetentionJobsRegistrar.cs:64`). Amaç: 06 §1 "IP / cihaz parmak izi kaydı (çoklu hesap tespiti)", 06 §8 "Fraud tespiti yeterli periyodu"; okuyan `MultiAccountDetector`.
+- `AuditLog.IpAddress` yalnız admin eylemlerinde dolu (`SystemSettingsService`, `AdminMaintenanceService`, `AdminUserSuspensionService`, `OutboundRowClosureService`; kullanıcı kaynaklı yazımlar `IpAddress: null`) — kullanıcı metnine girmedi.
+
+Metin (4 dil, `legal.privacy.sections.dataRetention` + `yourRights`):
+- Silme maddesi: "…bildirim kanallarınız ve **oturum kayıtlarınızdaki cihaz ve IP bilgisi** silinir ya da anonimleştirilir" (önce "oturum kayıtlarınız (cihaz ve IP bilgisi dahil)" diyordu ve giriş kayıtlarını da kapsıyor gibi okunuyordu).
+- Yeni madde: "Giriş kayıtları (her girişin zamanı, IP adresi, tarayıcı bilgisi ve IP adresinden üretilen güvenlik sinyali) hesap güvenliği, çoklu hesap ve dolandırıcılık tespiti için kayıt tarihinden itibaren 1 yıl saklanır, sonra kalıcı olarak silinir. Hesabınızı sildiğinizde bu kayıtlar hemen silinmez; anonim hesaba bağlı olarak bu süre dolana kadar kalır."
+- "Haklarınız" > silme hakkının sınırı: "…giriş kayıtları 1 yıllık süreleri dolana kadar kalır".
+- Onay penceresindeki reddetme açıklaması (`auth.tos.decline.description`): "silmede kişisel verileriniz silinir" → "Gizlilik Politikası'nda yazdığı gibi silinir ya da anonimleştirilir".
+- **Hukuki dayanak yazılmadı.** 5651 sayılı Kanun'un trafik bilgisi saklama yükümlülüğü yer/erişim sağlayıcılara yöneliktir; Skinora'nın bu sıfatı taşıyıp taşımadığı hukuki bir nitelendirmedir, resmî metinden okunacak bir olgu değil. Metin amaç + süre söyler; hukuki sebep "Amaçlar ve hukuki sebepler" bölümündeki meşru menfaat (dolandırıcılığın önlenmesi, güvenlik) ile zaten kapsanıyor. Sahip sorusu 7.
+- Test: `legal.test.tsx` "privacy — retention matches AccountLifecycleService + the login-log retention job" (2 test).
+
+### B3 — Yeniden onay penceresinden çıkış yok (⚠ HUKUK)
+
+- `frontend/src/components/auth/TosRepromptGate.tsx`: `declineSlot` artık iki modda da veriliyor (`<AccountManagementSection />`); önceki `mode === "first" ? … : undefined` kalktı, yorum gerekçeyi yazıyor (pencere tam ekran, `/settings` uyuyan rota değil; sunucu U13/U14'ü ilk kabulde muafiyetle, yeniden onayda sürüm zorunlu olmadığı için kabul eder). `TosModal.tsx` prop açıklaması güncellendi.
+- Metin: sözleşme "Askıya alma…" maddesi "Şartları **ya da güncellenmiş bir sürümünü** kabul etmeden de…" (4 dil).
+- 07 §4.4 (v4.21) ve 02 §19 satırı (v4.19) buna göre güncellendi.
+- Test: `TosRepromptGate.test.tsx` — eski "re-prompt: no decline path" testi (yalnız düğmenin yokluğunu ölçüyordu) yerine "re-prompt (new version): the modal blocks /settings, so declining offers closure and deletion here too": yol `/en/settings`, hesap `0.9` sürümünde → yeniden onay başlığı, "kabul etmiyorum" → panelde kapat + sil → kapat onayı → `deactivateAccount` çağrıldı, `/en`'e yönlendi, `acceptTos` çağrılmadı.
+- **Bozma:** `declineSlot` yeniden `mode === "first" ? … : undefined` yapıldı → bu test kırmızı (1 failed / 10 passed); geri alındı.
+- Sunucu değişmedi. E2E: ToS penceresi / hesap silme için mevcut Playwright senaryosu yok; eklenmedi (vitest + bozma kanıtı).
+
+### S4 bulguları
+
+| # | Bulgu | Durum | Değişiklik |
+|---|---|---|---|
+| S4-1 | İptal: tek iptalde "yeni işlem açma yasağı" (kod: yasak yalnız `cancel_limit_count` aşılınca) | ✓ kapandı | `terms.cancellation`: "…para alıcıya iade edilir ve satıcının itibarı düşer." (yasak bir sonraki maddede: "kısa sürede çok sayıda iptal") — 4 dil; test `legal.test.tsx` S4-1/S4-2 |
+| S4-2 | İadeler: "düşülen ücret bildirimde gösterilir" (kabul edilmiş ödemenin iade bildirimi ücret taşımıyor) | ✓ kapandı | `terms.refunds`: "Düşülen ücret işlem sayfasında, reddedilen ödemelerin iadesinde ayrıca bildirimde gösterilir." — 4 dil |
+| S4-3 | "Mainnet şirket bilgisini bekler" T171/T173/T175'e yansımamış | ✓ kapandı | `plan/11_F9.md` v1.22: T173 kriterine "başlamadan önce işletmeci bilgisi dolu (`isOperatorInfoComplete()` doğru, taslak etiketi yok, `NEXT_PUBLIC_TOS_VERSION` artırıldı)", T175'e "hukuk metinlerinde taslak etiketi yok"; DOC_CHANGELOG |
+| S4-4 | Callback sayfasındaki `declineSlot` testsiz | ✓ kapandı | `auth/callback/page.test.tsx` yeni test: `status=new_user` → "kabul etmiyorum" → sil (`SİL`) → `deleteAccount("SİL")`, `/tr`'ye yönlendi, panele gitmedi. Bozma: `declineSlot` satırı silindi → 1 kırmızı; geri alındı |
+| S4-5 | 02 §22 notu "teslimat 12 sa (§9.2)" yanlış atıf | ✓ kapandı | 02 v4.19: "(proje sahibi kararı 2026-10-04, `plan/11_F9.md`; ayar `delivery_timeout_minutes` = 720 — T169)" |
+| S4-6 | Metin esaslı değişti ama `NEXT_PUBLIC_TOS_VERSION` 1.0 | bilinen sınırlama | B3 düzeldiği için sürüm artışı artık güvenli (yeni sürümü reddeden hesabın çıkışı var). Gerçek kullanıcı yok; sürüm işletmeci bilgisiyle birlikte artırılır — artık T173 kriterinde yazılı (S4-3) |
+
+**Kapanmayan, bilinen:** 02 §7 iptal tablosu ile kod arasındaki cooldown farkı (sahip sorusu 8).
+
+### Bu turun testleri
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Frontend lint | ✓ çıkış 0 | `npm run lint` |
+| Frontend tsc | ✓ çıkış 0 | `npx tsc --noEmit -p .` |
+| Frontend i18n | ✓ 1653 × 4 eşit (20 advisory, hepsi T168 öncesi) | `npm run i18n:check` |
+| Frontend prettier | ✓ değişen dosyalar | `npx prettier --check <değişen dosyalar>` |
+| Frontend vitest | ✓ 45 dosya, 443/443 (önceki 438 + 5 yeni test) | `npx vitest run` |
+| Frontend build | ✓ | `npm run build` |
+| Hedefli | ✓ `TosRepromptGate.test.tsx` 11/11, `callback/page.test.tsx` 14/14, `components/legal` 29/29 | `npx vitest run <dosya>` |
+| Bozma | ✓ B3 → 1 kırmızı, S4-4 → 1 kırmızı (ikisi de geri alındı) | yukarıda |
+| Backend | dokunulmadı | — |
 
 ## Known Limitations / Follow-up
 
-- **Teslimat süresi ayarı:** `delivery_timeout_minutes` seed'de `Unconfigured` (DEPLOY_RUNBOOK §A #6). Metin "12 saat" diyor; kurulumda (T169/T171) değer 720 dakika girilmeli, yoksa metin ile davranış ayrışır.
+- **Teslimat süresi ayarı — T169'a bağımlı (doğrulama B1):** metin "12 saat" diyor; ayar `delivery_timeout_minutes` seed'de `Unconfigured`, `.env.example` ve deneme yayını bugün 60 dk. Ayarı 720 dk'ya T169 dalı çekiyor (sahip kararı listesi "teslimat süresi 720 dk ⚠"); **T168, T169'dan sonra birleştirilmeli**. Ayrıntı "Düzeltme turu" B1.
+- **Giriş kaydı saklama süresi metinde sabit "1 yıl"** (`retention.user_login_log_days` varsayılanı 365, admin ayarı). Ayar değişirse gizlilik metni de değişmeli. `UserLoginLog.DeviceFingerprint` bugün yazılmıyor; yazılmaya başlanırsa metne eklenmeli.
+- **Paralel dal çakışması:** `plan/11_F9.md` (v1.22), 02 (v4.19), 07 (v4.21) başlıkları ve DOC_CHANGELOG bu turda değişti; T169 da aynı belgelere dokunursa birleştirmede başlık satırı çakışır (iki tarafı koruyarak sürüm sırayla artırılır).
 - **HTTPS cümlesi** (gizlilik "Güvenlik") deneme yayınında tünel/T162 ile doğru olur.
 - **Hukukçu incelemesi yok** (sahip kararı 2026-10-04, risk kabul edildi). ES ve ZH çevirileri EN'den bir alt ajanla yapıldı, TR ile yapı testi geçiyor; anadili konuşan bir okuma yapılmadı.
 - **T160c** (iade kesinti kalıntısının toplanması) bekliyor; metin kalıntının nereye gittiğini söylemiyor, T160c sonrası değişmesi gerekmez.

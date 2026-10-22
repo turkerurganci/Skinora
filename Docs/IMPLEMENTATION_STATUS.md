@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-21 — T168 ⏳ yapım bitti, doğrulama bekliyor (hukuk metinleri 4 dil, şirket alanları işaretli + taslak etiketi kalır, kabul etmeyen hesap kendini silebilir; T168_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-22 — T168 ⏳ düzeltme turu, yeniden doğrulama bekliyor (doğrulama FAIL: 3 × S1 ⚠ HUKUK + 6 × S4 → B2/B3 + 5 S4 kapandı, B1 T169'a bağımlı; T168_REPORT.md, PR #370) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -370,7 +370,7 @@
 | T165 | Bildirim kanalları ve dış alarm | ⬚ Bekliyor |
 | T166 | Küçük düzeltmeler (tek PR) | ✓ Tamamlandı — doğrulama PASS (6/6, 4 × S4; B2 kapanışta düzeltildi): `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
 | T167 | MASAK akışı | ✓ Tamamlandı — doğrulama PASS (5/5, 6 × S4; bağımsız doğrulama Opus high, HEAD `422e5570`; S4-1/2/3/5/6 kapanışta kapandı, S4-4 T168'e): Tebliğ 29 notları ödeme ekranlarında ve yardımda, P3 payout gönderim adresi, payout tek adres + depozit işlem başına kodda ölçüldü ([rapor](TASK_REPORTS/T167_REPORT.md), PR [#368](https://github.com/turkerurganci/Skinora/pull/368)) |
-| T168 | Hukuk metinleri | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor: Kullanıcı Sözleşmesi + Gizlilik/KVKK aydınlatma + destek metinleri 4 dilde (TR esas), işletmeci alanları tek kayıtta boş ve "şirket bilgisi eklenecek" işaretli, taslak etiketi şirket bilgisine kadar kalır (sahip kararı 2026-10-21); destek alanı `skinora.com`; ToS'u kabul etmemiş hesap kendini kapatıp silebilir ([rapor](TASK_REPORTS/T168_REPORT.md)) |
+| T168 | Hukuk metinleri | ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor (doğrulama FAIL HEAD `9ce1f5f3`: B1 teslimat 12 sa ↔ ayar 60 dk → T169'a bağımlı, T169'dan sonra birleşir; B2 giriş kayıtları 1 yıl metne yazıldı; B3 yeniden onay penceresine kapat/sil yolu): Kullanıcı Sözleşmesi + Gizlilik/KVKK aydınlatma + destek metinleri 4 dilde (TR esas), işletmeci alanları tek kayıtta boş ve "şirket bilgisi eklenecek" işaretli, taslak etiketi şirket bilgisine kadar kalır (sahip kararı 2026-10-21); destek alanı `skinora.com`; ToS'u kabul etmemiş hesap kendini kapatıp silebilir ([rapor](TASK_REPORTS/T168_REPORT.md)) |
 | T169 | Kalan sahip kararları | ⬚ Bekliyor |
 | T170 | İzleme | ⬚ Bekliyor |
 | T171 | Kurulum günü | ⬚ Bekliyor |
