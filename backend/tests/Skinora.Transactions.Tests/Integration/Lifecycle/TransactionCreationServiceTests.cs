@@ -78,6 +78,10 @@ public class TransactionCreationServiceTests : IntegrationTestBase
         await context.ConfigureSettingAsync(TransactionLimitsProvider.CommissionRateKey, "0.02");
         await context.ConfigureSettingAsync(TransactionLimitsProvider.OpenLinkEnabledKey, "false");
         await context.ConfigureSettingAsync(FraudPreCheckService.DeviationThresholdKey, "0.20");
+        // T169 — the TRON minimum (seeded 50) is lowered to the general minimum
+        // so the price/rounding tests below keep listing cheap TRON sales; the
+        // TRON-minimum tests raise it back to the seeded value themselves.
+        await context.ConfigureSettingAsync(TronMinimumKey, "10");
 
         _clock = new FakeTimeProvider(new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero));
         _inventory = new FakeSteamInventoryReader();
@@ -896,6 +900,85 @@ public class TransactionCreationServiceTests : IntegrationTestBase
 
     private CreateTransactionRequest RequestFor(params string[] networks) =>
         ValidRequest() with { AcceptedNetworks = networks };
+
+    // ---- T169 — no TRON below its own minimum (proje sahibi kararı 2026-10-21) ----
+
+    private const string TronMinimumKey = "blockchain.tron.min_transaction_amount_usdt";
+
+    [Theory]
+    [InlineData("49.99")]
+    [InlineData("10.00")]
+    public async Task T169_A_Tron_Listing_Below_The_Tron_Minimum_Is_Refused_Naming_Network_And_Minimum(string price)
+    {
+        await Context.ConfigureSettingAsync(TronMinimumKey, "50");
+        _marketPrice.Price = decimal.Parse(price, System.Globalization.CultureInfo.InvariantCulture);
+
+        var outcome = await BuildSut().CreateAsync(
+            _seller.Id, RequestFor("TRON") with { Price = price }, CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.NetworkMinAmountNotMet, outcome.Status);
+        Assert.Equal(TransactionErrorCodes.NetworkMinAmountNotMet, outcome.ErrorCode);
+        Assert.Equal("TRON", NetworkOf(outcome.ErrorDetails));
+        Assert.Equal("50.00", outcome.ErrorDetails?.GetType().GetProperty("minAmount")?.GetValue(outcome.ErrorDetails));
+        Assert.False(await Context.Set<Transaction>().AnyAsync(t => t.SellerId == _seller.Id));
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task T169_Both_Networks_Below_The_Tron_Minimum_Is_Refused_Too()
+    {
+        // The seller ticked TRON; the listing is refused rather than silently
+        // stripped of it (the wizard shows TRON disabled below the minimum).
+        await Context.ConfigureSettingAsync(TronMinimumKey, "50");
+        _networks = TestNetworkAvailability.All();
+        await AddEthereumPayoutAsync();
+        _marketPrice.Price = 20m;
+
+        var outcome = await BuildSut().CreateAsync(
+            _seller.Id, RequestFor("ETHEREUM", "TRON") with { Price = "20.00" }, CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.NetworkMinAmountNotMet, outcome.Status);
+        Assert.Equal("TRON", NetworkOf(outcome.ErrorDetails));
+    }
+
+    [Fact]
+    public async Task T169_An_Ethereum_Only_Listing_Below_The_Tron_Minimum_Is_Created()
+    {
+        await Context.ConfigureSettingAsync(TronMinimumKey, "50");
+        _networks = TestNetworkAvailability.All();
+        await AddEthereumPayoutAsync();
+        _marketPrice.Price = 20m;
+
+        var outcome = await BuildSut().CreateAsync(
+            _seller.Id, RequestFor("ETHEREUM") with { Price = "20.00" }, CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+    }
+
+    [Fact]
+    public async Task T169_A_Tron_Listing_At_Exactly_The_Tron_Minimum_Is_Created()
+    {
+        await Context.ConfigureSettingAsync(TronMinimumKey, "50");
+        _marketPrice.Price = 50m;
+
+        var outcome = await BuildSut().CreateAsync(
+            _seller.Id, RequestFor("TRON") with { Price = "50.00" }, CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.Created, outcome.Status);
+    }
+
+    [Fact]
+    public async Task T169_An_Unreadable_Tron_Minimum_Keeps_The_Seeded_Rule()
+    {
+        // Fail toward the rule: a broken row reads as the seeded 50, not as "no minimum".
+        await Context.ConfigureSettingAsync(TronMinimumKey, "not-a-number");
+        _marketPrice.Price = 20m;
+
+        var outcome = await BuildSut().CreateAsync(
+            _seller.Id, RequestFor("TRON") with { Price = "20.00" }, CancellationToken.None);
+
+        Assert.Equal(CreateTransactionStatus.NetworkMinAmountNotMet, outcome.Status);
+    }
 
     [Fact]
     public async Task Listing_On_Both_Networks_Snapshots_Each_Networks_Payout_Address()

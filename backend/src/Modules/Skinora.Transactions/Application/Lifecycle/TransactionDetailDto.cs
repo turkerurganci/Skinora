@@ -85,8 +85,19 @@ public sealed record TransactionDetailDto(
 /// strings. <see cref="NetworkFeeAmount"/> is TRON's network fee line
 /// (T149 — 11 §F8 K8; what acceptance would fix now) and <c>"0.00"</c> on
 /// Ethereum; <see cref="TotalAmount"/> includes it.
+/// <para>
+/// T169 — <see cref="UnavailableReason"/> is set (<c>NETWORK_MIN_AMOUNT_NOT_MET</c>)
+/// when the price is below this network's own minimum (<see cref="MinAmount"/>,
+/// 2 decimals): the accept endpoint would refuse the network, so the form shows
+/// it disabled. Both are omitted on a network the buyer can choose.
+/// </para>
 /// </summary>
-public sealed record NetworkQuoteDto(string Network, string NetworkFeeAmount, string TotalAmount);
+public sealed record NetworkQuoteDto(
+    string Network,
+    string NetworkFeeAmount,
+    string TotalAmount,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? UnavailableReason = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MinAmount = null);
 
 /// <summary>Item snapshot for the detail response (07 §7.5).</summary>
 public sealed record TransactionItemDto(

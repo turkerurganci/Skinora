@@ -75,8 +75,10 @@ export function AcceptForm({
   const t = useTranslations("transactionDetail.accept");
   const locale = useLocale();
   const options = buyerNetworkOptions(acceptedNetworks ?? [BlockchainNetwork.TRON], networkQuotes);
+  // T169 — a network whose own minimum the price misses is shown, not chosen.
+  const choosable = options.filter((o) => !o.belowMinPrice);
   const [network, setNetwork] = useState<BlockchainNetwork | null>(
-    options.length === 1 ? options[0].network : null,
+    choosable.length === 1 ? choosable[0].network : null,
   );
   const [typedAddress, setTypedAddress] = useState("");
   const [checksumConfirmed, setChecksumConfirmed] = useState(false);
@@ -196,7 +198,7 @@ export function AcceptForm({
                   name="accept-network"
                   value={option.network}
                   checked={checked}
-                  disabled={fieldsDisabled}
+                  disabled={fieldsDisabled || Boolean(option.belowMinPrice)}
                   onChange={() => chooseNetwork(option.network)}
                   className="mt-1"
                   data-testid={`accept-network-${option.network}`}
@@ -205,7 +207,17 @@ export function AcceptForm({
                   <span className="block font-semibold text-gray-900">
                     {networkLabel(option.network)}
                   </span>
-                  {quote ? (
+                  {option.belowMinPrice ? (
+                    <span
+                      className="block text-xs text-amber-800"
+                      data-testid={`accept-below-min-${option.network}`}
+                    >
+                      {t("belowNetworkMin", {
+                        network: networkLabel(option.network),
+                        min: option.belowMinPrice,
+                      })}
+                    </span>
+                  ) : quote ? (
                     <span
                       className="block text-gray-800"
                       data-testid={`accept-quote-${option.network}`}

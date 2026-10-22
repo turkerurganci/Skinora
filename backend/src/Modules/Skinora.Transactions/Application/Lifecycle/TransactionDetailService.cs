@@ -5,6 +5,7 @@ using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.GasFee;
+using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.Steam;
 using Skinora.Transactions.Domain.Calculations;
 using Skinora.Transactions.Domain.Entities;
@@ -689,14 +690,20 @@ public sealed class TransactionDetailService : ITransactionDetailService
         // estimate acceptance will fix it from, Ethereum's 0. Before acceptance
         // TotalAmount is price + commission.
         var quotes = new List<NetworkQuoteDto>(networks.Count);
+        // T169 — a network whose own minimum the price misses is still listed
+        // (the listing accepts it) but marked unavailable: acceptance refuses it.
+        var minimums = await NetworkMinimumPrice.ReadAsync(_db, cancellationToken);
         foreach (var network in networks)
         {
             var fee = await _networkFees.GetBuyerNetworkFeeAsync(
                 network, transaction.StablecoinType, cancellationToken);
+            var below = NetworkMinimumPrice.IsBelow(transaction.Price, network, minimums, out var minimum);
             quotes.Add(new NetworkQuoteDto(
                 network.ToString(),
                 MoneyFormat.Display(fee.Amount),
-                MoneyFormat.Display(transaction.TotalAmount + fee.Amount)));
+                MoneyFormat.Display(transaction.TotalAmount + fee.Amount),
+                UnavailableReason: below ? TransactionErrorCodes.NetworkMinAmountNotMet : null,
+                MinAmount: below ? MoneyFormat.Display(minimum) : null));
         }
         return (networks.Select(n => n.ToString()).ToList(), quotes);
     }

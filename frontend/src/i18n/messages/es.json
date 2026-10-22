@@ -498,7 +498,8 @@
       "OUTBOUND_ROW_CLOSURE_PROPOSED": "Cierre de fila saliente propuesto",
       "OUTBOUND_ROW_CLOSURE_APPROVED": "Cierre de fila saliente aprobado",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "Cierre de fila saliente rechazado",
-      "OUTBOUND_ROW_CLOSURE_REFUSED": "Cierre de fila saliente denegado"
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "Cierre de fila saliente denegado",
+      "OUTBOUND_TRANSFER_APPROVED": "Pago saliente aprobado"
     }
   },
   "adminTransactions": {
@@ -1262,6 +1263,7 @@
         "addInProfile": "Añádela en tu perfil",
         "tronFeeNote": "En TRON el comprador también paga una tarifa de red TRON, fijada al aceptar. La parte de la tarifa de red de tu cobro que la comisión no cubre se descuenta de tu cobro.",
         "ethereumFeeNote": "En Ethereum ni tú ni el comprador pagáis tarifa de red.",
+        "belowNetworkMin": "{network} no está disponible para ventas de menos de {min} USDT: su comisión de red sería demasiado alta para la venta. Con este precio elige la otra red o sube el precio.",
         "noneSelected": "Selecciona al menos una red."
       }
     },
@@ -1327,7 +1329,8 @@
         "BUYER_STEAM_ID_NOT_FOUND": "El Steam ID que introdujiste no pertenece a un usuario registrado.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "El periodo de espera de la dirección de pago sigue activo.",
         "SELLER_WALLET_ADDRESS_MISSING": "Tu perfil no tiene dirección de pago. Añade una en tu perfil primero.",
-        "NETWORK_UNAVAILABLE": "Una de las redes seleccionadas no está disponible temporalmente. Quítala o vuelve a intentarlo más tarde."
+        "NETWORK_UNAVAILABLE": "Una de las redes seleccionadas no está disponible temporalmente. Quítala o vuelve a intentarlo más tarde.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "El precio está por debajo del importe mínimo de venta de una red que elegiste. Quita esa red o sube el precio."
       },
       "errorNetwork": "Red: {network}"
     }
@@ -1499,10 +1502,12 @@
         "addressFormat": "Introduce una dirección {network} válida.",
         "CHECKSUM_CONFIRMATION_REQUIRED": "Confirma que has revisado la dirección sin checksum.",
         "NETWORK_NOT_ACCEPTED": "El vendedor no acepta {network} en esta transacción. Elige otra red.",
-        "NETWORK_UNAVAILABLE": "{network} no está disponible temporalmente. Elige otra red o vuelve a intentarlo más tarde."
+        "NETWORK_UNAVAILABLE": "{network} no está disponible temporalmente. Elige otra red o vuelve a intentarlo más tarde.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "{network} no está disponible para una venta de este importe. Elige otra red."
       },
       "networkLabel": "Red de pago",
       "networkHint": "Elige la red en la que pagarás. Tu pago, el cobro del vendedor y cualquier reembolso se mueven en esta red. En TRON la tarifa de red se fija al aceptar.",
+      "belowNetworkMin": "{network} no está disponible para esta venta: {network} solo se puede usar en ventas de al menos {min} USDT.",
       "quote": {
         "total": "Envías: {amount}",
         "tronFee": "incluye tarifa de red TRON: {amount}",
@@ -2242,6 +2247,35 @@
         "cancel": "Cancelar"
       }
     },
+    "approvals": {
+      "heading": "Pagos pendientes de aprobación",
+      "gateClosed": "El envío automático está DESACTIVADO: cada pago al vendedor y cada reembolso al comprador espera hasta que lo apruebes.",
+      "gateOpen": "El envío automático está activado: los pagos y reembolsos se envían sin esperar aprobación.",
+      "intro": "Aprobar libera la fila para su envío tal como está; su importe y destinatario se fijaron al crearla. La siguiente ronda de un minuto la envía. El barrido (sweep) de un depósito a la billetera caliente nunca espera. La compuerta es el ajuste outbound.auto_send_enabled de la pantalla de Ajustes.",
+      "empty": "No hay pagos ni reembolsos pendientes de aprobación.",
+      "ariaLabel": "Filas salientes pendientes de aprobación",
+      "columns": {
+        "network": "Red",
+        "type": "Tipo",
+        "amount": "Importe",
+        "to": "Destinatario",
+        "created": "Creada",
+        "action": "Acción"
+      },
+      "gasFee": "Comisión de red: {amount}",
+      "approve": "Aprobar",
+      "confirm": {
+        "title": "Aprobar pago",
+        "warning": "Tras la aprobación este importe se envía de verdad en la cadena y no se puede deshacer. Comprueba la red, el importe y el destinatario.",
+        "network": "Red",
+        "type": "Tipo",
+        "amount": "Importe",
+        "to": "Destinatario",
+        "transaction": "Id de la transacción",
+        "cancel": "Cancelar",
+        "submit": "Aprobar y liberar para el envío"
+      }
+    },
     "errors": {
       "GENERIC": "No se pudo completar la acción. Inténtelo de nuevo.",
       "VALIDATION_ERROR": "La solicitud no es válida. Revise los campos e inténtelo de nuevo.",
@@ -2249,6 +2283,8 @@
       "HASH_CONFIRMATION_MISMATCH": "El hash escrito no coincide con el hash propuesto.",
       "SELF_APPROVAL_FORBIDDEN": "No puede aprobar su propia propuesta. Debe hacerlo otro administrador.",
       "ROW_NOT_FOUND": "No se encontró la fila saliente.",
+      "ROW_NOT_APPROVABLE": "Esta fila no es un pago al vendedor ni un reembolso; nunca espera aprobación.",
+      "ALREADY_APPROVED": "Esta fila ya está aprobada.",
       "CLOSURE_NOT_FOUND": "No se encontró el cierre.",
       "ROW_NOT_ETHEREUM": "La fila no está en Ethereum.",
       "ROW_NOT_OUTBOUND": "La fila no es una transferencia saliente.",

@@ -7,6 +7,7 @@ import {
   networkGateReason,
   sellerNetworkOptions,
   showsNetworkFeeLine,
+  withPriceMinimums,
 } from "./networkChoice";
 
 const { TRON, ETHEREUM } = BlockchainNetwork;
@@ -110,5 +111,55 @@ describe("showsNetworkFeeLine — K8: TRON has the line, Ethereum never", () => 
     expect(showsNetworkFeeLine(TRON)).toBe(true);
     expect(showsNetworkFeeLine(ETHEREUM)).toBe(false);
     expect(showsNetworkFeeLine(null)).toBe(false);
+  });
+});
+
+describe("withPriceMinimums — no TRON below its own minimum (T169, owner decision 2026-10-21)", () => {
+  const both = sellerNetworkOptions(
+    ["TRON", "ETHEREUM"],
+    [wallet(TRON, "PAYOUT", TRON_ADDR), wallet(ETHEREUM, "PAYOUT", ETH_ADDR)],
+  );
+  const mins = [{ network: "TRON", minPrice: "50.00" }];
+
+  it("below the minimum TRON cannot be ticked and says why; Ethereum is untouched", () => {
+    const options = withPriceMinimums(both, "49.99", mins);
+    expect(options[0]).toEqual({
+      network: TRON,
+      payoutAddress: TRON_ADDR,
+      selectable: false,
+      belowMinPrice: "50.00",
+    });
+    expect(options[1]).toEqual(both[1]);
+    expect(effectiveAcceptedNetworks(null, options)).toEqual([ETHEREUM]);
+  });
+
+  it("at the minimum TRON stays selectable (the rule is price < minimum)", () => {
+    expect(withPriceMinimums(both, "50", mins)).toEqual(both);
+  });
+
+  it("an empty or non-numeric price, or no minimums, changes nothing", () => {
+    expect(withPriceMinimums(both, "", mins)).toEqual(both);
+    expect(withPriceMinimums(both, "abc", mins)).toEqual(both);
+    expect(withPriceMinimums(both, "10", undefined)).toEqual(both);
+  });
+});
+
+describe("buyerNetworkOptions — a network below its own minimum is shown, not choosable (T169)", () => {
+  it("marks the option from the quote's unavailableReason", () => {
+    const options = buyerNetworkOptions(
+      ["TRON", "ETHEREUM"],
+      [
+        {
+          network: "TRON",
+          networkFeeAmount: "2.84",
+          totalAmount: "23.24",
+          unavailableReason: "NETWORK_MIN_AMOUNT_NOT_MET",
+          minAmount: "50.00",
+        },
+        { network: "ETHEREUM", networkFeeAmount: "0.00", totalAmount: "20.40" },
+      ],
+    );
+    expect(options[0].belowMinPrice).toBe("50.00");
+    expect(options[1].belowMinPrice).toBeUndefined();
   });
 });

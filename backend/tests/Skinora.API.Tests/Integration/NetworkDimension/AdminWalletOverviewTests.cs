@@ -66,7 +66,7 @@ public class AdminWalletOverviewTests : IntegrationTestBase
     {
         Balances = new BlockchainSidecarBalancesResult(BlockchainSidecarStatus.Success, 7_000_001,
         [
-            new(TronHot, new Dictionary<string, string> { ["TRX"] = "250000000", ["USDT"] = "1500250000", ["USDC"] = "0" }),
+            new(TronHot, new Dictionary<string, string> { ["TRX"] = "2500000000", ["USDT"] = "1500250000", ["USDC"] = "0" }),
             new(TronCold, new Dictionary<string, string> { ["TRX"] = "0", ["USDT"] = "90000000", ["USDC"] = "0" }),
         ]),
     };
@@ -114,9 +114,9 @@ public class AdminWalletOverviewTests : IntegrationTestBase
         Assert.Equal(["HOT", "COLD"], t.Wallets.Select(w => w.Role).ToArray());
         var tHot = t.Wallets[0];
         Assert.Equal(TronHot, tHot.Address);
-        Assert.Equal("250", Balance(tHot, "TRX"));
+        Assert.Equal("2500", Balance(tHot, "TRX"));
         Assert.Equal("1500.25", Balance(tHot, "USDT"));
-        Assert.Equal("100", tHot.NativeFloor); // 100 TRX seeded floor
+        Assert.Equal("1500", tHot.NativeFloor); // 1500 TRX seeded floor (T169)
         Assert.False(tHot.BelowNativeFloor);
 
         // Ethereum: hot + cold + fuel (the address comes from the service), ETH scaled by 18.

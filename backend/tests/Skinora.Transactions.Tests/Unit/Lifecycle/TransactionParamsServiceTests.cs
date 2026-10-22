@@ -45,6 +45,35 @@ public class TransactionParamsServiceTests
     }
 
     [Fact]
+    public async Task T169_Publishes_Each_Networks_Own_Minimum_Price()
+    {
+        var provider = new StubLimitsProvider(new TransactionLimits(
+            MaxConcurrent: null, NewAccountTransactionLimit: null, NewAccountPeriodDays: null,
+            PayoutAddressCooldownHours: null, AcceptTimeoutMinutes: null,
+            PaymentTimeoutMinMinutes: null, PaymentTimeoutMaxMinutes: null, PaymentTimeoutDefaultMinutes: null,
+            CommissionRate: null, MinTransactionAmount: 10m, MaxTransactionAmount: 2900m,
+            OpenLinkEnabled: false,
+            NetworkMinimums: new Dictionary<BlockchainNetwork, decimal> { [BlockchainNetwork.TRON] = 50m }));
+        var sut = new TransactionParamsService(provider, new FixedAvailability(BlockchainNetwork.TRON));
+
+        var dto = await sut.GetAsync(CancellationToken.None);
+
+        Assert.Equal([new NetworkMinPriceDto("TRON", "50.00")], dto.NetworkMinPrices);
+    }
+
+    [Fact]
+    public async Task T169_No_Network_Minimum_Read_Publishes_An_Empty_List()
+    {
+        var provider = new StubLimitsProvider(new TransactionLimits(
+            null, null, null, null, null, null, null, null, null, null, null, false));
+        var sut = new TransactionParamsService(provider, new FixedAvailability(BlockchainNetwork.TRON));
+
+        var dto = await sut.GetAsync(CancellationToken.None);
+
+        Assert.Empty(dto.NetworkMinPrices!);
+    }
+
+    [Fact]
     public async Task Falls_Back_To_Documented_Defaults_When_Settings_Missing()
     {
         var provider = new StubLimitsProvider(new TransactionLimits(

@@ -21,6 +21,7 @@ using Skinora.API.Outbox;
 using Skinora.API.RateLimiting;
 using Skinora.API.Startup;
 using Skinora.API.Services.AdminWallets;
+using Skinora.API.Services.OutboundApprovals;
 using Skinora.API.Services.WalletClosures;
 using Skinora.API.Tests.Common;
 using Skinora.Auth.Configuration;
@@ -285,6 +286,26 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         }
     }
 
+    /// <summary>T169 doğrulama S4-4 — AD40 / AD41 stubbed at the HTTP boundary.</summary>
+    public sealed class FakeApprovalService : IOutboundApprovalService
+    {
+        public ApprovalResult Result { get; set; } = ApprovalResult.Fail(ApprovalError.RowNotFound, "unset");
+        public List<(string Call, Guid Admin, Guid Row)> Calls { get; } = [];
+
+        public Task<OutboundApprovalQueueDto> ListPendingAsync(CancellationToken cancellationToken)
+        {
+            Calls.Add(("list", Guid.Empty, Guid.Empty));
+            return Task.FromResult(new OutboundApprovalQueueDto(false, []));
+        }
+
+        public Task<ApprovalResult> ApproveAsync(
+            Guid adminId, Guid blockchainTransactionId, string? ipAddress, CancellationToken cancellationToken)
+        {
+            Calls.Add(("approve", adminId, blockchainTransactionId));
+            return Task.FromResult(Result);
+        }
+    }
+
     public sealed class Factory : WebApplicationFactory<Program>
     {
         private readonly SqliteConnection _connection;
@@ -296,6 +317,7 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         /// <summary>T157 — the closure tool and the overview are stubbed at the HTTP boundary too.</summary>
         public FakeClosureService ClosureFake { get; } = new();
         public FakeOverviewService OverviewFake { get; } = new();
+        public FakeApprovalService ApprovalFake { get; } = new();
 
         public Factory()
         {
@@ -329,6 +351,7 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         public void Reset()
         {
             ClosureFake.Calls.Clear();
+            ApprovalFake.Calls.Clear();
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -424,6 +447,8 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
                 services.AddSingleton<IOutboundRowClosureService>(_ => ClosureFake);
                 services.RemoveAll<IAdminWalletOverviewService>();
                 services.AddSingleton<IAdminWalletOverviewService>(_ => OverviewFake);
+                services.RemoveAll<IOutboundApprovalService>();
+                services.AddSingleton<IOutboundApprovalService>(_ => ApprovalFake);
             });
         }
 

@@ -28,6 +28,9 @@ const api = vi.hoisted(() => ({
   proposeOutboundClosure: vi.fn(),
   approveOutboundClosure: vi.fn(),
   rejectOutboundClosure: vi.fn(),
+  // T169 — the approval panel sits above the network sections.
+  listOutboundApprovals: vi.fn(),
+  approveOutboundTransfer: vi.fn(),
 }));
 vi.mock("@/lib/api/admin", () => api);
 vi.mock("@/lib/api/auth", () => ({
@@ -37,6 +40,7 @@ vi.mock("@/lib/api/auth", () => ({
 beforeEach(() => {
   api.listOutboundClosureCandidates.mockResolvedValue([]);
   api.listOutboundClosures.mockResolvedValue([]);
+  api.listOutboundApprovals.mockResolvedValue({ autoSendEnabled: false, rows: [] });
 });
 afterEach(() => {
   cleanup();

@@ -93,9 +93,11 @@ public class SeedDataTests : IntegrationTestBase
         //   env-sourced catalogue entries, not rows).
         // + 3 T149 network fee policy rows (seed indices 76–78: TRON fee line
         //   buffer + fallback, Ethereum minimum-refund multiplier).
+        // + 2 T169 rows (seed indices 79–80: TRON's own minimum price and the
+        //   outbound.auto_send_enabled payout/refund launch gate).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(75, rows.Count);
-        Assert.Equal(75, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(77, rows.Count);
+        Assert.Equal(77, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -144,6 +146,8 @@ public class SeedDataTests : IntegrationTestBase
             "blockchain.refund_gas_fee_estimate_usdt",
             "blockchain.sweep_trx_fallback_sun",
             "blockchain.transfer_retry_intervals_minutes",
+            // T169 — TRON's own minimum price (50, owner decision 2026-10-21).
+            "blockchain.tron.min_transaction_amount_usdt",
             // T149 — TRON network fee line buffer (0.007) and fallback (3.00).
             "blockchain.tron.network_fee_buffer_ratio",
             "blockchain.tron.network_fee_fallback_usdt",
@@ -165,6 +169,9 @@ public class SeedDataTests : IntegrationTestBase
             "non_delivery_suspend_count",
             "non_delivery_window_days",
             "open_link_enabled",
+            // T169 — the payout/refund launch gate ships CONFIGURED false for the
+            // T125/T129 reason: it must not be flippable from a deploy variable.
+            "outbound.auto_send_enabled",
             // T129 — the settlement window ships with its documented default
             // (8 days = Steam's 7-day reversal window + one day of margin), so
             // a deploy that configures nothing is still protected.

@@ -30,6 +30,7 @@ function renderForm(
   props: Partial<{
     acceptedNetworks: string[] | null;
     profileWallets: UserWalletEntry[];
+    networkQuotes: typeof QUOTES;
   }> = {},
 ) {
   return render(
@@ -39,7 +40,7 @@ function renderForm(
         acceptedNetworks={
           props.acceptedNetworks === undefined ? ["TRON", "ETHEREUM"] : props.acceptedNetworks
         }
-        networkQuotes={QUOTES}
+        networkQuotes={props.networkQuotes ?? QUOTES}
         stablecoin="USDT"
         profileWallets={props.profileWallets ?? []}
         defaultSteamTradeUrl={TRADE_URL}
@@ -214,5 +215,27 @@ describe("AcceptForm — network choice (T156)", () => {
         "TRON (TRC-20) is temporarily unavailable. Choose another network or try again later.",
       ),
     ).toBeVisible();
+  });
+});
+
+describe("AcceptForm — a network below its own minimum (T169)", () => {
+  // 20 USDT sale: TRON is below its 50 USDT minimum (owner decision 2026-10-21).
+  const BELOW = [
+    {
+      network: "TRON",
+      networkFeeAmount: "2.90",
+      totalAmount: "23.30",
+      unavailableReason: "NETWORK_MIN_AMOUNT_NOT_MET",
+      minAmount: "50.00",
+    },
+    { network: "ETHEREUM", networkFeeAmount: "0.00", totalAmount: "20.40" },
+  ];
+
+  it("shows TRON disabled with the reason and preselects the only choosable network", () => {
+    renderForm({ networkQuotes: BELOW });
+    expect(screen.getByTestId("accept-network-TRON")).toBeDisabled();
+    expect(screen.getByTestId("accept-below-min-TRON")).toHaveTextContent("at least 50.00 USDT");
+    expect(screen.queryByTestId("accept-quote-TRON")).toBeNull();
+    expect(screen.getByTestId("accept-network-ETHEREUM")).toBeChecked();
   });
 });

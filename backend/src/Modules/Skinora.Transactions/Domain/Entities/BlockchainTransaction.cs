@@ -133,6 +133,19 @@ public class BlockchainTransaction
     public DateTime? NextAttemptAt { get; set; }
 
     public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// T169 — when an admin approved this outbound row for sending (AD41,
+    /// 07 §9.35). While <c>outbound.auto_send_enabled</c> is false the
+    /// dispatcher sends a SELLER_PAYOUT or *_REFUND row only once this is set;
+    /// SWEEP never needs it. NULL = not approved (or approval not required
+    /// because the gate was open). Written once, never cleared.
+    /// </summary>
+    public DateTime? ApprovedAt { get; set; }
+
+    /// <summary>T169 — the admin who approved the row (<see cref="ApprovedAt"/>); NULL with it.</summary>
+    public Guid? ApprovedByAdminId { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime? ConfirmedAt { get; set; }
 

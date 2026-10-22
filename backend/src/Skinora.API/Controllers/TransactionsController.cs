@@ -199,6 +199,11 @@ public sealed class TransactionsController : ControllerBase
             CreateTransactionStatus.NetworkUnavailable => StatusCode(
                 StatusCodes.Status503ServiceUnavailable, CreateErrorEnvelope(outcome)),
 
+            // T169 — 422 NETWORK_MIN_AMOUNT_NOT_MET: the price is below an
+            // accepted network's own minimum (TRON < 50 USDT).
+            CreateTransactionStatus.NetworkMinAmountNotMet
+                => UnprocessableEntity(CreateErrorEnvelope(outcome)),
+
             _ => StatusCode(StatusCodes.Status500InternalServerError),
         };
     }
@@ -343,6 +348,7 @@ public sealed class TransactionsController : ControllerBase
             // service or is frozen (fail closed, retryable). Both carry
             // details.network.
             AcceptTransactionStatus.NetworkNotAccepted
+                or AcceptTransactionStatus.NetworkMinAmountNotMet
                 => UnprocessableEntity(AcceptErrorEnvelope(outcome)),
             AcceptTransactionStatus.NetworkUnavailable
                 => StatusCode(StatusCodes.Status503ServiceUnavailable,

@@ -153,6 +153,19 @@ export interface TransactionParamsResponse {
    * süzülür"); a network missing from the list is not shown at all.
    */
   supportedNetworks: BlockchainNetwork[];
+  /**
+   * T169 — a network's own minimum price (TRON 50.00 — proje sahibi kararı
+   * 2026-10-21). Below it the wizard shows the network disabled; the create
+   * endpoint would answer 422 `NETWORK_MIN_AMOUNT_NOT_MET`. Absent on an older
+   * backend = no network minimum.
+   */
+  networkMinPrices?: NetworkMinPrice[];
+}
+
+/** One element of `networkMinPrices` (07 §7.4, T169). */
+export interface NetworkMinPrice {
+  network: string;
+  minPrice: string;
 }
 
 export function getTransactionParams(): Promise<TransactionParamsResponse> {
@@ -320,6 +333,13 @@ export interface TransactionNetworkQuote {
   network: string;
   networkFeeAmount: string;
   totalAmount: string;
+  /**
+   * T169 — set (`NETWORK_MIN_AMOUNT_NOT_MET`) when the price is below this
+   * network's own minimum (`minAmount`): accepting on it would be refused, so
+   * the accept form shows it disabled. Omitted on a network the buyer can pick.
+   */
+  unavailableReason?: string;
+  minAmount?: string;
 }
 
 export interface TransactionDetailInviteInfo {

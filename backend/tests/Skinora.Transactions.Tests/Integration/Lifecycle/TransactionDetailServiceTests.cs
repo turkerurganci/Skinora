@@ -799,6 +799,44 @@ public class TransactionDetailServiceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task T169_Below_The_Tron_Minimum_The_Tron_Quote_Is_Marked_Unavailable()
+    {
+        _networkFees.With(Skinora.Shared.Enums.BlockchainNetwork.TRON, 2.90m);
+        var transaction = await CreateTransactionAsync(TransactionStatus.CREATED, buyerId: _buyer.Id);
+        await Context.Set<Transaction>().Where(t => t.Id == transaction.Id).ExecuteUpdateAsync(u => u
+            .SetProperty(t => t.Price, 20m)
+            .SetProperty(t => t.CommissionAmount, 0.40m)
+            .SetProperty(t => t.TotalAmount, 20.40m));
+        foreach (var (network, address) in new[]
+                 {
+                     (Skinora.Shared.Enums.BlockchainNetwork.TRON, ValidWallet),
+                     (Skinora.Shared.Enums.BlockchainNetwork.ETHEREUM, "0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed"),
+                 })
+        {
+            Context.Set<TransactionNetworkOption>().Add(new TransactionNetworkOption
+            {
+                Id = Guid.NewGuid(),
+                TransactionId = transaction.Id,
+                Network = network,
+                SellerPayoutAddress = address,
+                CreatedAt = _clock.GetUtcNow().UtcDateTime,
+            });
+        }
+        await Context.SaveChangesAsync();
+
+        var outcome = await BuildSut().GetAsync(transaction.Id, _buyer.Id, callerSteamId: null, CancellationToken.None);
+
+        // The seeded TRON minimum (50) — the listing still accepts TRON, but
+        // acceptance would refuse it, so the form shows it disabled.
+        Assert.Equal(
+            [
+                new NetworkQuoteDto("TRON", "2.90", "23.30", "NETWORK_MIN_AMOUNT_NOT_MET", "50.00"),
+                new NetworkQuoteDto("ETHEREUM", "0.00", "20.40"),
+            ],
+            outcome.Body!.NetworkQuotes!);
+    }
+
+    [Fact]
     public async Task After_Acceptance_The_Fixed_Line_Is_Returned_And_No_Quote_Is_Asked()
     {
         _networkFees.With(Skinora.Shared.Enums.BlockchainNetwork.TRON, 9.99m); // must not be read
