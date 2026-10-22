@@ -75,8 +75,8 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Backend unit (tüm Unit filtresi — enum eklendi) | ✓ 2290/2290 | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — Shared 571, Fraud 19, Disputes 25, Users 49, Steam 59, Auth 96, Platform 161, Realtime 44, API 137, Transactions 981, Notifications 150 (ilk koşu; son koşu aşağıda) |
-| Backend integration (dokunulan projeler, LocalDB) | ✓ | Shared 16/16, Platform 74/74, Transactions 744 (ilk koşuda 10 adet 1 ms'lik LocalDB kuruluş titremesi; tek tek yeniden koşuda 21/21 geçti), API 775 (13 kırmızı → beklenen değerler T169'a çekildi / testler düzeltildi; yeniden koşu 146/146 + `OutboundApprovalTests` 5/5) |
+| Backend unit (tüm Unit filtresi — enum eklendi) | ✓ 2292/2292 | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` (son koşu) — Shared 571, Fraud 19, Disputes 25, Users 49, Steam 59, Auth 96, Platform 161, Realtime 44, API 137, Transactions 981, Notifications 150 |
+| Backend integration (dokunulan projeler, LocalDB) | ✓ 1609/1609 | Son koşu: Shared 16/16, Platform 74/74, Transactions 744/744, API 775/775. İlk koşuda Transactions'ta 10 adet 1 ms'lik LocalDB kuruluş titremesi ve API'de 13 kırmızı (beklenen değerler T169'a çekildi, onay testlerinin tohum satırları düzeltildi) vardı; düzeltmeden sonra tam yeniden koşu temiz |
 | Frontend | ✓ | `tsc --noEmit` temiz; `eslint` hata yok; prettier (değişen dosyalar, LF) temiz; `i18n:check` parity OK (4 dil × 1626 anahtar); `vitest` 44 dosya / 425 test geçti; `next build` başarılı |
 | e2e harness | ✓ | `tsc --noEmit`, prettier, eslint (`e2e/src/db.ts`) temiz; Docker kullanılmadığı için e2e süitleri yerelde koşulmadı (CI advisory leg'leri) |
 | Compose | ✓ | `node --test scripts/compose-exposure.test.mjs` 10/10 (trial overlay render) |
