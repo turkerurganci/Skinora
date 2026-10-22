@@ -1,0 +1,7 @@
+{
+  "txHash": "tron-refund-contract-example",
+  "delegationMode": "burn",
+  "delegationAmountSun": 0,
+  "fallbackAmountSun": 1611499,
+  "platformSpendSun": 2711500
+}

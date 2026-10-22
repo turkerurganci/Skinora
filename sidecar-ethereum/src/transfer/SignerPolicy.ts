@@ -18,7 +18,9 @@ import { decodeTransferCall } from './erc20.js';
  *     (blobs) and type 1 never.</item>
  *   <item><b>Token keys</b> (hot wallet, deposits): only a call of
  *     `transfer(address,uint256)` on an allowlisted token contract — USDT, and
- *     USDC only when the request is a wrong-token refund — with `value = 0`,
+ *     USDC only when the request is a wrong-token refund or (T160c) a sweep —
+ *     the deposit → pinned hot wallet send that collects the refund fee a
+ *     wrong-token refund withheld in USDC — with `value = 0`,
  *     exactly the recipient and amount asked for, no access list, a bounded
  *     gas limit, and (when the flow has one) a worst-case fee
  *     (`gasLimit × maxFeePerGas`) within the cap.</item>
@@ -38,7 +40,7 @@ export interface SignerPolicyConfig {
   readonly chainId: bigint;
   /** Canonical USDT contract — '' when not configured (nothing may be signed then). */
   readonly paymentToken: string;
-  /** Canonical USDC contract — the only extra token, and only for a wrong-token refund. */
+  /** Canonical USDC contract — the only extra token, and only for a wrong-token refund or a sweep (T160c). */
   readonly wrongTokenRefundToken: string;
   /**
    * Upper bound on any transaction's gas limit (T159a: `MAX_SIGNABLE_GAS_LIMIT`
@@ -53,7 +55,12 @@ export interface TokenTransferIntent {
   readonly contract: string;
   readonly recipient: string;
   readonly amountUnits: bigint;
-  /** True only for a `WRONG_TOKEN_REFUND` — the one flow that may move USDC. */
+  /**
+   * True only for a `WRONG_TOKEN_REFUND` and (T160c) a `SWEEP` — the flows that
+   * may move USDC. A sweep's destination is pinned to the service's own hot
+   * wallet (`TransferGuard.assertSweepDestination`), so USDC can only reach a
+   * platform wallet this way.
+   */
   readonly wrongTokenRefund: boolean;
   /**
    * Capped flows (sweep, payout, refund, cold): the most the transaction may

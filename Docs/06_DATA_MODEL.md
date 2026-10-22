@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.35** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160 — §8 `fee_cap_usd_per_transfer` açıklaması: iade ve soğuk aktarım da tavana bağlı (08 §3.7.7 ile hizalı). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
+**Versiyon: v6.36** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160c — `REFUND_FEE_SWEEP`, `RefundFeeRecovered`, `PlatformNetworkCost(Usdt)`, `RefundFeeSweepNextCheckAt` (⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -197,7 +197,8 @@ F8 Ethereum'u ekler (11 §F8 K1). Bu bölüm hedef modeli tanımlar; §3'teki en
 | `SPAM_TOKEN_INCOMING` | Bilinmeyen/desteklenmeyen token transferi tespiti — allowlist dışı token. Otomatik iade yapılmaz, ignore + log (08 §3.4). Admin dashboard'da görünür. |
 | `LATE_PAYMENT_REFUND` | Gecikmeli ödeme iadesi |
 | `INCORRECT_AMOUNT_REFUND` | Eksik tutar iadesi |
-| `SWEEP` | Depozit adresinden hot wallet'a fon sweep'i (deposit → hot wallet konsolidasyonu, 05 §3.3). Reconciliation'da hot wallet inflow'u olarak sayılır; `ITEM_DELIVERED` anında üretilir (iade penceresi sonrası — WP3). |
+| `SWEEP` | Depozit adresinden hot wallet'a fon sweep'i (deposit → hot wallet konsolidasyonu, 05 §3.3). Reconciliation'da hot wallet inflow'u olarak sayılır; `ITEM_DELIVERED` anında üretilir (iade penceresi sonrası — WP3). **T160c:** işlemin onaylanmış, depozitten çıkmış iadelerinde alıcıdan kesilen ağ ücretini (`GasFee`, işlemin token'ında) de taşır — o kısım `RefundFeeRecovered`'da (§3.8) |
+| `REFUND_FEE_SWEEP` | **T160c** — iadelerde alıcıdan kesilip depozitte kalan ağ ücretinin depozit → hot wallet toplanması; işlemin `SWEEP`'inin taşıyamadığı kalıntı (sweep'e hiç ulaşmayan iptal/iade işlemleri, yanlış token iadesinin USDC kesintisi, sweep kuyruğa girdikten sonra kesinleşen iade). `RefundFeeSweepQueueJob` üretir, yalnız toplamanın canlı fiyatı tutardan küçükse (05 §3.3). Reconciliation'da depozit çıkışı + hot wallet girişi |
 
 ### 2.6 BlockchainTransactionStatus
 
@@ -901,6 +902,7 @@ Her işlem için üretilen benzersiz blockchain ödeme adresi ve izleme durumu.
 | `ExpectedToken` | int | NOT NULL | Enum: StablecoinType |
 | `MonitoringStatus` | int | NOT NULL | Enum: MonitoringStatus — yaşam döngüsü ve `ACTIVE`in iki anlamı için §2.16 notu, tetikleyiciler için 08 §3.4 |
 | `MonitoringExpiresAt` | datetime | NULL | İzleme bitiş zamanı (ACTIVE durumda null) |
+| `RefundFeeSweepNextCheckAt` | datetime | NULL | **T160c** — `RefundFeeSweepQueueJob`'un bu depozitin toplanmamış iade kesintisine yeniden bakacağı en erken an (UTC). NULL = bir sonraki turda. Toplamak getirdiğinden pahalıysa `şimdi + 24 sa`, maliyet okunamadıysa `şimdi + 30 dk` (05 §3.3 "Sweep mekanizması") |
 | `MonitorFromBlock` | bigint | NULL, CHECK (`>= 0`) | **T158** — "şu bloktan itibaren izle": ağın servisinin adresi türettiği andaki son `finalized` bloğu (Ethereum; TRON servisi bildirmez → NULL). Yeni adrese bu bloktan önce para gelemez; her izleme başlatması bunu servise gönderir ve servis depoziti bu bloktan sonrasından sıfır bakiye tabanıyla okur — kesinti geri okuma süresini aşsa da (08 §3.7.4). T158 öncesi ayrılmış satırlarda NULL (servisin geri okuma kuralı geçerli) |
 | `IsDeleted` | bool | NOT NULL, DEFAULT 0 | Soft delete flag |
 | `DeletedAt` | datetime | NULL | Silinme zamanı |
@@ -914,7 +916,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 |-------|-----|-------|----------|
 | `Id` | guid | PK | |
 | `TransactionId` | guid | FK → Transaction, NOT NULL | |
-| `PaymentAddressId` | guid | FK → PaymentAddress, NULL | Gelen ödemelerde ve `SWEEP`'te ilgili depozit adresi (giden payout/iade'de NULL) |
+| `PaymentAddressId` | guid | FK → PaymentAddress, NULL | Gelen ödemelerde, `SWEEP`'te ve `REFUND_FEE_SWEEP`'te (T160c) ilgili depozit adresi (giden payout/iade'de NULL) |
 | `Network` | int | NOT NULL | Enum: BlockchainNetwork (§2.25; T145) — transferin ağı = işlemin ağı (11 §F8 K3). Webhook satırı ağını depozit adresinden alır |
 | `Type` | int | NOT NULL | Enum: BlockchainTransactionType |
 | `TxHash` | string(100) | NULL, UNIQUE (`Network`+`TxHash`+`EventIndex`) | Blockchain transaction hash (broadcast sonrası), kanonik biçimde (§1.4) |
@@ -926,6 +928,9 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 | `ActualTokenAddress` | string(50) | NULL | Yanlış token senaryosunda gelen/refund edilen token'ın contract adresi. `WRONG_TOKEN_INCOMING` ve `WRONG_TOKEN_REFUND` türlerinde dolu |
 | `GasFee` | decimal(18,6) | NULL | Ağ ücreti tahmininin USDT karşılığı (snapshot). `SELLER_PAYOUT`: split'e giren tahmin; `BUYER_REFUND` ve **T159a'dan itibaren** reddedilen ödeme iadeleri (`INCORRECT_AMOUNT_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `LATE_PAYMENT_REFUND`): iade tutarından düşülen tahmin — `Amount` net (alıcının aldığı), `Amount + GasFee` iade tabanı (07 §7.5 `originalAmount`). `SWEEP`'te NULL. T159a öncesi yazılmış reddedilen ödeme iadelerinde NULL (brüt gönderildi) |
 | `RealizedFeeWei` | decimal(38,0) | NULL | **T154 — Ethereum:** transferin zincirde gerçekten ödediği ücret, wei (makbuz `gasUsed × effectiveGasPrice`), onay anında yazılır. Ölçüm içindir, tahsil edilmez (08 §3.1a "Gerçekleşen ücret kaydedilir"). Servisten ondalık **metin** gelir (`realizedFeeWei`), en çok 28 hane (C# `decimal`'a tam sığar), double'dan hiç geçmez; bozuk değer NULL kalır ve uyarı log'lanır, onayı engellemez. TRON satırında her zaman NULL (TRON'un karşılığı `RealizedFeeSun`) |
+| `RefundFeeRecovered` | decimal(18,6) | NULL, CHECK | **T160c** — bu depozit → hot wallet transferinin taşıdığı, iadelerde alıcıdan kesilmiş ağ ücreti (`GasFee`) kısmı. `SWEEP`: `TotalAmount`'un üstündeki kısım (katlanan kesinti yoksa NULL); `REFUND_FEE_SWEEP`: daima `Amount`'a eşit; diğer türlerde NULL. Kesinti defteri: depozitte kalan = onaylanmış, depozitten çıkmış iadelerin `GasFee` toplamı − `FAILED` olmayan taşıyıcıların bu kolon toplamı (token başına) |
+| `PlatformNetworkCost` | decimal(38,0) | NULL | **T160c düzeltme turu (⚠ PARA)** — bu transfer için platformun ağın yerel varlığında harcadığı tutar, en küçük birimde (SUN / wei), servisin ölçümüyle; `RealizedFeeSun` / `RealizedFeeWei` (transferin kendi makbuz ücreti) DEĞİL. Depozit gönderimi: TRON'da sıcak cüzdanın depozite gönderdiği TRX (hesap açma, yakma / Bandwidth takviyesi, sabit yedek) + bu gönderimlerin yaktığı ücret — gönderim cevabıyla (`platformSpendSun`) yazılır; Ethereum'da yakıtın değeri + yakıt işleminin ücreti (kendi yakıtı yoksa 0) — kesin durum cevabıyla (`platformSpendWei`). Sıcak cüzdan gönderimi (Ethereum payout, sweep sonrası iade): makbuz ücreti. NULL = ölçülmedi (eski servis, kayıp günlük, TRON payout); 0 gerçek bir cevaptır |
+| `PlatformNetworkCostUsdt` | decimal(18,6) | NULL | **T160c düzeltme turu** — `PlatformNetworkCost`'un USDT karşılığı: satır `CONFIRMED` olurken servisin o kesin durum okumasıyla bildirdiği yerel varlık fiyatıyla (`nativePriceUsdt`) bir kez hesaplanır, 6 ondalığa yuvarlanır (sıfırdan uzağa); sonradan yeniden değerlenmez. Harcama ya da fiyat yoksa NULL. AD38 `refundFees` gider toplamları bunu toplar (07 §9.33) |
 | `Status` | int | NOT NULL | Enum: BlockchainTransactionStatus |
 | `BlockNumber` | long | NULL | Blockchain blok numarası |
 | `ConfirmationCount` | int | NOT NULL, DEFAULT 0 | Onay sayısı |
@@ -952,6 +957,7 @@ Tüm blockchain transferlerinin kaydı — gelen ödemeler, iadeler ve satıcı 
 > - **Spam-token incoming** (`SPAM_TOKEN_INCOMING`): `ActualTokenAddress NOT NULL`, `PaymentAddressId NOT NULL` — bilinmeyen token belirli bir ödeme adresine gelmiştir. Otomatik iade yapılmaz, yalnızca audit kaydı. Status doğrudan `CONFIRMED` olarak yazılır (terminal).
 > - **Giden transfer** (`SELLER_PAYOUT`, `BUYER_REFUND`, `EXCESS_REFUND`, `LATE_PAYMENT_REFUND`, `INCORRECT_AMOUNT_REFUND`): `PaymentAddressId NULL`, `ActualTokenAddress NULL`.
 > - **Sweep** (`SWEEP`): `PaymentAddressId NOT NULL`, `ActualTokenAddress NULL` — deposit → hot wallet transferi kaynak depozit adresine bağlıdır (reconciliation deposit-outflow attribution `PaymentAddressId` üzerinden yapılır), kanonik stablecoin transferidir. Giden transfer grubunun (`PaymentAddressId NULL`) **aksine** `PaymentAddressId` zorunludur; bu yüzden ayrı bir CHECK constraint'tir (`CK_BlockchainTransactions_Type_Sweep`), Outbound constraint'ine eklenmez (WP3).
+> - **İade kesintisi toplama** (`REFUND_FEE_SWEEP`, T160c): `PaymentAddressId NOT NULL`, `ActualTokenAddress NULL`, `RefundFeeRecovered = Amount` (`CK_BlockchainTransactions_Type_RefundFeeSweep`) — sweep biçimi; `Token` taşınan token'dır (yanlış token iadesinin kesintisinde USDC). `CK_BlockchainTransactions_RefundFeeRecovered`: `RefundFeeRecovered` yalnız `SWEEP` / `REFUND_FEE_SWEEP`'te ve pozitif. Tekil filtreli indeks `UQ_BlockchainTransactions_RefundFeeSweep_InFlight` = `(TransactionId) WHERE Type = 'REFUND_FEE_SWEEP' AND Status IN ('PENDING','DETECTED')` — işlem başına yolda en çok bir toplama (çift toplamanın veritabanı düzeyi engeli); zaman içinde birden çok satır olabilir (toplamadan sonra gelen geç ödemenin iadesi yeni kesinti bırakır).
 > - **CONFIRMED**: `ConfirmedAt NOT NULL`; TRON'da ayrıca `ConfirmationCount >= 20` (T145: `Network <> 'TRON' OR ConfirmationCount >= 20` — Ethereum `finalized` ile onaylanır, §1.4 "Onay alanları").
 > - **PENDING**: TRON'da `ConfirmationCount < 20` (T145: `Network <> 'TRON' OR ConfirmationCount < 20` — Ethereum satırı `finalized`'ı beklerken 20 bloğu geçebilir).
 > - **DETECTED**: `ConfirmationCount = 0`.

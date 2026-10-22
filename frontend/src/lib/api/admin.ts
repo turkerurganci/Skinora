@@ -1088,7 +1088,7 @@ export type OutboundRowStatus = "DETECTED" | "PENDING" | "CONFIRMED" | "FAILED";
 export interface OutboundRow {
   id: string;
   transactionId: string;
-  /** SELLER_PAYOUT | BUYER_REFUND | EXCESS_REFUND | WRONG_TOKEN_REFUND | INCORRECT_AMOUNT_REFUND | LATE_PAYMENT_REFUND | SWEEP */
+  /** SELLER_PAYOUT | BUYER_REFUND | EXCESS_REFUND | WRONG_TOKEN_REFUND | INCORRECT_AMOUNT_REFUND | LATE_PAYMENT_REFUND | SWEEP | REFUND_FEE_SWEEP */
   type: string;
   status: OutboundRowStatus;
   token: string;
@@ -1097,6 +1097,39 @@ export interface OutboundRow {
   txHash: string | null;
   retryCount: number;
   createdAt: string;
+}
+
+/**
+ * T160c — refund network fees withheld from buyers and where they are. Decimal
+ * strings: stablecoin amounts in USDT terms, chain costs in the network's
+ * native asset (`nativeAsset`).
+ */
+export interface RefundFeeBooks {
+  /** What buyers paid for their refunds' chain fees (income). */
+  withheld: string;
+  /** In the hot wallet (kept by hot-wallet refunds or carried by a confirmed sweep / collection). */
+  collected: string;
+  /** Carried by a sweep / collection that is not final yet. */
+  inTransit: string;
+  /** Still on deposits (waiting for a sweep, or not worth collecting yet). */
+  onDeposits: string;
+  /**
+   * T160c düzeltme turu — native asset the PLATFORM spent for those refunds
+   * (expense): TRON the TRX sent to the deposit (activation, burn top-up) +
+   * those sends' fees; Ethereum the fuel ETH + the fuel's fee (a hot-wallet
+   * refund: its receipt fee). Unmeasured rows count with their receipt fee.
+   */
+  refundChainCost: string;
+  /** Same, for the separate collections (the sale's own sweep is not counted). */
+  collectionChainCost: string;
+  /** USDT value of `refundChainCost`, each row at its confirmation price (measured rows only). */
+  refundChainCostUsdt: string;
+  /** USDT value of `collectionChainCost`, same rule. */
+  collectionChainCostUsdt: string;
+  /** `withheld` − both USDT expenses; negative = a loss. An upper bound while `costUnmeasured` > 0. */
+  netUsdt: string;
+  /** Refund / collection rows whose spend or its USDT value is not recorded. */
+  costUnmeasured: number;
 }
 
 export interface NetworkWallets {
@@ -1110,6 +1143,7 @@ export interface NetworkWallets {
   outbound: OutboundQueueSummary;
   recentColdTransfers: ColdTransfer[];
   recentOutbound: OutboundRow[];
+  refundFees: RefundFeeBooks;
 }
 
 export interface AdminWalletsResponse {

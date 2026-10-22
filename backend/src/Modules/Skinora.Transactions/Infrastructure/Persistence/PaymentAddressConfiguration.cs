@@ -56,6 +56,10 @@ public class PaymentAddressConfiguration : IEntityTypeConfiguration<PaymentAddre
             "CK_PaymentAddresses_MonitorFromBlock",
             "[MonitorFromBlock] IS NULL OR [MonitorFromBlock] >= 0"));
 
+        // T160c — when the refund-fee collector looks at this deposit again
+        // (NULL = next run). Plain nullable timestamp, no constraint.
+        builder.Property(p => p.RefundFeeSweepNextCheckAt);
+
         // --- ISoftDeletable ---
         builder.Property(p => p.IsDeleted)
             .IsRequired()

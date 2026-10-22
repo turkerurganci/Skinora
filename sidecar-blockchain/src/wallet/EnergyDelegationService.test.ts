@@ -52,6 +52,8 @@ const BURN_TOP_UP_64K_SUN = 7_071_350;
 const BANDWIDTH_TOP_UP_SUN = 385_000;
 /** The node stamps every transaction it builds with a 60 s expiration. */
 const TX_EXPIRATION_MS = 60_000;
+/** T160c düzeltme turu — the account-creation fee an activation burns (1 TRX + 0.1 TRX Bandwidth, Nile 2026-10-02). */
+const ACTIVATION_FEE_SUN = 1_100_000;
 
 interface SignedRequest {
   ownerAddress: string;
@@ -98,6 +100,8 @@ interface ChainOptions {
   delegateThrows?: boolean;
   undelegateThrows?: boolean;
   sendTrxThrows?: boolean;
+  /** T160c düzeltme turu — SUN a plain TRX send from the hot wallet burns (its Bandwidth). */
+  trxSendFeeSun?: number;
   transferThrows?: boolean;
   transferBroadcastDeadlineMs?: number;
   /** Dedicated stake account (owner decision 2026-09-17). Unset = the hot
@@ -277,7 +281,18 @@ function buildChain(o: ChainOptions = {}) {
         createNewAccountBandwidthRate: 1,
       };
     }),
-    getTransactionBlockNumber: vi.fn(async (hash: string) => blockOf.get(hash) ?? null),
+    getTransactionLanding: vi.fn(async (hash: string) => {
+      const blockNumber = blockOf.get(hash);
+      if (blockNumber === undefined) return null;
+      const kind = broadcasts.find((b) => b.hash === hash)!.kind;
+      // T160c düzeltme turu — what the sender burned: an activation pays the
+      // account-creation fee (1.1 TRX, measured on Nile 2026-10-02); a plain
+      // TRX send the hot wallet's Bandwidth (o.trxSendFeeSun, 0 by default —
+      // the fake hot wallet has free Bandwidth).
+      const feeSun =
+        kind === 'activation' ? ACTIVATION_FEE_SUN : kind === 'trx' ? (o.trxSendFeeSun ?? 0) : 0;
+      return { blockNumber, feeSun };
+    }),
   };
 
   let delivered = 0;
@@ -1176,5 +1191,61 @@ describe('configuration', () => {
       code: 'INVALID_FALLBACK_AMOUNT',
       retryable: false,
     });
+  });
+});
+
+/*
+ * T160c düzeltme turu (F1, ⚠ PARA) — what one deposit transfer cost the hot
+ * wallet. The accounting used to take only the transfer's own receipt fee,
+ * which the deposit pays OUT OF the TRX the hot wallet sent it; the hot
+ * wallet's real outflow is that TRX plus the fees its own sends burned
+ * (activation: the account-creation fee). What the deposit does not burn
+ * stays there and is never collected — spent all the same.
+ */
+describe('platformSpendSun — the TRX that left the hot wallet for the transfer', () => {
+  const TRX_SEND_FEE_SUN = 267_000; // a hot wallet out of free Bandwidth: 267 bytes × 1,000 SUN
+
+  it('fresh deposit, burn path: 1 SUN + the creation fee + the top-up + the top-up’s own fee', async () => {
+    const chain = buildChain({
+      stakingEnabled: false,
+      depositExists: false,
+      trxSendFeeSun: TRX_SEND_FEE_SUN,
+    });
+
+    const outcome = await chain.run();
+
+    const sentSun = chain.client.sendTrx.mock.calls.reduce(
+      (sum, [request]) => sum + (request as TrxSend).amountSun,
+      0,
+    );
+    // The activation's 1 SUN is already on the deposit, so the top-up is one SUN short of the plan.
+    expect(sentSun).toBe(1 + BURN_TOP_UP_64K_SUN - 1);
+    expect(outcome).toMatchObject({ mode: 'burn', activationSun: 1 });
+    expect(outcome.platformSpendSun).toBe(
+      1 + ACTIVATION_FEE_SUN + (BURN_TOP_UP_64K_SUN - 1) + TRX_SEND_FEE_SUN,
+    );
+    expect(outcome.platformSpendSun).toBe(8_438_350);
+  });
+
+  it('existing deposit already holding the Energy and Bandwidth: nothing sent, nothing spent', async () => {
+    const chain = buildChain({ stakingEnabled: false, depositEnergy: 200_000 });
+
+    const outcome = await chain.run();
+
+    expect(chain.client.sendTrx).not.toHaveBeenCalled();
+    expect(outcome).toMatchObject({ mode: 'no-energy', platformSpendSun: 0 });
+  });
+
+  it('plan unavailable: the fixed fallback and its fee are spent in full', async () => {
+    const chain = buildChain({
+      stakingEnabled: false,
+      simulationThrows: true,
+      trxSendFeeSun: TRX_SEND_FEE_SUN,
+    });
+
+    const outcome = await chain.run();
+
+    expect(outcome).toMatchObject({ mode: 'fallback', fallbackAmountSun: FALLBACK_SUN });
+    expect(outcome.platformSpendSun).toBe(FALLBACK_SUN + TRX_SEND_FEE_SUN);
   });
 });

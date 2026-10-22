@@ -129,8 +129,13 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                         "EMPTY_BODY",
                         "Sidecar returned 200 with empty txHash.");
                 }
+                // T160c düzeltme turu — TRON deposit sends report what they cost
+                // the hot wallet; a negative value is not a measurement.
                 return new TransferBroadcastResult(
-                    TransferBroadcastStatus.Success, payload.TxHash, null, null);
+                    TransferBroadcastStatus.Success, payload.TxHash, null, null,
+                    _policy.ReportsTronResourceUsage
+                        ? ReadPlatformSpendSun(payload.PlatformSpendSun, request.BlockchainTransactionId)
+                        : null);
             }
 
             ErrorEnvelope? error = null;
@@ -285,7 +290,9 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
                     tronResources ? payload.EnergyUsageTotal : null,
                     tronResources ? payload.OriginEnergyUsage : null,
                     TxHash: string.IsNullOrWhiteSpace(payload.TxHash) ? null : payload.TxHash,
-                    RealizedFeeWei: _policy.ReportsFeeInWei ? ReadRealizedFeeWei(payload.RealizedFeeWei, txHash) : null);
+                    RealizedFeeWei: _policy.ReportsFeeInWei ? ReadRealizedFeeWei(payload.RealizedFeeWei, txHash) : null,
+                    PlatformSpendWei: _policy.ReportsFeeInWei ? ReadWei(payload.PlatformSpendWei, "platformSpendWei", txHash) : null,
+                    NativePriceUsdt: ReadPrice(payload.NativePriceUsdt, txHash));
             }
             return new TransferStatusResult(
                 TransferStatusOutcome.Pending,
@@ -378,7 +385,10 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
     // malformed value (a JSON number, a hex string, more digits than decimal
     // holds exactly) is logged and recorded as NULL ("not measured"); it never
     // turns a final transfer into an unreadable status.
-    private decimal? ReadRealizedFeeWei(JsonElement? raw, string txHash)
+    private decimal? ReadRealizedFeeWei(JsonElement? raw, string txHash) =>
+        ReadWei(raw, "realizedFeeWei", txHash);
+
+    private decimal? ReadWei(JsonElement? raw, string field, string txHash)
     {
         if (raw is not { } value || value.ValueKind == JsonValueKind.Null) return null;
         if (value.ValueKind == JsonValueKind.String
@@ -387,8 +397,40 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             return wei;
         }
         _logger.LogWarning(
-            "{Network} status for {TxHash} carries an unusable realizedFeeWei {Raw} (a decimal string of at most {MaxDigits} digits is expected) — not recorded.",
-            _policy.Network, txHash, value.GetRawText(), WeiAmount.MaxDigits);
+            "{Network} status for {TxHash} carries an unusable {Field} {Raw} (a decimal string of at most {MaxDigits} digits is expected) — not recorded.",
+            _policy.Network, txHash, field, value.GetRawText(), WeiAmount.MaxDigits);
+        return null;
+    }
+
+    private long? ReadPlatformSpendSun(JsonElement? raw, Guid rowId)
+    {
+        if (raw is not { } value || value.ValueKind == JsonValueKind.Null) return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var sun) && sun >= 0)
+        {
+            return sun;
+        }
+        _logger.LogWarning(
+            "{Network} broadcast of {BlockchainTransactionId} carries an unusable platformSpendSun {Raw} — not recorded.",
+            _policy.Network, rowId, value.GetRawText());
+        return null;
+    }
+
+    // T160c düzeltme turu — the price the platform spend is valued at. Same
+    // rule as the realized fee: measurement, never a gate. A plain decimal
+    // string, positive, at most 6 decimals (both services send `toFixed(6)`).
+    private decimal? ReadPrice(JsonElement? raw, string txHash)
+    {
+        if (raw is not { } value || value.ValueKind == JsonValueKind.Null) return null;
+        if (value.ValueKind == JsonValueKind.String
+            && decimal.TryParse(value.GetString(), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var price)
+            && price > 0m
+            && decimal.Round(price, 6) == price)
+        {
+            return price;
+        }
+        _logger.LogWarning(
+            "{Network} status for {TxHash} carries an unusable nativePriceUsdt {Raw} — the platform spend is not valued.",
+            _policy.Network, txHash, value.GetRawText());
         return null;
     }
 
@@ -423,7 +465,9 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             // model as a refund (deposit index/address), but the destination is
             // the platform hot wallet (the row's ToAddress) and the sidecar runs
             // it through energy delegation, so it gets its own endpoint + body.
-            BlockchainTransactionType.SWEEP => (
+            // T160c — REFUND_FEE_SWEEP is the same deposit → hot wallet send
+            // (pinned destination), carrying withheld refund fees.
+            BlockchainTransactionType.SWEEP or BlockchainTransactionType.REFUND_FEE_SWEEP => (
                 "api/transfer/sweep",
                 new SweepBody(
                     network,
@@ -521,7 +565,11 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("blockNumber")] long? BlockNumber);
 
     private sealed record TransferBroadcastResponse(
-        [property: JsonPropertyName("txHash")] string? TxHash);
+        [property: JsonPropertyName("txHash")] string? TxHash,
+        // T160c düzeltme turu — TRON sweep / refund (sidecar-blockchain transferHandlers).
+        // Read as an element: a malformed measurement must never turn a
+        // broadcast that happened into an unparsable (retried) answer.
+        [property: JsonPropertyName("platformSpendSun")] JsonElement? PlatformSpendSun = null);
 
     private sealed record TransferStatusResponse(
         [property: JsonPropertyName("txHash")] string? TxHash,
@@ -534,7 +582,10 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         [property: JsonPropertyName("originEnergyUsage")] long? OriginEnergyUsage = null,
         // T154 — Ethereum; a decimal string (sidecar-ethereum/contracts/transfer-status/).
         // Read as an element so a wrong JSON type is a logged NULL, not an unreadable status.
-        [property: JsonPropertyName("realizedFeeWei")] JsonElement? RealizedFeeWei = null);
+        [property: JsonPropertyName("realizedFeeWei")] JsonElement? RealizedFeeWei = null,
+        // T160c düzeltme turu — Ethereum decimal string; both networks' price as a decimal string.
+        [property: JsonPropertyName("platformSpendWei")] JsonElement? PlatformSpendWei = null,
+        [property: JsonPropertyName("nativePriceUsdt")] JsonElement? NativePriceUsdt = null);
 
     private sealed record ErrorEnvelope(
         [property: JsonPropertyName("error")] string? Error,

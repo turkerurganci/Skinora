@@ -87,6 +87,7 @@ public sealed class SweepQueueJobTests : IDisposable
         Assert.Equal(StablecoinType.USDT, sweep.Token);
         Assert.Null(sweep.ActualTokenAddress);             // CK_..._Type_Sweep: NULL
         Assert.Null(sweep.GasFee);                         // sweeper funds energy via delegation
+        Assert.Null(sweep.RefundFeeRecovered);             // T160c — no refund fee to carry
         Assert.Null(sweep.NextAttemptAt);
     }
 
@@ -240,6 +241,139 @@ public sealed class SweepQueueJobTests : IDisposable
         Assert.True(await _db.Set<BlockchainTransaction>().AnyAsync(
             b => b.TransactionId == tx.Id && b.Type == BlockchainTransactionType.SWEEP));
     }
+
+    // -------------------- T160c — withheld refund fees ride along with the sweep --------------------
+    // Fixture fees (1.37 / 0.83 / 2.41 …) differ from every fallback setting
+    // (TRON 2.0, Ethereum 0.05) so a fallback leaking in would show.
+
+    [Fact]
+    public async Task T160c_Confirmed_Deposit_Refund_Fees_In_The_Sale_Token_Are_Added_To_The_Sweep()
+    {
+        await ConfigureHotWalletAsync();
+        var (tx, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        // Over-payment refund (excess 7.00 → net 5.63, fee 1.37) and a second
+        // transfer refunded whole minus its fee (4.00 → 3.17, fee 0.83).
+        AddRefund(tx, BlockchainTransactionType.EXCESS_REFUND, net: 5.63m, fee: 1.37m, from: deposit.Address);
+        AddRefund(tx, BlockchainTransactionType.EXCESS_REFUND, net: 3.17m, fee: 0.83m, from: deposit.Address);
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var sweep = await SingleSweepAsync(tx);
+        Assert.Equal(104.20m, sweep.Amount);           // 102 escrow + 1.37 + 0.83
+        Assert.Equal(2.20m, sweep.RefundFeeRecovered);
+        Assert.Null(sweep.GasFee);
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.PENDING)]
+    [InlineData(BlockchainTransactionStatus.DETECTED)]
+    [InlineData(BlockchainTransactionStatus.FAILED)]
+    public async Task T160c_A_Refund_That_Is_Not_Final_Keeps_Its_Whole_Base_On_The_Deposit(BlockchainTransactionStatus status)
+    {
+        await ConfigureHotWalletAsync();
+        var (tx, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        AddRefund(tx, BlockchainTransactionType.EXCESS_REFUND, net: 5.63m, fee: 1.37m, from: deposit.Address, status: status);
+        AddRefund(tx, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND, net: 9.59m, fee: 2.41m, from: deposit.Address);
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var sweep = await SingleSweepAsync(tx);
+        Assert.Equal(104.41m, sweep.Amount);           // only the confirmed under-payment refund's fee
+        Assert.Equal(2.41m, sweep.RefundFeeRecovered);
+    }
+
+    [Fact]
+    public async Task T160c_A_Wrong_Token_Refund_Fee_And_A_Hot_Wallet_Refund_Fee_Are_Not_Folded_In()
+    {
+        await ConfigureHotWalletAsync();
+        var (tx, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        // Withheld USDC — another token than this sweep moves.
+        var wrong = AddRefund(tx, BlockchainTransactionType.WRONG_TOKEN_REFUND, net: 8.63m, fee: 1.37m, from: deposit.Address);
+        wrong.ActualTokenAddress = "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8";
+        // Sent by the hot wallet: its fee never stayed on the deposit.
+        AddRefund(tx, BlockchainTransactionType.EXCESS_REFUND, net: 3.17m, fee: 0.83m, from: HotWalletAddress);
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var sweep = await SingleSweepAsync(tx);
+        Assert.Equal(102m, sweep.Amount);
+        Assert.Null(sweep.RefundFeeRecovered);
+    }
+
+    [Fact]
+    public async Task T160c_Fees_A_Collection_Already_Carries_Are_Not_Moved_Twice()
+    {
+        await ConfigureHotWalletAsync();
+        var (tx, deposit) = await SeedDeliveredAsync(price: 100m, commission: 2m);
+        AddRefund(tx, BlockchainTransactionType.EXCESS_REFUND, net: 5.63m, fee: 1.37m, from: deposit.Address);
+        AddRefund(tx, BlockchainTransactionType.EXCESS_REFUND, net: 3.17m, fee: 0.83m, from: deposit.Address);
+        AddCollection(tx, deposit, 0.83m, BlockchainTransactionStatus.CONFIRMED);
+        AddCollection(tx, deposit, 1.37m, BlockchainTransactionStatus.FAILED); // moved nothing
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var sweep = await SingleSweepAsync(tx);
+        Assert.Equal(103.37m, sweep.Amount);
+        Assert.Equal(1.37m, sweep.RefundFeeRecovered);
+    }
+
+    private BlockchainTransaction AddRefund(
+        Transaction tx,
+        BlockchainTransactionType type,
+        decimal net,
+        decimal fee,
+        string from,
+        BlockchainTransactionStatus status = BlockchainTransactionStatus.CONFIRMED)
+    {
+        var row = new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            Type = type,
+            TxHash = status == BlockchainTransactionStatus.PENDING ? null : "refund-" + Guid.NewGuid().ToString("N"),
+            FromAddress = from,
+            ToAddress = tx.BuyerRefundAddress!,
+            Amount = net,
+            GasFee = fee,
+            Token = StablecoinType.USDT,
+            ActualTokenAddress = type == BlockchainTransactionType.WRONG_TOKEN_REFUND
+                ? "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8"
+                : null,
+            Status = status,
+            ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
+            ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? _clock.GetUtcNow().UtcDateTime : null,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        };
+        _db.Set<BlockchainTransaction>().Add(row);
+        return row;
+    }
+
+    private void AddCollection(Transaction tx, PaymentAddress deposit, decimal amount, BlockchainTransactionStatus status) =>
+        _db.Set<BlockchainTransaction>().Add(new BlockchainTransaction
+        {
+            Id = Guid.NewGuid(),
+            TransactionId = tx.Id,
+            PaymentAddressId = deposit.Id,
+            Type = BlockchainTransactionType.REFUND_FEE_SWEEP,
+            TxHash = "collect-" + Guid.NewGuid().ToString("N"),
+            FromAddress = deposit.Address,
+            ToAddress = HotWalletAddress,
+            Amount = amount,
+            RefundFeeRecovered = amount,
+            Token = StablecoinType.USDT,
+            Status = status,
+            ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
+            ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? _clock.GetUtcNow().UtcDateTime : null,
+            CreatedAt = _clock.GetUtcNow().UtcDateTime,
+        });
+
+    private Task<BlockchainTransaction> SingleSweepAsync(Transaction tx) =>
+        _db.Set<BlockchainTransaction>().AsNoTracking()
+            .SingleAsync(b => b.TransactionId == tx.Id && b.Type == BlockchainTransactionType.SWEEP);
 
     [Fact]
     public async Task ReversedDelivery_IsSkipped()
