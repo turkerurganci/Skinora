@@ -1053,7 +1053,7 @@ Betik: [`scripts/wallet-backup/wallet-backup.sh`](../scripts/wallet-backup/walle
 | 7-Zip AES-256 | Windows'ta sağ tık ile kolay; "dosya adlarını şifrele" seçeneği | Bu PC'de **kurulu değil**; bütünlük yalnız CRC; betik bu yolu desteklemiyor (elle) |
 | `age` | Modern, sade | Kurulum gerekir (`winget install FiloSottile.age`); betik desteklemiyor |
 
-Gerekenler: Git Bash (`bash`, `tar`, `gpg`, `shred`), `node` ve bir kez `npm ci` (sidecar-ethereum — adres kontrolü servislerin kendi `ethers` sürümüyle yapılır). **Ağ gerekmez.** Betik parolayı ekrana yazmadan iki kez sorar, gpg'ye argüman değil dosya tanımlayıcısıyla verir; gpg geçici bir `GNUPGHOME` ile çalışır (kendi anahtarlığınıza hiçbir şey yazılmaz, parola önbelleğe alınmaz); açık metin yalnız geçici özel bir dizinde durur ve çıkışta `shred` ile silinir. `--passphrase-file` yalnız prova ve testler içindir.
+Gerekenler: Git Bash (`bash`, `tar`, `gpg`, `shred`), `node` ve bir kez `npm ci` (sidecar-ethereum — adres kontrolü servislerin kendi `ethers` sürümüyle yapılır). **Ağ gerekmez.** Betik parolayı ekrana yazmadan iki kez sorar, gpg'ye argüman değil dosya tanımlayıcısıyla verir; gpg geçici bir `GNUPGHOME` ile çalışır (kendi anahtarlığınıza hiçbir şey yazılmaz, parola önbelleğe alınmaz); açık metin yalnız geçici özel bir dizinde (`$TMPDIR/skinora-wallet-backup.*`) durur ve çıkışta `shred` ile silinir — iş Ctrl+C (INT), pencereyi kapatma (HUP) ya da `kill` (TERM) ile kesildiğinde de (testle). Yakalanamayan kesintide (`kill -9`, elektrik kesilmesi) dizin kalır: §L.8. `--passphrase-file` yalnız prova ve testler içindir.
 
 ### L.3 Parola (⚠ GÜVENLİK — saklama yeri sahibin kararı)
 
@@ -1129,4 +1129,5 @@ Aynı akışın küçük hâli CI'da her Ethereum servisi değişikliğinde koş
 
 - **Disk.** `secrets/*.txt` host'ta düz metindir (compose secret'ı swarm dışında bir bind mount'tur); koruma host erişimi ve **disk şifrelemesidir** — bu PC'de BitLocker açık olmalı (öneri, ⚠ GÜVENLİK). `shred` NTFS/SSD'de silmeyi garanti etmez (aşınma dengeleme, günlük); bu yüzden de disk şifrelemesi.
 - **Bellek.** İki servis tohumun kök düğümünü süreç boyunca bellekte tutar (05 §3.3). **KMS/HSM tetiği:** depozitlerde bekleyen para sahibin belirleyeceği eşiği (T169 "KMS/HSM eşiği") geçince imza KMS/HSM'e taşınır; bulut KMS'leri HD türetme yapmadığı için bu, depozit başına ayrı anahtar ve imza yolunun yeniden yazımı demektir.
+- **Yakalanamayan kesinti.** `kill -9` ya da elektrik kesilmesi betiğin temizliğini çalıştırmaz; `$TMPDIR/skinora-wallet-backup.*` dizini (içinde açık metin sırlar) kalabilir. Böyle bir kesintiden sonra o dizini `find … -type f -exec shred -u {} +` ve `rm -rf` ile elle silin.
 - **Ortak sırlar** (JWT, iki webhook sırrı, üç iç anahtar) hâlâ env'dedir → DEFERRED_BACKLOG `SharedSecretsInPlainEnv` (T171).

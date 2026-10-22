@@ -41,7 +41,7 @@ function startupInternalKey(): string {
 }
 
 // T163 — the seed and the hot wallet key come from their Docker secret files
-// (config/signingMaterial.ts); outside NODE_ENV=development|test a plain
+// (config/signingSecrets.ts); outside NODE_ENV=development|test a plain
 // HD_WALLET_MNEMONIC / HOT_WALLET_PRIVATE_KEY variable stops the service. The
 // startup line below names the SOURCE of each and the public address the key
 // controls (never a value), so an operator can check a restore against the

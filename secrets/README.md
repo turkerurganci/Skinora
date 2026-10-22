@@ -57,7 +57,7 @@ umask 077
 grep '^HD_WALLET_MNEMONIC=' .env | cut -d= -f2- | tr -d '"' > secrets/tron_hd_mnemonic.txt
 grep '^HOT_WALLET_PRIVATE_KEY=' .env | cut -d= -f2- | tr -d '"' > secrets/tron_hot_wallet_private_key.txt
 grep -v -e '^HD_WALLET_MNEMONIC' -e '^HOT_WALLET_PRIVATE_KEY' .env > .env.new && mv .env.new .env
-# Kontrol — yalnız ADRESLER yazılır (DEPLOY_RUNBOOK §L.5):
+# Kontrol — yalnız ADRESLER yazılır (DEPLOY_RUNBOOK §L.6):
 node scripts/wallet-backup/wallet-manifest.mjs addresses secrets
 ```
 

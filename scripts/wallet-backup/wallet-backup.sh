@@ -20,7 +20,8 @@
 # Never shows a secret: no `set -x`, the passphrase is read with echo off (or
 # from --passphrase-file for drills/tests) and reaches gpg through a file
 # descriptor, never argv; plaintext is only ever in a private temp directory
-# that is shredded on exit. gpg runs with a throwaway GNUPGHOME — nothing is
+# that is shredded on exit, also when the run is interrupted (Ctrl+C, a
+# closed window, kill). gpg runs with a throwaway GNUPGHOME — nothing is
 # cached in, or written to, the operator's own keyring.
 #
 # Needs: bash, tar, gpg (all in Git for Windows), sha256sum, node + the
@@ -46,15 +47,27 @@ say() { printf '%s\n' "$*"; }
 
 WORK=""
 cleanup() {
+  # Not interruptible: a second signal (or one sent to the whole process
+  # group, as `timeout` and a closed terminal do) must not stop the shredding
+  # half way. Ignored signals are inherited by shred/rm too.
+  trap '' HUP INT TERM
   [ -n "$WORK" ] || return 0
   if [ -d "$WORK/gnupg" ]; then
     gpgconf --homedir "$WORK/gnupg" --kill gpg-agent >/dev/null 2>&1 || true
   fi
-  # Best effort on NTFS/SSD (DEPLOY_RUNBOOK §L.6); then remove.
+  # Best effort on NTFS/SSD (DEPLOY_RUNBOOK §L.8); then remove.
   find "$WORK" -type f -exec shred -u -z {} + 2>/dev/null || true
   rm -rf "$WORK"
+  WORK=""
 }
+# bash runs the EXIT trap on a normal exit and on `die`, but NOT when a signal
+# kills it: without the three traps below a closed terminal window (HUP) or a
+# `kill` (TERM) would leave the plaintext in $WORK. Each turns the signal into
+# an exit (128 + signal number), which then runs cleanup.
 trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 new_workdir() {
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/skinora-wallet-backup.XXXXXX")"
@@ -251,7 +264,7 @@ cmd_restore() {
   say ""
   say "Restore OK  [$LABEL] → $target"
   say "  restored ${restored[*]}"
-  say "Addresses (the services must report these after restart — DEPLOY_RUNBOOK §L.5):"
+  say "Addresses (the services must report these after restart — DEPLOY_RUNBOOK §L.6):"
   print_addresses "$WORK/addresses.json"
 }
 

@@ -94,8 +94,9 @@ const HOT_WALLET_KEY: SecretSpec = {
   defaultPath: DEFAULT_SIGNING_SECRET_PATHS.hotWalletKey,
 };
 
+/** Exact match, no trimming: ' development' or 'development\n' keeps the env path closed. */
 export function envSecretsAllowed(nodeEnv: string | undefined): boolean {
-  return ENV_SECRET_MODES.has((nodeEnv ?? '').trim());
+  return nodeEnv !== undefined && ENV_SECRET_MODES.has(nodeEnv);
 }
 
 function resolveOne(

@@ -269,6 +269,104 @@ describe.skipIf(!TOOLS)(
       expect(readFileSync(join(target, 'ethereum_hd_mnemonic.txt'), 'utf8').trim()).toBe(MNEMONIC);
     }, 180_000);
 
+    it('encrypts with AES-256, S2K SHA-512 at the maximum count and an integrity check (gpg --list-packets)', () => {
+      const archive = backup(fixture('cipher-src', ALL_FIVE), join(work, 'cipher-out'));
+      const home = join(work, 'cipher-gnupg');
+      mkdirSync(home, { recursive: true });
+      const result = spawnSync(
+        'gpg',
+        [
+          '--batch',
+          '--no-tty',
+          '--pinentry-mode',
+          'loopback',
+          '--passphrase-file',
+          posix(passFile),
+          '--list-packets',
+          posix(archive),
+        ],
+        { encoding: 'utf8', timeout: 60_000, env: { ...process.env, GNUPGHOME: posix(home) } },
+      );
+      spawnSync('gpgconf', ['--homedir', posix(home), '--kill', 'gpg-agent']);
+      const packets = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+      for (const secret of SECRETS) expect(packets).not.toContain(secret);
+      // cipher 9 = AES-256, s2k 3 = iterated+salted, hash 10 = SHA-512 (RFC 4880 §9).
+      expect(packets).toMatch(
+        /:symkey enc packet: version \d, cipher 9,(?: aead \d,)?\s*s2k 3, hash 10/,
+      );
+      expect(packets).toMatch(/count 65011712\b/);
+      // Integrity: MDC (GnuPG 2.2, Git for Windows) or an AEAD packet (newer GnuPG).
+      expect(packets).toMatch(/mdc_method: 2|:aead encrypted packet:/);
+      expect(packets).not.toMatch(/:compressed packet:/);
+    }, 120_000);
+
+    // B1 (T163 validation): an interrupted run must not leave the plaintext
+    // behind. `timeout` signals the whole process group, as a closed terminal
+    // window does — children die at once and bash must still shred. A `node`
+    // shim on PATH holds the manifest check (plaintext already extracted) open
+    // for 6 s, so the signal at 3 s always lands while the secrets are on disk.
+    // Without the HUP/TERM traps, or with an interruptible cleanup, the
+    // directory stays (measured: old script 12/14 interrupted restores).
+    it.each(['TERM', 'HUP'])(
+      'shreds the plaintext temp directory when interrupted with SIG%s',
+      (signal) => {
+        const archive = backup(
+          fixture(`signal-${signal}-src`, ALL_FIVE),
+          join(work, `signal-${signal}-out`),
+        );
+        const tmp = join(work, `signal-${signal}-tmp`);
+        const shims = join(work, `signal-${signal}-bin`);
+        mkdirSync(tmp, { recursive: true });
+        mkdirSync(shims, { recursive: true });
+        writeFileSync(
+          join(shims, 'node'),
+          [
+            '#!/usr/bin/env bash',
+            'for a in "$@"; do',
+            '  if [ "$a" = check ]; then',
+            '    ls "$TMPDIR"/skinora-wallet-backup.*/plain/MANIFEST.json >/dev/null 2>&1 && : > "$SEEN"',
+            '    sleep 6',
+            '  fi',
+            'done',
+            'exec "$REAL_NODE" "$@"',
+            '',
+          ].join('\n'),
+          { mode: 0o755 },
+        );
+        const seen = join(work, `signal-${signal}-seen`);
+        const driver = [
+          // PATH is ':'-separated: on Windows C:/… must become /c/… first.
+          'if command -v cygpath >/dev/null 2>&1; then SHIMS="$(cygpath -u "$SHIMS")"; fi',
+          'export PATH="$SHIMS:$PATH"',
+          'timeout -s "$SIG" 3 bash "$SCRIPT" verify "$ARCHIVE" --passphrase-file "$PASSFILE" >/dev/null 2>&1',
+          'status=$?',
+          'left=$(ls -A "$TMPDIR" | wc -l)',
+          'echo "status=$status left=$left"',
+        ].join('\n');
+        const result = spawnSync('bash', ['-c', driver], {
+          encoding: 'utf8',
+          timeout: 120_000,
+          env: {
+            ...process.env,
+            TMPDIR: posix(tmp),
+            SHIMS: posix(shims),
+            SEEN: posix(seen),
+            REAL_NODE: posix(process.execPath),
+            SCRIPT: posix(SCRIPT),
+            ARCHIVE: posix(archive),
+            PASSFILE: posix(passFile),
+            SIG: signal,
+          },
+        });
+        const out = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+        for (const secret of SECRETS) expect(out).not.toContain(secret);
+        // 124 = timeout fired: the run really was interrupted, with the plaintext out.
+        expect(existsSync(seen), 'plaintext was not extracted before the signal').toBe(true);
+        expect(out.trim()).toBe('status=124 left=0');
+      },
+      120_000,
+    );
+
     it('refuses a short passphrase and a backup without a label', () => {
       const src = fixture('short-src', ALL_FIVE);
       const shortPass = join(work, 'short-passphrase');

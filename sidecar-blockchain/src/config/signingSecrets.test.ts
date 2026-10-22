@@ -160,11 +160,28 @@ describe('loadSigningMaterial — the plain-variable path is development-only', 
     expect(err.message).not.toContain('abandon');
   });
 
-  it('envSecretsAllowed is an exact match', () => {
+  it('envSecretsAllowed is an exact match (no trimming, no case folding)', () => {
     expect(envSecretsAllowed('development')).toBe(true);
-    expect(envSecretsAllowed(' test ')).toBe(true);
-    expect(envSecretsAllowed('production')).toBe(false);
+    expect(envSecretsAllowed('test')).toBe(true);
+    for (const padded of [' development', 'development ', 'development\n', ' test ', '\ttest']) {
+      expect(envSecretsAllowed(padded), JSON.stringify(padded)).toBe(false);
+    }
+    for (const other of ['Development', 'TEST', 'dev', 'tests', 'production', '']) {
+      expect(envSecretsAllowed(other), JSON.stringify(other)).toBe(false);
+    }
     expect(envSecretsAllowed(undefined)).toBe(false);
+  });
+
+  it('a padded NODE_ENV does not open the env path', () => {
+    for (const nodeEnv of [' development', 'development\n', ' test ']) {
+      const env = {
+        NODE_ENV: nodeEnv,
+        HD_WALLET_MNEMONIC: FIXTURE.mnemonic,
+      };
+      const err = refusal(() => loadSigningMaterial(env, '', NONE));
+      expect(err.code).toBe('SIGNING_SECRET_IN_ENV');
+      expect(err.message).not.toContain('abandon');
+    }
   });
 });
 
