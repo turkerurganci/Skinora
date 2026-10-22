@@ -75,9 +75,9 @@
 
 | Tür | Sonuç | Detay |
 |---|---|---|
-| Backend unit (tüm Unit filtresi — enum eklendi) | ✓ 2292/2292 | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` (son koşu) — Shared 571, Fraud 19, Disputes 25, Users 49, Steam 59, Auth 96, Platform 161, Realtime 44, API 137, Transactions 981, Notifications 150 |
-| Backend integration (dokunulan projeler, LocalDB) | ✓ 1609/1609 | Son koşu: Shared 16/16, Platform 74/74, Transactions 744/744, API 775/775. İlk koşuda Transactions'ta 10 adet 1 ms'lik LocalDB kuruluş titremesi ve API'de 13 kırmızı (beklenen değerler T169'a çekildi, onay testlerinin tohum satırları düzeltildi) vardı; düzeltmeden sonra tam yeniden koşu temiz |
-| Frontend | ✓ | `tsc --noEmit` temiz; `eslint` hata yok; prettier (değişen dosyalar, LF) temiz; `i18n:check` parity OK (4 dil × 1626 anahtar); `vitest` 44 dosya / 425 test geçti; `next build` başarılı |
+| Backend unit (tüm Unit filtresi — enum eklendi) | ✓ 2376/2376 | main (T160c) birleştirmesinden sonra (`fc35ca9f`): `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — Shared 572, Fraud 19, Disputes 25, Steam 59, Auth 96, Platform 161, Users 49, Realtime 44, API 138, Transactions 1063, Notifications 150. Contract filtresi 101/101 (Transactions 72, Shared 5, API 24) |
+| Backend integration (dokunulan projeler, LocalDB) | ✓ 1612/1612 | Birleştirmeden sonra: Shared 16/16, Platform 74/74, Transactions 744/744, API 778/778. İlk koşuda Transactions'ta 10 adet 1 ms'lik LocalDB kuruluş titremesi ve API'de 13 kırmızı (beklenen değerler T169'a çekildi, onay testlerinin tohum satırları düzeltildi) vardı; düzeltmeden sonra tam yeniden koşular temiz |
+| Frontend | ✓ | Birleştirmeden sonra: `tsc --noEmit` temiz; `eslint` hata yok; prettier (değişen dosyalar, LF) temiz; `i18n:check` parity OK (4 dil × 1641 anahtar); `vitest` 44 dosya / 426 test geçti; `next build` başarılı |
 | e2e harness | ✓ | `tsc --noEmit`, prettier, eslint (`e2e/src/db.ts`) temiz; Docker kullanılmadığı için e2e süitleri yerelde koşulmadı (CI advisory leg'leri) |
 | Compose | ✓ | `node --test scripts/compose-exposure.test.mjs` 10/10 (trial overlay render) |
 
