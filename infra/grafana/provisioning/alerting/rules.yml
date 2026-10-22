@@ -595,6 +595,100 @@ groups:
             network's gas tariff before anything else (DEPLOY_RUNBOOK §J
             "Gas tahmini").
 
+      # T164 — SQL Server Express caps one database's data files at 10 GB; past
+      # it every INSERT that needs a new page fails (Msg 1105 / 1827) — sales,
+      # payments, the job storage. The backend publishes the used space and
+      # the limit (10240 MB on Express; DatabaseStorageMonitor__DataLimitMegabytes
+      # overrides); no limit series = not Express = no alarm.
+      - uid: db-data-size-critical
+        title: Database Data Files Above 85% Of The Express Limit
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max(skinora_backend_db_data_used_bytes) / max(skinora_backend_db_data_limit_bytes)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.85]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The database uses more than 85% of the SQL Server Express 10 GB data limit
+          description: >-
+            Space used in the data files of the Skinora database is above 85% of
+            the limit the backend publishes (skinora_backend_db_data_limit_bytes —
+            10240 MB on Express). At 100% writes fail and the platform stops
+            taking sales and payments. Act now: purge what the retention jobs
+            allow, move to a paid edition, or archive (DEPLOY_RUNBOOK §M.5).
+
+      # T164 — the newest scheduled full backup (msdb, copy-only excluded) is
+      # older than the threshold the backend publishes (default 26 h = the 24 h
+      # schedule + 2 h). A database never backed up reads as timestamp 0 and
+      # fires too.
+      - uid: db-backup-full-stale
+        title: No Recent Full Database Backup
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: ((time() - max by (type) (skinora_backend_db_last_backup_timestamp_seconds{type="full"})) / max by (type) (skinora_backend_db_backup_alarm_age_seconds{type="full"})) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The database has no full backup newer than the alarm threshold
+          description: >-
+            The newest scheduled full backup of the Skinora database finished
+            longer ago than DatabaseStorageMonitor__FullBackupMaxAgeHours (default
+            26 h), or there is none. Check the skinora-db-backup container (docker
+            compose logs skinora-db-backup — "FAILED" lines), the backup folder
+            on the host (disk full, permissions) and that the database is ONLINE
+            (DEPLOY_RUNBOOK §M).
+
   - orgId: 1
     name: Skinora Warning Alerts
     folder: Skinora Alerts
@@ -1326,3 +1420,93 @@ groups:
             (08 §3.1a): check the service's estimate-fee log and the RPC provider,
             and compare the row's GasFee with the realized fee (DEPLOY_RUNBOOK §J
             "Gas tahmini"). The alarm clears an hour after the last fallback.
+
+      # T164 — 70% of the Express data limit: weeks of headroom at the trial's
+      # volume; time to plan, not to act (the 85% critical rule is the act-now).
+      - uid: db-data-size-warning
+        title: Database Data Files Above 70% Of The Express Limit
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max(skinora_backend_db_data_used_bytes) / max(skinora_backend_db_data_limit_bytes)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.7]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The database uses more than 70% of the SQL Server Express 10 GB data limit
+          description: >-
+            Space used in the data files of the Skinora database is above 70% of
+            the limit the backend publishes (10240 MB on Express). Plan the next
+            step before 85% (db-data-size-critical): which tables grow
+            (sp_spaceused), retention, a paid edition or archiving
+            (DEPLOY_RUNBOOK §M.5).
+
+      # T164 — only while the database is in FULL recovery: there the
+      # transaction log grows until a log backup truncates it, and the log
+      # backups are what a point-in-time restore replays.
+      - uid: db-backup-log-stale
+        title: No Recent Transaction Log Backup
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (((time() - max by (type) (skinora_backend_db_last_backup_timestamp_seconds{type="log"})) / max by (type) (skinora_backend_db_backup_alarm_age_seconds{type="log"})) and on() (max(skinora_backend_db_recovery_model_full) == 1)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The database is in FULL recovery but its log has not been backed up recently
+          description: >-
+            The newest log backup of the Skinora database is older than
+            DatabaseStorageMonitor__LogBackupMaxAgeMinutes (default 45 min =
+            three missed 15-minute backups), or there is none. Data written since
+            the last log backup is not in any backup, and the transaction log
+            keeps growing. Check docker compose logs skinora-db-backup
+            (DEPLOY_RUNBOOK §M).

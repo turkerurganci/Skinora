@@ -381,6 +381,14 @@ builder.Services.AddScoped<ISidecarHealthClient, SidecarHealthClient>();
 builder.Services.AddScoped<IPlatformHealthProbeJob, PlatformHealthProbeJob>();
 builder.Services.AddHostedService<HealthProbeRegistrar>();
 
+// T164 — database size (SQL Server Express 10 GB limit) and backup age series
+// for the db-data-size-* / db-backup-*-stale alarms (DEPLOY_RUNBOOK §M.5).
+builder.Services.Configure<DatabaseStorageMonitorOptions>(
+    builder.Configuration.GetSection(DatabaseStorageMonitorOptions.SectionName));
+builder.Services.AddSingleton<PrometheusDatabaseStorageObserver>();
+builder.Services.AddScoped<IDatabaseStorageProbe, SqlServerDatabaseStorageProbe>();
+builder.Services.AddHostedService<DatabaseStorageMonitorService>();
+
 // Account suspension (T105a) — admin suspend/unsuspend service + the temp-block
 // auto-unsuspend recurring job (lifts expired suspensions every 6h).
 // IUserSuspensionWriter is the single definition of what a suspension writes, shared

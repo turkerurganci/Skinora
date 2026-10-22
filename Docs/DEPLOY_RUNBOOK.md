@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-21 — T161 — §K deneme yayını (bu PC, Docker Desktop + Cloudflare Tunnel); §B iç anahtar zorunlu. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-22 — T164 — §M veritabanı yedeği (Express, otomatik tam + log), 10 GB alarmı, geri yükleme provası ve geri dönüş planı. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (75 satır — T149 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -946,7 +946,7 @@ MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
 MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
   -S localhost -U sa -P "$SA" -C -h -1 -d Skinora -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __EFMigrationsHistory"
 
-# 5) Tüm stack
+# 5) Tüm stack — skinora-db-backup da başlar ve ilk tam yedeği alır (§M, T164)
 $TRIAL up -d --build --wait
 #    (§G.5 tuzakları burada da geçerli: yeniden kurulumdan sonra
 #     $TRIAL restart skinora-reverse-proxy skinora-grafana)
@@ -1017,5 +1017,213 @@ Yığın `-p skinora-t161` proje adıyla (geliştirme projesi `escrow`'a dokunma
 ### K.8 Durdurma ve silme
 
 - **Durdur (veri kalır):** `$TRIAL down` — tünel profiliyle başlatıldıysa `$TRIAL --profile tunnel down`.
-- **Sil (veritabanı dahil, geri dönüşü yok):** `$TRIAL down -v`. Yalnız `skinora-trial_*` volume'lerini siler. **Öneksiz `docker compose down -v` koşmayın** — geliştirme projesinin volume'lerini siler.
+- **Sil (veritabanı dahil, geri dönüşü yok):** `$TRIAL down -v`. Yalnız `skinora-trial_*` volume'lerini siler. **Öneksiz `docker compose down -v` koşmayın** — geliştirme projesinin volume'lerini siler. Veritabanı yedekleri host klasöründedir (`backups/trial/db`, §M) ve `down -v` ile **silinmez**.
 - Geliştirme stack'i bu komutlardan etkilenmez; iki proje aynı anda çalışabilir (port çakışması yoktur: deneme yayını iç port yayımlamaz, operatör portları 8090/3011/3012).
+
+## M. Veritabanı yedeği ve geri dönüş planı (T164)
+
+> **Bağlam (proje sahibi kararları 2026-10-04 / 2026-10-21).** Veritabanı **SQL Server Express** (bir veritabanının veri dosyaları en çok **10 GB**); hacim günde 5–20 satış; deneme yayını bu PC'de (§K), PC gece yeniden başlayabilir. Express'te **SQL Agent yoktur** — sunucu kendi kendine yedek almaz. Bu bölüm yedeği, saklamayı, geri yüklemeyi, 10 GB alarmını ve kötü bir sürümden geri dönüşü anlatır. `(öneriyle kaydedildi — ⚠)` işaretli değerler sahibin değiştirebileceği önerilerdir.
+>
+> **En önemli kural (⚠ PARA):** zincirdeki para veritabanından önce gelir. Geri yüklenen veritabanı yedek anına döner; o andan sonra zincirde olanları (gelen ödemeler, gönderilen ödemeler/iadeler/sweep'ler, verilen depozit adresleri) **bilmez**. Bu yüzden geri yükleme son çaredir ve her geri yüklemeden sonra §M.8 mutabakatı, **imza servisleri açılmadan önce** yapılır.
+
+### M.1 Ne, ne sıklıkla, nerede (öneriyle kaydedildi — ⚠)
+
+| Konu | Değer | Neden |
+|---|---|---|
+| Tam yedek | **24 saatte bir** (en yeni tam yedek 24 saatten eskiyse) | Veritabanı küçük (2026-10-22: tam yedek 8,8 MB); tam yedek ucuz |
+| Log yedeği | **15 dakikada bir**, veritabanı **FULL** kurtarma modelinde | Kayıp en çok 15 dk; istenen ana dönüş (point-in-time, ör. "yanlış silmeden 1 dk öncesi") yalnız log yedeğiyle olur |
+| Fark (differential) yedeği | **yok** | Tam yedek zaten küçük; tam + log her anı kapsar, fark yedeği yalnız geri yüklemeyi hızlandırırdı |
+| Saklama | **14 gün**; en yeni **2 tam yedek her zaman** kalır | 2 haftalık geri dönüş penceresi; zamanlayıcı durursa son iyi yedekler silinmez. En eski kalan tam yedekten eski log yedekleri de silinir (tek başına işe yaramazlar) |
+| Doğrulama | her yedek `WITH CHECKSUM` alınır ve hemen `RESTORE VERIFYONLY` ile okunur; geçmeyen dosya silinir, `FAILED` yazılır | Bozuk dosya "var" sayılmasın |
+| Yer | host klasörü — geliştirme `backups/db`, deneme yayını **`backups/trial/db`** (`TRIAL_DB_BACKUP_DIR` ile başka diske alınabilir) | Veritabanı volume'ünün **dışında**: `down -v`, silinen ya da bozulan volume yedekleri götürmez. `.gitignore`'dadır |
+| Sıkıştırma | yok | Express desteklemez (`BACKUP DATABASE WITH COMPRESSION is not supported on Express Edition`, ölçüldü) |
+
+**Disk:** 14 tam yedek + loglar ≈ 14 × veritabanı boyutu. Bugün ~14 × 9 MB; 10 GB'a yaklaşan bir veritabanında ~140 GB olur — o noktaya gelmeden §M.5 alarmı çalar.
+
+Ayarlar `.env` / `.env.trial`: `DB_BACKUP_FULL_INTERVAL_HOURS`, `DB_BACKUP_LOG_INTERVAL_MINUTES` (**0** = log yedeği yok, model SIMPLE'a alınır), `DB_BACKUP_RETENTION_DAYS`. Saklama tam yedek aralığından kısa olamaz (betik açılmaz).
+
+### M.2 Zamanlayıcı: compose içindeki yedek konteyneri (seçim ve gerekçe)
+
+| Seçenek | Artı | Eksi |
+|---|---|---|
+| **(a) `skinora-db-backup` konteyneri (seçildi)** | Compose'un parçası: `$TRIAL up` ile gelir, `restart: unless-stopped` ile Docker Desktop açılınca kendiliğinden başlar; aynı dosya gelecekteki Linux sunucuda da çalışır; veritabanının kendi imajı (sqlcmd hazır, yeni imaj indirilmez); `sqlservr` başlatılmaz, yalnız betik koşar | Docker Desktop açılmazsa yedek de yok (o zaman site de yok) |
+| (b) Windows Görev Zamanlayıcı | Docker'dan bağımsız | Compose dışında elle kurulum, Linux sunucuya taşınmaz, sırrı Windows tarafında tutmak gerekir |
+| (c) Backend içinde Hangfire işi | Kod içinde | İşlerin deposu yedeklenen veritabanının içinde; backend çökünce yedek de durur; eski dosyaları silmek backend'in değil veritabanı sunucusunun diskinde |
+
+Betik: [`scripts/db-backup/db-backup.sh`](../scripts/db-backup/db-backup.sh). Takvim saat değil **yaştır**: her dakika "en yeni tam yedek 24 saatten, en yeni log 15 dakikadan eski mi?" diye bakar. PC gece kapalı kaldıysa açıldığı ilk dakikada eksik yedeği alır — atlamaz (testle: `scripts/db-backup/db-backup.test.mjs` "catch-up after a restart"). Veritabanı henüz yoksa, `RESTORING` ya da çevrimdışıysa bekler. Parola `sqlcmd`'ye komut satırında değil ortam değişkeniyle (`SQLCMDPASSWORD`) gider. Elle bir yedek ile zamanlayıcı aynı anda koşmaz (kilit).
+
+### M.3 Klasör, izinler, şifreleme, ikinci kopya
+
+**Yedekte ne var:** veritabanının tamamı — kullanıcıların e-posta, IP, Steam takas bağlantısı ve takas token'ı, oturum kayıtları, işlemler, admin kayıtları. **Cüzdan tohumları ve anahtarları yoktur** (onlar `secrets/`'tadır, yedekleri §L). Yine de kişisel veri ve sır taşır: **hiçbir yedek commit'e, buluta ya da e-postaya şifresiz girmez.**
+
+- **Git:** `backups/` `.gitignore`'dadır (testle: `scripts/db-backup/compose-backup.test.mjs`); `git add -f` kullanmayın.
+- **İzin (bu PC, öneri — ⚠ GÜVENLİK):** klasörü yalnız Windows kullanıcınıza ve SYSTEM'e açın:
+  ```powershell
+  icacls backups /inheritance:r /grant:r "${env:USERNAME}:(OI)(CI)F" "SYSTEM:(OI)(CI)F"
+  ```
+  Sonra bir yedek alıp çalıştığını görün (`$TRIAL exec skinora-db-backup bash /opt/skinora/db-backup.sh full izin-testi`). Disk **BitLocker** ile şifreli olmalı (§L.8 ile aynı öneri).
+- **İzin (Linux sunucu):** Docker eksik klasörü `root` sahipli açar ve SQL Server (uid 10001) yazamaz — betik `backup directory ... is missing or not writable` diyerek durur. Önce: `mkdir -p backups/db && sudo chown 10001:10001 backups/db && sudo chmod 700 backups/db`.
+- **İkinci kopya (öneri — ⚠ PARA; yeri sahibin seçimi):** yedekler bu PC'nin diskinde durur — disk ya da PC kaybolursa yedekler de gider. **Haftada bir** (ve her kurulum/güncellemeden önce) en yeni tam yedek ile ondan sonraki loglar **şifrelenip** makine dışına kopyalanır. Araç §L.2 ile aynı: **GnuPG simetrik**, AES-256, S2K SHA-512 / 65.011.712. Parola §L.3 kuralıyla, cüzdan arşivinin parolasından **ayrı**:
+  ```bash
+  D=backups/trial/db
+  FULL=$(ls $D/Skinora_FULL_*.bak | tail -n 1)                       # en yeni tam yedek
+  TS=$(basename "$FULL" | sed -E 's/.*_FULL_([0-9TZ]+).*/\1/')
+  FILES=$(cd $D && { basename "$FULL"; ls Skinora_LOG_*.trn 2>/dev/null | awk -v t="Skinora_LOG_$TS" '$0 > t'; })
+  OUT=/e/skinora-db/skinora-db-$TS.tar.gpg                           # USB ya da başka disk
+  (cd $D && tar -cf - $FILES) | gpg --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512 \
+      --s2k-mode 3 --s2k-count 65011712 --force-mdc -o "$OUT"
+  sha256sum "$OUT" > "$OUT.sha256"
+  gpg -d "$OUT" | tar -tvf -          # parola bir kez daha: arşivin açıldığını görün
+  ```
+  Yer seçenekleri: (1) §L'deki USB'lerden **ayrı** bir USB/harici disk, evde; (2) şifreli arşiv bir bulut klasörüne (şifreli olduğu için kabul edilebilir; mainnet'te sahibin kararı). Öneri: (1), ayda bir de (2). Saklama: son 8 haftalık arşiv.
+
+### M.4 Günlük işletim
+
+```bash
+TRIAL="docker compose -p skinora-trial --env-file .env.trial -f docker-compose.yml -f docker-compose.trial.yml"
+BK="$TRIAL exec -T skinora-db-backup bash /opt/skinora/db-backup.sh"
+
+$TRIAL logs --tail 20 skinora-db-backup    # "OK FULL …", "OK LOG …" satırları; "FAILED" olmamalı
+$BK list                                   # dosyalar ve boyutları
+$BK full predeploy                         # elle tam yedek (her kurulum/güncellemeden ÖNCE — §M.7)
+```
+
+- `$TRIAL up -d` yedek konteynerini de başlatır (§K.4 adım 5). İlk dakikada, veritabanı varsa, ilk tam yedeği alır; FULL modelde değilse modeli FULL'a alıp zinciri tam yedekle başlatır.
+- `$TRIAL down -v` veritabanı volume'ünü siler ama **`backups/trial/db`'ye dokunmaz**; o klasör elle silinmedikçe kalır.
+- Zaman damgaları dosya adında, **UTC**'dir (`Skinora_FULL_20261022T163603Z.bak` = 22 Ekim 19:36 Türkiye saati).
+
+### M.5 Alarmlar — 10 GB sınırı ve yedeğin yaşı
+
+**Metrik nereden (gerekçe):** backend, kendi bağlantısıyla 5 dakikada bir `sys.database_files` (veri ve log dosyası boyutu, kullanılan alan), `SERVERPROPERTY('EngineEdition')` (Express = 4) ve `msdb.dbo.backupset`'i (en yeni tam ve log yedeğinin yaşı, copy-only hariç) okur ve Prometheus'a yayımlar (`DatabaseStorageMonitorService`). Ayrı bir exporter (ör. `sql_exporter`) **seçilmedi**: yeni imaj, yeni bir veritabanı kullanıcısı ve 3 GB'lık RAM'de bir konteyner daha demekti; backend'in bağlantısı zaten var ve Prometheus backend'i zaten okuyor. Bedeli: backend kapalıyken bu seriler güncellenmez — o durumu `backend-down` alarmı yakalar. `msdb` okunamazsa (sa dışında bir kullanıcıya geçilirse ona `msdb`'de okuma izni gerekir) boyut yine yayımlanır, yedek yaşı son değerinde donar ve zamanla eskime alarmına düşer.
+
+| Alarm | Önem | Ne zaman | Ne yapılır |
+|---|---|---|---|
+| `db-data-size-warning` | warning | kullanılan veri alanı > sınırın **%70**'i, 15 dk | Planlayın: hangi tablolar büyüyor (`EXEC sp_spaceused` / tablo başına), saklama işleri (§E) çalışıyor mu, ücretli sürüm (Standard) ya da arşivleme |
+| `db-data-size-critical` | critical | > **%85**, 5 dk | Şimdi: %100'de **her yazma düşer** (Msg 1105 / 1827) — satış, ödeme, iş kuyruğu durur. Saklama/temizlik, ya da sürüm değişikliği (Developer üretimde lisanslı değildir) |
+| `db-backup-full-stale` | critical | en yeni tam yedek **26 saatten** eski ya da hiç yok | `$TRIAL logs skinora-db-backup` → `FAILED` satırı; klasör dolu mu, izin; veritabanı `ONLINE` mı |
+| `db-backup-log-stale` | warning | FULL modeldeyken en yeni log yedeği **45 dakikadan** eski | Aynı; log yedeği almadan log dosyası büyümeye devam eder (log dosyası 10 GB sınırına **sayılmaz**, ama diske sayılır) |
+
+- **Sınır:** Express'te 10.240 MB (yalnız veri dosyaları; log hariç). Kural **kullanılan** alanı böler (dosya ayrılmış ama boş alanla büyümeden önce de yazılabilir). Express değilse sınır serisi yayımlanmaz, boyut alarmı çalmaz. Ayar: `DatabaseStorageMonitor__DataLimitMegabytes` (başka bir sürümü bir disk sınırına göre izlemek ya da test için), `DatabaseStorageMonitor__FullBackupMaxAgeHours` (26), `DatabaseStorageMonitor__LogBackupMaxAgeMinutes` (45), `DatabaseStorageMonitor__IntervalSeconds` (300, en az 30).
+- **Deneme yayını Express'tir:** `docker-compose.trial.yml` `MSSQL_PID=Express`'i zorlar (`.env.trial` ne derse desin). Geliştirme stack'i `.env`'deki `MSSQL_PID`'i (varsayılan Developer) kullanır; orada boyut alarmı çalmaz.
+- **Seriler:** `skinora_backend_db_data_used_bytes`, `…_data_allocated_bytes`, `…_data_limit_bytes`, `…_log_allocated_bytes`, `…_recovery_model_full`, `…_last_backup_timestamp_seconds{type="full"|"log"}` (0 = hiç yok), `…_backup_alarm_age_seconds{type}`.
+
+### M.6 Geri yükleme adımları
+
+Betik veritabanını **hiçbir zaman üstüne yazarak** geri yüklemez: önce yeni bir ada geri yükler, kontrol edilir, sonra **yer değiştirir** ve canlı veritabanını `Skinora_before_restore_<zaman>` adıyla **saklar** — §M.8 mutabakatının en iyi kaynağı odur.
+
+```bash
+# 0) Kullanıcıları ve parayı durdur — yazma yok, gönderim yok
+$TRIAL --profile tunnel stop skinora-cloudflared                       # dışarıdan erişim kapanır
+$TRIAL --profile ethereum stop skinora-blockchain-sidecar skinora-ethereum-sidecar skinora-steam-sidecar
+$TRIAL stop skinora-backend skinora-frontend
+# (DİKKAT: skinora-ethereum-tx-journal volume'üne dokunmayın — veritabanıyla birlikte GERİ ALINMAZ, §M.8)
+
+# 1) Hangi noktaya? En yenisi mi, belirli bir an mı (UTC)?
+$BK list
+# 2) Yeni bir ada geri yükle — en yeni tam yedek + sonraki bütün loglar, sırayla
+$BK restore Skinora_restored                                 # en yeni hâl
+$BK restore Skinora_restored 2026-10-22T17:01:27Z            # o ana kadar (point-in-time)
+# 3) Kontrol
+SA=$(grep '^MSSQL_SA_PASSWORD=' .env.trial | cut -d= -f2-)
+SQL="$TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $SA -C -h -1 -W"
+MSYS_NO_PATHCONV=1 $SQL -d Skinora_restored -Q "DBCC CHECKDB WITH NO_INFOMSGS"           # çıktı boş olmalı
+MSYS_NO_PATHCONV=1 $SQL -d Skinora_restored -Q "SELECT COUNT(*), MAX(MigrationId) FROM __EFMigrationsHistory"
+#    migration sayısı ve sonuncusu, geri dönülen sürümün migration listesiyle aynı olmalı (§M.7)
+# 4) Yer değiştir: canlı → Skinora_before_restore_<zaman> (SAKLANIR), Skinora_restored → Skinora,
+#    ardından yeni zinciri başlatan "postrestore" tam yedeği
+$BK swap Skinora_restored
+# 5) §M.8 mutabakatı — imza servisleri AÇILMADAN
+# 6) Açılış sırası (§M.8 sonunda)
+```
+
+- Fiziksel dosyalar `/var/opt/mssql/data/Skinora_restored_<zaman>.mdf` adını taşır (yer değiştirmeden sonra da); zararsızdır.
+- Saklanan eski kopya da 10 GB'ı **kendi başına** sayar (sınır veritabanı başınadır) ama diski doldurur: mutabakat bitince `DROP DATABASE [Skinora_before_restore_<zaman>]` (öncesinde istenirse `BACKUP DATABASE … TO DISK = N'/var/opt/mssql/backup/…'`).
+- Disk ya da volume tamamen kaybolduysa: §K.4 adım 1–3 ile boş bir veritabanı sunucusu açın (**adım 4'teki migration'ı koşmayın**), `$TRIAL up -d --wait skinora-db skinora-db-backup`, sonra yukarıdaki 1–4 (eski kopya olmaz; §M.8 zincirden yapılır).
+
+### M.7 Geri dönüş planı — kötü sürüm ya da kötü migration
+
+**Her kurulum/güncellemeden önce (zorunlu):**
+1. `git rev-parse HEAD` → çalışan sürümün commit'i (not edin); `$SQL -d Skinora -Q "SELECT MAX(MigrationId) FROM __EFMigrationsHistory"` → son migration.
+2. `$BK full predeploy` → `Skinora_FULL_<zaman>_predeploy.bak`.
+3. Yeni sürümün getirdiği migration'lara bakın (`git diff <eski>..<yeni> --stat -- backend/src/Skinora.Shared/Persistence/Migrations`): veri silen / kolon düşüren var mı?
+
+**Sorun çıkınca — üç durum:**
+
+| Durum | Yapılacak | Veritabanı geri yüklenir mi? |
+|---|---|---|
+| **(1) Kötü uygulama sürümü, şema değişmedi** (ya da yeni migration yalnız ekleme yaptı: yeni tablo/kolon, eski sürüm onu yok sayar) | Önceki sürüme dön: `git checkout <eski commit>` → yığın **durmuşken** `$TRIAL build` (§K.3 RAM notu) → `$TRIAL up -d --wait`. Main'e birleşmiş her commit'in imajı `ghcr.io/turkerurganci/skinora-<servis>:sha-<kısa commit>` olarak da vardır (Docker Publish); sunucuda derleme yerine o imaj çekilebilir | **Hayır.** Veri doğrudur; yalnız kod geri döner |
+| **(2) Kötü migration** (veri bozan / silen, ya da eski kodun okuyamadığı şema) | Önce **ileri düzeltme** (yeni bir düzeltici migration) düşünün — para kayıtları canlı veritabanında doğru durur. Olmuyorsa ve migration geri alınabilirse: `dotnet ef migrations script <yeni> <eski> --idempotent` ile **Down** betiği üretip okuyun, veri kaybetmiyorsa uygulayın, sonra (1). Down veri kaybettiriyorsa: `predeploy` yedeğine **point-in-time** geri yükleme (§M.6) + (1) + **§M.8** | Yalnız son çare |
+| **(3) Veri kaybı / bozulma** (disk, volume, yanlış `DELETE`) | §M.6 ile en yeni hâle ya da olaydan bir an öncesine geri yükleme + **§M.8** | Evet |
+
+**Karar kuralı (⚠ PARA, öneri):** yedek anından sonra zincirde para hareket ettiyse (§M.8 sorgularında satır varsa) ve eski veritabanı hâlâ okunabiliyorsa, **eski veritabanını ileri düzeltmek** geri yüklemekten güvenlidir. Geri yükleme, eski veritabanı kullanılamaz olduğunda ya da yedek anından sonra hiçbir para hareketi olmadığında seçilir.
+
+### M.8 Geri yüklemeden sonra para mutabakatı (⚠ PARA)
+
+Geri yüklenen veritabanı `T_yedek` anındadır. `T_yedek` ile şimdi arasında zincirde olan her şey ya veritabanında **yoktur** ya da **eski durumdadır**. Üç tehlike ve sırası:
+
+**(a) Tekrar gönderim — en ciddisi.** `T_yedek`'ten sonra gönderilmiş bir ödeme/iade/sweep, geri yüklenen veritabanında ya `PENDING` satırdır ya da hiç yoktur. İmza servisi açılınca:
+- `PENDING` satır **TRON**'da **yeniden gönderilir** (TRON servisinin gönderim günlüğü yoktur). **Ethereum**'da aynı satır (aynı kimlik) imzalı işlem günlüğünden (`skinora-ethereum-tx-journal` volume'ü) **tekrar oynatılır, yeniden imzalanmaz** — bu yüzden günlük volume'ü veritabanıyla birlikte geri alınmaz.
+- Hiç olmayan satır: iş akışı (ör. `SellerPayoutQueueJob`) ödemeyi **yeni kimlikle** yeniden kuyruğa koyar → iki ağda da **ikinci ödeme**.
+
+Önlem: imza servisleri kapalıyken, eski kopyayla karşılaştırın:
+```sql
+-- OLD = Skinora_before_restore_<zaman>
+-- 1) Geri yüklenen veritabanında olmayan (yedekten sonra açılmış) zincir satırları
+SELECT o.Id, o.TransactionId, o.Network, o.Type, o.Status, o.TxHash, o.ToAddress, o.Amount, o.CreatedAt
+FROM [OLD].dbo.BlockchainTransactions o
+WHERE NOT EXISTS (SELECT 1 FROM Skinora.dbo.BlockchainTransactions r WHERE r.Id = o.Id);
+-- 2) İki tarafta olup durumu ya da hash'i farklı olanlar (ör. geri yüklenen PENDING, eski CONFIRMED)
+SELECT r.Id, r.TransactionId, r.Network, r.Type, r.Status AS Restored, o.Status AS Old, o.TxHash
+FROM Skinora.dbo.BlockchainTransactions r JOIN [OLD].dbo.BlockchainTransactions o ON o.Id = r.Id
+WHERE r.Status <> o.Status OR ISNULL(r.TxHash, '') <> ISNULL(o.TxHash, '');
+```
+Eski kopya yoksa (disk kaybı): sıcak cüzdanların ve depozit adreslerinin `T_yedek`'ten sonraki **giden** transferleri TronScan / Etherscan'den listelenir; Ethereum için ayrıca servis günlüğü (açılışta `ethereum-journal-ack-ahead-of-chain` / `-behind-chain` alarmları, §D).
+
+Düzeltme, satır satır ve iki kişiyle (öneri): (1) gönderilmiş ama veritabanında `PENDING` olan **Ethereum** satırı → AD33–AD37 kapatma aracı (zincirdeki hash'le kapatır, §D adım 7.4); (2) aynı durumdaki **TRON** satırı → **araç yok** (DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling`); TRON servisi **kapalı kalır** ve satır elle (işlem içinde, denetim kaydıyla) eski kopyadaki `Status`/`TxHash`/`ConfirmedAt` değerlerine getirilir; (3) veritabanında hiç olmayan bir gönderimin işlemi → admin panelinden **EMERGENCY_HOLD** (`SellerPayoutQueueJob` ve `SweepQueueJob` bekleyen işlemi atlar), sonra durum el ile çözülür.
+
+**(b) Depozit adresinin yeniden verilmesi.** Yeni adres indeksi `MAX(HdWalletIndex) + 1`'dir (ağ başına). Geri yüklenen veritabanının en büyük indeksi küçüktür → `T_yedek`'ten sonra **zaten verilmiş** adresler yeni işlemlere **tekrar verilir**; kayıp işlemin alıcısı geç öderse para yeni işleme yazılabilir.
+```sql
+SELECT o.Network, o.HdWalletIndex, o.Address, o.TransactionId, o.CreatedAt
+FROM [OLD].dbo.PaymentAddresses o
+WHERE NOT EXISTS (SELECT 1 FROM Skinora.dbo.PaymentAddresses r WHERE r.Network = o.Network AND r.HdWalletIndex = o.HdWalletIndex);
+```
+Satır varsa (ya da eski kopya yoksa ve zincirde `MAX + 1`… indeksli adreslerde hareket varsa): bugün kodda indeks tabanı **yoktur** (DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling`). Taban gelene kadar öneri: yeni satış açılmaz (tünel kapalı) — o adreslerin ödeme pencereleri geçene ve adresler zincirde boş görünene kadar; ya da sahibin kararıyla risk kabul edilir ve o adresler elle izlenir.
+
+**(c) Gelen ödemeler.** `T_yedek`'ten sonra depozitlere gelen ödemeler veritabanında yoktur. Mutabakat turu (`ReconciliationJob`, 03:00 UTC) depozit bakiyelerini zincirle karşılaştırır ve fark alarmı verir; geri yüklemeden sonra bir tur **hemen** koşulmalıdır: admin panelinden `reconciliation.schedule_cron`'u geçici olarak `*/10 * * * *` yapın (yeniden başlatmadan uygulanır, §E), ilk tur bitince eski değere döndürün. Her fark satırı (`ethereum-deposit-balance-mismatch`, mutabakat ekranı) bir kayıp ödemedir: işlem geri yüklenen veritabanında durumuna göre el ile ilerletilir ya da iade edilir.
+
+**Açılış sırası (geri yüklemeden sonra):**
+1. Veritabanı (geri yüklenmiş) + Redis + backend + frontend; **imza servisleri ve tünel kapalı**. Backend imza servisini kesinti sayar: o ağın giden satırları **bekler** (gönderim yok, deneme hakkı harcanmaz — `OutgoingTransferDispatchJob`), süre sayaçları açılışta uzatılır (WP16 yeniden başlatma kurtarması) ve kesintide dondurulur. Admin paneline bu makineden girilir (`http://127.0.0.1:8090`).
+2. (a), (b), (c) sorguları ve düzeltmeleri; EMERGENCY_HOLD'lar.
+3. `$TRIAL --profile ethereum up -d --wait skinora-blockchain-sidecar skinora-ethereum-sidecar skinora-steam-sidecar` — günlük alarmlarını izleyin (§D).
+4. Mutabakat turu (c); fark kalmayınca tünel: `$TRIAL --profile tunnel up -d --wait`.
+5. Eski kopyayı mutabakat bitince silin (§M.6).
+
+### M.9 Geri yükleme provası (2026-10-22, bu PC — T164 kabul kriteri)
+
+Ayrı proje `-p skinora-t164` (deneme yayını overlay'i, yani **SQL Server Express 16.0.4250.1**, `EngineEdition` 4), yalnız `skinora-db` + `skinora-db-backup`; ölçüm hızlı olsun diye log aralığı **1 dk**. İlk tam yedek veritabanı **boşken** alındı; 62 migration, test verisi ve bozma sonradan log yedekleriyle geldi — yani geri yükleme şemanın kendisini de loglardan yeniden kurdu.
+
+| Adım | Sonuç |
+|---|---|
+| 1. Yedek klasörü host'ta (Docker Desktop bind mount) | `Skinora_FULL_20261022T163603Z.bak` (2.936.832 bayt) + dakikada bir `…_LOG_….trn`, hepsi `verified` |
+| 2. Migration (§K.4 adım 4) | 62/62, son `20261021121631_T160c_PlatformNetworkCost` |
+| 3. Test verisi A (16:57:13Z) | Users 501, UserLoginLogs 2.000, AuditLogs 1.000 (Türkçe karakterli adlar) |
+| 4. Test verisi B (16:59:53Z) | Users 601, AuditLogs 1.001, kullanıcı #250 `CompletedTransactionCount` 28 → 1.028 |
+| 5. Bozma (17:01:31Z) | `DELETE FROM UserLoginLogs`, `DROP TABLE AuditLogs`, bütün adlar `BOZULDU` |
+| 6. `restore Skinora_restored 2026-10-22T17:01:27Z` | 1 tam + 25 log, **5,6 sn**; 32 tablonun **hepsi** (satır sayısı + `CHECKSUM_AGG(BINARY_CHECKSUM(*))`) B ile **birebir aynı**, migration 62, `DBCC CHECKDB` temiz |
+| 7. `swap Skinora_restored` | canlı → `Skinora_before_restore_20261022T170436Z` (Users 601, UserLoginLogs 0, AuditLogs yok — bozuk hâli saklandı), geri yüklenen → `Skinora`; `…_postrestore.bak` alındı; 1 dk sonra log zinciri devam etti |
+| 8. Volume kaybı: `down -v` | veritabanı volume'ü **silindi**; host klasöründe 31 dosya (23 MB) **kaldı** |
+| 9. Boş sunucu (`msdb`'de 0 yedek kaydı) → `restore` + `swap` | `postrestore` tam + 2 log; 32 tablo B ile **aynı** |
+| 10. Aynı boş sunucuda point-in-time `restore Skinora_pit 2026-10-22T16:59:31Z` | ilk tam + 23 log; 32 tablo **A ile aynı** (B'nin 100 kullanıcısı ve güncellemesi yok), `DBCC CHECKDB` temiz |
+| 11. Alarm (aynı projede backend + Prometheus + Grafana; test ayarı `DataLimitMegabytes=10`, `LogBackupMaxAgeMinutes=1`, yedek konteyneri durduruldu) | metrikler: kullanılan 9.699.328 / sınır 10.485.760 bayt (%92,5), `recovery_model_full` 1; Grafana: **`db-data-size-critical` firing**, **`db-data-size-warning` firing**, **`db-backup-log-stale` firing**, `db-backup-full-stale` normal (tam yedek dakikalar önce) — ayrıntı ve saatler T164 raporunda |
+| 12. Temizlik | `down -v --rmi local` — `skinora-t164` konteyner/volume/ağ **0**; prova yedek klasörü silindi; `escrow_*` volume'lerine dokunulmadı |
+
+Aynı akışın veritabanısız hâli CI'da koşar: `scripts/db-backup/db-backup.test.mjs` (takvim, saklama, geri yükleme zinciri, point-in-time, üstüne yazmama, parola argv'de yok) ve `scripts/db-backup/compose-backup.test.mjs` (iki konteyner aynı host klasörünü aynı yolda görüyor; deneme yayını kendi klasöründe ve Express).
+
+**Önerilen tekrar (⚠):** ayda bir, deneme yayınının kendi yedeğinden §M.6 adım 2–3 (`restore Skinora_drill` + `DBCC CHECKDB` + satır sayıları), sonra `DROP DATABASE Skinora_drill` — `swap` yapılmaz.
+
+### M.10 Bilinen sınırlar
+
+- **Para mutabakatı için iki araç eksik** (DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling`, ⚠ PARA): TRON'da gönderilmiş bir satırı zincirdeki hash'le kapatan araç yok (Ethereum'da AD33–AD37 var) ve depozit adres indeksine taban konamıyor (§M.8 (b)).
+- **Yedek ile site aynı makinede.** İkinci kopya (§M.3) elle; unutulursa disk kaybında yedek de gider.
+- **Yedeğin yaşı `msdb`'den okunur:** SQL Server'ın "yedek alındı" demesidir; dosyanın sonradan elle silinmesini görmez. `RESTORE VERIFYONLY`'den geçmeyen dosya silinir ama `msdb` kaydı kalır.
+- **Saklama yalnız `Skinora` adlı veritabanını** yedekler; `Skinora_before_restore_*` gibi kopyalar yedeklenmez.

@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-21 — T160c ✓ Tamamlandı, yeniden doğrulama PASS (iade kesinti kalıntısı sıcak cüzdana, AD38 gerçek zincir gideri; T160c_REPORT.md, PR #365). **Merge teyidi (T163 dalında işlendi):** T160c (#365) main `403fe257` → CI `39813399071` ✓, Docker Publish `39813399137` ✓.
+
 **Önceki güncelleme:** 2026-10-21 — T167 ✓ Tamamlandı, doğrulama PASS (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368). **Merge teyidi (T160c dalında işlendi):** T167 (#368) main `daf0e301` → CI `39615975640` ✓, Docker Publish `39615975624` ✓.
 
 **Önceki güncelleme:** 2026-10-21 — T160c ⏳ düzeltme turu, yeniden doğrulama bekliyor (muhasebe gideri platformun gerçek zincir harcaması; T160c_REPORT.md, PR #365)

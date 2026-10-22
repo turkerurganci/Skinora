@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.31** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160c — §3.3 iade kesintisinin toplanması ve gerçek gider (⚠ PARA); T161 — §3.4 port kuralı uygulandı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.32** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T164 — §2.4 ve §8.6 veritabanı yedeği uygulandı (otomatik tam + log, 14 gün), RPO önerisi. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -89,7 +89,7 @@ Ana iş mantığı, API katmanı, state machine, yetkilendirme ve tüm orchestra
 | Özellik | Karar |
 |---|---|
 | Hosting | Docker container (başlangıç), managed'a geçiş yolu açık |
-| Backup | Otomatik, günlük, offsite |
+| Backup | Otomatik, günlük, offsite. **Uygulandı (T164):** Express'te SQL Agent olmadığı için compose içindeki `skinora-db-backup` konteyneri zamanlar — tam yedek 24 saatte bir, log yedeği 15 dakikada bir (FULL kurtarma modeli, ana dönüş mümkün), 14 gün saklama, host klasörüne; makine dışı kopya haftalık ve şifreli, elle (öneriyle kaydedildi — ⚠; DEPLOY_RUNBOOK §M) |
 | Migration | EF Core migrations — CI/CD pipeline içinde otomatik |
 
 **DB büyüme stratejisi:**
@@ -920,8 +920,8 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 
 | Bileşen | Karar |
 |---|---|
-| DB backup | Otomatik, günlük, offsite (farklı lokasyona) |
-| Disaster recovery | Production öncesi tanımlanacak — RTO/RPO hedefleri |
+| DB backup | Otomatik, günlük, offsite (farklı lokasyona). **Uygulandı (T164):** §2.4 satırı; makine dışı kopya GnuPG ile şifreli (DEPLOY_RUNBOOK §M.3) |
+| Disaster recovery | Production öncesi tanımlanacak — RTO/RPO hedefleri. **T164 (öneriyle kaydedildi — ⚠):** RPO ≤ 15 dk (log yedeği aralığı), geri yükleme provasında ölçülen süre saniyeler (küçük veritabanı); geri yükleme ve kötü sürümden geri dönüş adımları, geri yüklemeden sonraki para mutabakatı DEPLOY_RUNBOOK §M.6–§M.8 |
 | Encryption at rest | SQL Server TDE (Transparent Data Encryption) |
 
 ---

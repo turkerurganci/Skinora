@@ -80,9 +80,24 @@ services:
     environment:
       - NODE_ENV=production
 
+  # T164 — SQL Server Express (owner decision 2026-10-04: the 10 GB data file
+  # limit the db-data-size alarms watch), whatever .env.trial says. Backups
+  # into the TRIAL's own host folder — never the development one (both
+  # databases are named Skinora; the files would mix). TRIAL_DB_BACKUP_DIR may
+  # point at another disk (DEPLOY_RUNBOOK §M.3); .env.example does not carry
+  # it, so a copied .env.trial keeps the default.
   skinora-db:
     container_name: !reset null
     ports: !reset []
+    environment:
+      - MSSQL_PID=Express
+    volumes:
+      - ${TRIAL_DB_BACKUP_DIR:-./backups/trial/db}:/var/opt/mssql/backup
+
+  skinora-db-backup:
+    container_name: !reset null
+    volumes:
+      - ${TRIAL_DB_BACKUP_DIR:-./backups/trial/db}:/var/opt/mssql/backup
 
   skinora-redis:
     container_name: !reset null

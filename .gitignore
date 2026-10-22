@@ -58,6 +58,10 @@ secrets/*
 !secrets/README.md
 # Steam Mobile Authenticator exports (shared/identity secrets in the clear)
 *.maFile
+
+# Database backups (T164, DEPLOY_RUNBOOK §M) — personal data and secrets in
+# clear; written by skinora-db-backup into backups/db and backups/trial/db.
+backups/
 *.mafile
 
 # Logs
