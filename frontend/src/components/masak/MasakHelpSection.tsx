@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useOperatorValues } from "@/components/legal/useOperatorValues";
 import { PayoutSourceNotice } from "./PayoutSourceNotice";
 
 /**
@@ -12,6 +13,8 @@ import { PayoutSourceNotice } from "./PayoutSourceNotice";
 export function MasakHelpSection() {
   const tBuyer = useTranslations("masak.buyer");
   const tHelp = useTranslations("masak.help");
+  const tMasak = useTranslations("masak");
+  const operator = useOperatorValues();
 
   return (
     <div className="mt-4 space-y-6 text-base leading-relaxed text-gray-700">
@@ -22,6 +25,7 @@ export function MasakHelpSection() {
           <li>{tHelp("paymentWindow")}</li>
           <li>{tBuyer("dailyLimit")}</li>
           <li>{tBuyer("declare")}</li>
+          <li>{tMasak("entityDetails", operator)}</li>
           <li>{tBuyer("description")}</li>
           <li>{tHelp("refund")}</li>
         </ul>
