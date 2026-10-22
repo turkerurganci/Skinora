@@ -19,7 +19,7 @@ namespace Skinora.API.Tests.Integration.NetworkDimension;
 
 /// <summary>
 /// T169 — the payout/refund launch gate and its admin approval (AD40/AD41,
-/// 07 §9.33; proje sahibi kararı 2026-10-21: test boyunca bütün ödemeler admin
+/// 07 §9.35; proje sahibi kararı 2026-10-21: test boyunca bütün ödemeler admin
 /// onayı gerektirir). ⚠ PARA. Runs on the migrated SQL Server schema, so the
 /// gate is exactly as the T169 migration seeds it (closed) and the dispatcher
 /// is the real one.
@@ -60,12 +60,14 @@ public class OutboundApprovalTests : IntegrationTestBase
         await ctx.SaveChangesAsync();
 
         // Refunds and sweeps leave the deposit: the dispatcher resolves it from
-        // the transaction's BUYER_PAYMENT row.
+        // the transaction's BUYER_PAYMENT row; only a sweep row names it (CHECKs).
+        Guid? depositId = null;
         if (type != BlockchainTransactionType.SELLER_PAYOUT)
         {
             var deposit = NewPaymentAddress(tx.Id, BlockchainNetwork.TRON, TronAddress, ++_seq);
             ctx.Set<PaymentAddress>().Add(deposit);
             await ctx.SaveChangesAsync();
+            depositId = deposit.Id;
             var inbound = NewInbound(tx.Id, deposit.Id, BlockchainNetwork.TRON, "0xin" + Guid.NewGuid().ToString("N"));
             ctx.Set<BlockchainTransaction>().Add(inbound);
             await ctx.SaveChangesAsync();
@@ -77,6 +79,7 @@ public class OutboundApprovalTests : IntegrationTestBase
             TransactionId = tx.Id,
             Network = BlockchainNetwork.TRON,
             Type = type,
+            PaymentAddressId = type == BlockchainTransactionType.SWEEP ? depositId : null,
             TxHash = txHash,
             FromAddress = type == BlockchainTransactionType.SELLER_PAYOUT ? string.Empty : TronAddress,
             ToAddress = SellerWallet,
@@ -85,7 +88,8 @@ public class OutboundApprovalTests : IntegrationTestBase
             Status = status,
             ConfirmedAt = status == BlockchainTransactionStatus.CONFIRMED ? Start.UtcDateTime : null,
             ConfirmationCount = status == BlockchainTransactionStatus.CONFIRMED ? 20 : 0,
-            CreatedAt = Start.UtcDateTime,
+            // Seconds apart so "oldest first" is a defined order.
+            CreatedAt = Start.UtcDateTime.AddSeconds(_seq),
         };
         ctx.Set<BlockchainTransaction>().Add(row);
         await ctx.SaveChangesAsync();

@@ -234,6 +234,15 @@ public class NetworkQueueIsolationTests : IntegrationTestBase
             .With(BlockchainNetwork.TRON, transfers: tron)
             .With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
 
+        // T169 — this test measures queue isolation, not the payout/refund
+        // launch gate (seeded closed): open it as an admin would.
+        await using (var ctx = CreateContext())
+        {
+            await ctx.Set<Skinora.Platform.Domain.Entities.SystemSetting>()
+                .Where(s => s.Key == OutboundApprovalGate.AutoSendKey)
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.Value, "true"));
+        }
+
         await using (var ctx = CreateContext())
         {
             var job = new OutgoingTransferDispatchJob(

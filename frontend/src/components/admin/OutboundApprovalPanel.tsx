@@ -22,13 +22,7 @@ function rowNetwork(row: OutboundApprovalRow): string {
   return network ? networkLabel(network) : row.network;
 }
 
-function ApproveDialog({
-  row,
-  onClose,
-}: {
-  row: OutboundApprovalRow | null;
-  onClose: () => void;
-}) {
+function ApproveDialog({ row, onClose }: { row: OutboundApprovalRow | null; onClose: () => void }) {
   const t = useTranslations("adminWallets");
   const ta = useTranslations("adminWallets.approvals.confirm");
   const tType = useTranslations("adminWallets.outboundType");
@@ -96,7 +90,7 @@ function ApproveDialog({
 
 /**
  * T169 — payouts and refunds waiting for an admin approval while the launch
- * gate `outbound.auto_send_enabled` is closed (07 §9.33 AD40/AD41). One admin
+ * gate `outbound.auto_send_enabled` is closed (07 §9.35 AD40/AD41). One admin
  * approves; the dispatcher then sends the row exactly as it was created.
  */
 export function OutboundApprovalPanel() {
@@ -136,20 +130,38 @@ export function OutboundApprovalPanel() {
         <p className="text-sm text-gray-500">{t("empty")}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full table-auto border-collapse text-left text-sm" aria-label={t("ariaLabel")}>
+          <table
+            className="w-full table-auto border-collapse text-left text-sm"
+            aria-label={t("ariaLabel")}
+          >
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-                <th scope="col" className="px-3 py-2">{t("columns.network")}</th>
-                <th scope="col" className="px-3 py-2">{t("columns.type")}</th>
-                <th scope="col" className="px-3 py-2">{t("columns.amount")}</th>
-                <th scope="col" className="px-3 py-2">{t("columns.to")}</th>
-                <th scope="col" className="px-3 py-2">{t("columns.created")}</th>
-                <th scope="col" className="px-3 py-2">{t("columns.action")}</th>
+                <th scope="col" className="px-3 py-2">
+                  {t("columns.network")}
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  {t("columns.type")}
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  {t("columns.amount")}
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  {t("columns.to")}
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  {t("columns.created")}
+                </th>
+                <th scope="col" className="px-3 py-2">
+                  {t("columns.action")}
+                </th>
               </tr>
             </thead>
             <tbody>
               {queue.data.rows.map((row) => (
-                <tr key={row.blockchainTransactionId} className="border-b border-gray-100 last:border-b-0">
+                <tr
+                  key={row.blockchainTransactionId}
+                  className="border-b border-gray-100 last:border-b-0"
+                >
                   <td className="px-3 py-2">{rowNetwork(row)}</td>
                   <td className="px-3 py-2">{tDynamic(tType, row.type, row.type)}</td>
                   <td className="px-3 py-2 tabular-nums">

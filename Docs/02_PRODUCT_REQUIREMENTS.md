@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v4.17** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-21 — T166 — USDC ürün yüzeyinden kalktı (yalnız yanlış token iadesinde kalır); ToS + 18+ kabulü sunucuda zorunlu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
+**Versiyon: v4.18** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-22 — T169 — işlem 10–2.900 $, 50 $ altında TRON yok, test boyunca ödemeler admin onaylı, yasaklı ülkeler. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -119,6 +119,7 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 - Alıcı işlemi kabul ederken satıcının kabul ettiği ağlardan **birini** seçer ve o ağ için iade adresini verir (§12.2)
 - Bir işlemde tek ağ ve tek token kabul edilir. Ödeme, satıcıya payout ve her türlü iade **alıcının seçtiği ağda** yapılır; ağlar arası para taşıma, köprü ya da borsa üzerinden dengeleme yoktur
 - Ağın ücret farkı alıcıya ağ seçerken gösterilir (TRON'da ayrı bir ağ ücreti satırı vardır, Ethereum'da yoktur — §5). **Uygulandı (T149):** işlem detayı kabulden önce her ağ için `networkQuotes[].networkFeeAmount` ve o ağdaki `totalAmount`'ı verir (07 §7.5); kabulde aynı (5 dakikaya kadar önbellekteki) tahminden sabitlenen satır kabul yanıtında `networkFeeAmount` olarak döner (07 §7.6)
+- **50 USDT'nin altındaki satışlarda TRON yoktur, yalnız Ethereum** (proje sahibi kararı 2026-10-21, T169): bu tutarın altında TRON ağ ücreti satıcının alacağının %9'unu aşar. Eşik ayardır (`blockchain.tron.min_transaction_amount_usdt`, 06 §3.17). Sihirbaz bu fiyatta TRON'u devre dışı gösterir ve nedenini söyler; sunucu ilanı da (07 §7.2) TRON'da kabulü de (07 §7.6) 422 `NETWORK_MIN_AMOUNT_NOT_MET` ile reddeder — eşik sonradan yükseltilirse eski ilanlar da kapsanır
 
 ### 4.3 Fiyatlandırma
 
@@ -153,6 +154,7 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 | Mutabakat süresi | Varsayılan **8 gün**. Steam'in trade geri alma penceresi (7 gün) kapanana kadar ödeme yapılmaz. Süre admin tarafından ayarlanır (§16.2) |
 | Ödeme öncesi son kontrol | Süre dolduğunda, ödeme yapılmadan **hemen önce** item'ın hâlâ alıcının envanterinde olduğu doğrulanır. Değilse trade geri alınmıştır → ödeme yapılmaz, para alıcıya iade edilir (§4.5.1) |
 | Akış | Platform komisyonu keser, kalan tutarı satıcının cüzdan adresine gönderir |
+| Admin onayı (test dönemi) | **Test boyunca her satıcı ödemesi ve her alıcı iadesi gönderilmeden önce admin onayı bekler** (proje sahibi kararı 2026-10-21, T169; ayar `outbound.auto_send_enabled` = `false`). Onay tutarı ve alıcıyı değiştirmez, yalnız gönderim anını tutar; her onay AuditLog'a yazılır (07 §9.35). Platformun kendi iç aktarımı (depozit → sıcak cüzdan sweep'i) beklemez. Kapı ilk en az 5 gerçek teslimat elle incelendikten sonra açılır (11 T175, DEPLOY_RUNBOOK §L) |
 | Cüzdan adresi | Satıcı profilinde varsayılan adres tanımlar; işlem başlatırken isterse farklı adres girebilir, girmezse profildeki kullanılır |
 
 ### 4.5.1 Mutabakat Süresi ve Trade Geri Alma Koruması
@@ -292,7 +294,7 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 
 | Gereksinim | Detay |
 |---|---|
-| Min/max işlem tutarı | Admin tarafından dinamik olarak belirlenebilir |
+| Min/max işlem tutarı | Admin tarafından dinamik olarak belirlenebilir. **Açılış değerleri (proje sahibi kararı 2026-10-21, T169): en düşük 10 USDT, en yüksek 2.900 USDT.** 10: Ethereum'da komisyon (0,20) platformun satış başı ağ maliyetini bugünkü tarifeyle karşılar. 2.900: Türk borsasından günlük sabit değerli kripto çekim sınırı 3.000 $ (MASAK Tebliğ 29 m. 4/4) — komisyon ve TRON ağ ücreti satırı payıyla. TRON'un ayrıca kendi en düşük tutarı vardır (50 USDT, §4.2) |
 | Eşzamanlı aktif işlem limiti | Var — admin tarafından değiştirilebilir |
 | Yeni hesap işlem limiti | Var — detaylar §14.3'te |
 
@@ -670,7 +672,7 @@ Platform kendi sürecini garanti eder, üçüncü taraflardan (Steam, blockchain
 
 | Gereksinim | Detay |
 |---|---|
-| Yasaklı bölgeler | OFAC/AB/BM yaptırım listesindeki ülkelerden erişim engellenir (geo-block). Yasaklı ülke listesi admin tarafından yönetilir ve güncellenebilir |
+| Yasaklı bölgeler | OFAC/AB/BM yaptırım listesindeki ülkelerden erişim engellenir (geo-block). Yasaklı ülke listesi admin tarafından yönetilir ve güncellenebilir. **Açılış listesi: IR, KP, CU, MM** (FATF eylem çağrısı listesi — İran, Kuzey Kore, Myanmar — + ABD'nin kapsamlı yaptırımlı ülkesi Küba; proje sahibi kararı 2026-10-21, T169). RU/BY hukuk incelemesinde yeniden bakılır |
 | Geo-block mekanizması | IP bazlı coğrafi engelleme uygulanır. Engellenen kullanıcıya bilgilendirme sayfası gösterilir |
 | Yaş kısıtı | Platform kullanımı için minimum 18 yaş gereklidir. MVP'de Steam hesap yaşı ve kullanıcının kendi beyanı ile kontrol edilir. Beyan ve Kullanım Şartları kabulü **sunucu tarafında zorunludur** (T166): kabul etmemiş hesap, istemciyi atlasa da yetkili uçlardan reddedilir (07 §4.4). Steam hesap yaşı minimum eşiği admin tarafından `auth.min_steam_account_age_days` SystemSetting (default 30 gün) üzerinden yönetilir — burner/fake hesap caydırıcısı, gerçek yaş doğrulaması değildir |
 | Sanctions screening | MVP'de cüzdan adresi bazlı temel tarama uygulanır — bilinen yaptırımlı adreslerle eşleşen adresler engellenir. Eşleşme tespit edildiğinde: yeni işlem/adres kaydı engellenir, hesap flag'lenir, kullanıcının tüm aktif işlemlerine otomatik EMERGENCY_HOLD uygulanır (§7). Tarama listesi admin tarafından güncellenebilir — ayrı bir yetki (`MANAGE_SANCTIONS`) gerektirir (07 §9.23–§9.25 AD22/AD23/AD24). MVP'de yalnız manuel admin entry; OFAC/EU/BM JSON feed auto-sync post-MVP |

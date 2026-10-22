@@ -137,7 +137,7 @@ public enum AuditAction
     OUTBOUND_ROW_CLOSURE_REFUSED,
 
     // T169 — an admin approved an outbound payout/refund row for sending while
-    // the launch gate outbound.auto_send_enabled is false (07 §9.33 AD41).
+    // the launch gate outbound.auto_send_enabled is false (07 §9.35 AD41).
     // ⚠ PARA. EntityType = "BlockchainTransaction"; EntityId = its Id;
     // NewValue = {blockchainTransactionId, transactionId, network, type, token,
     // amount, gasFee, toAddress, retryCount}. ActorType = ADMIN.

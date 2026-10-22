@@ -1238,7 +1238,7 @@ export function rejectOutboundClosure(id: string, note: string): Promise<Outboun
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
- * Outbound approvals (T169 — 07 §9.33 AD40/AD41). While the launch gate
+ * Outbound approvals (T169 — 07 §9.35 AD40/AD41). While the launch gate
  * `outbound.auto_send_enabled` is false, every seller payout and buyer refund
  * waits here for an admin approval; the sweep never does. Approving sends
  * nothing itself — the dispatcher sends the row on its next tick, unchanged.
@@ -1281,7 +1281,9 @@ export function listOutboundApprovals(): Promise<OutboundApprovalQueue> {
   return apiClient<OutboundApprovalQueue>("/admin/wallets/outbound-approvals");
 }
 
-export function approveOutboundTransfer(blockchainTransactionId: string): Promise<OutboundApproval> {
+export function approveOutboundTransfer(
+  blockchainTransactionId: string,
+): Promise<OutboundApproval> {
   return apiClient<OutboundApproval>(
     `/admin/wallets/outbound-approvals/${encodeURIComponent(blockchainTransactionId)}/approve`,
     { method: "POST" },

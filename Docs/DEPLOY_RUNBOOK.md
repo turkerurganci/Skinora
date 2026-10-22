@@ -1,8 +1,8 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-21 — T161 — §K deneme yayını (bu PC, Docker Desktop + Cloudflare Tunnel); §B iç anahtar zorunlu. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-22 — T169 — sahip kararlarının değerleri (§A, §C), §L ödeme onay kapısı, §M kurulum günü kontrol listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
-> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (75 satır — T149 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
+> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (77 satır — T169 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
 ---
 
@@ -18,6 +18,8 @@
 | **G. Lokal gerçek-konfigürasyon provası** | — | Uçtan uca çalıştırma reçetesi: sır yönetimi, migration, bootstrap SQL'leri, doğrulama listesi, bilinen tuzaklar. |
 | **J. Ethereum kurulumu ve alarmları (F8)** | Ethereum açılmadan ZORUNLU | Sırlar, RPC, fiyat kaynağı probu, cüzdan doldurma, açılış adımı (`ETHEREUM_SIDECAR_BASE_URL`), her Ethereum alarmının anlamı ve yordamı, uzun kesinti ve yanlış EVM ağı kurtarması (T158). |
 | **K. Deneme yayını (bu PC, Docker Desktop + Cloudflare Tunnel — T161)** | Deneme yayınından önce ZORUNLU | Ayrı compose projesi (`skinora-trial`, ayrı volume / `.env.trial` / `secrets/trial/`); dışarıya açık port yok, dış trafik yalnız tünelden; tünel token'sız açılmaz. Gelecekteki Linux sunucu için 80/443 + güvenlik duvarı notu §K.6. |
+| **L. Launch checklist — ödeme onay kapısı (T169)** | **Test boyunca KAPALI, açılış T175'te** | `outbound.auto_send_enabled` `false` seed edilir: her satıcı ödemesi ve alıcı iadesi admin onayı (S22 paneli, 07 §9.35) bekler; sweep beklemez. Açma prosedürü §L. |
+| **M. Kurulum günü kontrol listesi (T171)** | **Kurulumda ZORUNLU** | T169 sahip kararlarının değerleri (tutar sınırları, teslimat 720 dk, tavanlar, yasaklı ülkeler, kapılar) kurulan ortamda tek tek doğrulanır; yaptırım listesi yordamı ve KMS/HSM notu. |
 | **H. Launch checklist — teslimat kanıtı kapısı** | **Launch'ta ZORUNLU adım** | `delivery.inventory_evidence_auto_release_enabled` `false` seed edilir. İlk N gerçek teslimatın kanıtı insan tarafından incelenmeden envanter kanıtına dayalı otomatik para bırakma **açılmaz** (02 §9.2, T125). |
 
 ---
@@ -35,9 +37,9 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 | 3 | `SKINORA_SETTING_PAYMENT_TIMEOUT_MIN_MINUTES` | payment_timeout_min_minutes | int | 15 | Ödeme timeout min |
 | 4 | `SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES` | payment_timeout_max_minutes | int | 60 | Ödeme timeout max |
 | 5 | `SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES` | payment_timeout_default_minutes | int | 30 | Ödeme timeout varsayılan (min ≤ x ≤ max) |
-| 6 | `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` | delivery_timeout_minutes | int | 60 | Satıcı teslimat penceresi (02 §2.2 adım 6) — T123'te yeniden adlandırıldı, T124'te tüketilmeye başlandı; **60 bağlayıcı değil**, aşağıdaki uyarıya bak |
-| 7 | `SKINORA_SETTING_MIN_TRANSACTION_AMOUNT` | min_transaction_amount | decimal | 5.0 | Minimum işlem tutarı (USDT). **1 önerilmez:** sıcak cüzdanın ödeme enerjisi bittiğinde bir payout 6,43–13,03 TRX yakar (TRX 0,34 $ ile ~2,2–4,4 USDT); fiyatı bunun altındaki satışta satıcıya kalan tutar sıfırın altına düşer ve ödeme ertelenir (02 §4.7). Ucuz satışları açık tutup tutmamak iş kararıdır, kod zorlamaz |
-| 8 | `SKINORA_SETTING_MAX_TRANSACTION_AMOUNT` | max_transaction_amount | decimal | 10000.0 | Maksimum işlem tutarı (USDT) |
+| 6 | `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` | delivery_timeout_minutes | int | **720** | Satıcı teslimat penceresi (02 §2.2 adım 6) — T123'te yeniden adlandırıldı, T124'te tüketilmeye başlandı. **T169: 720 dk = sahibin 12 saatlik teslimat süresi (2026-10-04; hukuk metni "12 saat" der)** — aşağıdaki uyarıya bak |
+| 7 | `SKINORA_SETTING_MIN_TRANSACTION_AMOUNT` | min_transaction_amount | decimal | **10** | Minimum işlem tutarı (USDT). **T169 (proje sahibi kararı 2026-10-21): 10** — Ethereum'da komisyon (0,20) platformun satış başı ağ maliyetini (bugün ~0,11 $) karşılar. TRON'un ayrıca kendi en düşük tutarı vardır: `blockchain.tron.min_transaction_amount_usdt` = 50 (seed, env değil). **1 önerilmez:** sıcak cüzdanın ödeme enerjisi bittiğinde bir payout 6,43–13,03 TRX yakar (TRX 0,34 $ ile ~2,2–4,4 USDT); fiyatı bunun altındaki satışta satıcıya kalan tutar sıfırın altına düşer ve ödeme ertelenir (02 §4.7). Ucuz satışları açık tutup tutmamak iş kararıdır, kod zorlamaz |
+| 8 | `SKINORA_SETTING_MAX_TRANSACTION_AMOUNT` | max_transaction_amount | decimal | **2900** | Maksimum işlem tutarı (USDT). **T169 (proje sahibi kararı 2026-10-21): 2900** — Türk borsasından günlük sabit değerli kripto çekim sınırı 3.000 $ (MASAK Tebliğ 29 m. 4/4); TRON'da alıcı fiyat × 1,02 + ağ ücreti satırı öder, 2.900 bu payı bırakır. Tek gönderim tavanı (§C.3) bundan türer |
 | 9 | `SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS` | max_concurrent_transactions | int | 5 | Eşzamanlı aktif işlem limiti |
 | 10 | `SKINORA_SETTING_NEW_ACCOUNT_TRANSACTION_LIMIT` | new_account_transaction_limit | int | 3 | Yeni hesap işlem limiti |
 | 11 | `SKINORA_SETTING_NEW_ACCOUNT_PERIOD_DAYS` | new_account_period_days | int | 14 | Kaç gün yeni hesap sayılır |
@@ -47,14 +49,14 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 | 15 | `SKINORA_SETTING_HIGH_VOLUME_AMOUNT_THRESHOLD` | high_volume_amount_threshold | decimal | 5000.0 | Yüksek hacim tutar eşiği |
 | 16 | `SKINORA_SETTING_HIGH_VOLUME_COUNT_THRESHOLD` | high_volume_count_threshold | int | 10 | Yüksek hacim işlem sayısı eşiği |
 | 17 | `SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS` | high_volume_period_hours | int | 24 | Yüksek hacim kontrol periyodu (saat) |
-| 18 | `SKINORA_SETTING_HOT_WALLET_LIMIT` | hot_wallet_limit | decimal | 100000.0 | Hot wallet max bakiye limiti (aşılırsa admin alert) |
+| 18 | `SKINORA_SETTING_HOT_WALLET_LIMIT` | hot_wallet_limit | decimal | **4000** | Hot wallet max bakiye limiti (aşılırsa admin alert). **T169 (öneriyle kaydedildi — ⚠): 4000** = tek gönderim tavanı 3.000 + ~25 günlük komisyon; alarm gelince sıcakta ≤ 500 $ kalacak şekilde soğuğa aktar (AD39). Bugün yalnız TRON sıcak cüzdanı izleniyor — Ethereum için izleyici T170'te (DEFERRED_BACKLOG `EthereumHotWalletUsdtLimitUnmonitored`) |
 | 19 | `SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD` | dormant_account_value_threshold | decimal | 1000.0 | Dormant hesap tek-işlem tutar eşiği (USDT) |
 
 > Örnek değerler `SettingsBootstrapTests.AllRequiredEnvVars()` ile birebir; gerçek prod değerleri risk profiline göre **bilinçli** belirlenir. `payment_timeout_*` cross-key invariant: `min < max` ve `min ≤ default ≤ max` (`SystemSettingsValidator`). Tarihsel olarak 21 sayılıyordu; WP4a (`price_deviation_threshold`) ve WP12 (`timeout_warning_ratio`) seed-default verince **19**'a indi.
 
 > **Anahtar yeniden adlandırma (T123, 2026-08-13):** #2 ve #6'nın hem SystemSetting anahtarı hem env var adı değişti (`trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`). Env adı anahtardan türetildiği için (`SettingsBootstrapService`: `SKINORA_SETTING_{KEY_UPPER}`) **eski env var adları artık hiçbir şeyi doldurmaz** — bu ikisini `.env`'inde eski adla taşıyan bir ortam startup'ta fail-fast eder. `.env.example`, `docker-compose.yml` ve `docker-compose.e2e.yml` güncellendi; kendi `.env` dosyanı elle güncelle. DB tarafında migration `T123_RenameTimeoutSettings` bir `UpdateData`'dır (satır `Id`'leri sabit) → admin UI'dan girilmiş değerler korunur.
 
-> **#6 uyarısı (T122 doğrulaması, 2026-08-13; anahtar adı T123'te düzeltildi, tüketici T124'te bağlandı, **doğrulama turu T127'de canlı**) — `delivery_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır.** Bu ayar **satıcının teslimat penceresini** besliyor: `TimeoutSchedulingService.ArmDeliveryDeadlineAsync` ödeme onayında (`ConfirmPayment`) okuyup `DeliveryDeadline`'ı yazıyor. **T127 itibarıyla bu değeri düşük vermek doğrudan para hareketi üretir** — süre dolduğunda scanner bir doğrulama turu çalıştırır ve tur "item hâlâ satıcıda" derse iptal + alıcıya iade + satıcıya kusur uygular (03 §4.4). T127 öncesinde süre dolması bir şey tetiklemiyordu; artık tetikliyor. T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
+> **#6 uyarısı (T122 doğrulaması, 2026-08-13; anahtar adı T123'te düzeltildi, tüketici T124'te bağlandı, **doğrulama turu T127'de canlı**) — `delivery_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır.** Bu ayar **satıcının teslimat penceresini** besliyor: `TimeoutSchedulingService.ArmDeliveryDeadlineAsync` ödeme onayında (`ConfirmPayment`) okuyup `DeliveryDeadline`'ı yazıyor. **T127 itibarıyla bu değeri düşük vermek doğrudan para hareketi üretir** — süre dolduğunda scanner bir doğrulama turu çalıştırır ve tur "item hâlâ satıcıda" derse iptal + alıcıya iade + satıcıya kusur uygular (03 §4.4). T127 öncesinde süre dolması bir şey tetiklemiyordu; artık tetikliyor. T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. ~~Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır.~~ **T169 (2026-10-22):** satırın değeri artık **720**'dir (sahibin 12 saatlik teslimat süresi, 2026-10-04); `.env.example`, deneme yayını overlay'i (`docker-compose.trial.yml`: `.env.trial` boş bırakırsa 720) ve `SettingsBootstrapTests` aynı değeri taşır. Migration `T169_OwnerDecisions` hâlâ 60 olan bir veritabanını 720'ye çeker (admin'in değiştirdiği değer korunur). Ölçüm üretimden gelince daraltma kuralı (§H.4) aynen geçerli. Kurulum günü kontrolü: §M satır 1. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
 
 ---
 
@@ -121,14 +123,15 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 
 Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam **çalışmaz** (warn log ile atlanır, fail-fast DEĞİL).
 
-> **⚠ Bunlar `SKINORA_SETTING_*` env ile set EDİLEMEZ — yalnızca admin UI'dan.** (Platformun iki cüzdan adresi 2026-09-16'da bu listeden çıktı: artık `HOT_WALLET_ADDRESS` / `COLD_WALLET_ADDRESS` ortam değişkenidir, §B.) Aşağıdaki yedi satırın hepsi `SystemSettingSeed`'de `Default(...)` ile, yani `IsConfigured = true` olarak gelir. `SettingsBootstrapService` yalnız `IsConfigured = false` satırları env'den hydrate eder ve configured bir satırı **asla** override etmez (06 §8.9 güvenlik klozu). §A'daki 19 satır `Unconfigured(...)` olduğu için env yolu yalnız orada çalışır. (Doğrulandı 2026-07-29 — `SystemSettingSeed.cs`'te tam 19 `Unconfigured` satırı var.)
+> **⚠ Bunlar `SKINORA_SETTING_*` env ile set EDİLEMEZ — yalnızca admin UI'dan.** (Platformun iki cüzdan adresi 2026-09-16'da bu listeden çıktı: artık `HOT_WALLET_ADDRESS` / `COLD_WALLET_ADDRESS` ortam değişkenidir, §B.) Aşağıdaki sekiz satırın hepsi `SystemSettingSeed`'de `Default(...)` ile, yani `IsConfigured = true` olarak gelir. `SettingsBootstrapService` yalnız `IsConfigured = false` satırları env'den hydrate eder ve configured bir satırı **asla** override etmez (06 §8.9 güvenlik klozu). §A'daki 19 satır `Unconfigured(...)` olduğu için env yolu yalnız orada çalışır. (Doğrulandı 2026-07-29 — `SystemSettingSeed.cs`'te tam 19 `Unconfigured` satırı var.)
 
 | Key | Default | Set edilmezse |
 |---|---|---|
-| `auth.banned_countries` | NONE | Geo-block uygulanmaz (02 §21.1) |
+| `auth.banned_countries` | **IR,KP,CU,MM** (T169) | Varsayılan FATF eylem çağrısı listesi + Küba (proje sahibi kararı 2026-10-21). `NONE` yapılırsa geo-block uygulanmaz (02 §21.1). Ülke tünelden sonra `CF-IPCountry`'den okunur (T166) |
 | `multi_account.exchange_addresses` | NONE | Çoklu-hesap kontrolünde exchange adres allowlist'i boş |
 | `price_deviation_threshold` | 1.0 (= %100) | Seed default'la PRICE_DEVIATION fraud kuralı pratikte hiç ateşlemez (WP4a bilinçli geniş default). Prod'da daraltılmalı (02 §14.4) — **aşağıdaki `SteamMarket__Provider` ile birlikte** anlamlı olur |
 | `delivery.inventory_evidence_auto_release_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — envanter kanıtı kaydedilir ve gösterilir ama parayı tek başına serbest bırakmaz. Açma prosedürü §H'de; alıcının kendi onayı bundan etkilenmez (T125, 02 §9.2) |
+| `outbound.auto_send_enabled` | `false` | **Test boyunca ve açılışta bilinçli olarak `false` kalır** — her satıcı ödemesi ve alıcı iadesi admin onayı bekler (07 §9.35, S22 paneli); sweep beklemez. Açma prosedürü §L (T169, 11 T175) |
 | `settlement.reversal_auto_refund_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — mutabakat sonu kontrolü geri alma imzası bulursa admin'e eskale eder, otomatik iade + fraud flag uygulamaz. Açma prosedürü §I'de (T129, 02 §4.5.1) |
 | `payout_settlement_days` | `8` | Seed default'u zaten doğru değerdir (7 günlük Steam penceresi + 1 gün marj). Değiştirilecekse **7'nin altına inilemez** — validator reddeder (02 §16.2) |
 | `settlement.unreadable_escalation_hours` | `48` | Mutabakat kontrolü envanter okunamadığı için sonuca varamadığında admin'e ne kadar sonra düşeceği. Kısaltmak admin kuyruğunu şişirir, uzatmak satıcının ödemesini geciktirir — ödeme her iki hâlde de parkta kalır (03 §2.4) |
@@ -145,12 +148,15 @@ Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam 
 4. **Ethereum yakıt tavanı (T153) farklıdır:** aşılırsa yakıt gönderilmez ve sweep / iade **bekler** (`FUEL_LIMIT_REACHED`, satır `PENDING`) — reddedilseydi satır `FAILED` olur, yeni kimlikle yeniden açılır ve depozit ikinci kez yakıtlanırdı. Günlük tavan son 24 saatin yakıtını servisin günlüğünden sayar; saat ilerledikçe kendiliğinden açılır. Tek yakıt tavanı ETH fiyatı çok düşerse (tavan ETH cinsinden büyür) yetmeyebilir — o zaman değeri yükseltip servisi yeniden başlatın.
 
 ```bash
-# Örnek: en büyük işlem 10.000 USDT, beklenen günlük hacim 500 USDT
-MAX_SINGLE_TRANSFER_USDT=10000
-MAX_DAILY_OUTFLOW_USDT=1500
+# T169 (öneriyle kaydedildi — ⚠, mainnet öncesi sahibe yeniden sorulur):
+# tek = en büyük iade (2.900 × 1,02 + ağ ücreti satırı ≈ 2.961) → 3000;
+# günlük = en büyük üç satış → 9000 (madde 2'nin formülü 20 × 100 × 3 = 6.000
+# aynı gün üç 2.900'lük satışta üçüncü payout'u FAILED yapardı).
+MAX_SINGLE_TRANSFER_USDT=3000
+MAX_DAILY_OUTFLOW_USDT=9000
 # Ethereum servisinin kendi tavanları (T152) — aynı kural, ağ başına ayrı değer
-ETHEREUM_MAX_SINGLE_TRANSFER_USDT=10000
-ETHEREUM_MAX_DAILY_OUTFLOW_USDT=1500
+ETHEREUM_MAX_SINGLE_TRANSFER_USDT=3000
+ETHEREUM_MAX_DAILY_OUTFLOW_USDT=9000
 # Ethereum yakıt tavanları (T153) — ETH cinsinden. Tavanda bir sweep yakıtı
 # bugün ~0,000145 ETH (0,50 $ × 46.201 / 67.201 ÷ ETH fiyatı); 0,001 ETH, ETH
 # ~344 $'a düşene kadar tek yakıta yeter. Günlük: en yoğun gün ~30 gönderim ×
@@ -1019,3 +1025,58 @@ Yığın `-p skinora-t161` proje adıyla (geliştirme projesi `escrow`'a dokunma
 - **Durdur (veri kalır):** `$TRIAL down` — tünel profiliyle başlatıldıysa `$TRIAL --profile tunnel down`.
 - **Sil (veritabanı dahil, geri dönüşü yok):** `$TRIAL down -v`. Yalnız `skinora-trial_*` volume'lerini siler. **Öneksiz `docker compose down -v` koşmayın** — geliştirme projesinin volume'lerini siler.
 - Geliştirme stack'i bu komutlardan etkilenmez; iki proje aynı anda çalışabilir (port çakışması yoktur: deneme yayını iç port yayımlamaz, operatör portları 8090/3011/3012).
+
+---
+
+## L. Launch checklist — ödeme onay kapısı (T169)
+
+> **Proje sahibi kararı 2026-10-21:** test boyunca bütün ödemeler admin onayı gerektirir. 11 T175: "otomatik ödeme kapıları kapalı başlıyor ve ilk en az 5 gerçek teslimat elle incelendikten sonra açılıyor."
+
+### L.1 Kapı kapalıyken ne olur
+- `outbound.auto_send_enabled` = `false` (seed; env'den doldurulamaz, T125/T129 kapıları gibi). Satır okunamazsa kapı **kapalı** sayılır.
+- Gönderim işi `SELLER_PAYOUT` ve bütün iade türlerini (`BUYER_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `INCORRECT_AMOUNT_REFUND`, `LATE_PAYMENT_REFUND`) admin onaylayana kadar **göndermez**: satır `PENDING` kalır, `RetryCount` artmaz, `FAILED` olmaz. Log her turda ağ başına bir uyarı satırı yazar (`… wait for an admin approval`).
+- Sweep (depozit → sıcak cüzdan) ve sıcak→soğuk aktarım bundan etkilenmez.
+- Onay **tutarı ve alıcıyı değiştirmez**; yalnız gönderim anını tutar. İmzalayan servisin tavanları (§C.3) onaydan sonra da aynen uygulanır.
+
+### L.2 Günlük iş (kapı kapalıyken)
+1. Admin paneli → **Cüzdanlar** (S22) → üstteki **"Onay bekleyen ödemeler"** paneli.
+2. Her satır için: işlemi (`transactionId`) aç, durumu ve teslimatı kontrol et; ağ, tür, tutar ve alıcı adresinin işlemle uyuştuğunu doğrula.
+3. **Onayla** → onay penceresindeki özet son kez kontrol edilir → onay. Satır sonraki dakikada gönderilir; panelden düşer, cüzdan ekranının "son giden satırlar" listesine geçer.
+4. Her onay AuditLog'da `OUTBOUND_TRANSFER_APPROVED` (Fon kategorisi) — kim, ne zaman, hangi satır, IP.
+
+### L.3 Kapıyı açma (T175)
+1. En az 5 gerçek teslimat elle incelenmiş, ödemeleri onayla gönderilmiş ve zincirde doğrulanmış olmalı.
+2. Proje sahibinin açık kararı alınır.
+3. Admin → Ayarlar → `outbound.auto_send_enabled` = `true` (AD9; ayar değişikliği audit'lenir).
+4. Doğrula: `SELECT Value FROM SystemSettings WHERE [Key]='outbound.auto_send_enabled'` → `true`; panel "Otomatik gönderim açık" der; bekleyen onaysız satırlar sonraki turda gönderilir.
+5. Geri kapatmak aynı ayarla yapılır; kapalıya döndüğü andan sonra onaysız satır yine bekler (daha önce onaylanmış olanlar gider).
+
+---
+
+## M. Kurulum günü kontrol listesi (T171) — T169 değerleri
+
+Gerçek ağ kurulumunda (T171) ve deneme yayınında (§K) bu liste satır satır doğrulanır. Değerler: 02 §4.2/§8/§21.1, 06 §3.17, `.env.example`. "⚠" = öneriyle kaydedildi; mainnet öncesi sahibe yeniden sorulur.
+
+| # | Kontrol | Beklenen | Nasıl |
+|---|---|---|---|
+| 1 | **Teslimat süresi 720 dk mı?** | `delivery_timeout_minutes` = **720** | `SELECT Value FROM SystemSettings WHERE [Key]='delivery_timeout_minutes'` → `720`; `.env` / `.env.trial`'da `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES=720`. Düşük değer teslim etmiş satıcıyı iptal + kusurla cezalandırır (§A #6); hukuk metni "12 saat" der |
+| 2 | En düşük / en yüksek işlem tutarı | 10 / 2900 | `min_transaction_amount`, `max_transaction_amount` |
+| 3 | TRON'un kendi en düşük tutarı | 50 | `blockchain.tron.min_transaction_amount_usdt`; sihirbazda 49 $'lık fiyatta TRON devre dışı |
+| 4 | Ödeme onay kapısı kapalı | `outbound.auto_send_enabled` = `false` | §L |
+| 5 | Yasaklı ülkeler | `IR,KP,CU,MM` | `auth.banned_countries` |
+| 6 | Gönderim tavanları (⚠) | TRON + Ethereum: tek 3000 / günlük 9000 | `MAX_SINGLE_TRANSFER_USDT`, `MAX_DAILY_OUTFLOW_USDT`, `ETHEREUM_MAX_SINGLE_TRANSFER_USDT`, `ETHEREUM_MAX_DAILY_OUTFLOW_USDT` (boşsa payout/iade hiç imzalanmaz) |
+| 7 | Ethereum yakıt tavanları (⚠) | 0.001 / 0.02 ETH | `ETHEREUM_FUEL_MAX_SINGLE_ETH`, `ETHEREUM_FUEL_MAX_DAILY_ETH` |
+| 8 | Sıcak cüzdan limiti (⚠) | 4000 (aşınca sıcakta ≤ 500 $ kalacak kadar soğuğa) | `hot_wallet_limit` |
+| 9 | TRON sıcak TRX alt eşiği (⚠) | 1500 | `hot_wallet.trx_balance_minimum` |
+| 10 | Yedek ücretler (⚠) | TRON iade 2.60 / payout 2.25 / ağ ücreti satırı 3.00; Ethereum iade 0.20, payout 0.50, tavan 0.50 | `blockchain.refund_gas_fee_estimate_usdt`, `blockchain.payout_gas_fee_estimate_usdt`, `blockchain.tron.network_fee_fallback_usdt`, `blockchain.ethereum.*` |
+| 11 | Fiyat sapma kuralı kapalı (⚠) | `price_deviation_threshold` = 1.0, `STEAM_MARKET_PROVIDER=logging` | §C.1; pilottan sonra yeniden bakılır |
+| 12 | Sağlayıcı planları (⚠) | TronGrid ücretsiz (mainnet anahtarı Nile'dan **ayrı hesaptan**); Alchemy Free + Chainstack Developer | %80 kota alarmı gelirse ya da günde 25'ten fazla TRON satışı olursa TronGrid özel plan; Alchemy %80'i geçerse kullandıkça öde |
+| 13 | Yaptırım listesi yüklendi | OFAC SDN "Digital Currency Address – TRX / ETH / USDT" adresleri girildi | §M.1 |
+
+### M.1 Yaptırım listesi yordamı (öneriyle kaydedildi — ⚠)
+- **Kaynak:** OFAC SDN listesi (resmî, ücretsiz: sanctionslist.ofac.treas.gov) — "Digital Currency Address – TRX", "– ETH", "– USDT" alanları.
+- **Açılışta:** bu adresler admin panelinden elle girilir (yaptırım listesi ekranı, `MANAGE_SANCTIONS`; ağ `TRON` / `ETHEREUM`).
+- **Takvim:** ayda bir ve OFAC her güncelleme duyurduğunda gözden geçirilir; sorumlu kişi admin (bugün proje sahibi). Otomatik besleme açılıştan sonra ayrı görev (`sanctions-expansion`). Ethereum'da USDT kontratının kendi kara liste kontrolü (`isBlackListed`, T152) ek katmandır.
+
+### M.2 KMS/HSM (karar yok)
+Anahtarların donanım güvenlik modülüne taşınma eşiği **kararlaştırılmadı** — pilot (T173) sonrası proje sahibine sorulacak (T169, 2026-10-21). O zamana kadar tohum ve imza anahtarları Docker secret + çevrimdışı yedekte (T163) yazılım anahtarı olarak durur (DEFERRED_BACKLOG `SigningSecretsInPlainEnv`).

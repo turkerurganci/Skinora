@@ -10,7 +10,7 @@ namespace Skinora.API.Controllers;
 
 /// <summary>
 /// AD40 / AD41 — admin approval of outbound payouts and refunds while the
-/// launch gate <c>outbound.auto_send_enabled</c> is closed (T169 — 07 §9.33).
+/// launch gate <c>outbound.auto_send_enabled</c> is closed (T169 — 07 §9.35).
 /// ⚠ PARA. Every action needs <c>MANAGE_SETTINGS</c>, the permission the other
 /// wallet operations (AD20, AD33–AD39) use; the approver is the authenticated
 /// admin, never anything in the request.

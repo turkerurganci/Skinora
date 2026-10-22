@@ -17,7 +17,8 @@ export function useOutboundApprovals() {
 export function useApproveOutboundTransfer() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (blockchainTransactionId: string) => approveOutboundTransfer(blockchainTransactionId),
+    mutationFn: (blockchainTransactionId: string) =>
+      approveOutboundTransfer(blockchainTransactionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: APPROVALS_ROOT });
       queryClient.invalidateQueries({ queryKey: ["admin", "wallets", "overview"] });

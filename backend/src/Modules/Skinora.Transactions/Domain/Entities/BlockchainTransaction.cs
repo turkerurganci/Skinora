@@ -96,7 +96,7 @@ public class BlockchainTransaction
 
     /// <summary>
     /// T169 — when an admin approved this outbound row for sending (AD41,
-    /// 07 §9.33). While <c>outbound.auto_send_enabled</c> is false the
+    /// 07 §9.35). While <c>outbound.auto_send_enabled</c> is false the
     /// dispatcher sends a SELLER_PAYOUT or *_REFUND row only once this is set;
     /// SWEEP never needs it. NULL = not approved (or approval not required
     /// because the gate was open). Written once, never cleared.

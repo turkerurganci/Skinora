@@ -169,7 +169,7 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.Property(b => b.ErrorMessage)
             .HasMaxLength(500);
 
-        // T169 — admin approval of an outbound payout/refund (07 §9.33). Both
+        // T169 — admin approval of an outbound payout/refund (07 §9.35). Both
         // NULL until an admin approves; the dispatcher reads ApprovedAt while
         // outbound.auto_send_enabled is false. No FK: the approver is also on
         // the OUTBOUND_TRANSFER_APPROVED audit row.

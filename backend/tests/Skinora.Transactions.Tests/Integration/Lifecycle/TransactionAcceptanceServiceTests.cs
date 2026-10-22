@@ -1010,6 +1010,9 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
             .SetProperty(t => t.Price, 20m)
             .SetProperty(t => t.CommissionAmount, 0.40m)
             .SetProperty(t => t.TotalAmount, 20.40m));
+        // The listing entity is tracked from CreateListingAsync; drop it so the
+        // service reads the 20 USDT price (and the current RowVersion).
+        Context.ChangeTracker.Clear();
 
         var refused = await BuildSut().AcceptAsync(
             _buyer.Id, listing.Id,

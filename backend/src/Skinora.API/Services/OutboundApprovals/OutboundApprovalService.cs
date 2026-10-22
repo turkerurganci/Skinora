@@ -13,7 +13,7 @@ namespace Skinora.API.Services.OutboundApprovals;
 
 /// <summary>
 /// AD40 / AD41 — the admin approval of outbound payouts and refunds while the
-/// launch gate <c>outbound.auto_send_enabled</c> is closed (T169 — 07 §9.33;
+/// launch gate <c>outbound.auto_send_enabled</c> is closed (T169 — 07 §9.35;
 /// <see cref="OutboundApprovalGate"/>). ⚠ PARA.
 /// </summary>
 public interface IOutboundApprovalService

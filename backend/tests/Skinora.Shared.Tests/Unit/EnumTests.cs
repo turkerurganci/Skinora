@@ -438,7 +438,7 @@ public class EnumTests
     public void AuditAction_ShouldHave34Values()
     {
         // 34 after T169 added OUTBOUND_TRANSFER_APPROVED (admin approval of a
-        // payout/refund while outbound.auto_send_enabled is false, 07 §9.33).
+        // payout/refund while outbound.auto_send_enabled is false, 07 §9.35).
         // 33 after T157 added OUTBOUND_ROW_CLOSURE_PROPOSED / _APPROVED /
         // _REJECTED / _REFUSED (the two-person outbound-row closure tool,
         // 07 §9.32) — each with its row in 06 §2.19.
