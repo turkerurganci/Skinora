@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import messages from "@/i18n/messages/tr.json";
+import { TosRepromptGate } from "@/components/auth/TosRepromptGate";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import SteamCallbackPage from "./page";
 import type { Locale } from "next-intl";
 
@@ -18,13 +21,16 @@ import type { Locale } from "next-intl";
  * TAM DEĞERİNİ okur, "içinde dashboard geçiyor mu" demez.
  */
 
-const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
+const { replace, pathname } = vi.hoisted(() => ({
+  replace: vi.fn(),
+  pathname: { current: "/tr/auth/callback" },
+}));
 let params = new URLSearchParams();
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn(), back: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => params,
-  usePathname: () => "/tr/auth/callback",
+  usePathname: () => pathname.current,
   useParams: () => ({ locale: "tr" }),
   redirect: vi.fn(),
   permanentRedirect: vi.fn(),
@@ -37,6 +43,26 @@ vi.mock("@/lib/api/client", async (importOriginal) => ({
   refreshAccessToken,
 }));
 
+// T168 — the first-time ToS modal's decline path reuses the settings
+// account-management section; its API calls are mocked here.
+const { deleteAccount, deactivateAccount } = vi.hoisted(() => ({
+  deleteAccount: vi.fn(),
+  deactivateAccount: vi.fn(),
+}));
+vi.mock("@/lib/api/settings", () => ({
+  DELETE_ACCOUNT_CONFIRMATION: "SİL",
+  deleteAccount,
+  deactivateAccount,
+}));
+// T168 B5 — the REAL signOut runs (lib/auth/signOut is not mocked); only its
+// server call and the global gate's `/auth/me` are stubbed.
+const { logoutRequest, getMe } = vi.hoisted(() => ({ logoutRequest: vi.fn(), getMe: vi.fn() }));
+vi.mock("@/lib/api/auth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/auth")>()),
+  logout: logoutRequest,
+  getMe,
+}));
+
 function renderCallback(locale: Locale = "tr") {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages}>
@@ -46,11 +72,16 @@ function renderCallback(locale: Locale = "tr") {
 }
 
 beforeEach(() => {
-  replace.mockClear();
+  replace.mockReset();
+  pathname.current = "/tr/auth/callback";
   refreshAccessToken.mockResolvedValue("fake-access-token");
+  logoutRequest.mockResolvedValue(undefined);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useAuthStore.getState().logout();
+});
 
 describe("SteamCallbackPage — giriş sonrası hedef", () => {
   it("locale önekli returnUrl'i TEKRAR öneklemez (/tr/tr/dashboard regresyonu)", async () => {
@@ -135,5 +166,93 @@ describe("SteamCallbackPage — politika reddi kendi ekranına gider (F4c)", () 
     params = new URLSearchParams("error=some_future_code");
     renderCallback("tr");
     expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("SteamCallbackPage — ilk kabul modalında reddetme yolu (T168)", () => {
+  it("yeni kullanıcı şartları kabul etmeden hesabını silebilir (KVKK silme hakkı)", async () => {
+    // jsdom'da modal dialog yok; onay penceresi yalnız `open`ın dönmesini bekler.
+    if (!HTMLDialogElement.prototype.showModal) {
+      HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+        this.open = true;
+      };
+      HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+        this.open = false;
+      };
+    }
+    deleteAccount.mockResolvedValue({ deletedAt: "2026-10-22T00:00:00Z", message: "ok" });
+    params = new URLSearchParams("status=new_user&returnUrl=%2Ftr%2Fdashboard");
+
+    renderCallback("tr");
+
+    await waitFor(() => expect(screen.getByTestId("tos-decline-toggle")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("tos-decline-toggle"));
+    const panel = screen.getByTestId("tos-decline-panel");
+    expect(panel).toHaveTextContent(messages.auth.tos.decline.description);
+    expect(panel).toHaveTextContent(messages.settings.accountManagement.deactivate.button);
+
+    fireEvent.click(
+      screen.getAllByText(messages.settings.accountManagement.delete.button)[0] as HTMLElement,
+    );
+    fireEvent.change(screen.getByPlaceholderText("SİL"), { target: { value: "SİL" } });
+    fireEvent.click(document.querySelector("dialog button[type=submit]") as HTMLButtonElement);
+
+    await waitFor(() => expect(deleteAccount).toHaveBeenCalledWith("SİL"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/tr"));
+    // Kabul edilmedi; panele de gidilmedi.
+    expect(replace).not.toHaveBeenCalledWith("/tr/dashboard");
+  });
+});
+
+describe("SteamCallbackPage — reddedip silince pencere oturumla kapanır (T168 B5)", () => {
+  it("sil + çıkış sonrası ne callback penceresi ne genel kapı 'şartları kabul edin' gösterir", async () => {
+    if (!HTMLDialogElement.prototype.showModal) {
+      HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+        this.open = true;
+      };
+      HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+        this.open = false;
+      };
+    }
+    deleteAccount.mockResolvedValue({ deletedAt: "2026-10-22T00:00:00Z", message: "ok" });
+    const notAccepted = { tosAccepted: false, tosAcceptedVersion: null };
+    getMe.mockResolvedValue(notAccepted);
+    replace.mockImplementation((to: string) => {
+      pathname.current = to;
+    });
+    params = new URLSearchParams("status=new_user&returnUrl=%2Ftr%2Fdashboard");
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // AuthInitializer'ın pencere açılmadan önce önbelleğe bıraktığı cevap.
+    client.setQueryData(["auth", "me"], notAccepted);
+    // Genel kapı [locale] layout'unda yaşar; callback'te uyur, /tr'de uyanır.
+    const tree = () => (
+      <QueryClientProvider client={client}>
+        <NextIntlClientProvider locale="tr" messages={messages}>
+          <SteamCallbackPage />
+          <TosRepromptGate />
+        </NextIntlClientProvider>
+      </QueryClientProvider>
+    );
+    const { rerender } = render(tree());
+
+    await waitFor(() => expect(screen.getByTestId("tos-decline-toggle")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("tos-decline-toggle"));
+    fireEvent.click(
+      screen.getAllByText(messages.settings.accountManagement.delete.button)[0] as HTMLElement,
+    );
+    fireEvent.change(screen.getByPlaceholderText("SİL"), { target: { value: "SİL" } });
+    fireEvent.click(document.querySelector("dialog button[type=submit]") as HTMLButtonElement);
+
+    await waitFor(() => expect(deleteAccount).toHaveBeenCalledWith("SİL"));
+    await waitFor(() => expect(logoutRequest).toHaveBeenCalled());
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/tr"));
+    expect(useAuthStore.getState().accessToken).toBeNull();
+
+    rerender(tree());
+
+    await waitFor(() => expect(screen.queryByTestId("tos-submit")).toBeNull());
+    expect(screen.queryByText(messages.auth.tos.title)).toBeNull();
+    expect(screen.queryByTestId("tos-decline-toggle")).toBeNull();
   });
 });

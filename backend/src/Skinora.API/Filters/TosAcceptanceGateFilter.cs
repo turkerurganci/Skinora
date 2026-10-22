@@ -13,11 +13,14 @@ namespace Skinora.API.Filters;
 
 /// <summary>
 /// T166 — opts an endpoint (or a whole controller) out of
-/// <see cref="TosAcceptanceGateFilter"/>. Only the session surface
+/// <see cref="TosAcceptanceGateFilter"/>. Carried by the session surface
 /// (<c>AuthController</c>: <c>/auth/me</c>, <c>/auth/tos/accept</c>,
-/// refresh, logout, re-verify, authenticator check) carries it — an account
-/// that has not accepted yet must still be able to read its own state, accept,
-/// and sign out.
+/// refresh, logout, re-verify, authenticator check) — an account that has not
+/// accepted yet must still be able to read its own state, accept, and sign
+/// out — and, since T168, by the two account lifecycle endpoints
+/// (<c>POST /users/me/deactivate</c>, <c>DELETE /users/me</c>): declining the
+/// terms must not take away the right to close or delete the account (KVKK
+/// erasure). Nothing else carries it.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, Inherited = false)]
 public sealed class SkipTosAcceptanceGateAttribute : Attribute;

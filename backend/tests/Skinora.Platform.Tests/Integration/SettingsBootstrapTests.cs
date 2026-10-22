@@ -45,11 +45,12 @@ public class SettingsBootstrapTests : IntegrationTestBase
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_MIN_MINUTES"] = "15",
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_MAX_MINUTES"] = "60",
             ["SKINORA_SETTING_PAYMENT_TIMEOUT_DEFAULT_MINUTES"] = "30",
-            ["SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES"] = "60",
+            // T169 — the .env.example / DEPLOY_RUNBOOK §A values (owner decisions 2026-10-21).
+            ["SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES"] = "720",
             // WP12 — timeout_warning_ratio now ships with a seeded default (0.75),
             // so it is no longer a deploy-mandatory env var.
-            ["SKINORA_SETTING_MIN_TRANSACTION_AMOUNT"] = "1.0",
-            ["SKINORA_SETTING_MAX_TRANSACTION_AMOUNT"] = "10000.0",
+            ["SKINORA_SETTING_MIN_TRANSACTION_AMOUNT"] = "10",
+            ["SKINORA_SETTING_MAX_TRANSACTION_AMOUNT"] = "2900",
             ["SKINORA_SETTING_MAX_CONCURRENT_TRANSACTIONS"] = "5",
             ["SKINORA_SETTING_NEW_ACCOUNT_TRANSACTION_LIMIT"] = "3",
             ["SKINORA_SETTING_NEW_ACCOUNT_PERIOD_DAYS"] = "14",
@@ -61,7 +62,7 @@ public class SettingsBootstrapTests : IntegrationTestBase
             ["SKINORA_SETTING_HIGH_VOLUME_AMOUNT_THRESHOLD"] = "5000.0",
             ["SKINORA_SETTING_HIGH_VOLUME_COUNT_THRESHOLD"] = "10",
             ["SKINORA_SETTING_HIGH_VOLUME_PERIOD_HOURS"] = "24",
-            ["SKINORA_SETTING_HOT_WALLET_LIMIT"] = "100000.0",
+            ["SKINORA_SETTING_HOT_WALLET_LIMIT"] = "4000",
             ["SKINORA_SETTING_DORMANT_ACCOUNT_VALUE_THRESHOLD"] = "1000.0",
         };
 

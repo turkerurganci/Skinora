@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { ErrorState, Skeleton } from "@/components/common";
 import { useAdminWallets } from "@/lib/hooks/useAdminWallets";
 import { NetworkWalletsCard } from "./NetworkWalletsCard";
+import { OutboundApprovalPanel } from "./OutboundApprovalPanel";
 
 /**
  * S-wallets (T157) — per-network platform wallet overview. One card per
@@ -25,6 +26,8 @@ export function WalletsOverview() {
   }
   return (
     <div className="flex flex-col gap-6">
+      {/* T169 — payouts/refunds waiting for an admin approval (all networks). */}
+      <OutboundApprovalPanel />
       {data.networks.map((n) => (
         <NetworkWalletsCard key={n.network} data={n} />
       ))}

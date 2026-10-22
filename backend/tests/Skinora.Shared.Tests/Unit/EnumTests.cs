@@ -436,8 +436,10 @@ public class EnumTests
     // ── AuditAction (33) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave33Values()
+    public void AuditAction_ShouldHave34Values()
     {
+        // 34 after T169 added OUTBOUND_TRANSFER_APPROVED (admin approval of a
+        // payout/refund while outbound.auto_send_enabled is false, 07 §9.35).
         // 33 after T157 added OUTBOUND_ROW_CLOSURE_PROPOSED / _APPROVED /
         // _REJECTED / _REFUSED (the two-person outbound-row closure tool,
         // 07 §9.32) — each with its row in 06 §2.19.
@@ -462,7 +464,7 @@ public class EnumTests
         // row there — and never the reverse: do NOT delete enum values to
         // "align", every one of them has a writer.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(33, values.Length);
+        Assert.Equal(34, values.Length);
     }
 
     [Theory]

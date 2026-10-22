@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.13** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T167 — MASAK notları: ödeme ekranı, kabul formu, satıcı ödeme görünümleri, profil cüzdanı, destek sayfası. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
+**Versiyon: v4.14** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T169 — S06/S07 50 $ altında TRON devre dışı; S22 onay bekleyen ödemeler paneli. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
 
 ---
 
@@ -822,6 +822,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 - Seçili item özeti (C03 Compact, değiştirilebilir → adım 1'e geri)
 - **Stablecoin seçimi:** ~~USDT / USDC toggle butonları~~ — **kalktı (T166; 02 §4.2):** token her zaman USDT'dir (fiyat kutusunun yanında yazar); yerine **kabul edilen ağlar** seçimi gelir (TRON / Ethereum çoklu seçim; yalnız profilde ödeme adresi kayıtlı ağlar seçilebilir)
   - **Uygulandı (T156):** "Kabul ettiğiniz ağlar" onay kutuları. Listede **yalnız** `GET /transactions/params` `supportedNetworks`'teki ağlar vardır — açık olmayan ağ hiç gösterilmez. Açık ama profilde ödeme adresi olmayan ağ gösterilir, seçilemez ve "Bu ağda ödeme adresiniz yok — profilinizden ekleyin" der. Her seçenek ödeme adresini maskeli gösterir ve ağın ücret notunu taşır (TRON: alıcı ayrıca kabulde sabitlenen TRON ağ ücretini öder, satıcıya ödemenin komisyonla karşılanmayan ağ ücreti alacaktan düşer — 02 §4.7; Ethereum: iki taraftan da ağ ücreti alınmaz). Başlangıçta seçilebilir **bütün** ağlar işaretlidir; hiçbiri işaretli değilse adım geçilmez. Stablecoin toggle'ı T166'ya kadar yerinde (11 §F8 T156 kararları)
+  - **Uygulandı (T169 — sahip kararı 2026-10-21: 50 $ altında TRON yok):** girilen fiyat bir ağın kendi en düşük satış tutarının altındaysa (bugün yalnız TRON: `blockchain.tron.min_transaction_amount_usdt` = 50 USDT; `GET /transactions/params` `networkMinPrices`, 07 §7.4) o ağın onay kutusu gösterilir ama **devre dışıdır** ve işareti kalkar; altında neden yazar: "TRON, 50 USDT altındaki satışlarda kullanılamaz: ağ ücreti satış tutarına göre çok yüksek kalır. Bu fiyatta öteki ağı seçin ya da fiyatı yükseltin." (4 dil, `belowNetworkMin`). Fiyat yükseltilince kutu yeniden seçilebilir. Boş ya da sayı olmayan fiyat kutulara dokunmaz (fiyat alanı kendi hatasını gösterir). Sunucu aynı kuralı uygular: kural altındaki ağla gelen istek 422 `NETWORK_MIN_AMOUNT_NOT_MET` (`details.network`, `details.minAmount`) ile döner
 - **Fiyat girişi:**
   - Input alanı + seçili stablecoin etiketi (örn: `[___] USDT`)
   - Min/max bilgisi altında gösterilir: "Min: X, Max: Y"
@@ -871,7 +872,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 
 > **F8 hedefi (T156; 02 §4.2):** özetteki "Token" satırı satıcının kabul ettiği ağları gösterir (TRON TRC-20 / Ethereum ERC-20); tek ağ etiketi kalkar.
 >
-> **Uygulandı (T156):** "Ağlar" satırı her kabul edilen ağı `USDT · TRON (TRC-20)` biçiminde listeler; "Cüzdan" satırı her ağın ödeme adresini ağ adıyla gösterir. İstek gövdesi `acceptedNetworks` taşır (07 §7.2). Ağa bağlı bir ret (`SELLER_WALLET_ADDRESS_MISSING`, `PAYOUT_ADDRESS_COOLDOWN_ACTIVE`, `INVALID_WALLET_ADDRESS`, `SANCTIONS_MATCH`, `NETWORK_UNAVAILABLE`) hata panelinde `details.network`'ten okunan ağ adıyla gösterilir.
+> **Uygulandı (T156):** "Ağlar" satırı her kabul edilen ağı `USDT · TRON (TRC-20)` biçiminde listeler; "Cüzdan" satırı her ağın ödeme adresini ağ adıyla gösterir. İstek gövdesi `acceptedNetworks` taşır (07 §7.2). Ağa bağlı bir ret (`SELLER_WALLET_ADDRESS_MISSING`, `PAYOUT_ADDRESS_COOLDOWN_ACTIVE`, `INVALID_WALLET_ADDRESS`, `SANCTIONS_MATCH`, `NETWORK_UNAVAILABLE`, T169: `NETWORK_MIN_AMOUNT_NOT_MET`) hata panelinde `details.network`'ten okunan ağ adıyla gösterilir.
 
 - Tüm bilgiler salt okunur gösterilir
 - "Geri" butonu → önceki adımlara dönüş
@@ -953,7 +954,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 | Aksiyon alanı | "Alıcının kabul etmesi bekleniyor" | "Kabul Ediyorum" butonu (birincil) | "Bu işlemi kabul etmek için giriş yapın" + Login CTA |
 | Countdown | Alıcı kabul timeout'u (C02) | Alıcı kabul timeout'u (C02) | Gösterilmez |
 | Davet linki / bildirim bilgisi | Alıcı kayıtlı değilse: kopyalanabilir davet linki (C12). Alıcı kayıtlıysa: "Alıcıya bildirim gönderildi" bilgi metni | — | — |
-| Ödeme ağı *(T156)* | — | İlanın kabul ettiği ağlar (`acceptedNetworks`) radyo düğmesi olarak; her biri `networkQuotes`'tan gelen tutarı birebir gösterir ("Göndereceğiniz tutar: 23.30 USDT"; TRON'da altında "TRON ağ ücreti dahil: 2.90 USDT", Ethereum'da ücret satırı yok). Tek ağ varsa önden seçili, birden çoksa hiçbiri seçili değil ve seçim yapılmadan "Kabul Ediyorum" pasif. Kabul isteği `network` taşır; `NETWORK_NOT_ACCEPTED` / `NETWORK_UNAVAILABLE` ağ adıyla gösterilir | — |
+| Ödeme ağı *(T156)* | — | İlanın kabul ettiği ağlar (`acceptedNetworks`) radyo düğmesi olarak; her biri `networkQuotes`'tan gelen tutarı birebir gösterir ("Göndereceğiniz tutar: 23.30 USDT"; TRON'da altında "TRON ağ ücreti dahil: 2.90 USDT", Ethereum'da ücret satırı yok). Tek ağ varsa önden seçili, birden çoksa hiçbiri seçili değil ve seçim yapılmadan "Kabul Ediyorum" pasif. Kabul isteği `network` taşır; `NETWORK_NOT_ACCEPTED` / `NETWORK_UNAVAILABLE` ağ adıyla gösterilir. **T169 (50 $ altında TRON yok):** satış fiyatı ağın kendi en düşük tutarının altındaysa (`networkQuotes[].unavailableReason` = `NETWORK_MIN_AMOUNT_NOT_MET` + `minAmount`, 07 §7.5 — kural konmadan önce açılmış ilanlar da) o ağın radyo düğmesi gösterilir ama **devre dışıdır**, tutar yerine neden yazar: "Bu satışta TRON kullanılamaz: TRON ile en az 50 USDT'lik satışlar ödenebilir." (4 dil); seçilebilir tek ağ kalırsa önden seçilidir. Sunucu kabulde aynı kuralı uygular (422 `NETWORK_MIN_AMOUNT_NOT_MET`) | — |
 | İade adresi | — | Profildeki iade adresi gösterilir (varsa, maskeli) + "Değiştir" linki → yalnızca bu işlem için geçerli adres değişikliği, profil adresi etkilenmez (02 §12.2). Yoksa C11 (Wallet Address Input) zorunlu alan. Adres olmadan "Kabul Ediyorum" devre dışı. **T156:** adres **seçilen ağın** adresidir — profilde o ağın iade adresi varsa doldurulur, yoksa alan boş ve ağın biçimiyle denetlenir; ağ değişince yazılan adres silinir; sağlamasız Ethereum adresi ek onay kutusu ister (kabul ucu `confirmLowercase` almadığı için ikinci onay formda) | — |
 | İptal | "İşlemi İptal Et" butonu aktif | "İşlemi İptal Et" butonu aktif | — |
 | Ek bilgi | — | Satıcı skoru, item detayı, toplam tutar | Sınırlı: item adı, fiyat, satıcı adı |
@@ -1858,9 +1859,16 @@ Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sa
 
 ### 8.11 S22 — Cüzdanlar *(T157)*
 
-**Amaç:** Platformun cüzdanlarını, bakiyelerini ve giden transferlerini **ağ başına** görmek (TRON ve Ethereum ayrı bölümlerde — bir ağın bakiyesi ötekinin yerine geçmez); sıcak→soğuk aktarım başlatmak; Ethereum servisi günlüğünü kaybettiğinde takılı kalan giden satırları zincirdeki hash'le kapatmak (07 §9.32–§9.34).
+**Amaç:** Test boyunca satıcı ödemelerini ve alıcı iadelerini göndermeden önce onaylamak (T169); platformun cüzdanlarını, bakiyelerini ve giden transferlerini **ağ başına** görmek (TRON ve Ethereum ayrı bölümlerde — bir ağın bakiyesi ötekinin yerine geçmez); sıcak→soğuk aktarım başlatmak; Ethereum servisi günlüğünü kaybettiğinde takılı kalan giden satırları zincirdeki hash'le kapatmak (07 §9.32–§9.34).
 
 **Erişim:** Admin (`MANAGE_SETTINGS` — ayarlar ekranındaki salt okunur cüzdan adresleriyle aynı izin; ayrı bir cüzdan izni katalog değişikliği olur, öneriyle kaydedildi — ⚠).
+
+**Onay bekleyen ödemeler paneli (T169 — ⚠ PARA; sahip kararı 2026-10-21: test boyunca bütün ödemeler admin onaylı; 07 §9.35 AD40/AD41):** ekranın en üstünde, ağ kartlarından önce.
+
+- **Kapı durumu:** `outbound.auto_send_enabled` kapalıysa belirgin uyarı "Otomatik gönderim KAPALI: her satıcı ödemesi ve alıcı iadesi siz onaylayana kadar bekler."; açıksa "Otomatik gönderim açık: ödemeler ve iadeler onay beklemeden gönderilir." Kısa açıklama: onay satırı olduğu gibi gönderime bırakır (tutar ve alıcı satır oluşurken sabitlenmiştir), gönderimi sonraki dakikalık tur yapar, sweep onay beklemez, kapı Ayarlar ekranındaki ayardır.
+- **Liste (en eski önce):** onay bekleyen `SELLER_PAYOUT` / `*_REFUND` satırları — ağ, tür, tutar (iadede düşülen ağ ücreti ayrı satırda), alıcı adres (kopyalanabilir), oluşma zamanı, **Onayla**. Boşsa "Onay bekleyen ödeme ya da iade yok."
+- **Onay penceresi:** ağ, tür, tutar, alıcı adres ve işlem kimliği; uyarı "Onaydan sonra bu tutar zincirde gerçekten gönderilir ve geri alınamaz. Ağı, tutarı ve alıcı adresini kontrol edin."; düğmeler "Vazgeç" / "Onayla ve gönderime bırak". Onaylanan satır panelden düşer. Reddedilen onay (`ROW_NOT_APPROVABLE`, `ROW_NOT_OPEN`, `ALREADY_APPROVED`, `ROW_NOT_FOUND`) hata olarak gösterilir; hiçbir şey yazılmaz.
+- Onay işlemi kendisi para göndermez ve tutara/alıcıya dokunmaz; her onay AuditLog `OUTBOUND_TRANSFER_APPROVED` (runbook §M).
 
 **Bölümler (her ağ için ayrı kart, ağ etiketiyle: "TRON (TRC-20)" / "Ethereum (ERC-20)"):**
 

@@ -1,6 +1,6 @@
 # T164 — Veritabanı yedeği ve geri dönüş planı
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor (ilk doğrulama ✗ FAIL: 1 × S1 ⚠ PARA, 3 × S3, 7 × S4 — bkz. "Düzeltme turu") | **Tarih:** 2026-10-22
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — ilk doğrulama ✗ FAIL (1 × S1 ⚠ PARA, 3 × S3, 7 × S4 — bkz. "Düzeltme turu"), yeniden doğrulama ✓ PASS (5 × S4 — bkz. "Kapanış") | **Tarih:** 2026-10-22 (kapanış 2026-10-23)
 
 ---
 
@@ -93,9 +93,10 @@ Sonuç: dört kuraldan üçü canlıda doğru durumu aldı ve Grafana Alertmanag
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | 1. tur ✗ FAIL (HEAD `3e2441c0`, bağımsız doğrulama alt ajanı) → düzeltme turu yapıldı; **yeniden doğrulama bekliyor** |
-| Bulgu sayısı | 11 — S1: 1 (⚠ PARA, F1) · S3: 3 (F2 ⚠ PARA, F3, F4) · S4: 7 (F5–F11) |
-| Düzeltme gerekli mi | Evet — "Düzeltme turu" bölümü: S1 ve üç S3 kapandı; S4'lerden F6, F7 (ad çakışması), F9, F11 kapandı, F5/F8 belgede, F7 (kilit) ve F10 bilinen sınırlama |
+| Tur | HEAD | Verdict | Bulgular | Sonuç |
+|---|---|---|---|---|
+| 1. doğrulama (bağımsız alt ajan) | `3e2441c0` | ✗ FAIL | 11 — S1: 1 (⚠ PARA, F1) · S3: 3 (F2 ⚠ PARA, F3, F4) · S4: 7 (F5–F11) | "Düzeltme turu": S1 ve üç S3 kapandı; S4'lerden F6, F7 (ad çakışması), F9, F11 kapandı, F5/F8 belgede, F7 (kilit) ve F10 bilinen sınırlama |
+| Yeniden doğrulama (bağımsız alt ajan, Opus high) | `99e109ab` | ✓ PASS | 5 — S4: 5 (S4-2, S4-3 ⚠ PARA belge doğruluğu) | S1 senaryosu T164 + T169 koduyla bağımsız yeniden üretildi: eski yordamla **4 ikinci gönderim** (TRON ödeme + iade, Ethereum ödeme + iade), §N.8 ile kapı kapalı da açık da **0**; "adım 5 atlanırsa" 1. Üç S3 canlı bozma testleriyle kapandı. S4'lerin dördü kapanışta kapandı, biri (S4-4) birleştirme — "Kapanış" |
 
 ## Altyapı Değişiklikleri
 
@@ -108,6 +109,7 @@ Sonuç: dört kuraldan üçü canlıda doğru durumu aldı ve Grafana Alertmanag
 - Branch: `task/T164-veritabani-yedegi`
 - Commit: `95110e5c` — T164: Veritabanı yedeği ve geri dönüş planı (+ rapor/status commit'i)
 - Düzeltme turu: `d4644efd` (main #373 merge commit), `73ebdd87` (betik + izleme), `83e89299` (runbook §N.8 + belgeler) ve bu rapor commit'i
+- Kapanış: S4 commit'i, main (`69c68df6`) merge commit'i ve kapanış kaydı commit'i (aşağıda "Kapanış")
 - PR: #372
 - CI: ✗ — run `39824772868` dış nedenle kırmızı (Next.js critical danışması, frontend audit kapısı); T164'e ait iş yeşil, backend iş kolları Lint'e bağlı olduğu için atlandı
 
@@ -202,8 +204,8 @@ Ek: §N.4'e `export MSYS_NO_PATHCONV=1` eklendi. Git Bash'te `$BK` komutları `/
 ### Sahip kararları (2026-10-22) işlendi
 
 1. İkinci kopya **yalnız USB**, bulut yok: §N.3 ve 05 §2.4/§8.6.
-2. Geri yükleme sonrası araçlar **T173'ten önce, plan T172a**: T169 dalı plana ekliyor, burada eklenmedi (çift olmasın). Backlog `PostRestoreChainReconciliationTooling` hedefi ve §N.8 (b) güncellendi.
-3. 05 §8.6 "Encryption at rest": şimdilik BitLocker + şifreli makine dışı yedek, ücretli sürümde TDE. Satır **T169 dalındaki metinle birebir aynı**; birleştirmede tek satır kalır. Not: 05'in sürüm satırı (iki dalda da v3.32) çakışır; ikinci birleşen v3.33 yapmalı.
+2. Geri yükleme sonrası araçlar **T173'ten önce, plan T172a**: satırı T169 plana ekledi (main); kapanışta plan T172a satırı backlog `PostRestoreChainReconciliationTooling`'i kaynak gösteriyor, backlog satırının hedefi T172a. §N.8 (b) güncellendi.
+3. 05 §8.6 "Encryption at rest": şimdilik BitLocker + şifreli makine dışı yedek, ücretli sürümde TDE. Satır T169'daki metinle birebir aynıydı; main birleştirmesinde tek satır kaldı. 05 sürümü **v3.34** (main'de T163 v3.32, T169 v3.33).
 
 ### Birleştirme
 
@@ -224,10 +226,33 @@ Ek: §N.4'e `export MSYS_NO_PATHCONV=1` eklendi. Git Bash'te `$BK` komutları `/
 | `dotnet format Skinora.sln --verify-no-changes --severity error` (CI'daki komut) | ✓ rc=0 |
 
 
+## Kapanış (2026-10-23)
+
+**Girdi:** yeniden doğrulama ✓ PASS (HEAD `99e109ab`), 5 × S4. Para mantığına dokunulmadı; değişiklik yalnız test ve belge.
+
+| Bulgu | Durum |
+|---|---|
+| S4-1 — servis testi `ReportFailure()` silinmesini yakalamıyordu | **Kapandı (test):** `The_Service_…_Survives_A_Failing_Probe` önce başarılı okuma yapar (iki bölüm 1), sonra düşen okumada iki bölümün 0 olduğunu bekler. Mutasyon (çağrı silindi) yerelde ölçüldü: 1 fail / 18; geri alınınca 18/18 |
+| S4-2 ⚠ PARA (belge) — §N.8 adım 3 "deneme hakkı harcanmaz" kesinti algılanana kadar doğru değil | **Kapandı (runbook):** ≈3 dk pencerede deneme harcanabileceği, tükenen TRON satırının `FAILED` olup adım 4 listesinde görünmeyeceği, kapı `true` ise backend açılmadan SQL ile kapatma seçeneği yazıldı |
+| S4-3 ⚠ PARA (belge) — kapatmanın defter açığı, (c) yorumu, var olmayan "yeniden dene" | **Kapandı (runbook):** adım 5'e mutabakat / kesinti defteri / şikâyet anomalisi açığı ve satırı eski kopya değerlerine **aynı satır üzerinde** getiren SQL (filtreli tekil indeksler, sil-ekle yok); (c) eksik farkı kayıp ödeme saymaz; "yeniden dene" cümlesi "`FAILED`'i `PENDING`'e döndüren yol yoktur" oldu. Güvenli araç T172a (plan satırına üçüncü madde olarak eklendi) |
+| S4-4 — main ilerledi; BYPASS_LOG commit'i push edilmemişti | **Kapandı:** `origin/main` `69c68df6` (T163 #369, T169 #371, T168 #370) merge commit ile alındı; `759b5bb5` push edildi |
+| S4-5 — `db-monitor-probe-failing` zamanlaması | **Kapandı (runbook):** §N.5 metni ve tablo satırı: hiç okunmamış bölüm ≈5 dk, okunup düşen ≈20 dk |
+
+**Birleştirme (main `69c68df6`):** çakışmalar yalnız belgelerde; kod (compose ×2, `.env.example`, `rules.yml`) kendiliğinden birleşti.
+- DEPLOY_RUNBOOK: bölüm sırası **§L (T163) · §M (T169 onay kapısı) · §N (T164) · §O (T169 kurulum günü listesi)**; §0 özetine §N satırı; §N'deki T163/T169 atıfları harfle (§L, §M); başlık tek satır.
+- 05: **v3.34**; §8.6 "Encryption at rest" tek satır (main'in metni).
+- DOC_CHANGELOG, BYPASS_LOG (kronolojik), STATUS_CHANGELOG (main'in eski "Son güncelleme" satırı en üstte + merge teyitleri), IMPLEMENTATION_STATUS (main'in ✓ satırları aynen), DEFERRED_BACKLOG (iki tarafın satırları; **55 aktif / 162 çözülmüş**, main 53/162 + 2), plan/11_F9.md T172a ↔ backlog `PostRestoreChainReconciliationTooling`, MEMORY.
+
+**Testler (kapanış, merge sonrası HEAD):** `node --test "scripts/**/*.test.mjs"` **79/79** · `dotnet build Skinora.sln -c Release` 0 hata · `Skinora.API.Tests` unit (CI filtresi) **156/156** · `PrometheusDatabaseStorageObserverTests` 18/18 (mutasyonla 17/18) · `dotnet format Skinora.sln --verify-no-changes --severity error` rc=0 · çakışma işareti 0. Docker kullanılmadı.
+
+**Merge teyitleri (STATUS_CHANGELOG'a işlendi):** T169 (#371) main `21c93062` → CI `39850436226` ✓, Docker Publish `39850436112` ✓ · T168 (#370) main `69c68df6` → CI `39854740137` bloke edici joblar ✓ (CI Gate ✓; advisory UI E2E asılı), Docker Publish `39854740205` ✓.
+
 ## Known Limitations / Follow-up
 
 - `PostRestoreChainReconciliationTooling` (DEFERRED_BACKLOG §4; sahip kararı: T172a, T173'ten önce).
-- **§N.8 T169'un onay kapısına dayanır** (`outbound.auto_send_enabled`). T164 T169'dan önce birleşirse, T169 girene kadar geri yüklemeden sonra imza servisleri açılmaz.
+- **§N.8 T169'un onay kapısına dayanır** (`outbound.auto_send_enabled`, §M); T169 main'de.
+- **Kapatmanın defter açığı:** `FAILED POST_RESTORE_DUPLICATE` ile kapatılan satır, eski kopya değerlerine elle getirilene kadar mutabakatta eksik fark, iade kesinti defterinde "taşınmadı" ve ödeme şikâyetinde anomali olarak görünür (§N.8 adım 5; araç T172a).
+- **Kesinti algılanana kadar deneme hakkı:** geri yüklemeden sonra imza servisi kesintisi ≈3 dk'da algılanır; o pencerede gönderim işi deneme hakkı harcar (para çıkmaz). Tükenen satır `FAILED` olur ve adım 4 listesinde görünmez (§N.8 adım 3).
 - Disk doluluğu için alarm yok (backlog ⚪ `BackupDiskSpaceAlarm`); haftalık elle (§N.1).
 - Kilit konteynerin içinde: elle komutlar `exec` ile; `docker compose run` ile açılan ikinci konteyner kilidi görmez (§N.10).
 - Geri yüklemeden sonra `msdb` geri yüklenen yedeklerin satırlarını da gösterir (zararsız, §N.10).

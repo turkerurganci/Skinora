@@ -1,6 +1,6 @@
 # Skinora — Integration Specifications
 
-**Versiyon: v3.44** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-10-21 — T160c — §3.4 iade kesintisinin akıbeti (sweep + `REFUND_FEE_SWEEP`), §3.7.6 Ethereum sweep'inde USDC (⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#08_integration_specmd)
+**Versiyon: v3.45** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-10-22 — T169 — §3.3b admin onay kapısı: gönderim işi, tur ortası kapatma (⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#08_integration_specmd)
 
 ---
 
@@ -665,6 +665,21 @@ Blockchain sidecar yalnız *nasıl* imzalayacağını değil, **neyi imzalamayac
 | **Geçmiş okunamazsa** | Günlük tavan değerlendirilemez: yeniden denenebilir hata döner (backend 1/5/15 dk sonra dener). Geçmiş sayfa bütçesini aşarsa kalıcı hata — operatör bütçeyi ya da tavanı gözden geçirir | 502 `OUTFLOW_HISTORY_UNAVAILABLE` / 400 `OUTFLOW_HISTORY_INCOMPLETE` |
 
 **Yeni ortam değişkenleri:** `COLD_WALLET_ADDRESS` (boş = konsolidasyon kapalı), `MAX_SINGLE_TRANSFER_USDT`, `MAX_DAILY_OUTFLOW_USDT` (ikisi de ondalık USDT, boş = payout/iade kapalı). `HOT_WALLET_ADDRESS` zaten vardı; artık backend de aynı iki adresi okur (05 §3.3), böylece `.env` tek kaynaktır. Değer boyutlandırması `DEPLOY_RUNBOOK §C.3`.
+
+#### 3.3b Admin onay kapısı — gönderim işi (T169, ⚠ PARA)
+
+**Sahip kararı 2026-10-21:** test boyunca bütün ödemeler admin onayı gerektirir (11 T175: "otomatik ödeme kapıları kapalı başlıyor"). Kapı backend'dedir; imzalayan servisin kuralları (§3.3a) onaydan bağımsız olarak aynen uygulanır.
+
+| Konu | Kural |
+|---|---|
+| **Ayar** | `outbound.auto_send_enabled` (06 §3.17; seed `false`, env'den doldurulamaz). Yalnız yapılandırılmış ve `true` okunan değer kapıyı açık sayar; satır yok, yapılandırılmamış ya da bozuksa kapı **kapalı** |
+| **Tuttuğu türler** | `SELLER_PAYOUT` ve bütün iadeler (`BUYER_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `INCORRECT_AMOUNT_REFUND`, `LATE_PAYMENT_REFUND`). `SWEEP` ve `REFUND_FEE_SWEEP` (depozit → sıcak cüzdan) ile sıcak→soğuk aktarım beklemez: platformun kendi adresleri arası |
+| **Tek gönderim noktası** | `OutgoingTransferDispatchJob` (dakikalık; `BroadcastAsync`'in tek çağıranı). Kapı kapalıyken onaysız satır aday sorgusuna girmez — gönderilmez, `RetryCount` artmaz, `FAILED` olmaz, parti yeri (`BatchSize` = 20) almaz |
+| **Tur ortası kapatma** | İş, onaysız her ödeme/iade satırını açarken (göndermeden hemen önce) ayarı veritabanından **yeniden okur** (önbellek yok): tur sürerken kapı kapanırsa turda kalan onaysız satırlar gönderilmez. Kapanma anında imzalanmakta olan tek satır geri alınamaz. Kapalı → açık geçiş sonraki turda (≤ 1 dk) etkili olur |
+| **Onay** | AD41 (07 §9.35) yalnız `BlockchainTransaction.ApprovedAt` / `ApprovedByAdminId` yazar ve `OUTBOUND_TRANSFER_APPROVED` audit satırını ekler; tutar ve alıcı değişmez, onay para göndermez. Satırı sonraki tur gönderir — kapı yokmuş gibi, aynı istekle |
+| **Alarm** | Ethereum ücret "bekle" alarmı (§3.7.7, `FeeCapWaitAlarmMinutes`) onay bekleyen satırı saymaz; onaylanan satırın yaşı onay anından başlar |
+
+Prosedür (günlük onay, kapıyı açma/kapatma) DEPLOY_RUNBOOK §M.
 
 ### 3.4 Monitoring ve Polling Stratejisi
 

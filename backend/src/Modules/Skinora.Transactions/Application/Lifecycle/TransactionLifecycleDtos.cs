@@ -51,9 +51,16 @@ public sealed record TransactionParamsDto(
     IReadOnlyList<string> SupportedStablecoins,
     // T148 (07 §1.3) — networks open for a new transaction ("TRON" /
     // "ETHEREUM"): a configured service that is not in a health freeze.
-    IReadOnlyList<string> SupportedNetworks);
+    IReadOnlyList<string> SupportedNetworks,
+    // T169 — per network, its own minimum price (TRON 50.00); a network not
+    // listed has none beyond MinPrice. The wizard disables a network whose
+    // minimum the price misses (create would answer NETWORK_MIN_AMOUNT_NOT_MET).
+    IReadOnlyList<NetworkMinPriceDto>? NetworkMinPrices = null);
 
 public sealed record PaymentTimeoutWindowDto(int MinHours, int MaxHours, int DefaultHours);
+
+/// <summary>One element of <c>networkMinPrices</c> (07 §7.4, T169).</summary>
+public sealed record NetworkMinPriceDto(string Network, string MinPrice);
 
 // ---------- POST /transactions (07 §7.2) ----------
 
@@ -168,6 +175,11 @@ public enum CreateTransactionStatus
     /// configured service or is in a health freeze (07 §1.3, T147). Retryable;
     /// <c>details.network</c> names the network.</summary>
     NetworkUnavailable,
+
+    /// <summary>422 <c>NETWORK_MIN_AMOUNT_NOT_MET</c> — the price is below an
+    /// accepted network's own minimum (T169: TRON below 50 USDT).
+    /// <c>details.network</c> + <c>details.minAmount</c>.</summary>
+    NetworkMinAmountNotMet,
 }
 
 // ---------- POST /transactions/:id/accept (07 §7.6) ----------
@@ -281,6 +293,12 @@ public enum AcceptTransactionStatus
     /// configured service or is in a health freeze (07 §1.3, T147). Fail-closed
     /// and retryable; nothing is written.</summary>
     NetworkUnavailable,
+
+    /// <summary>422 <c>NETWORK_MIN_AMOUNT_NOT_MET</c> — the price is below the
+    /// chosen network's own minimum (T169: TRON below 50 USDT). Covers a
+    /// listing created before the rule or before the minimum was raised;
+    /// nothing is written.</summary>
+    NetworkMinAmountNotMet,
 }
 
 // ---------- POST /transactions/:id/confirm-ready (07 §7.6a) ----------

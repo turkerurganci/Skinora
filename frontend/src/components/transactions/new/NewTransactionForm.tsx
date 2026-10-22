@@ -25,6 +25,7 @@ import {
   effectiveAcceptedNetworks,
   networkGateReason,
   sellerNetworkOptions,
+  withPriceMinimums,
 } from "@/lib/transactions/networkChoice";
 import { networkLabel, parseNetwork } from "@/lib/utils/blockchain";
 import { EligibilityGate, NetworkGate, getBlockingReasons } from "./EligibilityGate";
@@ -97,9 +98,16 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
     () => sellerNetworkOptions(params.supportedNetworks, profile.data?.wallets),
     [params.supportedNetworks, profile.data?.wallets],
   );
+  // T169 — the options at the entered price (no TRON below its own minimum).
+  // The gate below keeps the price-free options: it answers "can this seller
+  // list at all", not "on which networks at this price".
+  const pricedNetworkOptions = useMemo(
+    () => withPriceMinimums(networkOptions, price, params.networkMinPrices),
+    [networkOptions, price, params.networkMinPrices],
+  );
   const acceptedNetworks = useMemo(
-    () => effectiveAcceptedNetworks(chosenNetworks, networkOptions),
-    [chosenNetworks, networkOptions],
+    () => effectiveAcceptedNetworks(chosenNetworks, pricedNetworkOptions),
+    [chosenNetworks, pricedNetworkOptions],
   );
   const networkGate = profile.data ? networkGateReason(networkOptions) : null;
 
@@ -308,7 +316,7 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
             price={price}
             paymentTimeoutHours={paymentTimeoutHours}
             priceError={priceError}
-            networkOptions={networkOptions}
+            networkOptions={pricedNetworkOptions}
             acceptedNetworks={acceptedNetworks}
             onToggleNetwork={toggleNetwork}
             onChangeItem={() => setStep(1)}
@@ -351,7 +359,7 @@ export function NewTransactionForm({ eligibility, params }: NewTransactionFormPr
           buyerMethod={method}
           buyerSteamId={buyerSteamId}
           acceptedNetworks={acceptedNetworks}
-          networkOptions={networkOptions}
+          networkOptions={pricedNetworkOptions}
           submitError={submitError}
           isSubmitting={mutation.isPending}
           onBack={() => setStep(3)}
@@ -457,6 +465,7 @@ export const POST_ERROR_CODES = new Set([
   // T147/T156 — one of the ticked networks is not open (no service or under a
   // health freeze, 07 §7.2). Retryable; `details.network` names it.
   "NETWORK_UNAVAILABLE",
+  "NETWORK_MIN_AMOUNT_NOT_MET",
 ]);
 
 function resolveErrorMessage(code: string, t: (key: string) => string): string {

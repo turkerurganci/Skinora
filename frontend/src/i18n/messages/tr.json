@@ -113,7 +113,7 @@
       "summaryHeading": "Önemli noktalar",
       "summary": {
         "escrow": "Ödemeniz, satıcı eşyayı teslim edene kadar emanette tutulur; platform eşyanın kendisini hiçbir zaman tutmaz.",
-        "commission": "İşlem tamamlandığında satıcıdan komisyon kesilir.",
+        "commission": "Komisyonu alıcı öder ve ödenecek toplama eklenir; TRON'da buna ayrı bir ağ ücreti eklenir.",
         "crypto": "Ödemeler yalnızca USDT ile, TRON veya Ethereum ağı üzerinden yapılır.",
         "disputes": "İtirazlar Skinora yöneticileri tarafından incelenir.",
         "kyc": "Yaptırım listesindeki cüzdanlar ve ambargolu bölgeler engellenir."
@@ -124,6 +124,10 @@
       "submitting": "Gönderiliyor...",
       "notEligible": "Devam etmeye uygun değilim",
       "acceptError": "Kabulünüz kaydedilemedi. Lütfen tekrar deneyin.",
+      "decline": {
+        "toggle": "Şartları kabul etmiyorum",
+        "description": "Şartları kabul etmeden Skinora'yı kullanamazsınız. İsterseniz hesabınızı şimdi kapatabilir ya da kalıcı olarak silebilirsiniz; silmede kişisel verileriniz Gizlilik Politikası'nda yazdığı gibi silinir ya da anonimleştirilir."
+      },
       "reprompt": {
         "title": "Güncellenmiş Kullanıcı Sözleşmesi",
         "description": "Kullanıcı Sözleşmemiz güncellendi. Devam etmek için lütfen yeni sürümü inceleyip kabul edin."
@@ -498,7 +502,8 @@
       "OUTBOUND_ROW_CLOSURE_PROPOSED": "Giden satır kapatma önerildi",
       "OUTBOUND_ROW_CLOSURE_APPROVED": "Giden satır kapatma onaylandı",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "Giden satır kapatma reddedildi",
-      "OUTBOUND_ROW_CLOSURE_REFUSED": "Giden satır kapatma geri çevrildi"
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "Giden satır kapatma geri çevrildi",
+      "OUTBOUND_TRANSFER_APPROVED": "Giden ödeme onaylandı"
     }
   },
   "adminTransactions": {
@@ -822,87 +827,187 @@
     "support": "Destek"
   },
   "legal": {
-    "draftNotice": "Bu metin inceleme amacıyla hazırlanmış bir TASLAKTIR ve hukuki danışmanlık niteliği taşımaz. Lansmandan önce yetkili hukuk müşavirlerince gözden geçirilip son hâline getirilecektir; yayımlanan nihai sürüm Skinora'yı kullanımınızı düzenleyecektir.",
+    "draftNotice": "Bu metin TASLAKTIR. İşletmeci bilgileri (unvan, adres, vergi bilgileri, yetkili mahkeme) henüz eklenmedi; bu bilgiler eklenene kadar metin taslak kalır ve Skinora gerçek ağda (gerçek USDT ile) açılmaz. Metin henüz bir hukukçu tarafından incelenmedi.",
     "backToHome": "Ana sayfaya dön",
+    "lastUpdated": "Son güncelleme: {date}",
+    "contents": "İçindekiler",
+    "operator": {
+      "heading": "İşletmeci bilgileri",
+      "pending": "[şirket bilgisi eklenecek]",
+      "fields": {
+        "legalName": "Unvan",
+        "address": "Adres",
+        "taxOffice": "Vergi dairesi",
+        "taxId": "Vergi kimlik numarası",
+        "mersisNo": "MERSİS numarası",
+        "kepAddress": "KEP adresi",
+        "courtVenue": "Yetkili mahkeme ve icra daireleri",
+        "email": "E-posta"
+      }
+    },
     "privacy": {
-      "title": "Gizlilik Politikası",
-      "intro": "Skinora, alıcı ile satıcıyı bir araya getiren ve eşya Steam üzerinden teslim edilene kadar ödemeyi emanette tutan bir CS2 eşya emanet hizmetidir. Bu politika, hizmeti yürütmek için işlediğimiz kişisel verileri ve sahip olduğunuz seçenekleri açıklar. Yalnızca gerekli olanı toplamayı ve verileri, geçerli olduğu durumlarda Türkiye'deki KVKK ve AB'deki GDPR dâhil yürürlükteki veri koruma yasalarına uygun şekilde işlemeyi amaçlarız.",
+      "title": "Gizlilik Politikası ve KVKK Aydınlatma Metni",
+      "intro": "Bu metin, 6698 sayılı Kişisel Verilerin Korunması Kanunu'nun (KVKK) 10. maddesi kapsamındaki aydınlatma metni ve Skinora'nın gizlilik politikasıdır. Skinora'yı kullanırken hangi kişisel verilerinizi, hangi amaçla ve hangi hukuki sebeple işlediğimizi, kimlere aktardığımızı ve haklarınızı anlatır. Yalnız hizmet için gerekli olan veriyi toplarız; kişisel veri satmayız ve reklam için kullanmayız.",
       "sections": {
-        "dataWeCollect": {
-          "heading": "Topladığımız veriler",
-          "body": "Steam ile (Steam OpenID) oturum açtığınızda Steam ID, görünen ad ve avatar dâhil Steam genel profilinizi alırız. Ayrıca TRON (TRC-20) ve Ethereum (ERC-20) ağlarındaki USDT ödemeleri için ağ başına sağladığınız cüzdan adreslerini ve teklifler, emanet durumu, ödemeler, iadeler ve uyuşmazlıklar gibi platformdaki işlem aktivitenize ilişkin kayıtları saklarız. Steam parolanızı veya Steam Mobile Authenticator kimlik bilgilerinizi almayız."
+        "controller": {
+          "heading": "Veri sorumlusu",
+          "body": "Veri sorumlusu Skinora'nın işletmecisidir: {legalName}, adres: {address}. Kişisel verilerinizle ilgili her soru ve talep için {supportEmail} adresine yazabilirsiniz.\n\nYürürlükteki başka bir veri koruma mevzuatı (ör. Avrupa Birliği'nde GDPR) size ek haklar tanıyorsa bu haklarınız saklıdır."
         },
-        "howWeUse": {
-          "heading": "Verilerinizi nasıl kullanırız",
-          "body": "Verilerinizi sizi doğrulamak, emanet işlemleri oluşturup tamamlamak, envanterleri okuyarak Steam teslimatlarını doğrulamak ve stablecoin ödemelerini, komisyonları, ödemeleri ve iadeleri işlemek için kullanırız. Ayrıca dolandırıcılığı tespit edip önlemek; yaş, coğrafi engelleme ve yaptırım taraması gibi uygunluk kurallarını uygulamak; uyuşmazlıkları çözmek ve yasal, muhasebe ve güvenlik yükümlülüklerimizi yerine getirmek için kullanırız."
+        "dataWeCollect": {
+          "heading": "İşlediğimiz kişisel veriler",
+          "body": "- Steam hesap bilgileri: Steam ID, görünen ad, profil fotoğrafı, Steam hesabının oluşturulma tarihi ve takas uygunluğu (Mobile Authenticator durumu, takas bekleme süresi, takas kısıtı).\n- Steam envanter bilgileri: işleme konu eşya ve teslimatı doğrulamak için işlem süresince satıcının ve alıcının herkese açık envanterinden okunan eşya kayıtları.\n- Steam takas bağlantınız (trade URL).\n- Cüzdan bilgileri: her ağ için kaydettiğiniz ödeme ve iade adresleri, adres değişikliği geçmişi, ödemenin geldiği adres ve işlem hash'leri.\n- İşlem bilgileri: ilanlar, fiyatlar, ödemeler, iadeler, iptaller ve sebepleri, itirazlar ve yönetici kararları, itibar skorunuzu oluşturan işlem sonuçları.\n- İletişim bilgileri (isteğe bağlı): e-posta adresiniz, bağladığınız Telegram ve Discord hesaplarının kimlikleri, bildirim ve dil tercihleriniz.\n- Onay kayıtları: Kullanıcı Sözleşmesi'ni kabul ettiğiniz tarih ve sürüm, 18 yaş beyanınızın tarihi.\n- Teknik ve güvenlik bilgileri: IP adresiniz ve ondan belirlenen ülke, oturum açtığınız cihaz ve tarayıcı bilgisi, oturum kayıtları, dolandırıcılık ve güvenlik sinyalleri (ör. aynı cüzdan adresinin birden fazla hesapta kullanılması).\n- Destek yazışmaları: bize gönderdiğiniz e-postalar.\n\nSteam parolanızı, Mobile Authenticator kodlarınızı, cüzdanınızın özel anahtarını ya da kurtarma ifadesini almayız. Kimlik belgesi istemeyiz; kimlik doğrulama (KYC) yapılmaz."
+        },
+        "collectionMethod": {
+          "heading": "Verileri nasıl topluyoruz",
+          "body": "- Steam ile oturum açtığınızda Steam'den (Steam OpenID ve Steam Web API) alınan bilgiler.\n- Steam Web API üzerinden okunan herkese açık envanter ve takas uygunluğu bilgileri.\n- Sizin girdiğiniz bilgiler: cüzdan adresleri, trade URL, e-posta, bağlantılı hesaplar, itiraz ve iptal açıklamaları.\n- Herkese açık blok zincirlerinden (TRON, Ethereum) okunan transferler.\n- Siteyi kullanırken otomatik oluşan kayıtlar: IP adresi, cihaz bilgisi, oturum kayıtları.\n\nVeriler elektronik ortamda, otomatik ya da kısmen otomatik yollarla toplanır."
+        },
+        "purposes": {
+          "heading": "Hangi amaçla ve hangi hukuki sebeple işliyoruz",
+          "body": "Amaçlar:\n- Oturum açma, hesabın yönetimi, 18 yaş beyanının ve Sözleşme kabulünün kaydı.\n- İşlemlerin kurulması ve yürütülmesi: ödeme adresinin üretilmesi, ödemenin doğrulanması, teslimatın envanterden doğrulanması, satıcıya ödeme ve iadeler.\n- İtirazların ve destek taleplerinin incelenmesi.\n- Dolandırıcılığın, kara para aklamanın ve kötüye kullanımın önlenmesi; yaptırım taraması, coğrafi engelleme ve işlem sınırları.\n- Açtığınız kanallardan (platform içi, e-posta, Telegram, Discord) bildirim gönderilmesi.\n- Hizmetin güvenliği, hataların izlenmesi ve denetim kayıtlarının tutulması.\n- Yasal yükümlülüklerin yerine getirilmesi ve yetkili makamların taleplerinin karşılanması.\n\nHukuki sebepler (KVKK'da sayılan işleme şartları):\n- Sözleşmenin kurulması ve ifası için gerekli olması: hesap, işlem, ödeme, teslimat, iade, itiraz ve bildirim.\n- Hukuki yükümlülüğümüzü yerine getirebilmemiz için zorunlu olması: kayıt saklama, yetkili makam talepleri.\n- Bir hakkın tesisi, kullanılması veya korunması için zorunlu olması: itirazlar, uyuşmazlıklar, denetim kayıtları.\n- Temel hak ve özgürlüklerinize zarar vermemek kaydıyla meşru menfaatimiz için zorunlu olması: dolandırıcılığın önlenmesi, güvenlik.\n- Sizin tarafınızdan alenileştirilmiş olması: herkese açık Steam profili ve envanteri, blok zincirindeki transferler.\n\nAçık rızaya dayanan bir işleme yapmıyoruz ve pazarlama iletisi göndermiyoruz."
         },
         "dataSharing": {
-          "heading": "Veri paylaşımı",
-          "body": "Verileri yalnızca hizmeti sunmak için gereken taraflarla (takas doğrulaması için Steam ve zincir üstü ödemeler için ödeme yaptığınız blok zinciri ağı — TRON veya Ethereum — gibi) ve adımıza hareket eden hizmet sağlayıcılarla paylaşırız. Genel bir blok zincirine kaydedilen işlemlerin doğası gereği başkalarınca görülebileceğini unutmayın. Yasaların gerektirdiği veya şartlarımızı uygulamak için gerekli olduğu durumlarda da veri açıklayabiliriz; kişisel veri satmıyoruz."
+          "heading": "Verileri kimlere ve hangi amaçla aktarıyoruz",
+          "body": "- Valve Corporation (Steam): oturum açma, envanter ve takas uygunluğu sorguları için Steam ID'niz Steam'e iletilir.\n- Blok zinciri ağları ve erişim sağlayıcıları: ödeme, satıcıya ödeme ve iade transferleri herkese açık TRON ve Ethereum ağlarına yazılır; zinciri okumak ve transfer göndermek için blok zinciri erişim (düğüm) sağlayıcıları kullanılır.\n- E-posta gönderim hizmeti: e-posta bildirimlerini açtıysanız e-posta adresiniz ve bildirimin içeriği.\n- Telegram ve Discord: bu kanalları bağladıysanız bildirimler o hesabın kimliği üzerinden gönderilir.\n- Barındırma ve ağ güvenliği hizmeti (Cloudflare): IP adresiniz dahil site trafiği bu hizmetten geçer.\n- İşlemdeki karşı taraf: Kullanıcı Sözleşmesi'nin \"Karşı tarafın gördüğü bilgiler\" bölümünde sayılan bilgiler.\n- Yetkili kamu kurum ve kuruluşları ile yargı mercileri: yasal bir yükümlülük ya da hukuken geçerli bir talep bulunduğunda.\n\nBu sağlayıcıların bir kısmı (Valve, Cloudflare, Telegram, Discord, e-posta ve blok zinciri erişim sağlayıcıları) yurt dışında yerleşiktir; bu nedenle ilgili verileriniz yurt dışına aktarılır. Kişisel verilerinizi satmayız ve reklam için paylaşmayız."
+        },
+        "blockchainPublic": {
+          "heading": "Blok zinciri kayıtları",
+          "body": "TRON ve Ethereum herkese açık ve değiştirilemez kayıtlardır. İşlemlerinizdeki cüzdan adresleri, tutarlar ve transfer zamanları zincirde herkese açıktır ve Skinora dahil hiç kimse onları silemez. Hesabınızı silseniz de zincirdeki kayıtlar kalır; Skinora yalnız kendi sistemindeki adres ile kişi arasındaki bağlantıyı anonimleştirir."
         },
         "dataRetention": {
-          "heading": "Veri saklama",
-          "body": "Kişisel verileri hizmeti sunmak için ve yasal, muhasebe, denetim ve uyuşmazlık çözümü yükümlülüklerimizi yerine getirmek için gerekli olduğu sürece saklarız. İşlem ve denetim kayıtları, bu yükümlülükleri karşılamak için genellikle aktif hesap verilerinden daha uzun süre tutulur. Hesabınızın silinmesini veya anonimleştirilmesini talep edebilirsiniz; üstün gelen bir yasal zorunluluk bulunmadığı sürece bu talebi yerine getiririz."
+          "heading": "Saklama süresi ve silme",
+          "body": "- Hesabınız açık olduğu sürece verilerinizi hizmet için saklarız. Hesabı kapatmak (deaktif etmek) verileri silmez; yeniden giriş yaptığınızda hesap açılır.\n- Hesabınızı sildiğinizde Steam ID'niz anonim bir kimlikle değiştirilir; görünen adınız, profil fotoğrafınız, e-posta adresiniz, trade URL'iniz, kayıtlı cüzdan adresleriniz, bildirim kanallarınız ve oturum kayıtlarınızdaki cihaz ve IP bilgisi silinir ya da anonimleştirilir.\n- Giriş kayıtları (her girişin zamanı, IP adresi, tarayıcı bilgisi ve IP adresinden üretilen güvenlik sinyali) hesap güvenliği, çoklu hesap ve dolandırıcılık tespiti için kayıt tarihinden itibaren 1 yıl saklanır, sonra kalıcı olarak silinir. Hesabınızı sildiğinizde bu kayıtlar hemen silinmez; anonim hesaba bağlı olarak bu süre dolana kadar kalır.\n- İşlem geçmişi ve denetim kayıtları (para hareketleri, adres değişikliği geçmişi, yönetici kararları, güvenlik olayları) hesap silindikten sonra da anonim hesaba bağlı olarak süresiz saklanır; bu kayıtlar uyuşmazlık, muhasebe, dolandırıcılığın önlenmesi ve yasal yükümlülükler için gereklidir. Bu kayıtlardaki cüzdan adresleri ve işlem hash'leri, zincirde zaten herkese açık oldukları için silinmez.\n- Yasal bir saklama yükümlülüğü bulunan kayıtlar, o yükümlülüğün gerektirdiği süre boyunca saklanır."
         },
         "yourRights": {
           "heading": "Haklarınız",
-          "body": "Bulunduğunuz yere bağlı olarak KVKK, GDPR veya diğer yürürlükteki mevzuat kapsamında kişisel verilerinize erişme, bunları düzeltme, silme veya işlenmesini kısıtlama, belirli işlemelere itiraz etme ve veri taşınabilirliği haklarına sahip olabilirsiniz. Bu hakları hesap ayarlarınızdan veya destekle iletişime geçerek kullanabilirsiniz; bir talebi yerine getirmeden önce kimliğinizi doğrulamamız gerekebilir. Saklamanın yasal olarak zorunlu olduğu durumlarda haklar sınırlanabilir."
+          "body": "KVKK'nın 11. maddesi uyarınca veri sorumlusuna başvurarak şu haklara sahipsiniz:\n- Kişisel verilerinizin işlenip işlenmediğini öğrenme,\n- İşlenmişse buna ilişkin bilgi talep etme,\n- İşlenme amacını ve amacına uygun kullanılıp kullanılmadığını öğrenme,\n- Yurt içinde veya yurt dışında aktarıldığı üçüncü kişileri bilme,\n- Eksik veya yanlış işlenmişse düzeltilmesini isteme,\n- Silinmesini veya yok edilmesini isteme,\n- Düzeltme, silme veya yok etme işlemlerinin verilerin aktarıldığı üçüncü kişilere bildirilmesini isteme,\n- Münhasıran otomatik sistemlerle analiz edilmesi sonucu aleyhinize bir sonuç çıkmasına itiraz etme,\n- Kanuna aykırı işleme nedeniyle zarara uğradıysanız zararın giderilmesini talep etme.\n\nHaklarınızı nasıl kullanırsınız:\n- Hesabınızı kapatmak ya da silmek için hesap ayarlarındaki \"Hesap Yönetimi\" bölümünü kullanın. Kullanıcı Sözleşmesi'ni kabul etmemiş olsanız da kabul ekranındaki \"Şartları kabul etmiyorum\" seçeneğinden hesabınızı kapatabilir ya da silebilirsiniz. Aktif bir işleminiz varken hesap kapatılamaz ve silinemez.\n- Diğer talepleriniz için {supportEmail} adresine, hesabınızın Steam ID'sini belirterek yazın. Talebi yerine getirmeden önce hesabın size ait olduğunu doğrularız (ör. Steam ile oturum açmanızı isteyerek).\n- Taleplerinizi en geç 30 gün içinde ve ücretsiz yanıtlarız.\n- Yanıtımızı yeterli bulmazsanız Kişisel Verileri Koruma Kurulu'na şikâyette bulunabilirsiniz.\n- Silme hakkının sınırı: işlem geçmişi ve denetim kayıtları anonim olarak saklanır, giriş kayıtları 1 yıllık süreleri dolana kadar kalır (\"Saklama süresi ve silme\")."
+        },
+        "security": {
+          "heading": "Güvenlik",
+          "body": "Kişisel verilerinizi yetkisiz erişime, kayba ve kötüye kullanıma karşı korumak için teknik ve idari tedbirler alırız: site trafiği şifreli bağlantı (HTTPS) üzerinden taşınır, oturum yenileme bilgisi tarayıcı betiklerinin okuyamadığı bir çerezde tutulur, iç sistemlere erişim yetkiyle sınırlıdır, para hareketleri ve yönetici işlemleri denetim kaydına yazılır. Skinora Steam parolanızı ya da cüzdan anahtarlarınızı hiçbir zaman istemez; bunları isteyen bir mesaj Skinora'dan gelmez."
+        },
+        "cookies": {
+          "heading": "Çerezler ve tarayıcı depolaması",
+          "body": "Yalnız hizmetin çalışması için zorunlu olanları kullanırız:\n- Oturum yenileme çerezi: oturumunuzu açık tutar; tarayıcı betikleri okuyamaz.\n- Giriş sırasında kullanılan kısa süreli güvenlik çerezleri: Steam girişinden dönüşü korur.\n- Dil çerezi: seçtiğiniz dili hatırlar.\n- Tarayıcı depolaması: oturum erişim anahtarı ve yarım kalan ilan formunun taslağı tarayıcınızda tutulur.\n\nReklam, analitik ya da üçüncü taraf izleme çerezi kullanmıyoruz."
+        },
+        "minors": {
+          "heading": "18 yaş altı",
+          "body": "Skinora 18 yaşından küçüklere yönelik değildir ve 18 yaşından küçükler hesap açamaz. 18 yaşından küçük birinin hesap açtığını öğrenirsek hesabı kapatır ve verilerini bu metindeki kurallara göre sileriz."
+        },
+        "changes": {
+          "heading": "Bu metindeki değişiklikler",
+          "body": "Bu metni güncelleyebiliriz; güncel metin bu sayfada yayımlanır ve sayfanın başındaki tarih değişir. Verilerinizi yeni bir amaçla işleyeceksek bunu ayrıca bildiririz."
         },
         "contact": {
           "heading": "İletişim",
-          "body": "Gizlilikle ilgili sorularınız veya veri koruma haklarınızı kullanmak için destek sayfası üzerinden bize ulaşın. Veri sorumlusu ve varsa yerel temsilci, yayımlanacak nihai politikada belirtilecektir."
+          "body": "Kişisel verilerinizle ilgili her soru ve talep için: {supportEmail}. Veri sorumlusunun bilgileri sayfanın sonundadır."
         }
       }
     },
     "terms": {
       "title": "Kullanıcı Sözleşmesi",
-      "intro": "Bu şartlar, alıcı ile satıcıyı bir araya getiren ve satıcı eşyayı bir Steam takası yoluyla teslim edene kadar alıcının ödemesini emanette tutan CS2 eşya emanet platformu Skinora'yı kullanımınızı düzenler. Oturum açıp hizmeti kullanarak bu şartları kabul etmiş olursunuz. Bu şartlar, nihai yayımlanan sürümde belirtilecek olan işletmecinin yargı çevresinin yürürlükteki yasalarına tabidir.",
+      "intro": "Bu Kullanıcı Sözleşmesi (\"Sözleşme\"), CS2 eşya alım satımında alıcının ödemesini emanette tutan Skinora platformunun (\"Skinora\", \"biz\") işletmecisi ile platformu kullanan siz arasındaki ilişkiyi düzenler. İşletmeci: {legalName}, adres: {address}.\n\nSteam ile oturum açtıktan sonra 18 yaş beyanını ve bu Sözleşme'yi onay kutularıyla kabul edersiniz. Kabul etmeden işlem başlatamaz, işlem kabul edemez ve ödeme alamazsınız. Kabul etmek istemezseniz hesabınızı aynı ekrandan kapatabilir ya da silebilirsiniz. Kişisel verilerin işlenmesi Gizlilik Politikası ve KVKK Aydınlatma Metni'nde anlatılır.",
       "sections": {
-        "acceptance": {
-          "heading": "Kabul ve uygunluk",
-          "body": "Bir işlem oluşturarak veya kabul ederek, en az 18 yaşında olduğunuzu ve bu şartları ile Gizlilik Politikası'nı kabul ettiğinizi onaylarsınız. Ayrıca engellenmiş veya yaptırım uygulanan bir yargı çevresinde bulunmadığınızı ve geçerli herhangi bir yaptırım listesinde yer almadığınızı onaylarsınız. Coğrafi engelleme ve tarama uygularız ve uygunluk doğrulanamadığında hizmeti reddedebiliriz."
+        "parties": {
+          "heading": "Tanımlar ve dil",
+          "body": "Bu Sözleşme'de:\n- Satıcı: bir CS2 eşyasını satmak için işlem başlatan kullanıcı.\n- Alıcı: satıcının Steam ID ile belirlediği ve işlemi kabul eden kullanıcı.\n- İşlem: tek bir eşyanın tek bir fiyatla satışı.\n- Emanet: alıcının ödemesinin, bu Sözleşme'deki koşullar gerçekleşene kadar Skinora'nın kontrolündeki, o işleme özel ödeme adresinde tutulması.\n- Ağ: ödemenin yapıldığı blok zinciri — TRON (USDT TRC-20) ya da Ethereum (USDT ERC-20).\n\nSözleşme Türkçe, İngilizce, İspanyolca ve Çince yayımlanır. Türkçe metin esastır; çeviriler arasında anlam farkı olursa Türkçe metin geçerlidir."
+        },
+        "eligibility": {
+          "heading": "Kimler kullanabilir",
+          "body": "Skinora'yı yalnız şu koşulları taşıyan kullanıcılar kullanabilir:\n- En az 18 yaşında olmak ve bunu beyan etmek.\n- Erişimin engellendiği (yaptırım uygulanan) bir ülkede bulunmamak ve hiçbir yaptırım listesinde yer almamak. Engelli ülkeleri IP adresinden belirleriz; yaptırım listesindeki cüzdan adresleri kaydedilmez.\n- Kendine ait bir Steam hesabıyla giriş yapmak. Steam hesabı, platformun belirlediği en düşük hesap yaşını doldurmuş olmalıdır.\n- Steam Mobile Authenticator'ın açık olması (her iki tarafta). Steam'in takas kısıtı bulunan hesaplar — en az 5 USD harcamamış \"limited\" hesaplar ve ilk 15 gününü doldurmamış yeni hesaplar — takas yapamadığı için işleme giremez.\n\nKimlik doğrulama (KYC) yapmıyoruz. Koşullardan birinin karşılanmadığını tespit edersek hizmeti reddedebilir, hesabı askıya alabilir ya da açık işlemleri dondurabiliriz (\"Askıya alma, hesap kapatma ve silme\")."
         },
         "serviceDescription": {
-          "heading": "Hizmet",
-          "body": "Skinora, satıcı kararlaştırılan CS2 eşyasını bir Steam takası aracılığıyla teslim edene kadar alıcının stablecoin ödemesini (alıcının seçtiği ağda: TRON'da TRC-20 veya Ethereum'da ERC-20) emanette tutan bir aracı olarak hareket eder. Teslimat doğrulandığında, platform komisyonu ve varsa ağ gas ücretini düştükten sonra ödemeyi satıcıya aynı ağda serbest bırakırız. Takas genellikle iyi durumda bir Steam hesabı gerektirir ve Steam Mobile Authenticator gerekebilir. Skinora bağımsız bir hizmettir; Valve veya Steam ile bağlantılı değildir, onlar tarafından desteklenmez veya işletilmez."
+          "heading": "Hizmetin niteliği",
+          "body": "Skinora bir emanet aracısıdır: eşya hiçbir aşamada Skinora'ya geçmez, emanete alınan şey yalnız alıcının parasıdır. Eşya satıcıdan alıcıya tek bir Steam takasıyla doğrudan gider; takas teklifini satıcı gönderir ve Skinora bu takasın tarafı değildir. Bu yüzden Skinora eşyayı saklamaz, teslim etmez ve satıcının eşyayı gerçekten göndereceğini garanti edemez. Garanti ettiği şey, eşya bu Sözleşme'deki kurallara göre teslim edilmediğinde alıcının parasının iade edilmesidir.\n\nSkinora kullanıcı bakiyesi tutmaz: ödemeyi kendi cüzdanınızdan ya da borsanızdan gönderirsiniz; satıcıya ödemeler ve iadeler kullanıcının kayıtlı adresine yapılır. Fiyatı satıcı belirler; Skinora fiyata karışmaz ve eşyanın piyasa değeri, gerçekliği ya da gelecekte takas edilebilirliği hakkında güvence vermez.\n\nSkinora bağımsız bir hizmettir; Valve Corporation ya da Steam ile bağlantılı değildir, onlar tarafından desteklenmez veya işletilmez."
         },
-        "userObligations": {
-          "heading": "Yükümlülükleriniz",
-          "body": "Doğru cüzdan adresleri sağlamalı, yalnızca size ait ve kontrolünüzde olan Steam ve cüzdan hesaplarını kullanmalı ve takasları dürüstçe ve gecikmeden tamamlamalısınız. Dolandırıcılık, kara para aklama, piyasa manipülasyonu ya da platform kontrollerini, uygunluk denetimlerini veya yaptırım taramasını aşma girişiminde bulunmamalısınız. Steam ve cüzdan kimlik bilgilerinizin güvenliğinden ve onaylamadan önce alıcı ile adres bilgilerini doğrulamaktan siz sorumlusunuz."
+        "transactionFlow": {
+          "heading": "İşlem akışı",
+          "body": "Her işlem aynı sırayla ilerler:\n1. Satıcı envanterinden eşyayı seçer, fiyatı USDT olarak girer, kabul ettiği ağları (TRON, Ethereum ya da ikisi) ve ödeme süresini seçer, alıcının Steam ID'sini yazar. Skinora eşyanın satıcının envanterinde ve takas edilebilir olduğunu kontrol eder.\n2. Alıcı işlemi inceler, satıcının kabul ettiği ağlardan birini seçer, o ağdaki iade adresini ve Steam takas bağlantısını (trade URL) verir ve kabul eder. Bu adımda ödeme yapılmaz.\n3. Satıcı eşyayı göndermeye hazır olduğunu onaylar. Skinora eşyayı yeniden kontrol eder ve ödeme adresini alıcıya ancak bu onaydan sonra gösterir.\n4. Alıcı, ödeme süresi içinde gösterilen toplam tutarı seçilen ağda, o işleme özel ödeme adresine tek seferde gönderir.\n5. Ödeme blok zincirinde kesinleşince Skinora onu otomatik doğrular ve satıcıya eşyayı göndermesini bildirir.\n6. Satıcı, teslimat süresi içinde eşyayı alıcıya doğrudan Steam takas teklifiyle gönderir.\n7. Teslimat, alıcının onayıyla ya da envanter kanıtıyla doğrulanır.\n8. Mutabakat süresi dolunca Skinora komisyonu ayırır ve satıcının alacağını satıcının o ağdaki ödeme adresine gönderir.\n\nİşlemin eşyası, fiyatı ve kabul edilen ağları işlem oluşturulduktan sonra değiştirilemez; değiştirmek isteyen satıcı işlemi iptal edip yenisini açar. Her işlem tek bir eşya içerir ve aynı eşya aynı anda birden fazla açık işlemde kullanılamaz. Her adımın kalan süresi işlem sayfasında gösterilir; süresi dolan adım işlemi iptal eder (\"İptal ve cayma\")."
+        },
+        "paymentAndNetworks": {
+          "heading": "Ödeme, ağ ve token",
+          "body": "- Tek ödeme aracı USDT'dir: TRON ağında USDT (TRC-20) ya da Ethereum ağında USDT (ERC-20). Başka token ve başka ağ kabul edilmez.\n- Bir işlemde tek ağ kullanılır: alıcının seçtiği ağ. Ödeme, satıcıya ödeme ve her iade bu ağda yapılır; ağlar arasında para taşıma, köprü ya da dönüştürme yapılmaz.\n- Ödeme adresi her işlem için ayrı üretilir. Önceki bir işlemin adresine gönderim yapmayın.\n- Gösterilen toplam tutarı tek bir transferle ve tam olarak gönderin. Skinora parçalı ödemeleri birleştirmez ve tutarda tolerans uygulamaz: eksik gelen tutar kabul edilmez ve iade edilir; fazla gelen tutarın fazlası iade edilir ve işlem devam eder; ilk doğru transferden sonra gelen transferler iade edilir.\n- Yanlışlıkla USDC gönderirseniz talep etmeniz gerekmeden iade edilir. Skinora'nın tanımadığı bir token ya da kontrat otomatik iade edilemez; yönetici incelemesine düşer.\n- Bir Ethereum adresi başka EVM ağlarında da geçerli görünür. Ethereum dışındaki bir ağdan (ör. BNB Smart Chain, Polygon, Arbitrum) gönderilen ödeme bu işleme sayılmaz ve otomatik iade edilmez; destek talebi gerekir. Ödeme ekranındaki ağ uyarısına uyun.\n- Ödeme, blok zincirinde kesinleştiğinde doğrulanır. Ödeme süresi dolduktan sonra gelen ödeme işlemi yeniden açmaz; iade edilir.\n- Bu bölümdeki her iade, alıcının kabul anında o ağ için verdiği iade adresine, iadenin ağ ücreti düşülerek yapılır (\"İadeler\")."
         },
         "fees": {
           "heading": "Ücretler",
-          "body": "Her işleme bir platform komisyonu ve ağa bağlı olarak bir blok zinciri ağ (gas) ücreti uygulanır. Geçerli tutarlar, bir işlemi onaylamadan önce uygulama içinde size gösterilir; kesin oranlar yapılandırılabilir ve zamanla değişebilir. TRON'da alıcı, işlem kabul edildiğinde sabitlenen ayrı bir TRON ağ ücreti öder; Ethereum'da ağ ücretini platform karşılar. Blok zinciri ağ ücretleri ilgili ağ (TRON veya Ethereum) tarafından belirlenir ve kontrolümüz dışındadır."
+          "body": "- Komisyonu alıcı öder. Komisyon fiyatın bir yüzdesidir, kuruşa aşağı yuvarlanır ve ödenecek toplama eklenir. Oran işlem oluşturulurken o işlem için sabitlenir; oran sonradan değişse de açık işlemi etkilemez. Geçerli tutarlar işlemi kabul etmeden önce gösterilir.\n- TRON ağında alıcı ayrıca bir \"TRON ağ ücreti\" öder. Bu ücret, ödemenin işlemin ödeme adresinden Skinora'nın cüzdanına aktarılmasının blok zinciri maliyetidir; kabul anında hesaplanıp sabitlenir ve toplama eklenir. Aktarım sonradan pahalıya ya da ucuza gelse de tutar değişmez: eksik kalan kısmı Skinora karşılar, artan kısım Skinora'da kalır. Ethereum ağında bu ücret yoktur; aktarım maliyetini Skinora karşılar.\n- Satıcıya ödemenin ağ ücreti: TRON'da Skinora karşılar; ancak bu ücret komisyonun belirli bir yüzdesini (koruma eşiği, varsayılan %10) aşarsa aşan kısım satıcının alacağından düşülür. Ethereum'da satıcı fiyatın tamamını alır.\n- Kendi cüzdanınızdan ya da borsanızdan ödeme gönderirken oluşan ağ ücretini ve borsanızın ücretlerini siz ödersiniz.\n- İadelerin ağ ücreti iade tutarından düşülür (\"İadeler\").\n- Blok zinciri ağ ücretlerini TRON ve Ethereum ağları belirler; Skinora bunları kontrol etmez."
+        },
+        "delivery": {
+          "heading": "Teslimat",
+          "body": "- Ödeme doğrulandıktan sonra satıcının eşyayı alıcıya göndermek için 12 saati vardır (teslimat süresi). Kalan süre işlem sayfasında gösterilir ve süre dolmadan önce satıcıya uyarı gönderilir.\n- Satıcı takas teklifini alıcının işlemde verdiği trade URL'ine gönderir; Skinora bu bağlantıyı satıcıya hazır olarak sunar.\n- Teslimat iki yoldan doğrulanır: alıcı \"teslim aldım\" onayı verir ya da Skinora, eşyanın satıcının envanterinden düştüğünü ve alıcının envanterinde beklenen sayının arttığını birlikte görür (envanter kanıtı). Envanter kanıtı görüldüğünde alıcıya kontrol edip onaylaması için bildirim gönderilir; kanıtın tek başına ödemeyi serbest bırakması, Skinora'nın ilk gerçek teslimatları inceledikten sonra açtığı bir ayardır.\n- Alıcı olarak eşyayı Steam envanterinizde görmeden \"teslim aldım\" demeyin: onay, satıcıya ödemenin yolunu açar ve geri alınamaz.\n- Steam envanteriniz gizliyse envanter kanıtı üretilemez; teslimat yalnız sizin onayınızla doğrulanır.\n- Aynı türden bir eşyanın teslimi teslimat sayılır. Aşınma (float) ya da desen farkı otomatik kontrol edilmez; böyle bir fark \"yanlış eşya\" itirazıyla incelenir.\n- Teslimat süresi dolmadan hemen önce Skinora son bir kez kontrol eder; teslimat görülürse işlem iptal edilmez. Görülmezse işlem iptal edilir, alıcının parası iade edilir ve gecikme satıcının hesabına yazılır.\n- Steam kesintisinde ve platform bakımında süreler dondurulur; kesinti bitince kaldığı yerden devam eder."
+        },
+        "settlement": {
+          "heading": "Mutabakat süresi ve satıcıya ödeme",
+          "body": "- Steam, takasla el değiştiren bir eşyayı 7 gün boyunca geri alınabilir tutar ve takasın iki tarafı da geri almayı başlatabilir. Bu yüzden teslimat doğrulandıktan sonra satıcıya ödeme 8 gün (mutabakat süresi) bekletilir; para bu sürede emanette kalır.\n- Süre sonunda, ödemeden hemen önce eşyanın hâlâ alıcının envanterinde olduğu kontrol edilir. Eşya alıcıdaysa komisyon ayrılır, kalan tutar satıcıya gönderilir ve işlem tamamlanır.\n- Satıcıya ödemeleri ve iadeleri Skinora gönderir. Bazı dönemlerde (ör. deneme yayını süresince) her satıcı ödemesi ve her iade, gönderilmeden önce bir yöneticinin onayını bekler. Onay tutarı ve alıcı adresini değiştirmez; yalnız gönderimi onay verilene kadar geciktirir.\n- Eşya alıcıda değilse ve satıcıya geri döndüyse takas geri alınmış sayılır: satıcıya ödeme yapılmaz, para yönetici incelemesinden sonra alıcıya iade edilir ve satıcının hesabına dolandırıcılık işareti konur.\n- Durum ayırt edilemiyorsa (eşya alıcıda değil, ama satıcıya döndüğü de görünmüyor) otomatik karar verilmez; bir yönetici inceler ve para karar verilene kadar bekler.\n- Satıcıya ödeme, işlem oluşturulurken o ağ için sabitlenen ödeme adresine gönderilir. Profildeki adresi sonradan değiştirmek açık işlemi etkilemez.\n- Ödemeyi almadığınızı düşünüyorsanız işlem sayfasından bildirin; gönderim blok zincirinde kontrol edilir, gerekirse yeniden denenir ya da yöneticiye iletilir.\n- Satıcıya ödemeler her ağda Skinora'nın aynı gönderim adresinden çıkar. Ödemeyi Türkiye'deki bir borsada alıyorsanız borsanız göndericiyi beyan etmenizi isteyebilir (\"Türkiye'deki borsalar ve MASAK\")."
+        },
+        "cancellation": {
+          "heading": "İptal ve cayma",
+          "body": "- Ödeme gönderilmeden önce satıcı da alıcı da işlemi iptal edebilir; para hareket etmediği için iade gerekmez.\n- Alıcı ödemeyi gönderdikten sonra işlemi tek taraflı iptal edemez. Satıcı ise eşyayı göndermekten vazgeçerek iptal edebilir; bu durumda para alıcıya iade edilir ve satıcının itibarı düşer.\n- İptal eden taraf bir sebep belirtmek zorundadır. Kısa sürede çok sayıda iptal yapan kullanıcıya geçici işlem başlatma yasağı uygulanır.\n- Bir adımın süresi dolarsa işlem iptal olur; ödeme alınmışsa alıcıya iade edilir.\n- Skinora yöneticileri, eşya teslim edilmeden önceki aktif işlemleri sebep göstererek iptal edebilir. Yüksek riskli durumlarda (yaptırım eşleşmesi, hesap ele geçirme şüphesi) her aktif işlemi geçici olarak dondurabilir; dondurma süresince süreler durur. Eşya teslim edildikten sonra standart iptal uygulanmaz; istisnai durumlar elle incelenir.\n\nCayma: Ödemeyi göndermeden önce işlemden ücretsiz vazgeçebilirsiniz. Ödemeyi gönderdiğinizde emanet hizmetinin ifası sizin talebiniz ve onayınızla başlar; bu andan sonra alıcı işlemi tek taraflı iptal edemez ve para yalnız bu Sözleşme'de yazılan hâllerde iade edilir."
+        },
+        "refunds": {
+          "heading": "İadeler",
+          "body": "- İade yalnız para için yapılır; eşya hiçbir aşamada Skinora'da bulunmadığı için eşya iadesi yoktur.\n- İade, alıcının kabul anında seçtiği ağ için verdiği iade adresine gönderilir. Reddedilen ödemelerin (eksik tutar, fazla tutarın fazlası, parçalı ödemede sonraki transferler, yanlış token, süresi dolduktan sonra gelen ödeme) iadesi de aynı adrese gider.\n- Kabul edilmiş bir ödemenin iadesinde alıcı fiyatı ve komisyonu geri alır. TRON ağ ücreti, ödeme Skinora'nın cüzdanına aktarılmadan önce yapılan iadede tam iade edilir; aktarımdan sonra yapılan iadede, harcanmış olduğu için iade edilmez.\n- Her iadenin ağ ücreti iade tutarından düşülür; alıcı \"iade edilen tutar − iadenin ağ ücreti\" kadar alır. Ücret gönderimden hemen önce blok zincirinden hesaplanır; hesaplanamazsa ağın yedek ücreti ile son ölçülen ücretten küçük olanı kullanılır. Düşülen ücret işlem sayfasında, reddedilen ödemelerin iadesinde ayrıca bildirimde gösterilir.\n- Ağ ücreti iadenin büyük kısmını yutuyorsa (net iade, iadenin ağ ücretinin iki katından azsa) iade otomatik gönderilmez; para işlemin ödeme adresinde kalır ve bir yönetici elle karar verir.\n- Bazı dönemlerde iadeler de gönderilmeden önce yönetici onayı bekler (\"Mutabakat süresi ve satıcıya ödeme\").\n- İade adresinin doğruluğundan alıcı sorumludur. Yanlış ya da size ait olmayan bir adrese yapılan iade geri alınamaz."
+        },
+        "disputes": {
+          "heading": "İtirazlar",
+          "body": "- İtirazı yalnız alıcı açar. Satıcıya ödemeyi, satıcının bir talebi gerekmeden Skinora başlattığı için satıcı tarafında itiraz yoktur; satıcı almadığı bir ödemeyi işlem sayfasından bildirir.\n- İtiraz türleri: ödeme itirazı (\"ödedim ama görünmüyor\"), teslim itirazı (\"eşya gelmedi\") ve yanlış eşya itirazı.\n- Önce otomatik kontroller çalışır: ödeme blok zincirinde aranır, teslimat kanıtı yeniden kontrol edilir, yanlış eşyada alıcının envanterine giren eşya işlemdeki eşyayla karşılaştırılır. Eşya satıcıdan düşmüş ama alıcıya ulaşmamışsa vaka doğrudan yöneticiye gider.\n- Otomatik sonuç sizi tatmin etmezse itirazı yöneticiye yükseltebilirsiniz. Yönetici satıcı lehine (satıcıya ödeme) ya da alıcı lehine (alıcıya iade) karar verir; karar iki tarafa bildirilir ve kayda geçer. Teslimatın kanıtlandığı bir işlemde varsayılan karar satıcı lehinedir; alıcı lehine karar ayrıca gerekçelendirilir.\n- Aynı işlemde aynı türden ikinci itiraz açılamaz. İtiraz süreleri durdurmaz; süresi dolan işlem iptal olur, itiraz kapanır ve standart iade kuralları uygulanır.\n- Steam'in eşyaya el koyması, hesabı yasaklaması ya da takas sistemini değiştirmesi gibi Skinora'nın göremediği ve önleyemediği olaylar itirazla çözülmez (\"Sorumluluk\")."
+        },
+        "userObligations": {
+          "heading": "Yükümlülükleriniz",
+          "body": "- Yalnız size ait ve kontrolünüzdeki Steam hesabını ve cüzdan adreslerini kullanın. Ödeme ve iade adreslerinizi her ağ için doğru girin ve adres girişindeki onay adımını okuyun.\n- Ödemeyi işlemde seçilen ağda, tam tutarla ve tek seferde gönderin.\n- Takası dürüstçe ve süresinde tamamlayın. Satıcı olarak takas teklifini yalnız alıcının trade URL'ine gönderin ve eşyayı teslim ettikten sonra takası geri almayın.\n- Çalıntı, haksız elde edilmiş ya da üzerinde başkasının hakkı bulunan eşya satmayın.\n- Dolandırıcılık, kara para aklama, birden fazla hesapla kuralları aşma, yaptırım taramasını ya da coğrafi engeli atlatma girişiminde bulunmayın.\n- Steam'in kullanım koşullarına ve yürürlükteki mevzuata uyun. Satışlarınızdan doğan vergi ve benzeri yasal yükümlülükler size aittir.\n- Steam parolanızı, Mobile Authenticator kodlarınızı, cüzdanınızın özel anahtarını ya da kurtarma ifadesini kimseyle paylaşmayın; Skinora bunları hiçbir zaman istemez."
+        },
+        "visibility": {
+          "heading": "Karşı tarafın gördüğü bilgiler",
+          "body": "Bir işlemde taraflar birbirinin Steam profilini (görünen ad, profil fotoğrafı, Steam ID) ve Skinora'daki itibar skorunu görür. Satıcı, takas teklifini gönderebilmesi için alıcının Steam trade URL'ini görür. Ödemeler ve iadeler blok zincirinde yapıldığı için işlemle ilgili cüzdan adresleri ve transferler zincirde herkese açıktır. Karşı tarafın bilgilerini yalnız işlemi tamamlamak için kullanın."
+        },
+        "restrictions": {
+          "heading": "İşlem sınırları ve hesap güvenliği",
+          "body": "- Skinora en düşük ve en yüksek işlem tutarı, eşzamanlı aktif işlem sayısı ve yeni hesapların ilk işlemleri için sınırlar uygular. Sınıra takılan işlem oluşturulmadan reddedilir ve sebebi gösterilir.\n- Fiyatı piyasa fiyatından belirgin biçimde sapan ya da kısa sürede yüksek hacim oluşturan işlemler, başlamadan önce yönetici onayına bekletilir.\n- Ödemeyi aldıktan sonra eşyayı teslim etmeyen, iptal eden ya da takası geri alan satıcının hesabı, tekrar hâlinde önce işaretlenir, sonra askıya alınır.\n- Ödeme ya da iade adresini değiştirmek Steam ile yeniden onay ister; değişiklikten sonra bir süre yeni işlem başlatma ve işlem kabul etme engellenir. Açık işlemler, işlem açılırken sabitlenen adresle tamamlanır.\n- Yaptırım listesindeki bir adresle eşleşme bulunursa adres kaydedilmez, hesap işaretlenir ve hesabın aktif işlemleri dondurulur."
+        },
+        "masak": {
+          "heading": "Türkiye'deki borsalar ve MASAK",
+          "body": "Türkiye'deki kripto varlık hizmet sağlayıcıları (borsalar), MASAK düzenlemesi gereği harici cüzdanlara yapılan çekimlere bekleme süresi ve tutar sınırı uygular ve transferin karşı tarafını beyan ettirir. Borsanız Skinora'nın ödeme ve gönderim adreslerini harici cüzdan olarak görür. Bu kuralları borsanız uygular, Skinora değil. Ödemenin süresinde ve tek seferde gönderilmesi ve beyanın doğru yapılması kullanıcının sorumluluğundadır. Bekleme süresi, sınırlar ve beyan bilgileri Destek sayfasının \"Türkiye'deki borsalar ve MASAK kuralları\" bölümündedir; bu bilgi pratik bir özettir, hukuki tavsiye değildir.\n\nBeyanda tüzel kişi bilgisi istenirse: unvan {legalName}, adres {address}."
         },
         "liability": {
           "heading": "Sorumluluk",
-          "body": "Skinora, emanet ve aracılık hizmetini olduğu gibi ve mevcut hâliyle sunar ve hiçbir eşyanın piyasa değerini, gerçekliğini veya gelecekteki takas edilebilirliğini garanti etmez. Yürürlükteki yasaların izin verdiği azami ölçüde Skinora; Steam kesintileri, blok zinciri ağ sorunları, üçüncü taraf arızaları veya yanlış adrese gönderim gibi kullanıcı hatalarından doğan kayıplardan sorumlu değildir. Bu şartlardaki hiçbir hüküm, yasa gereği hariç tutulamayan sorumluluğu ortadan kaldırmaz."
+          "body": "Skinora şunları garanti eder:\n- Ödemelerin blok zincirinde doğrulanması.\n- Emanetteki paranın bu Sözleşme'deki akışa göre yönetilmesi: teslimat doğrulanana kadar tutulması, doğrulanınca satıcıya aktarılması, doğrulanamazsa alıcıya iade edilmesi.\n- Teslimat doğrulamasının yazılı kanıt kurallarına göre işletilmesi; kanıt üretilemediğinde işlemin sessizce kapatılmayıp incelemeye alınması.\n- Süre dolduğunda ve iptalde paranın, desteklenen varlıklar kapsamında iade edilmesi.\n\nSkinora şunlardan sorumlu değildir:\n- Eşyanın kendisi: Skinora eşyayı hiçbir aşamada tutmaz; satıcının eşyayı göndermemesinin sonucu, alıcının parasının iadesidir.\n- Steam'in eşyaya el koyması, hesabı yasaklaması, takas sistemini değiştirmesi ya da kesintileri; eşyanın çalıntı çıkması.\n- Steam'in kendi kararıyla yaptığı geri almalar. Takasın taraflarınca mutabakat süresi içinde yapılan geri almaya karşı Skinora satıcıya ödemeyi bekleterek korur (\"Mutabakat süresi ve satıcıya ödeme\").\n- TRON ya da Ethereum ağındaki olağandışı durumlar (ağ kesintisi, aşırı ücret artışı ve benzerleri) ve borsaların kendi kuralları ya da gecikmeleri.\n- Kullanıcı hatası: yanlış ağdan, yanlış tutarla ya da yanlış adrese gönderim, yanlış girilen ödeme veya iade adresi, kimlik bilgilerinin paylaşılması.\n\nEmanetteki parayı bu Sözleşme'ye uygun olarak satıcıya aktarma ya da alıcıya iade etme yükümlülüğümüz sınırlanmaz. Bunun dışında, kast ve ağır kusur hâlleri ile yasa gereği sınırlandırılamayan sorumluluk saklı kalmak üzere, Skinora dolaylı zararlardan (kâr kaybı, eşyanın değer kaybı, fırsat kaybı) sorumlu değildir."
         },
-        "termination": {
-          "heading": "Askıya alma ve fesih",
-          "body": "Bu şartları veya yürürlükteki yasaları ihlal eden hesapları, dolandırıcılık, uygunluk ve yaptırım kurallarımız dâhil, askıya alabilir veya kapatabiliriz; gerektiğinde inceleme amacıyla işlemleri tutabilir veya geri alabiliriz. Bir hesap askıya alındığında, çözüm sürecini takip edebilmeniz için genellikle aktif işlemlerinize salt okunur erişiminizi koruruz. Emanette tutulan fonları bu şartlara ve yürürlükteki yasalara uygun şekilde işleme alırız."
+        "indemnity": {
+          "heading": "Tazminat",
+          "body": "Bu Sözleşme'yi ya da yürürlükteki mevzuatı ihlal etmeniz (ör. çalıntı eşya satmanız, dolandırıcılık girişimi) nedeniyle Skinora'nın uğradığı zararı ve üçüncü kişilerin bu nedenle Skinora'ya yönelttiği talepleri, yürürlükteki hukukun izin verdiği ölçüde karşılarsınız."
+        },
+        "suspension": {
+          "heading": "Askıya alma, hesap kapatma ve silme",
+          "body": "- Bu Sözleşme'yi ya da yürürlükteki mevzuatı ihlal eden, dolandırıcılık veya yaptırım kurallarına takılan hesapları işaretleyebilir, askıya alabilir ya da kapatabiliriz. Askıdaki hesap oturum açabilir ama para hareketi gerektiren işlem yapamaz; açık işlemlerin otomatik adımları sürer, kullanıcı eylemi gerektiren adımlar süre dolunca iptal olur.\n- Hesabınızı istediğiniz zaman ayarlardan kapatabilir (deaktif edebilir) ya da silebilirsiniz. Şartları ya da güncellenmiş bir sürümünü kabul etmeden de, kabul ekranındaki \"Şartları kabul etmiyorum\" seçeneğinden aynı işlemleri yapabilirsiniz. Aktif bir işleminiz varken hesap kapatılamaz ve silinemez; önce işlemin tamamlanması ya da iptal edilmesi gerekir.\n- Kapatılan hesap yeniden giriş yapıldığında açılır. Silmede kişisel verileriniz silinir ya da anonimleştirilir; işlem geçmişi ve denetim kayıtları anonim olarak saklanır (Gizlilik Politikası).\n- Emanetteki para, hesap askıya alınsa ya da kapatılsa da bu Sözleşme'ye göre işlenir."
+        },
+        "changes": {
+          "heading": "Değişiklikler",
+          "body": "Bu Sözleşme'yi güncelleyebiliriz. Güncel metin bu sayfada yayımlanır ve sayfanın başındaki tarih değişir. Esaslı bir değişiklikte bir sonraki oturumunuzda yeni metni kabul etmeniz istenir. Değişiklikler yayımlandıktan sonra başlatılan işlemlere uygulanır; açık bir işlem, başladığı andaki koşullarla tamamlanır."
+        },
+        "governingLaw": {
+          "heading": "Uygulanacak hukuk ve yetkili mahkeme",
+          "body": "Bu Sözleşme'ye Türkiye Cumhuriyeti hukuku uygulanır. Sözleşmeden doğan uyuşmazlıklarda {courtVenue} mahkemeleri ve icra daireleri yetkilidir. Tüketici olarak hareket eden kullanıcıların, tüketici mevzuatında belirlenen parasal sınırlar içinde tüketici hakem heyetlerine, bu sınırları aşan uyuşmazlıklarda tüketici mahkemelerine başvurma hakkı saklıdır.\n\nBir uyuşmazlığı mahkemeye taşımadan önce destek adresimize ({supportEmail}) iletmenizi rica ederiz; çoğu sorun işlem kayıtları üzerinden hızla çözülür."
         },
         "contact": {
           "heading": "İletişim",
-          "body": "Bu şartlarla ilgili sorularınızı, son hâline getirildiğinde geçerli yasa ve işletmeci kuruluş dâhil, destek sayfası üzerinden gönderebilirsiniz."
+          "body": "Bu Sözleşme ile ilgili sorularınızı {supportEmail} adresine gönderebilirsiniz. İşletmeci bilgileri sayfanın sonundadır."
         }
       }
     },
     "support": {
       "title": "Destek",
-      "intro": "İşleminiz veya hesabınızla ilgili yardıma mı ihtiyacınız var? Bu sayfa, ekibimize nasıl ulaşacağınızı, yanıtın genellikle ne kadar süreceğini ve uyuşmazlıkların nasıl ele alındığını açıklar.",
+      "intro": "İşleminiz ya da hesabınızla ilgili yardım mı gerekiyor? Bu sayfa ekibimize nasıl ulaşacağınızı, yanıtın ne kadar süreceğini, itirazların nasıl ilerlediğini ve Türkiye'deki borsalardan ödeme yaparken dikkat etmeniz gerekenleri anlatır.",
       "sections": {
         "contact": {
           "heading": "Bize ulaşın",
-          "body": "Desteğe uygulama içindeki destek akışı üzerinden veya support@skinora.app adresine e-posta göndererek ulaşabilirsiniz. Size daha hızlı yardımcı olabilmemiz için lütfen işlem numaranızı ve sorunun açık bir açıklamasını ekleyin. Steam parolanızı veya cüzdanınızın özel anahtarlarını ya da kurtarma ifadesini destek dâhil hiç kimseyle paylaşmayın."
+          "body": "Desteğe {supportEmail} adresine e-posta göndererek ulaşabilirsiniz. Daha hızlı yardımcı olabilmemiz için işlem numaranızı, işlemin ağını (TRON ya da Ethereum), varsa işlem hash'ini ve sorunun kısa bir açıklamasını ekleyin.\n\nSteam parolanızı, Mobile Authenticator kodlarınızı, cüzdanınızın özel anahtarını ya da kurtarma ifadesini destek dahil hiç kimseyle paylaşmayın; Skinora bunları hiçbir zaman istemez."
         },
         "responseTimes": {
           "heading": "Yanıt süreleri",
-          "body": "Bir iş günü içinde yanıt vermeyi hedefliyoruz ve zaman açısından kritik emanet ve ödeme sorunlarına öncelik verilir. Yanıt süreleri garanti değil hedeftir; yoğun talep, Steam kesintileri veya blok zinciri tıkanıklığı dönemlerinde daha uzun olabilir."
+          "body": "Bir iş günü içinde yanıt vermeyi hedefliyoruz; ödemesi emanette bekleyen ve süresi işleyen işlemlere öncelik veririz. Bu bir hedeftir, garanti değildir: yoğun dönemlerde, Steam kesintilerinde ya da blok zinciri tıkanıklığında yanıt gecikir. Kişisel verilerinizle ilgili talepleri en geç 30 gün içinde yanıtlarız."
         },
         "disputes": {
-          "heading": "İşlem uyuşmazlıkları",
-          "body": "Bir takas beklendiği gibi tamamlanmazsa alıcı, işlem sayfasından ödeme, teslimat veya yanlış eşya alma gibi sorunlar için bir uyuşmazlık açabilir. Önce otomatik kontroller çalışır; çözülemeyen vakalar manuel inceleme için platform yöneticilerine yükseltilir. Bir uyuşmazlık, uygun durumlarda emanetteki fonların alıcının cüzdanına iadesi dâhil, alıcı veya satıcı lehine çözülebilir."
+          "heading": "İşlem itirazları",
+          "body": "Takas beklendiği gibi gitmezse itirazı işlem sayfasından açın:\n- İtirazı alıcı açar: ödeme itirazı (ödedim ama görünmüyor), teslim itirazı (eşya gelmedi) ya da yanlış eşya itirazı.\n- Önce otomatik kontroller çalışır; sonuç sizi tatmin etmezse itirazı yöneticiye yükseltebilirsiniz.\n- Yönetici satıcı lehine (satıcıya ödeme) ya da alıcı lehine (alıcıya iade) karar verir; iki taraf da bilgilendirilir.\n- İtiraz teslimat süresini durdurmaz: süre dolarsa işlem iptal olur ve para alıcıya iade edilir.\n- Satıcıysanız ve tamamlanmış bir işlemin ödemesini almadıysanız işlem sayfasından bildirin; gönderim blok zincirinde kontrol edilir.\n\nAyrıntılar Kullanıcı Sözleşmesi'nin \"İtirazlar\" bölümündedir."
         },
         "masak": {
           "heading": "Türkiye'deki borsalar ve MASAK kuralları",
@@ -910,7 +1015,7 @@
         },
         "faq": {
           "heading": "Sık sorulan sorular",
-          "body": "Steam ile oturum açma, takas tekliflerini gönderme ve kabul etme, stablecoin ödemeleri ve onayları, komisyonlar ve gas ücretleri, iadeler ve hesap güvenliği hakkında rehberlik burada yer alacaktır. O zamana kadar bu konuların herhangi birinde yardım için destekle iletişime geçin."
+          "body": "- Hangi ödeme yöntemini kabul ediyorsunuz? Yalnız USDT: TRON ağında (TRC-20) ya da Ethereum ağında (ERC-20). Satıcı kabul ettiği ağları seçer, alıcı bunlardan birini seçer.\n- Ödemeyi yanlış ağdan gönderdim. Ethereum dışındaki bir EVM ağından (ör. BNB Smart Chain, Polygon) gönderilen ödeme işleme sayılmaz ve otomatik iade edilmez; işlem numarası ve işlem hash'iyle bize yazın.\n- Eksik ya da fazla gönderdim. Eksik tutar kabul edilmez ve iade edilir; fazla tutarın fazlası iade edilir ve işlem devam eder. İadeler, iadenin ağ ücreti düşülerek iade adresinize gider.\n- Ne kadar öderim? Alıcı fiyat + komisyon öder; TRON'da buna TRON ağ ücreti eklenir. Ödenecek toplam, kabul ekranında her ağ için ayrı gösterilir.\n- Satıcı eşyayı ne zaman göndermeli? Ödeme doğrulandıktan sonra 12 saat içinde. Göndermezse işlem iptal edilir ve paranız iade edilir.\n- Eşyayı aldım, ne yapmalıyım? Eşyayı Steam envanterinizde gördükten sonra işlem sayfasında \"teslim aldım\" onayını verin. Eşyayı görmeden onay vermeyin.\n- Satıcı olarak param ne zaman gelir? Teslimat doğrulandıktan 8 gün sonra, eşyanın hâlâ alıcıda olduğu kontrol edildiğinde. Bu bekleme, Steam'in 7 günlük takas geri alma penceresine karşı alıcıyı korur. Bazı dönemlerde (ör. deneme yayını) ödeme gönderilmeden önce yönetici onayı bekler; bu, ödemeyi biraz geciktirebilir.\n- Neden Steam Mobile Authenticator gerekiyor? Taraflardan birinde kapalıysa Steam takası 15 gün bekletir; bu yüzden iki tarafta da açık olmalıdır. Steam'de en az 5 USD harcamamış ya da ilk 15 gününü doldurmamış hesaplar takas yapamaz.\n- Türkiye'deki bir borsadan ödeyeceğim. Borsalar yeni alınan USDT'yi harici cüzdana en erken 48 saat sonra (ilk çekimde 72 saat) gönderir ve günlük sınır uygular; USDT'yi işlemi kabul etmeden önce alın. Ayrıntılar yukarıdaki MASAK bölümündedir.\n- Hesabımı nasıl silerim? Ayarlar > Hesap Yönetimi bölümünden. Kullanıcı Sözleşmesi'ni kabul etmediyseniz kabul ekranındaki \"Şartları kabul etmiyorum\" seçeneğinden. Aktif işleminiz varken hesap silinemez.\n- Steam parolamı ya da cüzdan anahtarımı isteyen bir mesaj aldım. Skinora bunları hiçbir zaman istemez; mesajı yanıtlamayın ve bize bildirin."
         }
       }
     }
@@ -1262,6 +1367,7 @@
         "addInProfile": "Profilinizden ekleyin",
         "tronFeeNote": "TRON'da alıcı ayrıca kabul anında sabitlenen bir TRON ağ ücreti öder. Size yapılacak ödemenin ağ ücretinin komisyonla karşılanmayan kısmı alacağınızdan düşülür.",
         "ethereumFeeNote": "Ethereum'da ne siz ne de alıcı ağ ücreti ödersiniz.",
+        "belowNetworkMin": "{network}, {min} USDT altındaki satışlarda kullanılamaz: ağ ücreti satış tutarına göre çok yüksek kalır. Bu fiyatta öteki ağı seçin ya da fiyatı yükseltin.",
         "noneSelected": "En az bir ağ seçin."
       }
     },
@@ -1327,7 +1433,8 @@
         "BUYER_STEAM_ID_NOT_FOUND": "Belirttiğiniz Steam ID kayıtlı bir kullanıcıya ait değil.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "Ödeme adresi cooldown'u devam ediyor.",
         "SELLER_WALLET_ADDRESS_MISSING": "Profilinizde ödeme adresi yok. Önce profilinizden bir adres ekleyin.",
-        "NETWORK_UNAVAILABLE": "Seçtiğiniz ağlardan biri şu anda kullanılamıyor. O ağı kaldırın ya da daha sonra tekrar deneyin."
+        "NETWORK_UNAVAILABLE": "Seçtiğiniz ağlardan biri şu anda kullanılamıyor. O ağı kaldırın ya da daha sonra tekrar deneyin.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "Fiyat, seçtiğiniz bir ağın en düşük satış tutarının altında. O ağı kaldırın ya da fiyatı yükseltin."
       },
       "errorNetwork": "Ağ: {network}"
     }
@@ -1499,10 +1606,12 @@
         "addressFormat": "Geçerli bir {network} adresi girin.",
         "CHECKSUM_CONFIRMATION_REQUIRED": "Sağlaması olmayan adresi kontrol ettiğinizi onaylayın.",
         "NETWORK_NOT_ACCEPTED": "Satıcı bu işlemde {network} kabul etmiyor. Başka bir ağ seçin.",
-        "NETWORK_UNAVAILABLE": "{network} şu anda kullanılamıyor. Başka bir ağ seçin ya da daha sonra tekrar deneyin."
+        "NETWORK_UNAVAILABLE": "{network} şu anda kullanılamıyor. Başka bir ağ seçin ya da daha sonra tekrar deneyin.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "{network} bu tutardaki satışlarda kullanılamaz. Başka bir ağ seçin."
       },
       "networkLabel": "Ödeme ağı",
       "networkHint": "Ödeme yapacağınız ağı seçin. Ödemeniz, satıcıya ödeme ve her türlü iade bu ağda yapılır. TRON'da ağ ücreti kabul anında sabitlenir.",
+      "belowNetworkMin": "Bu satışta {network} kullanılamaz: {network} ile en az {min} USDT'lik satışlar ödenebilir.",
       "quote": {
         "total": "Göndereceğiniz tutar: {amount}",
         "tronFee": "TRON ağ ücreti dahil: {amount}",
@@ -2242,6 +2351,35 @@
         "cancel": "Vazgeç"
       }
     },
+    "approvals": {
+      "heading": "Onay bekleyen ödemeler",
+      "gateClosed": "Otomatik gönderim KAPALI: her satıcı ödemesi ve alıcı iadesi siz onaylayana kadar bekler.",
+      "gateOpen": "Otomatik gönderim açık: ödemeler ve iadeler onay beklemeden gönderilir.",
+      "intro": "Onay, satırı olduğu gibi gönderime bırakır; tutar ve alıcı adresi satır oluşurken sabitlenmiştir. Gönderimi bir sonraki dakikalık tur yapar. Depozitten sıcak cüzdana toplama (sweep) onay beklemez. Kapı, Ayarlar ekranındaki outbound.auto_send_enabled ayarıdır.",
+      "empty": "Onay bekleyen ödeme ya da iade yok.",
+      "ariaLabel": "Onay bekleyen giden satırlar",
+      "columns": {
+        "network": "Ağ",
+        "type": "Tür",
+        "amount": "Tutar",
+        "to": "Alıcı adres",
+        "created": "Oluştu",
+        "action": "İşlem"
+      },
+      "gasFee": "Ağ ücreti: {amount}",
+      "approve": "Onayla",
+      "confirm": {
+        "title": "Ödemeyi onayla",
+        "warning": "Onaydan sonra bu tutar zincirde gerçekten gönderilir ve geri alınamaz. Ağı, tutarı ve alıcı adresini kontrol edin.",
+        "network": "Ağ",
+        "type": "Tür",
+        "amount": "Tutar",
+        "to": "Alıcı adres",
+        "transaction": "İşlem kimliği",
+        "cancel": "Vazgeç",
+        "submit": "Onayla ve gönderime bırak"
+      }
+    },
     "errors": {
       "GENERIC": "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
       "VALIDATION_ERROR": "İstek geçersiz. Alanları kontrol edip tekrar deneyin.",
@@ -2249,6 +2387,8 @@
       "HASH_CONFIRMATION_MISMATCH": "Yazılan hash önerilen hash ile uyuşmuyor.",
       "SELF_APPROVAL_FORBIDDEN": "Kendi önerinizi onaylayamazsınız. Farklı bir yönetici onaylamalı.",
       "ROW_NOT_FOUND": "Giden satır bulunamadı.",
+      "ROW_NOT_APPROVABLE": "Bu satır bir satıcı ödemesi ya da iade değil; onay beklemez.",
+      "ALREADY_APPROVED": "Bu satır zaten onaylanmış.",
       "CLOSURE_NOT_FOUND": "Kapatma bulunamadı.",
       "ROW_NOT_ETHEREUM": "Satır Ethereum ağında değil.",
       "ROW_NOT_OUTBOUND": "Satır giden bir transfer değil.",
@@ -2298,6 +2438,7 @@
       "paymentWindow": "Ödeme süresi, satıcının ilanda seçtiği süredir ve işlem sayfasında geri sayım olarak görünür. Borsanızın bekleme süresi bundan uzun olabileceği için USDT'yi işlemi kabul etmeden önce alın.",
       "refund": "İadeler de Skinora'nın adresinden gelir (işlemin depozit adresi ya da sıcak cüzdan). İade adresiniz bir Türk borsasındaysa borsa sizden gönderici beyanı isteyebilir: gönderici Skinora'dır.",
       "sources": "Kaynak: MASAK Genel Tebliği (Sıra No: 29), Resmî Gazete 28.06.2025, sayı 32940, madde 4; Suç Gelirlerinin Aklanmasının ve Terörün Finansmanının Önlenmesine Dair Tedbirler Hakkında Yönetmelik, madde 24/A."
-    }
+    },
+    "entityDetails": "Borsanız tüzel kişinin unvanını ve adresini de isterse: unvan {legalName}, adres {address}."
   }
 }

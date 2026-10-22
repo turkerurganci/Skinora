@@ -1,4 +1,5 @@
 using System.Globalization;
+using Skinora.Shared.Enums;
 using Skinora.Transactions.Application.Networks;
 
 namespace Skinora.Transactions.Application.Lifecycle;
@@ -79,6 +80,12 @@ public sealed class TransactionParamsService : ITransactionParamsService
             // buyer's choice among them arrives with T147.
             SupportedNetworks: _networks.OpenForNewTransactions()
                 .Select(n => n.ToString())
+                .ToList(),
+            // T169 — a network's own minimum (TRON 50.00), enum order.
+            NetworkMinPrices: (limits.NetworkMinimums ?? new Dictionary<BlockchainNetwork, decimal>())
+                .OrderBy(kv => kv.Key)
+                .Select(kv => new NetworkMinPriceDto(
+                    kv.Key.ToString(), kv.Value.ToString("0.00", CultureInfo.InvariantCulture)))
                 .ToList());
     }
 

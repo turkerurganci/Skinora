@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { CopyButton } from "@/components/common";
+import { useOperatorValues } from "@/components/legal/useOperatorValues";
 import { payoutSourceFor, usePayoutSources } from "@/lib/hooks/usePayoutSources";
 import { ALL_NETWORKS, networkLabel } from "@/lib/utils/blockchain";
 import type { BlockchainNetwork } from "@/types/enums";
@@ -28,6 +29,8 @@ export interface PayoutSourceNoticeProps {
  */
 export function PayoutSourceNotice({ network, compact }: PayoutSourceNoticeProps) {
   const t = useTranslations("masak.seller");
+  const tMasak = useTranslations("masak");
+  const operator = useOperatorValues();
   const { data, isError } = usePayoutSources();
   const networks = network ? [network] : ALL_NETWORKS;
   const rows = networks
@@ -43,6 +46,8 @@ export function PayoutSourceNotice({ network, compact }: PayoutSourceNoticeProps
     >
       {!compact && <p className="font-medium">{t("title")}</p>}
       <p>{t("declare")}</p>
+      {/* T168 — Yönetmelik 24/A-6 trade name + address of the sender. */}
+      <p data-testid="masak-seller-entity">{tMasak("entityDetails", operator)}</p>
       {rows.map((row) => (
         <div key={row.network} className="space-y-1" data-testid={`payout-source-${row.network}`}>
           <p className="text-xs font-medium uppercase text-blue-800">

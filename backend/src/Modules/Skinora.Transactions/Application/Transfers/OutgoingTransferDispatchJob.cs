@@ -139,7 +139,15 @@ public sealed class OutgoingTransferDispatchJob
         // sweeps. Filtering in the query keeps the batch for rows that can move.
         var configured = _services.ConfiguredNetworks.ToList();
         await LogParkedRowsAsync(configured, cancellationToken);
-        await ReportQueueAsync(now, cancellationToken);
+
+        // T169 — the payout/refund launch gate (OutboundApprovalGate, ⚠ PARA).
+        // Closed (the seeded state): a SELLER_PAYOUT / *_REFUND row is a
+        // candidate only once an admin approved it; SWEEP never waits. An
+        // unapproved row is not sent, spends no retry and is not FAILED — it
+        // simply is not picked, so it never takes a batch slot either.
+        var autoSend = await OutboundApprovalGate.IsAutoSendEnabledAsync(_db, cancellationToken);
+        if (!autoSend) await LogAwaitingApprovalAsync(cancellationToken);
+        await ReportQueueAsync(now, autoSend, cancellationToken);
 
         // T150 — a configured network in a detected outage is skipped the same
         // way (its rows keep their retry budget), every reachable network gets
@@ -163,7 +171,10 @@ public sealed class OutgoingTransferDispatchJob
                 .Where(b => b.Status == BlockchainTransactionStatus.PENDING
                     && OutboundTypes.Contains(b.Type)
                     && b.Network == network
-                    && (b.NextAttemptAt == null || b.NextAttemptAt <= now))
+                    && (b.NextAttemptAt == null || b.NextAttemptAt <= now)
+                    && (autoSend
+                        || !OutboundApprovalGate.ApprovalTypes.Contains(b.Type)
+                        || b.ApprovedAt != null))
                 .OrderBy(b => b.CreatedAt)
                 .Take(BatchSize)
                 .Select(b => b.Id)
@@ -183,7 +194,7 @@ public sealed class OutgoingTransferDispatchJob
             cancellationToken.ThrowIfCancellationRequested();
             if (breaker.IsTripped(network)) continue;
 
-            var serviceUnreachable = await DispatchOneAsync(id, cancellationToken);
+            var serviceUnreachable = await DispatchOneAsync(id, autoSend, cancellationToken);
             if (serviceUnreachable && breaker.Trip(network))
             {
                 _logger.LogWarning(
@@ -226,17 +237,54 @@ public sealed class OutgoingTransferDispatchJob
     }
 
     /// <summary>
+    /// T169 — one line per run and network while the gate is closed and rows
+    /// wait for an admin approval (AD40 lists them). Not an error: holding the
+    /// row is the gate doing its job.
+    /// </summary>
+    private async Task LogAwaitingApprovalAsync(CancellationToken cancellationToken)
+    {
+        var waiting = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(b => b.Status == BlockchainTransactionStatus.PENDING
+                && OutboundApprovalGate.ApprovalTypes.Contains(b.Type)
+                && b.ApprovedAt == null)
+            .GroupBy(b => b.Network)
+            .Select(g => new { Network = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        foreach (var group in waiting)
+        {
+            _logger.LogWarning(
+                "{Count} outbound payout/refund row(s) on {Network} wait for an admin approval ({Key} = false) — nothing sent until approved (admin wallets screen).",
+                group.Count, group.Network, OutboundApprovalGate.AutoSendKey);
+        }
+    }
+
+    /// <summary>
     /// T152 — per-network queue visibility every run, for every network, before
     /// any network is skipped (an outage is exactly when the numbers matter).
+    /// T169 — a row held by the approval gate is not in the queue the stall
+    /// alarm watches (it waits for a person, not for the fee); an approved row
+    /// counts from its approval, so a late approval does not fire the alarm.
     /// </summary>
-    private async Task ReportQueueAsync(DateTime now, CancellationToken cancellationToken)
+    private async Task ReportQueueAsync(DateTime now, bool autoSend, CancellationToken cancellationToken)
     {
         var pending = await _db.Set<BlockchainTransaction>()
             .AsNoTracking()
             .IgnoreQueryFilters()
-            .Where(b => b.Status == BlockchainTransactionStatus.PENDING && OutboundTypes.Contains(b.Type))
+            .Where(b => b.Status == BlockchainTransactionStatus.PENDING
+                && OutboundTypes.Contains(b.Type)
+                && (autoSend
+                    || !OutboundApprovalGate.ApprovalTypes.Contains(b.Type)
+                    || b.ApprovedAt != null))
             .GroupBy(b => b.Network)
-            .Select(g => new { Network = g.Key, Count = g.Count(), Oldest = g.Min(b => b.CreatedAt) })
+            .Select(g => new
+            {
+                Network = g.Key,
+                Count = g.Count(),
+                Oldest = g.Min(b => b.ApprovedAt ?? b.CreatedAt),
+            })
             .ToListAsync(cancellationToken);
 
         foreach (var network in Enum.GetValues<BlockchainNetwork>())
@@ -249,11 +297,30 @@ public sealed class OutgoingTransferDispatchJob
         }
     }
 
-    private async Task<bool> DispatchOneAsync(Guid id, CancellationToken cancellationToken)
+    private async Task<bool> DispatchOneAsync(Guid id, bool autoSend, CancellationToken cancellationToken)
     {
         var row = await _db.Set<BlockchainTransaction>()
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (row is null || row.Status != BlockchainTransactionStatus.PENDING) return false;
+
+        // T169 — second layer of the approval gate (the candidate query is the
+        // first): an unapproved payout/refund is never sent while the gate is
+        // closed. Left untouched — no retry spent, not FAILED.
+        // Doğrulama S4-1 (⚠ PARA): the tick read the gate once, and a batch can
+        // run for minutes (deposit sends wait for blocks), so an admin closing
+        // the gate mid-tick must stop the very next unapproved row. The setting
+        // is therefore read again — straight from the database, no cache — for
+        // every unapproved payout/refund the tick would otherwise send. Only
+        // the open → closed change takes effect mid-tick; a gate opened mid-tick
+        // opens on the next tick (the candidate query already left those rows out).
+        if (OutboundApprovalGate.RequiresApproval(row.Type) && row.ApprovedAt is null
+            && !(autoSend && await OutboundApprovalGate.IsAutoSendEnabledAsync(_db, cancellationToken)))
+        {
+            _logger.LogWarning(
+                "Outbound row {Id} ({Type}) on {Network} has no admin approval and {Key} is false — left PENDING, nothing sent.",
+                row.Id, row.Type, row.Network, OutboundApprovalGate.AutoSendKey);
+            return false;
+        }
 
         // T148 — fail closed per network (05 §3.3a). A row whose network has no
         // service configured is left PENDING untouched: no broadcast, no retry

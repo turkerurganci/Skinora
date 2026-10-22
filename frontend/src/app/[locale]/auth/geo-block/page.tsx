@@ -2,8 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { InfoScreen } from "@/components/auth";
-
-const SUPPORT_HREF = process.env.NEXT_PUBLIC_SUPPORT_URL ?? "mailto:support@skinora.app";
+import { SUPPORT_HREF } from "@/lib/legal/operator";
 
 export default function GeoBlockPage() {
   const t = useTranslations("auth.geoBlock");

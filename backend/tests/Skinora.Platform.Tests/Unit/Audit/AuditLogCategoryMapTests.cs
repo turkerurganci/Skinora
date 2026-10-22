@@ -65,8 +65,10 @@ public class AuditLogCategoryMapTests
             AuditLogCategoryMap.Categories.FundMovement);
 
         // 5 wallet base + 1 T77 hot→cold consolidation + 3 T157 outbound-row
-        // closure steps (proposed / approved / rejected) = 9.
-        Assert.Equal(9, actions.Count);
+        // closure steps (proposed / approved / rejected) + 1 T169 outbound
+        // transfer approval = 10.
+        Assert.Equal(10, actions.Count);
+        Assert.Contains(AuditAction.OUTBOUND_TRANSFER_APPROVED, actions);
         Assert.Contains(AuditAction.OUTBOUND_ROW_CLOSURE_PROPOSED, actions);
         Assert.Contains(AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED, actions);
         Assert.Contains(AuditAction.OUTBOUND_ROW_CLOSURE_REJECTED, actions);

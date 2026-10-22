@@ -997,6 +997,43 @@ public class TransactionAcceptanceServiceTests : IntegrationTestBase
         Assert.Equal(0, _tradeHold.CallCount);
     }
 
+    // ---- T169 — no TRON below its own minimum (proje sahibi kararı 2026-10-21) ----
+
+    [Fact]
+    public async Task T169_Tron_Below_Its_Minimum_Is_Refused_At_Acceptance_And_Ethereum_Still_Accepts()
+    {
+        // A listing that predates the rule (or a raised minimum) still accepts
+        // TRON in its options; acceptance is where the buyer would pay on it.
+        _networks = TestNetworkAvailability.All();
+        var listing = await CreateListingAsync(BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM);
+        await Context.Set<Transaction>().Where(t => t.Id == listing.Id).ExecuteUpdateAsync(u => u
+            .SetProperty(t => t.Price, 20m)
+            .SetProperty(t => t.CommissionAmount, 0.40m)
+            .SetProperty(t => t.TotalAmount, 20.40m));
+        // The listing entity is tracked from CreateListingAsync; drop it so the
+        // service reads the 20 USDT price (and the current RowVersion).
+        Context.ChangeTracker.Clear();
+
+        var refused = await BuildSut().AcceptAsync(
+            _buyer.Id, listing.Id,
+            new AcceptTransactionRequest(ValidWallet2, BuyerTradeUrl, Network: "TRON"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.NetworkMinAmountNotMet, refused.Status);
+        Assert.Equal(TransactionErrorCodes.NetworkMinAmountNotMet, refused.ErrorCode);
+        Assert.Equal("TRON", NetworkOf(refused.ErrorDetails));
+        Assert.Equal("50.00", refused.ErrorDetails?.GetType().GetProperty("minAmount")?.GetValue(refused.ErrorDetails));
+        await AssertUntouchedAsync(listing.Id);
+        Assert.Equal(0, _tradeHold.CallCount); // refused before the Steam probes
+
+        var accepted = await BuildSut().AcceptAsync(
+            _buyer.Id, listing.Id,
+            new AcceptTransactionRequest(BuyerEthereumRefundChecksummed, BuyerTradeUrl, Network: "ETHEREUM"),
+            CancellationToken.None);
+
+        Assert.Equal(AcceptTransactionStatus.Accepted, accepted.Status);
+    }
+
     [Fact]
     public async Task A_Frozen_Network_Fails_Closed_And_The_Other_Network_Still_Accepts()
     {

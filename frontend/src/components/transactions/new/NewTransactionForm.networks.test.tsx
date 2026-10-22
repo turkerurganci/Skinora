@@ -71,7 +71,10 @@ const ELIGIBLE: EligibilityResponse = {
   newAccountLimit: { isNewAccount: false, current: null, max: null },
 };
 
-function params(supportedNetworks: BlockchainNetwork[]): TransactionParamsResponse {
+function params(
+  supportedNetworks: BlockchainNetwork[],
+  networkMinPrices?: TransactionParamsResponse["networkMinPrices"],
+): TransactionParamsResponse {
   return {
     minPrice: "1.00",
     maxPrice: "10000.00",
@@ -80,6 +83,7 @@ function params(supportedNetworks: BlockchainNetwork[]): TransactionParamsRespon
     openLinkEnabled: true,
     supportedStablecoins: [StablecoinType.USDT],
     supportedNetworks,
+    networkMinPrices,
   };
 }
 
@@ -101,12 +105,13 @@ function renderForm(
   supported: BlockchainNetwork[],
   messages: object = en,
   locale: "en" | "tr" | "es" | "zh" = "en",
+  networkMinPrices?: TransactionParamsResponse["networkMinPrices"],
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <NextIntlClientProvider locale={locale} messages={messages}>
-        <NewTransactionForm eligibility={ELIGIBLE} params={params(supported)} />
+        <NewTransactionForm eligibility={ELIGIBLE} params={params(supported, networkMinPrices)} />
       </NextIntlClientProvider>
     </QueryClientProvider>,
   );
@@ -192,6 +197,48 @@ describe("NewTransactionForm — network choice (T156)", () => {
         expect.objectContaining({
           acceptedNetworks: [BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM],
         }),
+      ),
+    );
+  });
+});
+
+describe("NewTransactionForm — no TRON below its own minimum (T169)", () => {
+  // The seeded draft prices the item at 20.00; TRON's minimum is 50.00
+  // (owner decision 2026-10-21).
+  const MINS = [{ network: "TRON", minPrice: "50.00" }];
+
+  it.each([
+    { locale: "en", messages: en, text: "under 50.00 USDT" },
+    { locale: "tr", messages: tr, text: "50.00 USDT altındaki" },
+    { locale: "es", messages: es, text: "menos de 50.00 USDT" },
+    { locale: "zh", messages: zh, text: "50.00" },
+  ] as const)(
+    "$locale: TRON is shown disabled with the reason; Ethereum stays ticked",
+    ({ locale, messages, text }) => {
+      profileState.wallets = [
+        payout(BlockchainNetwork.TRON, TRON_ADDR),
+        payout(BlockchainNetwork.ETHEREUM, ETH_ADDR),
+      ];
+      renderForm([BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM], messages, locale, MINS);
+      const tron = screen.getByTestId("network-option-TRON");
+      expect(tron).toBeDisabled();
+      expect(tron).not.toBeChecked();
+      expect(screen.getByTestId("network-below-min-TRON")).toHaveTextContent(text);
+      expect(screen.getByTestId("network-option-ETHEREUM")).toBeChecked();
+    },
+  );
+
+  it("POST /transactions leaves TRON out below its minimum", async () => {
+    profileState.wallets = [
+      payout(BlockchainNetwork.TRON, TRON_ADDR),
+      payout(BlockchainNetwork.ETHEREUM, ETH_ADDR),
+    ];
+    searchParamsState.value = "step=4";
+    renderForm([BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM], en, "en", MINS);
+    fireEvent.click(screen.getByRole("button", { name: "Start transaction" }));
+    await waitFor(() =>
+      expect(createTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ acceptedNetworks: [BlockchainNetwork.ETHEREUM] }),
       ),
     );
   });

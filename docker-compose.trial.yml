@@ -55,6 +55,14 @@ services:
       # below — not .env.trial's REVERSE_PROXY_KNOWN_NETWORK, which a copied
       # .env.example would leave at the development value.
       - ReverseProxy__KnownNetworks__0=${TRIAL_NETWORK_SUBNET:-172.30.161.0/24}
+      # T169 — the owner's 12-hour delivery window (720 min; legal text says
+      # "12 saat"). .env.trial (copied from .env.example) carries 720 already;
+      # this default only covers a .env.trial that leaves it empty, so the
+      # trial never boots on a shorter window that would cancel a seller who
+      # delivered (DEPLOY_RUNBOOK §A #6). Read once, on the first boot of a
+      # fresh database (SettingsBootstrapService); an existing database is
+      # moved by the T169 migration.
+      - SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES=${SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES:-720}
 
   skinora-frontend:
     container_name: !reset null
@@ -188,6 +196,10 @@ networks:
 
 # The trial's own secrets — never the development ones under ./secrets.
 secrets:
+  tron_hd_mnemonic:
+    file: ./secrets/trial/tron_hd_mnemonic.txt
+  tron_hot_wallet_private_key:
+    file: ./secrets/trial/tron_hot_wallet_private_key.txt
   ethereum_hd_mnemonic:
     file: ./secrets/trial/ethereum_hd_mnemonic.txt
   ethereum_hot_wallet_private_key:

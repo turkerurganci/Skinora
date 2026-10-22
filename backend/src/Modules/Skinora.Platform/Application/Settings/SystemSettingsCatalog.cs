@@ -127,6 +127,8 @@ public static class SystemSettingsCatalog
         // T149 — TRON network fee line (11 §F8 K8): the buyer pays the sweep.
         new("blockchain.tron.network_fee_buffer_ratio",   "blockchain_health",    "TRON ağ ücreti satırı — TRX fiyat tamponu (oran)",          "oran"),
         new("blockchain.tron.network_fee_fallback_usdt",  "blockchain_health",    "TRON ağ ücreti satırı — tahmin alınamazsa yazılan yedek",   "USDT"),
+        // T169 — TRON's own minimum price (owner decision 2026-10-21).
+        new("blockchain.tron.min_transaction_amount_usdt", "transaction_limits",  "TRON için en düşük satış tutarı — altında TRON kapalı",     "USDT"),
 
         // --- Ethereum per-network parameters (T148 — 05 §3.3a, 06 §1.4 "Ayarlar") ---
         // TRON keeps the unprefixed keys above. Values are the T142
@@ -186,6 +188,8 @@ public static class SystemSettingsCatalog
         new("payout_settlement_days",                     "settlement",           "Mutabakat süresi — satıcı ödemesinin bekletilme süresi",    "gün"),
         new("settlement.unreadable_escalation_hours",     "settlement",           "Okunamayan envanterde admin eskalasyon eşiği",              "saat"),
         new("settlement.reversal_auto_refund_enabled",    "settlement",           "Geri alma tespitinde otomatik iade",                        null),
+        // T169 — payout/refund launch gate (11 T175).
+        new("outbound.auto_send_enabled",                 "settlement",           "Satıcı ödemesi ve iadeleri otomatik gönder (kapalı = admin onayı)", null),
     ];
 }
 

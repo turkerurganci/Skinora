@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { signOut } from "@/lib/auth/signOut";
 import { LanguageSelector } from "@/components/common";
+import { SUPPORT_HREF } from "@/lib/legal/operator";
 import { cn } from "@/lib/utils/cn";
 
 export interface SuspendedHeaderProps {
@@ -15,7 +16,7 @@ export function SuspendedHeader({
   className,
   // Align with the S03d / sanctions / geo-block info screens (env-or-mailto)
   // instead of the previous "/support" default, which had no matching route (404).
-  supportUrl = process.env.NEXT_PUBLIC_SUPPORT_URL ?? "mailto:support@skinora.app",
+  supportUrl = SUPPORT_HREF,
 }: SuspendedHeaderProps) {
   const t = useTranslations("nav");
   const locale = useLocale();

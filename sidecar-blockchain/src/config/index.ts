@@ -106,22 +106,20 @@ export const config = {
   usdcContract: TOKEN_CONTRACTS[network].USDC,
   tokenDecimals: 6,
 
-  // HD Wallet — 08 §3.2, derivation path: m/44'/195'/0'/0/{index} from the
-  // BIP-32 master node of this mnemonic (empty BIP-39 passphrase), so any
-  // standard TRON wallet restoring the phrase sees the same addresses. Before
-  // T143 the code derived under m/44'/60'/0'/0/0 instead; deposit addresses
-  // created before T143 are not reachable from this code (DEPLOY_RUNBOOK §G.0b).
-  hdWalletMnemonic: process.env.HD_WALLET_MNEMONIC || '',
-
+  // Signing material — the HD seed (08 §3.2, m/44'/195'/0'/0/{index} from the
+  // BIP-32 master node, empty BIP-39 passphrase) and the hot wallet key — is
+  // NOT part of this object (T163). It is read once at startup from its Docker
+  // secret files by config/signingSecrets.ts and handed to the services that
+  // sign; nothing that logs or serialises `config` can reach it.
+  //
   // Hot wallet — operationally distinct from HD wallet master mnemonic
-  // (05 §3.3 + 05 §3.5). Signing material is mounted as a Docker secret in
-  // production. Sidecar refuses to broadcast SELLER_PAYOUT transfers when
-  // the key is unset, but otherwise starts so the rest of the API surface
-  // (monitor, derive) remains usable in development. In MVP the hot wallet
-  // doubles as the sweeper account that issues `delegateresource` to
-  // deposit addresses (T74 scope decision 2026-05-17).
+  // (05 §3.3 + 05 §3.5). Sidecar refuses to broadcast SELLER_PAYOUT transfers
+  // when the key is unset, but otherwise starts so the rest of the API surface
+  // (monitor, derive) remains usable. In MVP the hot wallet doubles as the
+  // sweeper account that issues `delegateresource` to deposit addresses (T74
+  // scope decision 2026-05-17). When the key is set, this address must be the
+  // one it controls (HOT_WALLET_ADDRESS_MISMATCH, T163).
   hotWalletAddress: process.env.HOT_WALLET_ADDRESS || '',
-  hotWalletPrivateKey: process.env.HOT_WALLET_PRIVATE_KEY || '',
 
   // Platform-owned destinations and value ceilings — owner decisions
   // 2026-09-16/17 (05 §3.3). The cold wallet address lives here, not in an
