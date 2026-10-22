@@ -121,7 +121,7 @@ public static class SystemSettingSeed
         // the sidecar's pre-send estimate (triggerconstantcontract + resource/price probes,
         // ChargedGasFeeResolver); this setting is only the FALLBACK when that estimate is
         // unavailable, and still feeds the 2× minimum-refund threshold in that case.
-        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.60", "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa RefundDecisionService bu değeri kullanır ve iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine bu değerle karar verilir."),
+        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.80", "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi tahmininden gelir: T169a'dan beri platformun iade için gönderdiği TRX'in tamamı (hesap açma + %10 paylı yakma takviyesi + takviyenin bandı; 02 §4.7). Tahmin alınamazsa son ölçülen tahminle bu değerin küçüğü kesilir (T160b) ve en düşük iade eşiği bu tutarla hesaplanır. 2,80 = yeni depozitten, USDT tutan alıcıya iadenin ana ağ maliyeti (8,44 TRX × 0,3313; T169a, öneriyle kaydedildi — ⚠ PARA)."),
         // --- T73: Outbound transfer dispatcher retry intervals (08 §3.3, 05 §3.3, 11 T73) ---
         // CSV (dakika) — sıralı; her transient failure'da `RetryCount` artırılır ve bu listenin
         // RetryCount'inci elemanı `NextAttemptAt`'a eklenir. Liste tükendiğinde transfer FAILED
@@ -246,6 +246,16 @@ public static class SystemSettingSeed
         // row waits for an admin approval (OutgoingTransferDispatchJob skips
         // rows without ApprovedAt); SWEEP is internal and never waits.
         Default     (80, "outbound.auto_send_enabled",                    "bool",    "Settlement",   "false",        "Satıcı ödemeleri ve alıcı iadeleri OTOMATİK gönderilsin mi (T169 / T175 açılış kapısı). false iken her SELLER_PAYOUT ve *_REFUND satırı admin onayı bekler (AD40/AD41 — cüzdan ekranı, AuditLog OUTBOUND_TRANSFER_APPROVED); sweep (depozit → sıcak cüzdan) beklemez. Test boyunca kapalı (proje sahibi kararı 2026-10-21); ilk en az 5 gerçek teslimat elle incelendikten sonra açılır (11 T175)."),
+
+        // --- T169a: deposit refund daily limit (proje sahibi kararı 2026-10-21) ---
+        // Per network: the refunds that leave a DEPOSIT address (TRON always;
+        // Ethereum before the sweep) may send at most this much in any 24 hours.
+        // A refund that would cross it waits PENDING (no retry spent, never
+        // FAILED), raises an alarm and goes out when the window has room again
+        // or an admin releases it (AD42). Seeded configured (Default) — an
+        // admin can change it, the env cannot hydrate it.
+        Default     (81, "blockchain.tron.deposit_refund_daily_limit_usdt",     "decimal", "Limit",   "100",          "TRON'da depozit adreslerinden yapılan iadelerin herhangi bir 24 saatte gönderebileceği en çok tutar (USDT). Aşacak iade beklemede kalır (FAILED olmaz, deneme hakkı harcanmaz), admin'e alarm gider; pencerede yer açılınca ya da admin AD42 ile serbest bırakınca gider. Sıcak cüzdandan çıkan iadeler sayılmaz. 100 = proje sahibi kararı 2026-10-21 (T169a)."),
+        Default     (82, "blockchain.ethereum.deposit_refund_daily_limit_usdt", "decimal", "Limit",   "100",          "Ethereum'da depozit adreslerinden (sweep'ten önce) yapılan iadelerin herhangi bir 24 saatte gönderebileceği en çok tutar (USDT). Aşacak iade beklemede kalır (FAILED olmaz, deneme hakkı harcanmaz), admin'e alarm gider; pencerede yer açılınca ya da admin AD42 ile serbest bırakınca gider. Sweep sonrası sıcak cüzdandan çıkan iadeler sayılmaz. 100 = proje sahibi kararı 2026-10-21 (T169a)."),
     ];
 
     private static SystemSetting Unconfigured(

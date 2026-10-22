@@ -1126,7 +1126,7 @@ public class OutboundRowClosureTests : IntegrationTestBase
             ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new OneMinuteRetryPolicy(),
             new OutboxService(ctx), Contracts,
             new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
-            Wallets(), _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
+            Wallets(), NullDepositRefundLimitObserver.Instance, _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
         await dispatch.ExecuteAsync();
     }
 

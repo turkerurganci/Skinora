@@ -43,6 +43,7 @@ namespace Skinora.Shared.Blockchain;
 /// <param name="NetworkFeeBufferRatio">TRX price head-room added to the buyer's network fee line (11 §F8 K8, T149); TRON only.</param>
 /// <param name="NetworkFeeFallbackUsdt">Network fee line written when the sweep estimate is unavailable at acceptance (T149); TRON only.</param>
 /// <param name="MinTransactionAmountUsdt">The network's own minimum price (T169): below it a listing may not accept the network and a buyer may not pay on it; TRON only.</param>
+/// <param name="DepositRefundDailyLimitUsdt">T169a — the most that refunds leaving DEPOSIT addresses may send on this network in any 24 hours (USDT); above it a refund waits for the window or an admin release (08 §3.3c). Both networks.</param>
 public sealed record BlockchainNetworkSettingKeys(
     BlockchainNetwork Network,
     string RefundGasFeeFallbackUsdt,
@@ -56,7 +57,8 @@ public sealed record BlockchainNetworkSettingKeys(
     string MinRefundThresholdRatio,
     string? NetworkFeeBufferRatio,
     string? NetworkFeeFallbackUsdt,
-    string? MinTransactionAmountUsdt = null)
+    string? MinTransactionAmountUsdt = null,
+    string DepositRefundDailyLimitUsdt = "")
 {
     /// <summary>TRON — the pre-F8 keys, unchanged.</summary>
     public static readonly BlockchainNetworkSettingKeys Tron = new(
@@ -72,7 +74,8 @@ public sealed record BlockchainNetworkSettingKeys(
         MinRefundThresholdRatio: "min_refund_threshold_ratio",
         NetworkFeeBufferRatio: "blockchain.tron.network_fee_buffer_ratio",
         NetworkFeeFallbackUsdt: "blockchain.tron.network_fee_fallback_usdt",
-        MinTransactionAmountUsdt: "blockchain.tron.min_transaction_amount_usdt");
+        MinTransactionAmountUsdt: "blockchain.tron.min_transaction_amount_usdt",
+        DepositRefundDailyLimitUsdt: "blockchain.tron.deposit_refund_daily_limit_usdt");
 
     /// <summary>Ethereum — T148 keys, seeded with the T142 measurements.</summary>
     public static readonly BlockchainNetworkSettingKeys Ethereum = new(
@@ -88,7 +91,8 @@ public sealed record BlockchainNetworkSettingKeys(
         MinRefundThresholdRatio: "blockchain.ethereum.min_refund_threshold_ratio",
         NetworkFeeBufferRatio: null,
         NetworkFeeFallbackUsdt: null,
-        MinTransactionAmountUsdt: null);
+        MinTransactionAmountUsdt: null,
+        DepositRefundDailyLimitUsdt: "blockchain.ethereum.deposit_refund_daily_limit_usdt");
 
     /// <summary>The keys of <paramref name="network"/>.</summary>
     public static BlockchainNetworkSettingKeys For(BlockchainNetwork network) => network switch
@@ -115,8 +119,9 @@ public sealed record BlockchainNetworkSettingKeys(
             NetworkFeeBufferRatio,
             NetworkFeeFallbackUsdt,
             MinTransactionAmountUsdt,
+            DepositRefundDailyLimitUsdt,
         }
-        .Where(k => k is not null)
+        .Where(k => !string.IsNullOrEmpty(k))
         .Select(k => k!)
         .ToList();
 }

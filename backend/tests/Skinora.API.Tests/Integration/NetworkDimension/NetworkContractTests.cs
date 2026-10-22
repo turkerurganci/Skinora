@@ -333,8 +333,12 @@ public class NetworkContractTests : IntegrationTestBase
 
         // TRON — the values the platform ran with before T148, moved by T169
         // (refund 2.0 → 2.60, payout 0.50 → 2.25, TRX floor 100 → 1500) and
-        // its own minimum price (50).
-        Assert.Equal(2.60m, tron.RefundGasFeeFallbackUsdt);
+        // its own minimum price (50); T169a moved the refund 2.60 → 2.80 (the
+        // refund fee is now the platform's whole outlay) and added the deposit
+        // refund daily limit (100 per network).
+        Assert.Equal(2.80m, tron.RefundGasFeeFallbackUsdt);
+        Assert.Equal(100m, tron.DepositRefundDailyLimitUsdt);
+        Assert.Equal(100m, ethereum.DepositRefundDailyLimitUsdt);
         Assert.Equal(2.25m, tron.PayoutGasFeeFallbackUsdt);
         Assert.Equal(10.0m, tron.MaxChargedGasFeeUsdt);
         Assert.Equal(1500m, tron.HotWalletNativeBalanceMinimum);
@@ -368,7 +372,7 @@ public class NetworkContractTests : IntegrationTestBase
         await using var read = CreateContext();
         var provider = new BlockchainNetworkSettingsProvider(read);
         Assert.Equal(0.80m, (await provider.GetAsync(BlockchainNetwork.ETHEREUM, default)).RefundGasFeeFallbackUsdt);
-        Assert.Equal(2.60m, (await provider.GetAsync(BlockchainNetwork.TRON, default)).RefundGasFeeFallbackUsdt);
+        Assert.Equal(2.80m, (await provider.GetAsync(BlockchainNetwork.TRON, default)).RefundGasFeeFallbackUsdt);
     }
 }
 
@@ -422,7 +426,9 @@ public class NetworkSettingsMigrationRehearsalTests : IntegrationTestBase
         Assert.Equal("0.50", settings["blockchain.ethereum.fee_cap_usd_per_transfer"]);
         Assert.Equal("180", settings["blockchain.ethereum.fee_cap_wait_alarm_minutes"]);
         Assert.Equal("0.06", settings["blockchain.ethereum.fuel_wallet_eth_balance_minimum"]);
-        Assert.Equal("2.60", settings["blockchain.refund_gas_fee_estimate_usdt"]); // T169
+        Assert.Equal("2.80", settings["blockchain.refund_gas_fee_estimate_usdt"]); // T169 2.60 → T169a 2.80
+        Assert.Equal("100", settings["blockchain.tron.deposit_refund_daily_limit_usdt"]); // T169a
+        Assert.Equal("100", settings["blockchain.ethereum.deposit_refund_daily_limit_usdt"]); // T169a
     }
 
     [Fact]

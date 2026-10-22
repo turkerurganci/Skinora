@@ -115,6 +115,7 @@ public static class AuditLogCategoryMap
             [AuditAction.OUTBOUND_ROW_CLOSURE_REJECTED] = Categories.FundMovement,
             [AuditAction.OUTBOUND_ROW_CLOSURE_REFUSED] = Categories.SecurityEvent,
             [AuditAction.OUTBOUND_TRANSFER_APPROVED] = Categories.FundMovement,
+            [AuditAction.DEPOSIT_REFUND_LIMIT_RELEASED] = Categories.FundMovement,
         };
 
     /// <summary>Returns the API category for the supplied <paramref name="action"/>.</summary>

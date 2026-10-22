@@ -1326,3 +1326,53 @@ groups:
             (08 §3.1a): check the service's estimate-fee log and the RPC provider,
             and compare the row's GasFee with the realized fee (DEPLOY_RUNBOOK §J
             "Gas tahmini"). The alarm clears an hour after the last fallback.
+
+      # T169a — deposit refund daily limit (proje sahibi kararı 2026-10-21, ⚠ PARA;
+      # 08 §3.3c). The backend's dispatcher publishes, per network, the refunds
+      # the limit holds; any held refund pages until it goes (window or AD42).
+      - uid: deposit-refund-daily-limit-held
+        title: Refund Held By The Deposit Refund Daily Limit
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max by (network) (skinora_backend_deposit_refund_limit_held_rows)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: A refund is waiting because deposit refunds reached the network's 24-hour limit
+          description: >-
+            Refunds that leave deposit addresses on this network have sent
+            blockchain.*.deposit_refund_daily_limit_usdt (100 USDT) in the last 24
+            hours, and the next one would cross it. It waits PENDING (no retry
+            spent, never FAILED) and goes out on its own when the refunds of 24
+            hours ago leave the window; a refund larger than the limit never does.
+            Check skinora_backend_deposit_refund_limit_used_usdt against
+            skinora_backend_deposit_refund_limit_usdt, then the admin wallets
+            screen ("Günlük iade tavanı"): either wait or release the row (AD42,
+            audited) after checking the refund is genuine (DEPLOY_RUNBOOK §M.4).
+            An unexpected burst of refunds is the signal this limit exists for.

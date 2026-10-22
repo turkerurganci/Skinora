@@ -499,7 +499,8 @@
       "OUTBOUND_ROW_CLOSURE_APPROVED": "已批准关闭出款记录",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "已拒绝关闭出款记录",
       "OUTBOUND_ROW_CLOSURE_REFUSED": "已驳回关闭出款记录",
-      "OUTBOUND_TRANSFER_APPROVED": "出账付款已批准"
+      "OUTBOUND_TRANSFER_APPROVED": "出账付款已批准",
+      "DEPOSIT_REFUND_LIMIT_RELEASED": "已解除押金退款限额"
     }
   },
   "adminTransactions": {
@@ -569,7 +570,7 @@
       "payoutSentAt": "发送时间",
       "refund": "退款详情",
       "refundOriginal": "原始金额",
-      "refundGasFee": "Gas 费",
+      "refundGasFee": "网络费用",
       "refundNet": "净退款",
       "refundAddress": "退款地址",
       "refundedAt": "退款时间",
@@ -1428,7 +1429,7 @@
       "refund": {
         "title": "退款摘要",
         "originalAmount": "原始金额",
-        "gasFee": "Gas 费用",
+        "gasFee": "网络费用（退款的链上成本）",
         "netRefundAmount": "净退款",
         "refundAddress": "退款地址",
         "txHash": "交易哈希",
@@ -2274,6 +2275,33 @@
         "transaction": "交易 ID",
         "cancel": "取消",
         "submit": "批准并放行发送"
+      },
+      "limit": {
+        "heading": "每日退款限额（来自押金地址）",
+        "usage": "{network}：过去 24 小时从押金地址退款 {used} / {limit} USDT",
+        "intro": "从押金地址发出的退款，每个网络在任意 24 小时内的总额不得超过此限额。会超出限额的退款将等待（不算失败，不消耗重试次数），在 24 小时前的退款移出窗口后自动发出；大于限额的单笔退款永远不会自动发出。从热钱包发出的退款不计入。限额即设置页面中的 blockchain.*.deposit_refund_daily_limit_usdt。",
+        "empty": "没有被限额挂起的退款。",
+        "ariaLabel": "被每日退款限额挂起的退款",
+        "columns": {
+          "network": "网络",
+          "type": "类型",
+          "amount": "金额",
+          "to": "收款地址",
+          "held": "挂起时间",
+          "action": "操作"
+        },
+        "release": "超出限额发送",
+        "confirm": {
+          "title": "超出限额发送退款",
+          "warning": "此退款将超出今天的押金退款限额。解除后该金额将真实地在链上发送，且无法撤销；它仍计入当日总额。请确认退款真实，并核对网络、金额和收款地址。",
+          "network": "网络",
+          "type": "类型",
+          "amount": "金额",
+          "to": "收款地址",
+          "transaction": "交易 ID",
+          "cancel": "取消",
+          "submit": "解除并排队发送"
+        }
       }
     },
     "errors": {
@@ -2285,6 +2313,8 @@
       "ROW_NOT_FOUND": "未找到该出款记录。",
       "ROW_NOT_APPROVABLE": "该记录不是卖家付款或退款，不需要批准。",
       "ALREADY_APPROVED": "该记录已被批准。",
+      "ROW_NOT_HELD": "此退款未被每日退款限额挂起，无需解除。",
+      "ALREADY_RELEASED": "此退款已解除。",
       "CLOSURE_NOT_FOUND": "未找到该关闭申请。",
       "ROW_NOT_ETHEREUM": "该记录不在Ethereum上。",
       "ROW_NOT_OUTBOUND": "该记录不是出款转账。",
