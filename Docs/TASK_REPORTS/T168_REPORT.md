@@ -1,6 +1,6 @@
 # T168 — Hukuk metinleri
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor | **Tarih:** 2026-10-21 (düzeltme turu 2026-10-22)
+**Faz:** F9 | **Durum:** ⏳ Devam ediyor — 2. düzeltme turu, yeniden doğrulama bekliyor | **Tarih:** 2026-10-21 (düzeltme turları 2026-10-22)
 
 ---
 
@@ -14,7 +14,7 @@
 - **Alan adı:** `support@skinora.app` her yerden kalktı; tek adres `support@skinora.com` (`SUPPORT_EMAIL`; coğrafi engel, yaptırım, askı ekranları ve askı başlığı `SUPPORT_HREF`'i kullanıyor). Operatör alarmı `admin@skinora.com` zaten aynı alan adında.
 - **MASAK beyanı (backlog ⚪ `MasakDeclarationEntityDetails`):** yeni `masak.entityDetails` satırı (unvan + adres, Yönetmelik 24/A-6) alıcının ödeme kutusunda, satıcının gönderim notunda ve destek `#masak` bölümünde; değerler işletmeci kaydından. Satır şirket bilgisi gelene kadar açık (güncellendi).
 - **Backend — backlog 🟡 `TosNotAcceptedAccountCannotSelfDelete` ✅ (⚠ GÜVENLİK/HUKUK):** `POST /users/me/deactivate` (U13) ve `DELETE /users/me` (U14) `[SkipTosAcceptanceGate]` taşıyor. Başka uç açılmadı; uçların kendi kuralları (aktif işlem yok, birebir `SİL`) aynen geçerli.
-- **Arayüz:** ToS modalına `declineSlot`; ilk kabulde (callback sayfası ve global kapı "first" modu) "Şartları kabul etmiyorum" → açıklama + hesap yönetimi (kapat/sil, ayarlardaki bileşenin aynısı). Yeniden onayda (sürüm artışı) gösterilmez. Modal özetindeki **yanlış "İşlem tamamlandığında satıcıdan komisyon kesilir"** cümlesi düzeltildi (02 §5: komisyonu alıcı öder; TRON'da ayrı ağ ücreti) — 4 dil.
+- **Arayüz:** ToS modalına `declineSlot`; ilk kabulde (callback sayfası ve global kapı "first" modu) "Şartları kabul etmiyorum" → açıklama + hesap yönetimi (kapat/sil, ayarlardaki bileşenin aynısı). Aynı yol yeniden onayda (sürüm artışı) da gösterilir (düzeltme turu B3); kapatma/silme sonrası pencere oturumla birlikte kapanır (2. düzeltme turu B5). Modal özetindeki **yanlış "İşlem tamamlandığında satıcıdan komisyon kesilir"** cümlesi düzeltildi (02 §5: komisyonu alıcı öder; TRON'da ayrı ağ ücreti) — 4 dil.
 - **LegalPage:** metin gövdesi düz metinden yapı çıkarır (`LegalBody`: boş satır = paragraf, `- ` = madde, `1. ` = numaralı liste), içindekiler (sözleşme ve gizlilik), "son güncelleme" tarihi, işletmeci bloğu. Bölüm listeleri `lib/legal/sections.ts`'te (App Router sayfası başka isim dışa veremez).
 - **Belgeler:** `plan/11_F9.md` v1.21 T168 kriteri sahip kararına göre uyarlandı · 07 §4.4 v4.20 (muafiyet; sürümün sunucuda zorunlu tutulmaması T168'de yeniden ele alındı, değişmedi) · 02 v4.18 §22 "Uygulandı (T168)" notu ve §19 satırı · DOC_CHANGELOG (02, 07, 11) · DEFERRED_BACKLOG 53/158 → 52/159 · IMPLEMENTATION_STATUS T168 ⏳ · STATUS_CHANGELOG (T167 merge teyidi) · repo memory T168 satırı.
 
@@ -170,7 +170,7 @@ Metin (4 dil, `legal.privacy.sections.dataRetention` + `yourRights`):
 | S4-3 | "Mainnet şirket bilgisini bekler" T171/T173/T175'e yansımamış | ✓ kapandı | `plan/11_F9.md` v1.22: T173 kriterine "başlamadan önce işletmeci bilgisi dolu (`isOperatorInfoComplete()` doğru, taslak etiketi yok, `NEXT_PUBLIC_TOS_VERSION` artırıldı)", T175'e "hukuk metinlerinde taslak etiketi yok"; DOC_CHANGELOG |
 | S4-4 | Callback sayfasındaki `declineSlot` testsiz | ✓ kapandı | `auth/callback/page.test.tsx` yeni test: `status=new_user` → "kabul etmiyorum" → sil (`SİL`) → `deleteAccount("SİL")`, `/tr`'ye yönlendi, panele gitmedi. Bozma: `declineSlot` satırı silindi → 1 kırmızı; geri alındı |
 | S4-5 | 02 §22 notu "teslimat 12 sa (§9.2)" yanlış atıf | ✓ kapandı | 02 v4.19: "(proje sahibi kararı 2026-10-04, `plan/11_F9.md`; ayar `delivery_timeout_minutes` = 720 — T169)" |
-| S4-6 | Metin esaslı değişti ama `NEXT_PUBLIC_TOS_VERSION` 1.0 | bilinen sınırlama | B3 düzeldiği için sürüm artışı artık güvenli (yeni sürümü reddeden hesabın çıkışı var). Gerçek kullanıcı yok; sürüm işletmeci bilgisiyle birlikte artırılır — artık T173 kriterinde yazılı (S4-3) |
+| S4-6 | Metin esaslı değişti ama `NEXT_PUBLIC_TOS_VERSION` 1.0 | bilinen sınırlama | B3 ve B5 (2. tur) düzeldikten sonra sürüm artışı güvenli (yeni sürümü reddeden hesabın çıkışı var). Gerçek kullanıcı yok; sürüm işletmeci bilgisiyle birlikte artırılır — artık T173 kriterinde yazılı (S4-3) |
 
 **Kapanmayan, bilinen:** 02 §7 iptal tablosu ile kod arasındaki cooldown farkı (sahip sorusu 8).
 
@@ -187,6 +187,54 @@ Metin (4 dil, `legal.privacy.sections.dataRetention` + `yourRights`):
 | Hedefli | ✓ `TosRepromptGate.test.tsx` 11/11, `callback/page.test.tsx` 14/14, `components/legal` 29/29 | `npx vitest run <dosya>` |
 | Bozma | ✓ B3 → 1 kırmızı, S4-4 → 1 kırmızı (ikisi de geri alındı) | yukarıda |
 | Backend | dokunulmadı | — |
+
+## Düzeltme turu 2 (2026-10-22)
+
+Yeniden doğrulama ✗ FAIL verdi (HEAD `dce74e72`; 1 × S1 ⚠ HUKUK + 2 × S4). İlk turun B2/B3 ve S4-1…S4-5'i kapandı; B1 T169'a bağlı (değişmedi). Tur başında working tree temiz, HEAD `dce74e72` = `origin/task/T168-hukuk-metinleri`, `origin/main` = `403fe257` (dal güncel, birleştirme gerekmedi). Docker kullanılmadı.
+
+### B5 — Kapatma/silme sonrası onay penceresi kalıyordu (⚠ HUKUK)
+
+Kök neden: `TosRepromptGate` modu `["auth","me"]` önbelleğinden hesaplıyordu; çıkışta sorgu yalnız `enabled: false` olur, önbellekteki son cevap durur. Kapı `[locale]` layout'unda olduğu için `/settings` → `/{locale}` geçişinde ayakta kalıyor ve oturumu kapanmış kullanıcıya "şartları kabul edin" penceresini göstermeye devam ediyordu.
+
+- `frontend/src/components/auth/TosRepromptGate.tsx`: mod artık oturuma bağlı — `!accessToken || DORMANT_ROUTE.test(pathname) ? null : tosGateMode(...)`. Ek olarak token düşünce `queryClient.removeQueries({ queryKey: ["auth","me"] })`: bayat cevap atılır, sonraki giriş (belki başka hesap) kendi cevabını çeker.
+- `frontend/src/app/[locale]/auth/callback/page.tsx`: ilk kabul penceresi `tokenReady && accessToken` ile çizilir (sayfa hâlâ takılıysa da oturumla kapanır).
+- Testler gerçek çıkış akışıyla: `lib/auth/signOut` artık mock'lanmıyor; yalnız sunucu çağrısı (`logout`) mock. Önbelleğe bayat `me` önceden yazılıyor (AuthInitializer'ın bıraktığı cevap). Router `replace` mock'u yolu gerçekten değiştiriyor.
+  - `TosRepromptGate.test.tsx` — `it.each` iki pencere: **ilk kabul** (sil) ve **yeniden onay** (kapat), `/en/settings`'ten başlar → `logout` çağrıldı, `/en`'e gidildi, store token null → `tos-submit`, `auth.tos.title`, `auth.tos.reprompt.title`, `tos-decline-toggle` yok; önbellekte `me` yok; `acceptTos` çağrılmadı.
+  - `auth/callback/page.test.tsx` — callback sayfası + genel kapı aynı ağaçta, önbellekte "kabul etmemiş" `me`: sil → `/tr` → ne callback penceresi ne genel kapı.
+- **Bozma (hepsi geri alındı):**
+  - Kapı düzeltmesinin tamamı geri (mod satırı + önbellek temizliği) → `TosRepromptGate.test.tsx` 2 kırmızı / 11 yeşil (`expected <button …> to be null` — pencere kaldı, B5'in kendisi); callback testi 1 kırmızı / 14 yeşil.
+  - Yalnız önbellek temizliği geri → 2 kırmızı (önbellek bayat kaldı).
+  - Yalnız mod satırı geri → yeşil (önbellek temizliği tek başına pencereyi kapatıyor; mod satırı ikinci savunma hattı).
+  - Callback'te yalnız `&& accessToken` geri → callback testi 1 kırmızı.
+
+### S4-7 — Rapor özet satırı
+
+"Yapılan İşler > Arayüz" satırı düzeltildi: red yolu ilk kabulde ve yeniden onayda gösterilir; kapatma/silme sonrası pencere oturumla kapanır.
+
+### S4-8 — "Satıcıya ödemeler otomatik yapılır" ↔ T169 yönetici onayı (⚠ HUKUK)
+
+T169 (PR #371) `outbound.auto_send_enabled` = `false` ile test boyunca her satıcı ödemesini ve her alıcı iadesini yönetici onayına bağlıyor. Metin ayardan okunmuyor (B1'deki gerekçe); her iki ayar durumunda doğru kalan bir dil seçildi (4 dil):
+
+- `terms.disputes`: "Satıcıya ödemeler otomatik yapıldığı için…" → "Satıcıya ödemeyi, satıcının bir talebi gerekmeden Skinora başlattığı için satıcı tarafında itiraz yoktur…"
+- `terms.settlement` yeni madde: "Satıcıya ödemeleri ve iadeleri Skinora gönderir. Bazı dönemlerde (ör. deneme yayını süresince) her satıcı ödemesi ve her iade, gönderilmeden önce bir yöneticinin onayını bekler. Onay tutarı ve alıcı adresini değiştirmez; yalnız gönderimi onay verilene kadar geciktirir."
+- `terms.refunds` yeni madde: "Bazı dönemlerde iadeler de gönderilmeden önce yönetici onayı bekler ("Mutabakat süresi ve satıcıya ödeme")."
+- `terms.paymentAndNetworks`: "Yanlışlıkla USDC gönderirseniz otomatik iade edilir." → "…talep etmeniz gerekmeden iade edilir."
+- `support.faq` "Satıcı olarak param ne zaman gelir?": sona "Bazı dönemlerde (ör. deneme yayını) ödeme gönderilmeden önce yönetici onayı bekler; bu, ödemeyi biraz geciktirebilir."
+- Kalan "otomatik" ifadeleri olumsuz ya da gönderimle ilgisiz (ör. "iade otomatik gönderilmez", "otomatik iade edilemez", ödemenin otomatik doğrulanması) — dokunulmadı. Hukuk metni dışı: ana sayfa `home.features.autoSettle` "Otomatik doğrulama ve ödeme" pazarlama başlığı T168 kapsamında değil, değiştirilmedi.
+
+### 2. turun testleri
+
+| Tür | Sonuç | Komut |
+|---|---|---|
+| Frontend lint | ✓ çıkış 0 | `npx eslint .` |
+| Frontend tsc | ✓ çıkış 0 | `npx tsc --noEmit` |
+| Frontend i18n | ✓ 1668 × 4 eşit (20 advisory) | `npm run i18n:check` |
+| Frontend vitest | ✓ 45 dosya, 447/447 (444 + 3 yeni) | `npx vitest run` |
+| Frontend build | ✓ çıkış 0 | `npm run build` |
+| Bozma | ✓ yukarıda (B5) | — |
+| Backend | dokunulmadı | — |
+
+Secret hook: EN iade maddesinin ilk hâli 12 ardışık küçük harfli kelimeyle BIP-39 kalıbına takıldı; cümle "In some periods Skinora also holds refunds for admin approval before sending them" olarak yeniden yazıldı (anlam aynı, bypass yok).
 
 ## Known Limitations / Follow-up
 
