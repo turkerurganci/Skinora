@@ -146,6 +146,17 @@ export function Step2Details({
                           </Link>
                         </p>
                       )}
+                      {option.belowMinPrice && (
+                        <p
+                          className="text-amber-800"
+                          data-testid={`network-below-min-${option.network}`}
+                        >
+                          {t("networks.belowNetworkMin", {
+                            network: networkLabel(option.network),
+                            min: option.belowMinPrice,
+                          })}
+                        </p>
+                      )}
                       <p>
                         {option.network === BlockchainNetwork.TRON
                           ? t("networks.tronFeeNote")

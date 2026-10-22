@@ -61,7 +61,8 @@ public sealed class TransactionLimitsProvider : ITransactionLimitsProvider
             CommissionRate: ReadOptionalPositiveDecimal(rows, CommissionRateKey),
             MinTransactionAmount: ReadOptionalPositiveDecimal(rows, MinAmountKey),
             MaxTransactionAmount: ReadOptionalPositiveDecimal(rows, MaxAmountKey),
-            OpenLinkEnabled: ReadBool(rows, OpenLinkEnabledKey, fallback: false));
+            OpenLinkEnabled: ReadBool(rows, OpenLinkEnabledKey, fallback: false),
+            NetworkMinimums: await Networks.NetworkMinimumPrice.ReadAsync(_db, cancellationToken));
     }
 
     private static int? ReadOptionalPositiveInt(IReadOnlyDictionary<string, string?> rows, string key)

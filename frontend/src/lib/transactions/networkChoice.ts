@@ -1,7 +1,7 @@
 import { BlockchainNetwork } from "@/types/enums";
 import { ALL_NETWORKS, parseNetwork } from "@/lib/utils/blockchain";
 import { findWallet, type UserWalletEntry } from "@/lib/api/users";
-import type { TransactionNetworkQuote } from "@/lib/api/transactions";
+import type { NetworkMinPrice, TransactionNetworkQuote } from "@/lib/api/transactions";
 
 /**
  * T156 — the network rules of the listing wizard (S06 step 2, 02 §4.2, 03 §2.2
@@ -16,6 +16,11 @@ export interface SellerNetworkOption {
   payoutAddress: string | null;
   /** Only networks with a saved payout address can be ticked (02 §4.2). */
   selectable: boolean;
+  /**
+   * T169 — the network's own minimum price (TRON 50.00) when the entered price
+   * is below it: the network cannot be ticked for this price. Absent otherwise.
+   */
+  belowMinPrice?: string;
 }
 
 /**
@@ -37,6 +42,34 @@ export function sellerNetworkOptions(
   return ALL_NETWORKS.filter((n) => open.has(n)).map((network) => {
     const payoutAddress = findWallet(wallets, network, "PAYOUT");
     return { network, payoutAddress, selectable: payoutAddress !== null };
+  });
+}
+
+/** T169 — `network`'s own minimum price from `networkMinPrices`, or null. */
+export function networkMinPrice(
+  network: BlockchainNetwork,
+  minPrices: readonly NetworkMinPrice[] | null | undefined,
+): string | null {
+  return minPrices?.find((m) => m.network === network)?.minPrice ?? null;
+}
+
+/**
+ * T169 — the step-2 options for the entered `price`: a network whose own
+ * minimum the price misses (no TRON below 50 USDT) cannot be ticked and says
+ * why. An empty or non-numeric price changes nothing (the price field reports
+ * its own error). The price-free options stay the input of
+ * {@link networkGateReason}: that gate answers "can this seller list at all".
+ */
+export function withPriceMinimums(
+  options: readonly SellerNetworkOption[],
+  price: string,
+  minPrices: readonly NetworkMinPrice[] | null | undefined,
+): SellerNetworkOption[] {
+  const value = price.trim() === "" ? Number.NaN : Number(price);
+  return options.map((option) => {
+    const min = networkMinPrice(option.network, minPrices);
+    if (min === null || !Number.isFinite(value) || value >= Number(min)) return option;
+    return { ...option, selectable: false, belowMinPrice: min };
   });
 }
 
@@ -78,6 +111,11 @@ export interface BuyerNetworkOption {
   network: BlockchainNetwork;
   /** `networkQuotes[]` entry for it; null when the server sent none. */
   quote: TransactionNetworkQuote | null;
+  /**
+   * T169 — the network's own minimum the price misses (from the quote's
+   * `unavailableReason`/`minAmount`): the option is shown but cannot be chosen.
+   */
+  belowMinPrice?: string;
 }
 
 /**
@@ -91,10 +129,12 @@ export function buyerNetworkOptions(
   const accepted = new Set(
     (acceptedNetworks ?? []).map(parseNetwork).filter((n): n is BlockchainNetwork => n !== null),
   );
-  return ALL_NETWORKS.filter((n) => accepted.has(n)).map((network) => ({
-    network,
-    quote: quotes?.find((q) => q.network === network) ?? null,
-  }));
+  return ALL_NETWORKS.filter((n) => accepted.has(n)).map((network) => {
+    const quote = quotes?.find((q) => q.network === network) ?? null;
+    return quote?.unavailableReason === "NETWORK_MIN_AMOUNT_NOT_MET" && quote.minAmount
+      ? { network, quote, belowMinPrice: quote.minAmount }
+      : { network, quote };
+  });
 }
 
 /**

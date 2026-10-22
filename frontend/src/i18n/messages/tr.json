@@ -502,7 +502,8 @@
       "OUTBOUND_ROW_CLOSURE_PROPOSED": "Giden satır kapatma önerildi",
       "OUTBOUND_ROW_CLOSURE_APPROVED": "Giden satır kapatma onaylandı",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "Giden satır kapatma reddedildi",
-      "OUTBOUND_ROW_CLOSURE_REFUSED": "Giden satır kapatma geri çevrildi"
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "Giden satır kapatma geri çevrildi",
+      "OUTBOUND_TRANSFER_APPROVED": "Giden ödeme onaylandı"
     }
   },
   "adminTransactions": {
@@ -1366,6 +1367,7 @@
         "addInProfile": "Profilinizden ekleyin",
         "tronFeeNote": "TRON'da alıcı ayrıca kabul anında sabitlenen bir TRON ağ ücreti öder. Size yapılacak ödemenin ağ ücretinin komisyonla karşılanmayan kısmı alacağınızdan düşülür.",
         "ethereumFeeNote": "Ethereum'da ne siz ne de alıcı ağ ücreti ödersiniz.",
+        "belowNetworkMin": "{network}, {min} USDT altındaki satışlarda kullanılamaz: ağ ücreti satış tutarına göre çok yüksek kalır. Bu fiyatta öteki ağı seçin ya da fiyatı yükseltin.",
         "noneSelected": "En az bir ağ seçin."
       }
     },
@@ -1431,7 +1433,8 @@
         "BUYER_STEAM_ID_NOT_FOUND": "Belirttiğiniz Steam ID kayıtlı bir kullanıcıya ait değil.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "Ödeme adresi cooldown'u devam ediyor.",
         "SELLER_WALLET_ADDRESS_MISSING": "Profilinizde ödeme adresi yok. Önce profilinizden bir adres ekleyin.",
-        "NETWORK_UNAVAILABLE": "Seçtiğiniz ağlardan biri şu anda kullanılamıyor. O ağı kaldırın ya da daha sonra tekrar deneyin."
+        "NETWORK_UNAVAILABLE": "Seçtiğiniz ağlardan biri şu anda kullanılamıyor. O ağı kaldırın ya da daha sonra tekrar deneyin.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "Fiyat, seçtiğiniz bir ağın en düşük satış tutarının altında. O ağı kaldırın ya da fiyatı yükseltin."
       },
       "errorNetwork": "Ağ: {network}"
     }
@@ -1603,10 +1606,12 @@
         "addressFormat": "Geçerli bir {network} adresi girin.",
         "CHECKSUM_CONFIRMATION_REQUIRED": "Sağlaması olmayan adresi kontrol ettiğinizi onaylayın.",
         "NETWORK_NOT_ACCEPTED": "Satıcı bu işlemde {network} kabul etmiyor. Başka bir ağ seçin.",
-        "NETWORK_UNAVAILABLE": "{network} şu anda kullanılamıyor. Başka bir ağ seçin ya da daha sonra tekrar deneyin."
+        "NETWORK_UNAVAILABLE": "{network} şu anda kullanılamıyor. Başka bir ağ seçin ya da daha sonra tekrar deneyin.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "{network} bu tutardaki satışlarda kullanılamaz. Başka bir ağ seçin."
       },
       "networkLabel": "Ödeme ağı",
       "networkHint": "Ödeme yapacağınız ağı seçin. Ödemeniz, satıcıya ödeme ve her türlü iade bu ağda yapılır. TRON'da ağ ücreti kabul anında sabitlenir.",
+      "belowNetworkMin": "Bu satışta {network} kullanılamaz: {network} ile en az {min} USDT'lik satışlar ödenebilir.",
       "quote": {
         "total": "Göndereceğiniz tutar: {amount}",
         "tronFee": "TRON ağ ücreti dahil: {amount}",
@@ -2346,6 +2351,35 @@
         "cancel": "Vazgeç"
       }
     },
+    "approvals": {
+      "heading": "Onay bekleyen ödemeler",
+      "gateClosed": "Otomatik gönderim KAPALI: her satıcı ödemesi ve alıcı iadesi siz onaylayana kadar bekler.",
+      "gateOpen": "Otomatik gönderim açık: ödemeler ve iadeler onay beklemeden gönderilir.",
+      "intro": "Onay, satırı olduğu gibi gönderime bırakır; tutar ve alıcı adresi satır oluşurken sabitlenmiştir. Gönderimi bir sonraki dakikalık tur yapar. Depozitten sıcak cüzdana toplama (sweep) onay beklemez. Kapı, Ayarlar ekranındaki outbound.auto_send_enabled ayarıdır.",
+      "empty": "Onay bekleyen ödeme ya da iade yok.",
+      "ariaLabel": "Onay bekleyen giden satırlar",
+      "columns": {
+        "network": "Ağ",
+        "type": "Tür",
+        "amount": "Tutar",
+        "to": "Alıcı adres",
+        "created": "Oluştu",
+        "action": "İşlem"
+      },
+      "gasFee": "Ağ ücreti: {amount}",
+      "approve": "Onayla",
+      "confirm": {
+        "title": "Ödemeyi onayla",
+        "warning": "Onaydan sonra bu tutar zincirde gerçekten gönderilir ve geri alınamaz. Ağı, tutarı ve alıcı adresini kontrol edin.",
+        "network": "Ağ",
+        "type": "Tür",
+        "amount": "Tutar",
+        "to": "Alıcı adres",
+        "transaction": "İşlem kimliği",
+        "cancel": "Vazgeç",
+        "submit": "Onayla ve gönderime bırak"
+      }
+    },
     "errors": {
       "GENERIC": "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
       "VALIDATION_ERROR": "İstek geçersiz. Alanları kontrol edip tekrar deneyin.",
@@ -2353,6 +2387,8 @@
       "HASH_CONFIRMATION_MISMATCH": "Yazılan hash önerilen hash ile uyuşmuyor.",
       "SELF_APPROVAL_FORBIDDEN": "Kendi önerinizi onaylayamazsınız. Farklı bir yönetici onaylamalı.",
       "ROW_NOT_FOUND": "Giden satır bulunamadı.",
+      "ROW_NOT_APPROVABLE": "Bu satır bir satıcı ödemesi ya da iade değil; onay beklemez.",
+      "ALREADY_APPROVED": "Bu satır zaten onaylanmış.",
       "CLOSURE_NOT_FOUND": "Kapatma bulunamadı.",
       "ROW_NOT_ETHEREUM": "Satır Ethereum ağında değil.",
       "ROW_NOT_OUTBOUND": "Satır giden bir transfer değil.",

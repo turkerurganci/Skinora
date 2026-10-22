@@ -1274,12 +1274,12 @@ namespace Skinora.Shared.Persistence.Migrations
                             Category = "AccessControl",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "string",
-                            Description = "Geo-block — ISO-3166-1 alpha-2 ülke kodları CSV (örn: 'IR,KP,CU'); 'NONE' hiçbir ülke engellenmemiş demektir. Admin tarafından yönetilir.",
+                            Description = "Geo-block — ISO-3166-1 alpha-2 ülke kodları CSV; 'NONE' hiçbir ülke engellenmemiş demektir. Admin tarafından yönetilir. Varsayılan IR,KP,CU,MM = FATF eylem çağrısı listesi (İran, Kuzey Kore, Myanmar) + Küba (proje sahibi kararı 2026-10-21, T169).",
                             IsConfigured = true,
                             Key = "auth.banned_countries",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Value = "NONE"
+                            Value = "IR,KP,CU,MM"
                         },
                         new
                         {
@@ -1551,7 +1551,7 @@ namespace Skinora.Shared.Persistence.Migrations
                             Key = "blockchain.refund_gas_fee_estimate_usdt",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Value = "2.0"
+                            Value = "2.60"
                         },
                         new
                         {
@@ -1611,12 +1611,12 @@ namespace Skinora.Shared.Persistence.Migrations
                             Category = "Wallet",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "decimal",
-                            Description = "Hot wallet TRX bakiye alt eşiği (TRX, gas için). Bu değerin altına düşerse HOT_WALLET_THRESHOLD_BREACHED audit + admin SignalR alert fırlar (T77 — 05 §3.3). MVP ölçeğinde 100 TRX ≈ 50 TRC-20 transfer gas worst-case headroom.",
+                            Description = "Hot wallet TRX bakiye alt eşiği (TRX, gas için). Bu değerin altına düşerse HOT_WALLET_THRESHOLD_BREACHED audit + admin SignalR alert fırlar (T77 — 05 §3.3). 1500 TRX ≈ günde 10 TRON satışında 7 günlük yakma payı (satış başı ~22 TRX; T169, öneriyle kaydedildi — ⚠).",
                             IsConfigured = true,
                             Key = "hot_wallet.trx_balance_minimum",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Value = "100"
+                            Value = "1500"
                         },
                         new
                         {
@@ -1629,7 +1629,7 @@ namespace Skinora.Shared.Persistence.Migrations
                             Key = "blockchain.payout_gas_fee_estimate_usdt",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Value = "0.50"
+                            Value = "2.25"
                         },
                         new
                         {
@@ -1741,12 +1741,12 @@ namespace Skinora.Shared.Persistence.Migrations
                             Category = "Monitoring",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "decimal",
-                            Description = "Ethereum iade gas fee FALLBACK değeri (USDT) — runtime tahmin alınamazsa kesilir ve en düşük iade eşiğinin girdisi olur. Varsayılan 0,50 = T142'nin işlem başı ücret tavanı (08 §3.7.7). TRON'un karşılığı blockchain.refund_gas_fee_estimate_usdt.",
+                            Description = "Ethereum iade gas fee FALLBACK değeri (USDT) — runtime tahmin alınamazsa kesilir ve en düşük iade eşiğinin girdisi olur. Varsayılan 0,20: en pahalı iadeyi (88.201 gas) 0,92 gwei'ye kadar karşılar; daha pahalı günde farkı platform öder (T169, öneriyle kaydedildi — ⚠). TRON'un karşılığı blockchain.refund_gas_fee_estimate_usdt.",
                             IsConfigured = true,
                             Key = "blockchain.ethereum.refund_gas_fee_estimate_usdt",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Value = "0.50"
+                            Value = "0.20"
                         },
                         new
                         {
@@ -1877,6 +1877,32 @@ namespace Skinora.Shared.Persistence.Migrations
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Value = "2.0"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-00000000004f"),
+                            Category = "Limit",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "decimal",
+                            Description = "TRON için en düşük satış tutarı (USDT). Fiyatı bunun altındaki ilan TRON'u kabul edemez ve alıcı TRON'da ödeyemez (422 NETWORK_MIN_AMOUNT_NOT_MET); ilan sihirbazı ve kabul formu TRON'u devre dışı gösterir. 50 = proje sahibi kararı 2026-10-21 (T169): 50 $'ın altında TRON ağ ücreti satıcının %9'unu aşar.",
+                            IsConfigured = true,
+                            Key = "blockchain.tron.min_transaction_amount_usdt",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "50"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-000000000050"),
+                            Category = "Settlement",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "bool",
+                            Description = "Satıcı ödemeleri ve alıcı iadeleri OTOMATİK gönderilsin mi (T169 / T175 açılış kapısı). false iken her SELLER_PAYOUT ve *_REFUND satırı admin onayı bekler (AD40/AD41 — cüzdan ekranı, AuditLog OUTBOUND_TRANSFER_APPROVED); sweep (depozit → sıcak cüzdan) beklemez. Test boyunca kapalı (proje sahibi kararı 2026-10-21); ilk en az 5 gerçek teslimat elle incelendikten sonra açılır (11 T175).",
+                            IsConfigured = true,
+                            Key = "outbound.auto_send_enabled",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "false"
                         });
                 });
 
@@ -2053,6 +2079,12 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 6)
                         .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ApprovedByAdminId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<long?>("BlockNumber")
                         .HasColumnType("bigint");

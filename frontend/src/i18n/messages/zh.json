@@ -502,7 +502,8 @@
       "OUTBOUND_ROW_CLOSURE_PROPOSED": "已提议关闭出款记录",
       "OUTBOUND_ROW_CLOSURE_APPROVED": "已批准关闭出款记录",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "已拒绝关闭出款记录",
-      "OUTBOUND_ROW_CLOSURE_REFUSED": "已驳回关闭出款记录"
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "已驳回关闭出款记录",
+      "OUTBOUND_TRANSFER_APPROVED": "出账付款已批准"
     }
   },
   "adminTransactions": {
@@ -1366,6 +1367,7 @@
         "addInProfile": "在个人资料中添加",
         "tronFeeNote": "在 TRON 上，买家还需支付一笔在接受时确定的 TRON 网络费。您收款的网络费中佣金未覆盖的部分将从您的收款中扣除。",
         "ethereumFeeNote": "在 Ethereum 上，您和买家都无需支付网络费。",
+        "belowNetworkMin": "低于 {min} USDT 的销售不能使用 {network}：其网络费用相对于销售金额过高。按此价格请选择另一个网络或提高价格。",
         "noneSelected": "请至少选择一个网络。"
       }
     },
@@ -1431,7 +1433,8 @@
         "BUYER_STEAM_ID_NOT_FOUND": "您输入的 Steam ID 不属于已注册用户。",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "收款地址冷却期仍在生效。",
         "SELLER_WALLET_ADDRESS_MISSING": "您的个人资料中没有收款地址。请先在个人资料中添加。",
-        "NETWORK_UNAVAILABLE": "所选网络之一暂时不可用。请移除该网络或稍后再试。"
+        "NETWORK_UNAVAILABLE": "所选网络之一暂时不可用。请移除该网络或稍后再试。",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "价格低于您所选某个网络的最低销售金额。请移除该网络或提高价格。"
       },
       "errorNetwork": "网络：{network}"
     }
@@ -1603,10 +1606,12 @@
         "addressFormat": "请输入有效的 {network} 地址。",
         "CHECKSUM_CONFIRMATION_REQUIRED": "请确认您已核对这个不含校验的地址。",
         "NETWORK_NOT_ACCEPTED": "卖家在本交易中不接受 {network}。请选择其他网络。",
-        "NETWORK_UNAVAILABLE": "{network} 暂时不可用。请选择其他网络或稍后再试。"
+        "NETWORK_UNAVAILABLE": "{network} 暂时不可用。请选择其他网络或稍后再试。",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "此金额的销售不能使用 {network}。请选择其他网络。"
       },
       "networkLabel": "付款网络",
       "networkHint": "选择您要付款的网络。您的付款、卖家收款以及任何退款都在此网络上进行。在 TRON 上，网络费在接受时确定。",
+      "belowNetworkMin": "本次销售不能使用 {network}：{network} 仅可用于至少 {min} USDT 的销售。",
       "quote": {
         "total": "您需发送：{amount}",
         "tronFee": "含 TRON 网络费：{amount}",
@@ -2346,6 +2351,35 @@
         "cancel": "取消"
       }
     },
+    "approvals": {
+      "heading": "待批准的付款",
+      "gateClosed": "自动发送已关闭：每笔卖家付款和买家退款都会等待您批准。",
+      "gateOpen": "自动发送已开启：付款和退款无需等待批准即会发送。",
+      "intro": "批准会让该记录按原样进入发送；其金额和收款地址在创建时已固定。下一轮（每分钟一次）会发送它。从充值地址到热钱包的归集（sweep）从不等待。该开关是“设置”页面中的 outbound.auto_send_enabled。",
+      "empty": "没有待批准的付款或退款。",
+      "ariaLabel": "待批准的出账记录",
+      "columns": {
+        "network": "网络",
+        "type": "类型",
+        "amount": "金额",
+        "to": "收款地址",
+        "created": "创建时间",
+        "action": "操作"
+      },
+      "gasFee": "网络费用：{amount}",
+      "approve": "批准",
+      "confirm": {
+        "title": "批准付款",
+        "warning": "批准后该金额将在链上真实发送且无法撤销。请核对网络、金额和收款地址。",
+        "network": "网络",
+        "type": "类型",
+        "amount": "金额",
+        "to": "收款地址",
+        "transaction": "交易 ID",
+        "cancel": "取消",
+        "submit": "批准并放行发送"
+      }
+    },
     "errors": {
       "GENERIC": "无法完成操作，请重试。",
       "VALIDATION_ERROR": "请求无效。请检查各字段后重试。",
@@ -2353,6 +2387,8 @@
       "HASH_CONFIRMATION_MISMATCH": "输入的哈希与提议的哈希不一致。",
       "SELF_APPROVAL_FORBIDDEN": "您不能批准自己的提议，必须由另一名管理员操作。",
       "ROW_NOT_FOUND": "未找到该出款记录。",
+      "ROW_NOT_APPROVABLE": "该记录不是卖家付款或退款，不需要批准。",
+      "ALREADY_APPROVED": "该记录已被批准。",
       "CLOSURE_NOT_FOUND": "未找到该关闭申请。",
       "ROW_NOT_ETHEREUM": "该记录不在Ethereum上。",
       "ROW_NOT_OUTBOUND": "该记录不是出款转账。",

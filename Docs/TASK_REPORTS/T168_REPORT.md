@@ -1,6 +1,6 @@
 # T168 — Hukuk metinleri
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor — 2. düzeltme turu, yeniden doğrulama bekliyor | **Tarih:** 2026-10-21 (düzeltme turları 2026-10-22)
+**Faz:** F9 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-10-21 (düzeltme turları 2026-10-22)
 
 ---
 
@@ -56,11 +56,13 @@ Kriterler `plan/11_F9.md` v1.21 (sahip kararıyla uyarlanmış metin).
 
 ## Doğrulama
 
-| Alan | Sonuç |
+| Aşama | Sonuç |
 |---|---|
-| Doğrulama durumu | 1. tur ✗ FAIL (HEAD `9ce1f5f3`, 2026-10-22) → düzeltme turu yapıldı, yeniden doğrulama bekliyor |
-| Bulgu sayısı | 3 × S1 ⚠ HUKUK (B1–B3) + 6 × S4 |
-| Düzeltme gerekli mi | Evet — aşağıda "Düzeltme turu" |
+| 1. doğrulama | ✗ FAIL — HEAD `9ce1f5f3` (2026-10-22): 3 × S1 ⚠ HUKUK (B1–B3) + 6 × S4 |
+| Yeniden doğrulama | ✗ FAIL — HEAD `dce74e72` (2026-10-22): 1 × S1 ⚠ HUKUK (B5) + 2 × S4 |
+| 2. düzeltme turu sonrası yönetici diff incelemesi | ✓ (B5 + S4-7/S4-8 kapandı) |
+| B1 (teslimat 12 sa ↔ ayar) | T169 ile kapandı: `delivery_timeout_minutes` 720 dk (`.env.example`, DEPLOY_RUNBOOK §A #6, `docker-compose.trial.yml`, migration `T169_OwnerDecisions` 60 → 720) |
+| Birleştirme | main `21c93062` (T169 #371) dala birleştirildi; çakışmalar yalnız belge başlıkları / günlükler |
 
 ## Altyapı Değişiklikleri
 
@@ -242,7 +244,7 @@ Secret hook: EN iade maddesinin ilk hâli 12 ardışık küçük harfli kelimeyl
 
 ## Known Limitations / Follow-up
 
-- **Teslimat süresi ayarı — T169'a bağımlı (doğrulama B1):** metin "12 saat" diyor; ayar `delivery_timeout_minutes` seed'de `Unconfigured`, `.env.example` ve deneme yayını bugün 60 dk. Ayarı 720 dk'ya T169 dalı çekiyor (sahip kararı listesi "teslimat süresi 720 dk ⚠"); **T168, T169'dan sonra birleştirilmeli**. Ayrıntı "Düzeltme turu" B1.
+- **Teslimat süresi ayarı — T169 ile kapandı (doğrulama B1):** ~~aşağıdaki bağımlılık~~ T169 (#371) ayarı 720 dk yaptı; metin "12 saat" ile tutarlı. Eski not: metin "12 saat" diyor; ayar `delivery_timeout_minutes` seed'de `Unconfigured`, `.env.example` ve deneme yayını bugün 60 dk. Ayarı 720 dk'ya T169 dalı çekiyor (sahip kararı listesi "teslimat süresi 720 dk ⚠"); **T168, T169'dan sonra birleştirilmeli**. Ayrıntı "Düzeltme turu" B1.
 - **Giriş kaydı saklama süresi metinde sabit "1 yıl"** (`retention.user_login_log_days` varsayılanı 365, admin ayarı). Ayar değişirse gizlilik metni de değişmeli. `UserLoginLog.DeviceFingerprint` bugün yazılmıyor; yazılmaya başlanırsa metne eklenmeli.
 - **Paralel dal çakışması:** `plan/11_F9.md` (v1.22), 02 (v4.19), 07 (v4.21) başlıkları ve DOC_CHANGELOG bu turda değişti; T169 da aynı belgelere dokunursa birleştirmede başlık satırı çakışır (iki tarafı koruyarak sürüm sırayla artırılır).
 - **HTTPS cümlesi** (gizlilik "Güvenlik") deneme yayınında tünel/T162 ile doğru olur.

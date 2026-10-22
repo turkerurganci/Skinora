@@ -82,7 +82,7 @@ public static class SystemSettingSeed
         Default     (27, "open_link_enabled",                           "bool",    "Feature",     "false", "Açık link yöntemi aktif mi"),
         Unconfigured(28, "hot_wallet_limit",                            "decimal", "Wallet",      "Hot wallet maksimum bakiye limiti — aşıldığında admin alert (05 §3.3)"),
         // --- T30: Access control settings (02 §21.1, 03 §11a.1, §11a.2) ---
-        Default     (29, "auth.banned_countries",                       "string",  "AccessControl", "NONE", "Geo-block — ISO-3166-1 alpha-2 ülke kodları CSV (örn: 'IR,KP,CU'); 'NONE' hiçbir ülke engellenmemiş demektir. Admin tarafından yönetilir."),
+        Default     (29, "auth.banned_countries",                       "string",  "AccessControl", "IR,KP,CU,MM", "Geo-block — ISO-3166-1 alpha-2 ülke kodları CSV; 'NONE' hiçbir ülke engellenmemiş demektir. Admin tarafından yönetilir. Varsayılan IR,KP,CU,MM = FATF eylem çağrısı listesi (İran, Kuzey Kore, Myanmar) + Küba (proje sahibi kararı 2026-10-21, T169)."),
         Default     (30, "auth.min_steam_account_age_days",             "int",     "AccessControl", "30",   "Steam hesap minimum yaş eşiği (gün) — burner/fake hesap caydırıcı. Hesap yaşı bu değerden az ise giriş engellenir (02 §21.1, 03 §11a.2)."),
         // --- T34: Wallet address change cooldown (02 §12.3, 03 §9.2) ---
         Default     (31, "wallet.payout_address_cooldown_hours",        "int",     "Wallet",        "24",   "Satıcı ödeme adresi değişikliği sonrası cooldown süresi (saat). Cooldown süresince yeni işlem başlatma engellenir; mevcut CREATED davetler eski snapshot adresle devam eder (02 §12.3)."),
@@ -121,7 +121,7 @@ public static class SystemSettingSeed
         // the sidecar's pre-send estimate (triggerconstantcontract + resource/price probes,
         // ChargedGasFeeResolver); this setting is only the FALLBACK when that estimate is
         // unavailable, and still feeds the 2× minimum-refund threshold in that case.
-        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.0",  "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa RefundDecisionService bu değeri kullanır ve iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine bu değerle karar verilir."),
+        Default     (50, "blockchain.refund_gas_fee_estimate_usdt",     "decimal", "Monitoring",    "2.60", "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa RefundDecisionService bu değeri kullanır ve iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine bu değerle karar verilir."),
         // --- T73: Outbound transfer dispatcher retry intervals (08 §3.3, 05 §3.3, 11 T73) ---
         // CSV (dakika) — sıralı; her transient failure'da `RetryCount` artırılır ve bu listenin
         // RetryCount'inci elemanı `NextAttemptAt`'a eklenir. Liste tükendiğinde transfer FAILED
@@ -153,7 +153,7 @@ public static class SystemSettingSeed
         // 100 TRX (~50 stablecoin transfers' worth of gas headroom); below
         // that threshold a SECURITY_EVENT audit + admin SignalR alert fires.
         Default     (57, "hot_wallet.monitor_cron",                       "string",  "Monitoring",    "*/15 * * * *", "Hot wallet bakiye monitor job'unun cron ifadesi (T77 — 05 §3.3). Default '*/15 * * * *' (her 15 dakikada bir). Değiştirildikten sonra host restart gerekir (admin runtime override T96 devir)."),
-        Default     (58, "hot_wallet.trx_balance_minimum",                "decimal", "Wallet",        "100",          "Hot wallet TRX bakiye alt eşiği (TRX, gas için). Bu değerin altına düşerse HOT_WALLET_THRESHOLD_BREACHED audit + admin SignalR alert fırlar (T77 — 05 §3.3). MVP ölçeğinde 100 TRX ≈ 50 TRC-20 transfer gas worst-case headroom."),
+        Default     (58, "hot_wallet.trx_balance_minimum",                "decimal", "Wallet",        "1500",         "Hot wallet TRX bakiye alt eşiği (TRX, gas için). Bu değerin altına düşerse HOT_WALLET_THRESHOLD_BREACHED audit + admin SignalR alert fırlar (T77 — 05 §3.3). 1500 TRX ≈ günde 10 TRON satışında 7 günlük yakma payı (satış başı ~22 TRX; T169, öneriyle kaydedildi — ⚠)."),
         // --- WP1: Seller-payout gas fee estimate (02 §4.7, 09 §14.4, 04 §7.3) ---
         // Separate from blockchain.refund_gas_fee_estimate_usdt because the
         // seller-send gas is the quantity the protection split measures against
@@ -162,7 +162,7 @@ public static class SystemSettingSeed
         // SELLER_PAYOUT row. Since Prova-GasFeeChargedIsFixedGuess (2026-09-02)
         // the split input comes from the sidecar's pre-send estimate; this
         // setting is only the FALLBACK when that estimate is unavailable.
-        Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "0.50",         "Satıcı payout gas fee FALLBACK değeri (USDT). Normalde gas-fee koruma split'inin (02 §4.7) girdisi sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa SellerPayoutQueueJob bu değeri kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30)."),
+        Default     (59, "blockchain.payout_gas_fee_estimate_usdt",       "decimal", "Commission",    "2.25",         "Satıcı payout gas fee FALLBACK değeri (USDT). Normalde gas-fee koruma split'inin (02 §4.7) girdisi sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa SellerPayoutQueueJob bu değeri kullanır: gasFee komisyon×%10 eşiğini aşarsa aşan kısım satıcının alacağından düşülür (04 §7.3 örneği: 0.50 → satıcıdan 0.30)."),
         // --- T125: Delivery evidence launch gate (02 §9.2, DEPLOY_RUNBOOK §H) ---
         // Seeded FALSE and deliberately not env-bootstrappable (Default(...) ⇒
         // IsConfigured = true, which SettingsBootstrapService never overrides):
@@ -210,7 +210,7 @@ public static class SystemSettingSeed
         // contract and the admin catalogue are complete before the Ethereum
         // service does. The hot/cold addresses are env-sourced catalogue entries,
         // not rows (05 §3.3 "Platform adresleri").
-        Default     (68, "blockchain.ethereum.refund_gas_fee_estimate_usdt",  "decimal", "Monitoring",   "0.50",         "Ethereum iade gas fee FALLBACK değeri (USDT) — runtime tahmin alınamazsa kesilir ve en düşük iade eşiğinin girdisi olur. Varsayılan 0,50 = T142'nin işlem başı ücret tavanı (08 §3.7.7). TRON'un karşılığı blockchain.refund_gas_fee_estimate_usdt."),
+        Default     (68, "blockchain.ethereum.refund_gas_fee_estimate_usdt",  "decimal", "Monitoring",   "0.20",         "Ethereum iade gas fee FALLBACK değeri (USDT) — runtime tahmin alınamazsa kesilir ve en düşük iade eşiğinin girdisi olur. Varsayılan 0,20: en pahalı iadeyi (88.201 gas) 0,92 gwei'ye kadar karşılar; daha pahalı günde farkı platform öder (T169, öneriyle kaydedildi — ⚠). TRON'un karşılığı blockchain.refund_gas_fee_estimate_usdt."),
         Default     (69, "blockchain.ethereum.payout_gas_fee_estimate_usdt",  "decimal", "Commission",   "0.50",         "Ethereum satıcı payout gas fee FALLBACK değeri (USDT) — runtime tahmin alınamazsa kullanılır. Ethereum'da payout ücretini platform tavana kadar üstlenir (08 §3.7.7, T149). TRON'un karşılığı blockchain.payout_gas_fee_estimate_usdt."),
         Default     (70, "blockchain.ethereum.max_charged_gas_fee_usdt",      "decimal", "Monitoring",   "10.0",         "Ethereum'da kullanıcıdan kesilebilecek gas fee üst sınırı (USDT). Runtime tahmin bu değeri aşarsa REDDEDİLİR (kırpılmaz) ve fallback kesilir. 10,0 son 30 günün en pahalı bloğunda bile (38,7 gwei) bir iade yakıtını (~7,8 $) geçirir; çöküş günlerinde tavanı aşan tahmin reddedilir (T142 ölçümü, T149 gözden geçirir)."),
         Default     (71, "blockchain.ethereum.fee_cap_usd_per_transfer",      "decimal", "Commission",   "0.50",         "Ethereum'da platformun üstlendiği ağ ücreti tavanı (USD, gönderim başına): sweep işlemi (yakıt + sweep) ve payout için ayrı ayrı; satış başı en çok 1,00 $. Tavanın üstünde sweep/payout bekler, iade beklemez (08 §3.7.7; T142 ölçümü — 30 günün p99'u satış başı 1,73 $, tavanın üstünde geçen süre %3,1)."),
@@ -231,6 +231,21 @@ public static class SystemSettingSeed
         Default     (76, "blockchain.tron.network_fee_buffer_ratio",     "decimal", "Commission",   "0.007",        "TRON ağ ücreti satırı — sweep'e kadar (~8 gün) TRX fiyat oynamasına karşı tampon oranı (11 §F8 K8). Satır = YUKARI_2_HANE(sweep maliyeti TRX × canlı TRX/USDT × (1 + bu oran)). 0,007 = 02 §5 örneği (8,44 TRX × 0,34 × 1,007 = 2,8901 → 2,90). 0 ≤ değer < 1."),
         Default     (77, "blockchain.tron.network_fee_fallback_usdt",    "decimal", "Commission",   "3.00",         "TRON ağ ücreti satırı YEDEĞİ (USDT) — kabul anında sweep tahmini alınamazsa (servis/zincir/kur erişilemez ya da tahmin blockchain.max_charged_gas_fee_usdt'yi aşar) satıra bu değer yazılır; kabul tahmine bloke olmaz. Satır sonradan düzeltilmez (08 §3.1a)."),
         Default     (78, "blockchain.ethereum.min_refund_threshold_ratio", "decimal", "Monitoring", "2.0",          "Ethereum minimum iade eşiği — net iade < gas fee × bu oran ise iade yapılmaz, admin uyarısı (02 §4.6). Canlı tahmin kullandığı için Ethereum'da yalnız tozu engeller. TRON'un karşılığı min_refund_threshold_ratio."),
+
+        // --- T169: owner decisions 2026-10-21 ---
+        // TRON per-network minimum price: below it a listing may not accept
+        // TRON and a buyer may not pay on TRON (NETWORK_MIN_AMOUNT_NOT_MET) —
+        // TRON's network fee would eat too much of a cheap sale. Ethereum has
+        // no such row (BlockchainNetworkSettingKeys.Ethereum → null).
+        Default     (79, "blockchain.tron.min_transaction_amount_usdt",  "decimal", "Limit",        "50",           "TRON için en düşük satış tutarı (USDT). Fiyatı bunun altındaki ilan TRON'u kabul edemez ve alıcı TRON'da ödeyemez (422 NETWORK_MIN_AMOUNT_NOT_MET); ilan sihirbazı ve kabul formu TRON'u devre dışı gösterir. 50 = proje sahibi kararı 2026-10-21 (T169): 50 $'ın altında TRON ağ ücreti satıcının %9'unu aşar."),
+        // Payout/refund launch gate (T169, T175 "otomatik ödeme kapıları kapalı
+        // başlıyor"). Seeded FALSE and deliberately not env-bootstrappable
+        // (Default(...) ⇒ IsConfigured = true, which SettingsBootstrapService
+        // never overrides), like the T125/T129 gates: only an admin can open
+        // it, from the admin UI. While false every SELLER_PAYOUT and *_REFUND
+        // row waits for an admin approval (OutgoingTransferDispatchJob skips
+        // rows without ApprovedAt); SWEEP is internal and never waits.
+        Default     (80, "outbound.auto_send_enabled",                    "bool",    "Settlement",   "false",        "Satıcı ödemeleri ve alıcı iadeleri OTOMATİK gönderilsin mi (T169 / T175 açılış kapısı). false iken her SELLER_PAYOUT ve *_REFUND satırı admin onayı bekler (AD40/AD41 — cüzdan ekranı, AuditLog OUTBOUND_TRANSFER_APPROVED); sweep (depozit → sıcak cüzdan) beklemez. Test boyunca kapalı (proje sahibi kararı 2026-10-21); ilk en az 5 gerçek teslimat elle incelendikten sonra açılır (11 T175)."),
     ];
 
     private static SystemSetting Unconfigured(

@@ -165,6 +165,17 @@ export async function seedHappyPath(): Promise<typeof seed> {
       console.warn(`[e2e:db] seed cleanup batch failed — stale rows may remain: ${String(err)}`);
     });
 
+  // T169 — the payout/refund launch gate (`outbound.auto_send_enabled`) is
+  // seeded CLOSED: every SELLER_PAYOUT / *_REFUND row waits for an admin
+  // approval (AD41). The suites measure the money pipeline itself (refund
+  // CONFIRMED, payout → COMPLETED), not the approval step, so the harness opens
+  // the gate the way an admin would — the row is not env-bootstrappable on
+  // purpose. The approval path has its own backend tests (OutboundApprovalTests).
+  await r().query(
+    `UPDATE SystemSettings SET Value = 'true', IsConfigured = 1, UpdatedAt = SYSUTCDATETIME()
+     WHERE [Key] = 'outbound.auto_send_enabled'`,
+  );
+
   // Seller — MA verified + payout address + backdated account (dodges new-account limit).
   //
   // T166 — every seeded party carries the ToS + 18+ stamps (TosAccepted*,

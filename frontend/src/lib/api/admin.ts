@@ -1270,3 +1270,56 @@ export function rejectOutboundClosure(id: string, note: string): Promise<Outboun
     { method: "POST", body: JSON.stringify({ note }) },
   );
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Outbound approvals (T169 — 07 §9.35 AD40/AD41). While the launch gate
+ * `outbound.auto_send_enabled` is false, every seller payout and buyer refund
+ * waits here for an admin approval; the sweep never does. Approving sends
+ * nothing itself — the dispatcher sends the row on its next tick, unchanged.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export interface OutboundApprovalRow {
+  blockchainTransactionId: string;
+  transactionId: string;
+  network: string;
+  type: string;
+  /** The stablecoin the transaction expected. */
+  token: string;
+  /** The stablecoin the row moves on chain (a wrong-token refund: the one that arrived). */
+  chainToken: string | null;
+  amount: number;
+  /** Network fee already deducted (refund) or charged to the seller (payout); null when none. */
+  gasFee: number | null;
+  toAddress: string;
+  retryCount: number;
+  createdAt: string;
+}
+
+export interface OutboundApprovalQueue {
+  /** The gate's state: true = rows leave without approval. */
+  autoSendEnabled: boolean;
+  rows: OutboundApprovalRow[];
+}
+
+export interface OutboundApproval {
+  blockchainTransactionId: string;
+  network: string;
+  type: string;
+  amount: number;
+  toAddress: string;
+  approvedAt: string;
+  approvedByAdminId: string;
+}
+
+export function listOutboundApprovals(): Promise<OutboundApprovalQueue> {
+  return apiClient<OutboundApprovalQueue>("/admin/wallets/outbound-approvals");
+}
+
+export function approveOutboundTransfer(
+  blockchainTransactionId: string,
+): Promise<OutboundApproval> {
+  return apiClient<OutboundApproval>(
+    `/admin/wallets/outbound-approvals/${encodeURIComponent(blockchainTransactionId)}/approve`,
+    { method: "POST" },
+  );
+}

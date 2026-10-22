@@ -423,6 +423,9 @@ public static class TransactionsModule
         services.AddScoped<IHotWalletMonitorService, HotWalletMonitorService>();
         // T157 — two-person closure of an Ethereum outbound row after journal loss (07 §9.32).
         services.AddScoped<IOutboundRowClosureService, OutboundRowClosureService>();
+        // T169 — admin approval of payouts/refunds while outbound.auto_send_enabled is false (07 §9.35).
+        services.AddScoped<Skinora.API.Services.OutboundApprovals.IOutboundApprovalService,
+            Skinora.API.Services.OutboundApprovals.OutboundApprovalService>();
         // T157 — AD38 wallet / balance / transfer overview per network.
         services.AddScoped<IAdminWalletOverviewService, AdminWalletOverviewService>();
         services.AddScoped<HotWalletMonitorJob>();

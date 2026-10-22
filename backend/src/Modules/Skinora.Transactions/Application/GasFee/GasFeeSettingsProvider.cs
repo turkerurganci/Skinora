@@ -22,18 +22,20 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
 
     /// <summary>
     /// Code-side fallback for <see cref="RefundGasFeeEstimateKey"/> — mirrors
-    /// the seeded default of <c>2.0</c> USDT (T72 MVP). Provider falls back
-    /// to this when the row is missing, unconfigured, or malformed.
+    /// the seeded default of <c>2.60</c> USDT (T169: the measured TRON
+    /// deposit-refund low leg, 2.62 $). Provider falls back to this when the
+    /// row is missing, unconfigured, or malformed.
     /// </summary>
-    public const decimal DefaultRefundGasFeeEstimateUsdt = 2.0m;
+    public const decimal DefaultRefundGasFeeEstimateUsdt = 2.60m;
 
     /// <summary>
     /// Code-side fallback for <see cref="PayoutGasFeeEstimateKey"/> — mirrors
-    /// the seeded default of <c>0.50</c> USDT (WP1 MVP, 04 §7.3 worked
-    /// example). Provider falls back to this when the row is missing,
+    /// the seeded default of <c>2.25</c> USDT (T169: the measured TRON payout
+    /// low leg — the old 0.50 was the 04 §7.3 worked example and a quarter of
+    /// the real cost). Provider falls back to this when the row is missing,
     /// unconfigured, or malformed.
     /// </summary>
-    public const decimal DefaultPayoutGasFeeEstimateUsdt = 0.50m;
+    public const decimal DefaultPayoutGasFeeEstimateUsdt = 2.25m;
 
     public const string MaxChargedGasFeeKey = "blockchain.max_charged_gas_fee_usdt";
 
