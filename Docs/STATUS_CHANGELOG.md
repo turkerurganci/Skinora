@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-22 — chore (görev değil): `next` + `eslint-config-next` 16.3.8 → 16.4.2 güvenlik yükseltmesi — 2026-10-22 danışmaları GHSA-2464-fhr4-w9xw (critical RCE) + GHSA-p3m5-59mp-jv5r (high DoS) bloke edici frontend audit adımını tüm dallarda kırmızıya döndürmüştü; `npm audit --omit=dev` 0, backlog ✅ `FrontendNextAdvisories1642` (§7), dal `chore/next-16.4.2-guvenlik`.
+
 **Önceki güncelleme:** 2026-10-21 — T160c ✓ Tamamlandı, yeniden doğrulama PASS (iade kesinti kalıntısı sıcak cüzdana, AD38 gerçek zincir gideri; T160c_REPORT.md, PR #365). **Merge teyidi (T163 dalında işlendi):** T160c (#365) main `403fe257` → CI `39813399071` ✓, Docker Publish `39813399137` ✓.
 
 **Önceki güncelleme:** 2026-10-21 — T167 ✓ Tamamlandı, doğrulama PASS (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368). **Merge teyidi (T160c dalında işlendi):** T167 (#368) main `daf0e301` → CI `39615975640` ✓, Docker Publish `39615975624` ✓.
@@ -22,8 +24,10 @@
 
 **Önceki güncelleme:** 2026-10-21 — T160b ✓ Tamamlandı, doğrulama PASS (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek min(son ölçülen, sabit ayar), alarmlı; T160b_REPORT.md, PR #364)
 
-**Önceki güncelleme:** 2026-10-21 — T160b ⏳ yapım bitti, doğrulama bekliyor (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek son ölçülen tahmin ya da ayar, alarmlı; PR #364)
-
+**Önceki güncelleme:** 2026-10-21 — T160b ⏳ yapım bitti, doğrulama bekliyor (iade gas tahmini geçici hatada 12 sn içinde 3 kez; yedek son ölçülen tahmin ya da ayar, alarmlı; PR #364)
+
+
+
 **Önceki güncelleme:** 2026-10-21 — T160a ✓ Tamamlandı, doğrulama PASS (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363). **Merge teyidi (T160b dalında işlendi):** T160a (#363) main `50868b13` → CI `39572533083` ✓, Docker Publish `39572533142` ✓.
 
 **Önceki güncelleme:** 2026-10-21 — T160a ⏳ yapım bitti, doğrulama bekliyor (next 16.3.8, prod audit 0, CI frontend audit; T160a_REPORT.md, PR #363); T160 + #362 merge teyitleri
