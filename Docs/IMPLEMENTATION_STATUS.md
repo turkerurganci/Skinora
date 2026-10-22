@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-22 — T168 ✓ Tamamlandı (hukuk metinleri 4 dil; yeniden doğrulama: 1. tur FAIL 3 × S1 ⚠ HUKUK, 2. tur FAIL B5, 2. düzeltme yönetici incelemesi ✓; B1 T169 ile kapandı; T168_REPORT.md, PR #370) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-23 — T174 ⏳ Devam ediyor (DEFERRED_BACKLOG §4: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 10 ⚪ kalır, 1 ⚪ → 🟡 ⚠ yaptırım ekranı yok; 48 aktif / 167 çözülmüş; T174_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -378,7 +378,7 @@
 | T172 | Sunucuda prova (Nile + Sepolia) | ⬚ Bekliyor |
 | T172a | Yedekten geri yükleme sonrası para araçları (⚠ PARA; T173'ten önce — sahip kararı 2026-10-22) | ⬚ Bekliyor |
 | T173 | Mainnet pilotu | ⬚ Bekliyor |
-| T174 | DEFERRED_BACKLOG §4 triyajı | ⬚ Bekliyor |
+| T174 | DEFERRED_BACKLOG §4 triyajı | ⏳ Devam ediyor — 2026-10-17'de ⚪ sayılan 16 satır bugünkü kodla ölçüldü: 5 ✅ bayat (WP1/WP2/WP4b+T147/WP7/WP9), 10 ⚪ kalır (metin güncel), `sanctions-expansion` ⚪ → 🟡 (öneriyle kaydedildi — ⚠: yaptırım listesi yönetici ekranı yok, runbook §O.1 açılış adımı ona dayanıyor); backlog 53/162 → 48/167; rapor [`T174_REPORT.md`](TASK_REPORTS/T174_REPORT.md) |
 | T175 | Çıkış kapısı (12 §6.3) + açılış | ⬚ Bekliyor |
 
 ---

@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-22 — T168 ✓ Tamamlandı (hukuk metinleri 4 dil; yeniden doğrulama: 1. tur FAIL 3 × S1 ⚠ HUKUK, 2. tur FAIL B5, 2. düzeltme yönetici incelemesi ✓; B1 T169 ile kapandı; T168_REPORT.md, PR #370)
+
 **Önceki güncelleme:** 2026-10-22 — T169 ✓ Tamamlandı, doğrulama PASS (işlem 10–2.900 $, 50 $ altında TRON yok, ödemeler admin onaylı — tur ortası kapatma hemen etkili, yasaklı ülkeler; T169a + T172a açıldı; T169_REPORT.md, PR #371) **Merge teyidi (T168 dalında işlendi):** T169 (#371) main `21c93062` → CI `39850436226` (koşuyor), Docker Publish `39850436112` ✓.
 
 **Önceki güncelleme:** 2026-10-22 — T168 ⏳ 2. düzeltme turu, yeniden doğrulama bekliyor (yeniden doğrulama FAIL: B5 ⚠ HUKUK kapat/sil sonrası onay penceresi oturumla kapanır + S4-7/S4-8 kapandı; T168_REPORT.md, PR #370)
