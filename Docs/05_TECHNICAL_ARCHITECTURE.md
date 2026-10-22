@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.31** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160c — §3.3 iade kesintisinin toplanması ve gerçek gider (⚠ PARA); T161 — §3.4 port kuralı uygulandı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.32** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T163 — §3.3/§3.5 imza sırları bugünkü hâliyle: Docker secret dosyası, çevrimdışı yedek, KMS/HSM tetiği. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -305,8 +305,8 @@ Bugünkü servis Tron blockchain (TRC-20) ile tüm etkileşimi yönetir. **F8 he
 
 | Katman | Uygulama |
 |---|---|
-| Master key saklama | Encrypted vault veya HSM (production), environment variable (development). F8 hedefinde **iki ayrı tohum** vardır (TRON, Ethereum — K7); her biri yalnız kendi servisinin konteynerine girer, ayrı çevrimdışı yedeklenir (T163) |
-| Signing izolasyonu | Private key'ler application memory'de kalıcı tutulmaz — yalnızca signing anında Key Vault'tan okunur, imzalama tamamlandıktan sonra bellekten temizlenir |
+| Master key saklama | **Bugün (T163): Docker secret dosyası** — tohum ve sıcak/yakıt anahtarları host'ta `secrets/*.txt`, compose `secrets:` ile yalnız kendi ağının servisine `/run/secrets/` altına bağlanır; düz ortam değişkeni değildir (`docker inspect` göstermez). TRON servisi `NODE_ENV` `development`/`test` dışındayken imza sırrını env'de bulursa **açılmaz**; Ethereum servisi yalnız dosyadan okur. **İki ayrı tohum** (TRON, Ethereum — K7); her biri yalnız kendi servisinin konteynerine girer. **Çevrimdışı yedek:** GnuPG AES-256 şifreli arşiv (iki USB) + tohumların kağıt kopyası, adres türetmeyle doğrulanan geri yükleme provası (DEPLOY_RUNBOOK §L, öneriyle kaydedildi — ⚠). Host'taki dosyanın koruması host erişimi ve disk şifrelemesidir. **Yükseltme tetiği (proje sahibi kararı 2026-09-17):** depozitlerde bekleyen para sahibin belirleyeceği eşiği geçince (T169 "KMS/HSM eşiği") imza KMS/HSM'e taşınır — bulut KMS'leri HD türetme yapmadığı için bu, depozit başına ayrı anahtar ve imza yolunun yeniden yazımıdır |
+| Signing izolasyonu | İmza yalnız ağın kendi servisinde yapılır; backend ve diğer konteynerler imza materyalini görmez. **Bugünkü gerçek (T163):** tohum ve sıcak/yakıt anahtarı servis açılışında secret dosyasından **bir kez** okunur ve süreç boyunca bellekte kalır; tohumun BIP-32 kök düğümü de önbellekte tutulur. Depozit anahtarı her imzada kökten yeniden türetilir ve saklanmaz; log, hata mesajı, `/health` ve API cevapları sır taşımaz (testle). "Yalnız imza anında okunur, sonra bellekten temizlenir" hedefi KMS/HSM tetiğine bağlıdır (yukarıda) |
 | Hot wallet limiti | Operasyonel miktarda fon tutulur, fazlası cold wallet'a. Limit (`hot_wallet_limit`) admin tarafından belirlenir; ödeme sweep'ini beklediği için sıcak cüzdanda biriken şey **komisyondur**, limit ona göre küçük tutulur (owner kararı 2026-09-17: limit aşılınca admin elle aktarır, otomasyon yok). Hedef adres sabittir (yukarıdaki "Platform adresleri"), yani aktarım düğmesi parayı ancak soğuk cüzdana gönderebilir |
 | Transfer limitleri | **İmzalayan serviste, ortam değişkeninde, fail-closed** (owner kararı 2026-09-17; F8'de her ağın servisi kendi tavanlarını taşır — 08 §3.7.6). (1) Tek gönderim tavanı `MAX_SINGLE_TRANSFER_USDT` — payout ve iadeye uygulanır, basamak kayması gibi hesap hatalarını geçirmez. (2) Sıcak cüzdanın son 24 saatlik çıkış toplamı için tavan `MAX_DAILY_OUTFLOW_USDT` — toplam zincirden okunur (TronGrid trc20 geçmişi, `only_from`), yani sidecar yeniden başlayınca sayaç sıfırlanmaz; ele geçirilmiş bir backend cüzdanı küçük adımlarla boşaltamaz. Soğuk cüzdana konsolidasyon **iki tavanın da dışındadır** — hedefi sabitlenmiştir, para platformdan çıkmaz. Tavan aşılırsa gönderim kalıcı reddedilir (400 → FAILED + alert); geçmiş okunamazsa geçici hata (502 → retry). Ayar yoksa **transfer yapılmaz** (08 §3.3) |
 
@@ -439,15 +439,16 @@ Tüm hassas bilgiler (credentials, key'ler, connection string'ler) ortam bazınd
 | Ortam | Strateji |
 |---|---|
 | Development | `.env` dosyası — `.gitignore`'da, repo'ya dahil edilmez |
-| Production | Docker Secrets veya Azure Key Vault — environment variable olarak container'a inject |
+| Production | **İmza sırları** (tohumlar, cüzdan anahtarları): Docker secret **dosyası**, yalnız kendi ağının servisine (T150, T163); env yolu kapalı. **Diğer sırlar** (JWT, webhook HMAC, iç anahtarlar, DB/Redis parolası, API anahtarları): bugün `.env` → container env'i; dosyaya taşınmaları T171'e bırakıldı (DEFERRED_BACKLOG `SharedSecretsInPlainEnv`) |
 
 **Secret envanteri ve rotation politikası:**
 
 | Secret türü | Örnek | Rotation politikası |
 |---|---|---|
 | Steam bot credentials | username, password, shared_secret, identity_secret | Manuel — değiştirildiğinde redeploy |
-| Tron wallet private key | Hot wallet signing key | Yüksek güvenlik — Key Vault'ta, memory'de sadece imzalama anında |
-| Ethereum depozit tohumu | **Ayrı kök tohum** (11 §F8 K7) | Kendi Docker secret'ı (`ethereum_hd_mnemonic`, T150), yalnız Ethereum servisine; yoksa servis açılmaz. Kendi çevrimdışı yedeği ve geri yükleme provası (T163). TRON tohumuyla hiçbir konteynerde birlikte bulunmaz |
+| Tron depozit tohumu | Depozit adresi türetme (08 §3.2) | Docker secret `tron_hd_mnemonic` (T163), yalnız TRON servisine; çevrimdışı yedek DEPLOY_RUNBOOK §L. Değişmez — değişirse eski depozitler yeni tohumdan erişilemez |
+| Tron wallet private key | Hot wallet signing key | Docker secret `tron_hot_wallet_private_key` (T163), yalnız TRON servisine; açılışta `HOT_WALLET_ADDRESS`'i kontrol ettiği doğrulanır (`HOT_WALLET_ADDRESS_MISMATCH`). Çevrimdışı yedek DEPLOY_RUNBOOK §L. KMS/HSM tetiği §3.3 |
+| Ethereum depozit tohumu | **Ayrı kök tohum** (11 §F8 K7) | Kendi Docker secret'ı (`ethereum_hd_mnemonic`, T150), yalnız Ethereum servisine; yoksa servis açılmaz. Çevrimdışı yedeği ve geri yükleme provası DEPLOY_RUNBOOK §L (T163; aynı arşivde, kendi adres kontrolüyle). TRON tohumuyla hiçbir konteynerde birlikte bulunmaz |
 | Ethereum sıcak cüzdan anahtarı | Payout ve soğuk aktarım imzası | Docker secret `ethereum_hot_wallet_private_key` (T150), yalnız Ethereum servisine; TRON sıcak anahtarıyla aynı kural. Açılışta `ETHEREUM_HOT_WALLET_ADDRESS`'i kontrol ettiği doğrulanır. İmzada kullanımı T152 |
 | Ethereum yakıt cüzdanı anahtarı | Depozitlere gas için ETH gönderimi | Docker secret `ethereum_fuel_wallet_private_key` (T150). **Sıcak cüzdan anahtarından ayrı** (öneriyle kaydedildi — ⚠) — aynı anahtar/adres ya da sıcak/soğuk adresi kontrol eden bir yakıt anahtarı servisi açılışta durdurur (T150); yalnız Ethereum servisine; tek ve günlük tavanla korunur (08 §3.7.5, T153) |
 | Internal API key | Sidecar ↔ Backend `X-Internal-Key` | Deploy sırasında otomatik rotation imkanı |
@@ -461,7 +462,7 @@ Tüm hassas bilgiler (credentials, key'ler, connection string'ler) ortam bazınd
 |---|---|
 | Log maskeleme | Secret'lar asla log'a yazılmaz — middleware seviyesinde maskeleme |
 | API response | Secret'lar asla API response'a dahil edilmez |
-| Tron private key | RAM'de minimum süre tutulur, signing bittikten sonra bellekten temizlenir. Ethereum anahtarları için aynı kural (imza T152'de) |
+| Tron private key | Hedef: RAM'de minimum süre. **Bugün (T163):** sıcak anahtar ve tohum kökü süreç boyunca bellekte; depozit anahtarları imza başına türetilip bırakılır (§3.3 "Signing izolasyonu", KMS/HSM tetiği). Ethereum anahtarları için aynı durum |
 | Git koruması | `.gitignore` + pre-commit hook ile secret dosyalarının repo'ya push edilmesi engellenir |
 
 **Platform parametreleri bootstrap (06 §8.9):**

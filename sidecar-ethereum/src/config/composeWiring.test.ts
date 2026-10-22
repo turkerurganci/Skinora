@@ -108,6 +108,9 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
     for (const tron of [
       'HD_WALLET_MNEMONIC',
       'HOT_WALLET_PRIVATE_KEY',
+      // T163 — TRON's seed and key are Docker secrets of their own now.
+      'tron_hd_mnemonic',
+      'tron_hot_wallet_private_key',
       'TRON_API_KEY',
       '${INTERNAL_KEY}',
     ]) {
@@ -117,15 +120,24 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
 });
 
 describe('docker-compose — the Ethereum secrets reach no other container', () => {
-  it.each([
-    'skinora-backend',
-    'skinora-blockchain-sidecar',
-    'skinora-steam-sidecar',
-    'skinora-frontend',
-  ])('%s has none of them', (service) => {
-    const other = block(service);
-    for (const name of SECRET_NAMES) expect(other).not.toContain(name);
-    expect(other).not.toMatch(/^ {4}secrets:/m);
+  it.each(['skinora-backend', 'skinora-steam-sidecar', 'skinora-frontend'])(
+    '%s has none of them',
+    (service) => {
+      const other = block(service);
+      for (const name of SECRET_NAMES) expect(other).not.toContain(name);
+      expect(other).not.toMatch(/^ {4}secrets:/m);
+    },
+  );
+
+  // T163 — the TRON service has a secrets block of its own (its seed and hot
+  // key); it may list TRON's secrets and nothing else.
+  it('skinora-blockchain-sidecar mounts only TRON secrets', () => {
+    const tron = block('skinora-blockchain-sidecar');
+    for (const name of SECRET_NAMES) expect(tron).not.toContain(name);
+    const mounted = [...tron.matchAll(/^ {6}- ([a-z0-9_]+)$/gm)]
+      .map((m) => m[1])
+      .filter((name) => /_(mnemonic|private_key)$/.test(name));
+    expect(mounted).toEqual(['tron_hd_mnemonic', 'tron_hot_wallet_private_key']);
   });
 
   it('the backend still points at no Ethereum service by default (fail-closed until T151–T154)', () => {

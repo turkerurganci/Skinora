@@ -173,6 +173,10 @@ networks:
 
 # The trial's own secrets — never the development ones under ./secrets.
 secrets:
+  tron_hd_mnemonic:
+    file: ./secrets/trial/tron_hd_mnemonic.txt
+  tron_hot_wallet_private_key:
+    file: ./secrets/trial/tron_hot_wallet_private_key.txt
   ethereum_hd_mnemonic:
     file: ./secrets/trial/ethereum_hd_mnemonic.txt
   ethereum_hot_wallet_private_key:

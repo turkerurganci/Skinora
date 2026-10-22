@@ -657,7 +657,7 @@ export class EnergyDelegationService implements DelegationSource {
   private assertConfigured(): void {
     if (!this.sweeperAddress || !this.sweeperPrivateKey) {
       throw new SidecarError(
-        'Sweeper credentials missing — delegation cannot run without HOT_WALLET_ADDRESS + HOT_WALLET_PRIVATE_KEY.',
+        'Sweeper credentials missing — delegation cannot run without HOT_WALLET_ADDRESS + the tron_hot_wallet_private_key secret file.',
         'SWEEPER_NOT_CONFIGURED',
         false,
       );

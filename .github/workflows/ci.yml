@@ -103,6 +103,9 @@ jobs:
               - '.github/workflows/**'
             sidecar-blockchain:
               - 'sidecar-blockchain/**'
+              # T163 — composeWiring.test.ts reads the compose file (signing
+              # secrets are Docker secrets of this service only).
+              - 'docker-compose.yml'
               - '.github/workflows/**'
             sidecar-fake:
               - 'sidecar-fake/**'
@@ -115,12 +118,14 @@ jobs:
             # its directory: docker-compose.yml + infra/ (wiring and alert-rule
             # tests) and the TRON service's hdRoot.ts (the byte-for-byte parity
             # test of the shared root builder) — a change to any of them must
-            # run it.
+            # run it. T163 — it also runs the offline wallet backup drill
+            # (scripts/wallet-backup/, on this package's ethers).
             sidecar-ethereum:
               - 'sidecar-ethereum/**'
               - 'sidecar-blockchain/src/wallet/hdRoot.ts'
               - 'docker-compose.yml'
               - 'infra/**'
+              - 'scripts/wallet-backup/**'
               - '.github/workflows/**'
             e2e:
               - 'e2e/**'

@@ -11,8 +11,9 @@
 # a dev template; keep it out of real runs.
 #
 # Values come from .env (gitignored). This file contains ${VAR} references only —
-# never a secret literal. Services receive only the env they need: hot-wallet and
-# HD-wallet signing material goes to the blockchain sidecar alone.
+# never a secret literal. Services receive only the env they need. Signing
+# material (seeds, wallet keys) is not env at all: Docker secrets under
+# ./secrets, each mounted into its own network's service alone (T150, T163).
 #
 # Prerequisite: the schema is NOT auto-migrated at startup. Apply migrations
 # before first boot — see Docs/DEPLOY_RUNBOOK.md §G.
@@ -43,8 +44,8 @@ services:
       - "127.0.0.1:${BACKEND_PORT:-5000}:5000"
     # Every value is a ${VAR} reference resolved from .env (gitignored) — no
     # secret literal lives in this file. Each service receives ONLY the env it
-    # needs: HOT_WALLET_PRIVATE_KEY and HD_WALLET_MNEMONIC are deliberately
-    # absent here so the backend never sees signing material (F4 gate check).
+    # needs: signing material (seeds, wallet keys — Docker secrets since T150 /
+    # T163) is deliberately absent here so the backend never sees it (F4 gate check).
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
@@ -277,10 +278,12 @@ services:
       # and every incoming transfer is classified as wrong/spam token.
       - TRON_USDT_CONTRACT=${TRON_USDT_CONTRACT:-}
       - TRON_USDC_CONTRACT=${TRON_USDC_CONTRACT:-}
-      - HD_WALLET_MNEMONIC=${HD_WALLET_MNEMONIC}
-      # Hot wallet signing material — ONLY this service receives it (05 §3.3/§3.5).
+      # T163 — the seed and the hot wallet KEY are not environment values any
+      # more: they arrive as Docker secrets (see `secrets:` below), ONLY to this
+      # service (05 §3.3/§3.5). Outside NODE_ENV=development|test the service
+      # refuses to start if HD_WALLET_MNEMONIC or HOT_WALLET_PRIVATE_KEY is set
+      # as a variable. The ADDRESS is public and stays here.
       - HOT_WALLET_ADDRESS=${HOT_WALLET_ADDRESS:-}
-      - HOT_WALLET_PRIVATE_KEY=${HOT_WALLET_PRIVATE_KEY:-}
       # Pinned consolidation destination + outbound ceilings (08 §3.3a).
       # Fail-closed: unset ceilings refuse payouts and refunds.
       - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
@@ -315,6 +318,12 @@ services:
       - POST_CANCEL_CADENCE_30D_MS=${POST_CANCEL_CADENCE_30D_MS:-3600000}
       - SWEEP_TRX_FALLBACK_SUN=${SWEEP_TRX_FALLBACK_SUN:-15000000}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
+    # T163 — mounted at /run/secrets/<name>; the service reads them from there
+    # (sidecar-blockchain/src/config/signingSecrets.ts). Offline backup and
+    # restore drill: DEPLOY_RUNBOOK §L, scripts/wallet-backup/.
+    secrets:
+      - tron_hd_mnemonic
+      - tron_hot_wallet_private_key
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -634,11 +643,23 @@ volumes:
   # with the database; never delete it while a send is pending (DEPLOY_RUNBOOK §D).
   skinora-ethereum-tx-journal:
 
-# T150 — Docker secrets of the Ethereum service (05 §3.5, 08 §3.7.2, K7). Files
-# under ./secrets (gitignored; secrets/README.md). Only the "ethereum" profile
+# Docker secrets — signing material only (05 §3.5). Files under ./secrets
+# (gitignored; secrets/README.md). A MISSING source file is not an error to
+# compose: Docker Desktop creates an empty DIRECTORY at that path instead, and
+# the service then refuses to start (SIGNING_SECRET_UNREADABLE /
+# HD_WALLET_NOT_CONFIGURED) — create the file, delete the directory.
+#
+# T150 — the Ethereum service's (08 §3.7.2, K7). Only the "ethereum" profile
 # needs them to exist. The two key files may be empty until T152 / T153 use
 # them; the seed file may not.
+# T163 — the TRON service's. Always mounted (the service is in every stack);
+# either file may be empty: an empty seed leaves /api/wallet/derive at 503, an
+# empty hot key refuses payouts, refunds and sweeps.
 secrets:
+  tron_hd_mnemonic:
+    file: ./secrets/tron_hd_mnemonic.txt
+  tron_hot_wallet_private_key:
+    file: ./secrets/tron_hot_wallet_private_key.txt
   ethereum_hd_mnemonic:
     file: ./secrets/ethereum_hd_mnemonic.txt
   ethereum_hot_wallet_private_key:

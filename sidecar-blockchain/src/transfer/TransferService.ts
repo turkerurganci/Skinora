@@ -121,7 +121,7 @@ export interface SweepResult extends SendTransferResult {
  * Two flows live here:
  * <list type="bullet">
  *   <item><c>payout</c> — hot wallet → seller (SELLER_PAYOUT row).
- *     Signing key: <c>HOT_WALLET_PRIVATE_KEY</c> (Docker secret).</item>
+ *     Signing key: the <c>tron_hot_wallet_private_key</c> Docker secret file.</item>
  *   <item><c>coldWalletTransfer</c> — hot wallet → cold wallet (admin-driven
  *     operational consolidation, T77 — 05 §3.3 hot wallet limit alert flow).
  *     Same signing key as payout; mechanically a TRC-20 transfer from the
@@ -131,7 +131,7 @@ export interface SweepResult extends SendTransferResult {
  *     customer-facing payouts.</item>
  *   <item><c>sweep</c> — deposit address → hot wallet
  *     (operational consolidation, 05 §3.3 sweep mechanism).
- *     Signing key: derived from <c>HD_WALLET_MNEMONIC</c> at index N,
+ *     Signing key: derived from the <c>tron_hd_mnemonic</c> secret at index N,
  *     produced fresh per call and dropped immediately after broadcast.</item>
  * </list>
  * </para>
@@ -169,7 +169,7 @@ export class TransferService {
   async payout(request: PayoutRequest): Promise<SendTransferResult> {
     if (!this.hotWalletAddress || !this.hotWalletPrivateKey) {
       throw new SidecarError(
-        'Hot wallet credentials are not configured (HOT_WALLET_ADDRESS + HOT_WALLET_PRIVATE_KEY).',
+        'Hot wallet credentials are not configured (HOT_WALLET_ADDRESS + the tron_hot_wallet_private_key secret file).',
         'HOT_WALLET_NOT_CONFIGURED',
         false,
       );
@@ -211,7 +211,7 @@ export class TransferService {
   async coldWalletTransfer(request: ColdWalletTransferRequest): Promise<SendTransferResult> {
     if (!this.hotWalletAddress || !this.hotWalletPrivateKey) {
       throw new SidecarError(
-        'Hot wallet credentials are not configured (HOT_WALLET_ADDRESS + HOT_WALLET_PRIVATE_KEY).',
+        'Hot wallet credentials are not configured (HOT_WALLET_ADDRESS + the tron_hot_wallet_private_key secret file).',
         'HOT_WALLET_NOT_CONFIGURED',
         false,
       );
