@@ -43,9 +43,10 @@ function buildRequest(body: unknown): Request {
 const CONTRACT_DIR = resolve(__dirname, '../../contracts');
 
 function loadExample(folder: string): Record<string, unknown> {
-  return JSON.parse(
-    readFileSync(resolve(CONTRACT_DIR, folder, 'response.json'), 'utf8'),
-  ) as Record<string, unknown>;
+  return JSON.parse(readFileSync(resolve(CONTRACT_DIR, folder, 'response.json'), 'utf8')) as Record<
+    string,
+    unknown
+  >;
 }
 
 const DEPOSIT_BODY = {
