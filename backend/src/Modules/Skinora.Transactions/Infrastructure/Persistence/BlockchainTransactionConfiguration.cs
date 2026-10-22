@@ -54,6 +54,22 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
                 "(Type <> 'SWEEP') " +
                 "OR (PaymentAddressId IS NOT NULL AND ActualTokenAddress IS NULL)");
 
+            // REFUND_FEE_SWEEP (T160c): the same deposit → hot wallet shape as
+            // SWEEP (deposit-anchored, the token it moves in Token, no wrong-
+            // token contract), and every unit it moves is a collected refund
+            // fee — so RefundFeeRecovered equals Amount.
+            t.HasCheckConstraint("CK_BlockchainTransactions_Type_RefundFeeSweep",
+                "(Type <> 'REFUND_FEE_SWEEP') " +
+                "OR (PaymentAddressId IS NOT NULL AND ActualTokenAddress IS NULL " +
+                "AND RefundFeeRecovered IS NOT NULL AND RefundFeeRecovered = Amount)");
+
+            // RefundFeeRecovered (T160c) lives only on the two deposit → hot
+            // wallet types and is positive (SweepQueueJob writes NULL, not 0,
+            // when nothing is folded in).
+            t.HasCheckConstraint("CK_BlockchainTransactions_RefundFeeRecovered",
+                "(RefundFeeRecovered IS NULL) " +
+                "OR (Type IN ('SWEEP', 'REFUND_FEE_SWEEP') AND RefundFeeRecovered > 0)");
+
             // ===== Status-dependent CHECK constraints (06 §3.8) =====
 
             // CONFIRMED: ConfirmedAt NOT NULL on every network; the 20-block
@@ -151,6 +167,18 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.Property(b => b.RealizedFeeWei)
             .HasPrecision(38, 0);
 
+        // T160c — refund fees this deposit → hot wallet transfer carries.
+        builder.Property(b => b.RefundFeeRecovered)
+            .HasPrecision(18, 6);
+
+        // T160c düzeltme turu — what the platform spent for the transfer
+        // (native smallest unit, exact integer) and its USDT value at the
+        // confirmation price. NULL = not measured; 0 is a real answer.
+        builder.Property(b => b.PlatformNetworkCost)
+            .HasPrecision(38, 0);
+        builder.Property(b => b.PlatformNetworkCostUsdt)
+            .HasPrecision(18, 6);
+
         builder.Property(b => b.Status)
             .IsRequired();
 
@@ -237,6 +265,19 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.HasIndex(b => b.TransactionId, "UQ_BlockchainTransactions_Sweep_TransactionId")
             .IsUnique()
             .HasFilter("[Type] = 'SWEEP'");
+
+        // T160c (S2 money-safety) — at most one REFUND_FEE_SWEEP in flight per
+        // transaction (the job moves one token at a time and waits for nothing
+        // to be in flight on the deposit). RefundFeeSweepQueueJob computes what
+        // is still owed from the ledger and counts every non-FAILED collection
+        // row, so a second row can only appear if two producer ticks
+        // interleave; this filtered index is the database-level backstop
+        // behind its [DisableConcurrentExecution] lock. Several rows over time
+        // stay legal (a late payment refunded after a collection leaves a new
+        // fee; a USDC fee goes after the USDT one is final).
+        builder.HasIndex(b => b.TransactionId, "UQ_BlockchainTransactions_RefundFeeSweep_InFlight")
+            .IsUnique()
+            .HasFilter("[Type] = 'REFUND_FEE_SWEEP' AND [Status] IN ('PENDING', 'DETECTED')");
 
         // --- Performance indexes (06 §5.2) ---
         builder.HasIndex(b => b.TransactionId)

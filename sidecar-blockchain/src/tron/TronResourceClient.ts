@@ -47,6 +47,12 @@ export interface AccountResources {
   energyPerTrx: number | null;
 }
 
+/** T160c düzeltme turu — a transaction in a block and the SUN its sender burned for it. */
+export interface TransactionLanding {
+  blockNumber: number;
+  feeSun: number;
+}
+
 export interface ContractEnergyPolicy {
   /**
    * The contract's NOMINAL caller share, 0-100 (`consume_user_resource_percent`).
@@ -347,16 +353,35 @@ export class TronResourceClient {
     txHash: string,
     fetchFn: typeof fetch = fetch,
   ): Promise<number | null> {
-    const body = await this.post<{ id?: string; blockNumber?: unknown }>(
+    return (await this.getTransactionLanding(txHash, fetchFn))?.blockNumber ?? null;
+  }
+
+  /**
+   * T160c düzeltme turu (F1) — the same read as
+   * {@link getTransactionBlockNumber}, with the SUN the sender burned for the
+   * transaction (`fee`: Bandwidth, Energy and, for a TRX send that creates an
+   * account, the creation fee). The node omits `fee` when nothing was burned,
+   * so a missing or malformed one is 0. Null while no block holds it.
+   */
+  async getTransactionLanding(
+    txHash: string,
+    fetchFn: typeof fetch = fetch,
+  ): Promise<TransactionLanding | null> {
+    const body = await this.post<{ id?: string; blockNumber?: unknown; fee?: unknown }>(
       '/wallet/gettransactioninfobyid',
       { value: txHash },
       fetchFn,
     );
-    return typeof body.blockNumber === 'number' &&
-      Number.isInteger(body.blockNumber) &&
-      body.blockNumber > 0
-      ? body.blockNumber
-      : null;
+    if (
+      typeof body.blockNumber !== 'number' ||
+      !Number.isInteger(body.blockNumber) ||
+      body.blockNumber <= 0
+    ) {
+      return null;
+    }
+    const feeSun =
+      typeof body.fee === 'number' && Number.isInteger(body.fee) && body.fee > 0 ? body.fee : 0;
+    return { blockNumber: body.blockNumber, feeSun };
   }
 
   async getChainFeeParameters(fetchFn: typeof fetch = fetch): Promise<ChainFeeParameters> {

@@ -94,7 +94,11 @@ function buildStubWallet(map: Record<number, { address: string; privateKey: stri
  */
 function buildStubDelegation(
   mode: 'delegated' | 'fallback' = 'delegated',
-  options: { delegationAmountSun?: number; fallbackAmountSun?: number } = {},
+  options: {
+    delegationAmountSun?: number;
+    fallbackAmountSun?: number;
+    platformSpendSun?: number;
+  } = {},
 ) {
   return {
     withDelegation: vi.fn(
@@ -109,6 +113,7 @@ function buildStubDelegation(
           delegationAmountSun:
             mode === 'delegated' ? (options.delegationAmountSun ?? 200_000_000) : 0,
           fallbackAmountSun: mode === 'fallback' ? (options.fallbackAmountSun ?? 15_000_000) : 0,
+          platformSpendSun: options.platformSpendSun ?? 0,
           action: result,
         };
       },
@@ -340,6 +345,7 @@ describe('TransferService.sweep()', () => {
       delegationMode: 'delegated',
       delegationAmountSun: 200_000_000,
       fallbackAmountSun: 0,
+      platformSpendSun: 0,
     });
   });
 
@@ -377,6 +383,7 @@ describe('TransferService.sweep()', () => {
       delegationMode: 'fallback',
       delegationAmountSun: 0,
       fallbackAmountSun: 15_000_000,
+      platformSpendSun: 0,
     });
   });
 
@@ -536,6 +543,7 @@ describe('RefundService.refund()', () => {
       delegationMode: 'delegated',
       delegationAmountSun: 200_000_000,
       fallbackAmountSun: 0,
+      platformSpendSun: 0,
     });
   });
 
@@ -838,5 +846,80 @@ describe('destination pinning and amount limits (05 §3.3)', () => {
     ).rejects.toMatchObject({ code: 'TRANSFER_AMOUNT_ABOVE_LIMIT', retryable: false });
     expect(delegation.withDelegation).not.toHaveBeenCalled();
     expect(client.sendTransfer).not.toHaveBeenCalled();
+  });
+});
+
+describe('T160c düzeltme turu — the platform spend and the status price', () => {
+  function serviceWith(priceService?: {
+    getPrice: () => Promise<{ priceUsdt: number; source: 'binance' }>;
+  }) {
+    const client = buildStubClient();
+    const wallet = buildStubWallet({
+      7: { address: 'TDeposit7', privateKey: 'REPLACE_IN_ENV' },
+    });
+    const delegation = buildStubDelegation('fallback', { platformSpendSun: 8_438_350 });
+    const service = new TransferService({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletManager: wallet as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: client as any,
+      tokenContracts: { USDT: TOKEN_USDT, USDC: TOKEN_USDC },
+      guard: buildGuard(),
+      hotWalletAddress: HOT_WALLET,
+      hotWalletPrivateKey: 'REPLACE_IN_ENV',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      energyDelegation: delegation as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      priceService: priceService as any,
+    });
+    return { service, client };
+  }
+
+  it('a sweep answers with what the delegation flow says the hot wallet spent', async () => {
+    const { service } = serviceWith();
+    const result = await service.sweep({
+      blockchainTransactionId: 'bx-7',
+      depositIndex: 7,
+      depositAddress: 'TDeposit7',
+      toHotWalletAddress: HOT_WALLET,
+      amount: '10',
+      token: 'USDT',
+      correlationId: 'corr-7',
+    });
+    expect(result.platformSpendSun).toBe(8_438_350);
+  });
+
+  it('the status carries TRX/USDT at the read (6 decimals) once in a block', async () => {
+    const { service } = serviceWith({
+      getPrice: async () => ({ priceUsdt: 0.3313, source: 'binance' }),
+    });
+    await expect(service.getStatus('tx-fake')).resolves.toMatchObject({
+      contractRet: 'SUCCESS',
+      nativePriceUsdt: '0.331300',
+    });
+  });
+
+  it('a failing price feed leaves the price null and the status intact', async () => {
+    const { service } = serviceWith({
+      getPrice: async () => {
+        throw new Error('TRX_PRICE_UNAVAILABLE');
+      },
+    });
+    await expect(service.getStatus('tx-fake')).resolves.toMatchObject({
+      contractRet: 'SUCCESS',
+      confirmations: 30,
+      nativePriceUsdt: null,
+    });
+  });
+
+  it('not in a block yet: no price is asked', async () => {
+    const getPrice = vi.fn(async () => ({ priceUsdt: 0.3313, source: 'binance' as const }));
+    const { service, client } = serviceWith({ getPrice });
+    client.getTransactionStatus.mockResolvedValueOnce({
+      txHash: 'tx-fake',
+      confirmations: -1,
+    } as never);
+    await expect(service.getStatus('tx-fake')).resolves.toMatchObject({ nativePriceUsdt: null });
+    expect(getPrice).not.toHaveBeenCalled();
   });
 });

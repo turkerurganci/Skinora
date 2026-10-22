@@ -1,9 +1,11 @@
+using System.Globalization;
 using Skinora.Transactions.Tests.Helpers;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.Platform.Application.Wallets;
+using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
@@ -232,6 +234,114 @@ public sealed class OutgoingTransferConfirmationJobTests : IDisposable
         var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
         Assert.Equal(9_007_282_507_774_707m, reloaded.RealizedFeeWei);
         Assert.Null(reloaded.RealizedFeeSun);
+    }
+
+    // -------------------- T160c düzeltme turu — platform spend valued at confirmation --------------------
+
+    [Fact]
+    public async Task T160c_Ethereum_Confirmation_Records_The_Platform_Spend_And_Values_It_At_The_Reported_Price()
+    {
+        // T159b senaryo 2 (Sepolia): fuel 168,966,002,534,490 wei + 204,600 gas at 1 gwei;
+        // the refund's own receipt 152,417 gas at 1 gwei; ETH 2,444.861904 USDT.
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(
+                TransferStatusOutcome.Confirmed, 11_959_101L, null, "SUCCESS", null,
+                RealizedFeeWei: 152_417_000_000_000m,
+                PlatformSpendWei: 373_566_002_534_490m,
+                NativePriceUsdt: 2444.861904m),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var row = await SeedDetectedAsync(BlockchainTransactionType.BUYER_REFUND);
+        row.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        Assert.Equal(152_417_000_000_000m, reloaded.RealizedFeeWei);
+        Assert.Equal(373_566_002_534_490m, reloaded.PlatformNetworkCost);
+        Assert.Equal(0.913317m, reloaded.PlatformNetworkCostUsdt); // 0.000373566002534490 × 2,444.861904
+    }
+
+    [Fact]
+    public async Task T160c_Tron_Confirmation_Values_The_Spend_The_Broadcast_Recorded_And_Keeps_It()
+    {
+        var row = await SeedDetectedAsync(BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
+        row.PlatformNetworkCost = 2_711_500m;
+        await _db.SaveChangesAsync();
+        _client.NextStatus = new TransferStatusResult(
+            TransferStatusOutcome.Confirmed, 72_004_108L, 20, "SUCCESS", null,
+            RealizedFeeSun: 0L, PlatformSpendWei: 9m, NativePriceUsdt: 0.3313m);
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(2_711_500m, reloaded.PlatformNetworkCost); // a wei figure never lands on TRON
+        Assert.Equal(0.898320m, reloaded.PlatformNetworkCostUsdt);
+        Assert.Equal(0L, reloaded.RealizedFeeSun);
+    }
+
+    [Fact]
+    public async Task T160c_Without_A_Price_The_Spend_Is_Kept_And_Left_Unvalued()
+    {
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(
+                TransferStatusOutcome.Confirmed, 11_959_101L, null, "SUCCESS", null,
+                RealizedFeeWei: 152_393_000_000_000m, PlatformSpendWei: 373_540_002_534_100m),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var row = await SeedDetectedAsync(BlockchainTransactionType.LATE_PAYMENT_REFUND);
+        row.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(373_540_002_534_100m, reloaded.PlatformNetworkCost);
+        Assert.Null(reloaded.PlatformNetworkCostUsdt);
+    }
+
+    [Fact]
+    public async Task T160c_An_Unrealistic_Price_Leaves_The_Spend_Unvalued_And_Still_Confirms()
+    {
+        // S4-4 — 0.37354 ETH at 10^13 USDT/ETH is 3.7e12 USDT: more than
+        // decimal(18,6) holds. The row is confirmed with its spend, unvalued.
+        var ethereum = new StubBlockchainTransferClient
+        {
+            NextStatus = new TransferStatusResult(
+                TransferStatusOutcome.Confirmed, 11_959_101L, null, "SUCCESS", null,
+                RealizedFeeWei: 152_393_000_000_000m, PlatformSpendWei: 373_540_002_534_100_000m,
+                NativePriceUsdt: 10_000_000_000_000m),
+        };
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        var row = await SeedDetectedAsync(BlockchainTransactionType.LATE_PAYMENT_REFUND);
+        row.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == row.Id);
+        Assert.Equal(BlockchainTransactionStatus.CONFIRMED, reloaded.Status);
+        Assert.Equal(373_540_002_534_100_000m, reloaded.PlatformNetworkCost);
+        Assert.Null(reloaded.PlatformNetworkCostUsdt);
+    }
+
+    [Theory]
+    [InlineData("999999999999999999999999999", "79228162514264337593543950335")] // decimal overflow
+    [InlineData("1000000000000000000", "1000000000000")]                          // 10^12: one above the column
+    public void T160c_PlatformCostUsdt_Is_Null_Where_The_Column_Cannot_Hold_It(string wei, string price)
+    {
+        var policy = BlockchainNetworkPolicy.For(BlockchainNetwork.ETHEREUM);
+        Assert.Null(OutgoingTransferConfirmationJob.PlatformCostUsdt(
+            decimal.Parse(wei, CultureInfo.InvariantCulture), decimal.Parse(price, CultureInfo.InvariantCulture), policy));
+        // The column's own maximum is still a value.
+        Assert.Equal(
+            OutgoingTransferConfirmationJob.MaxPlatformCostUsdt,
+            OutgoingTransferConfirmationJob.PlatformCostUsdt(1_000_000_000_000_000_000m,
+                OutgoingTransferConfirmationJob.MaxPlatformCostUsdt, policy));
     }
 
     [Fact]

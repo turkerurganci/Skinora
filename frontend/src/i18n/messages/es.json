@@ -2087,6 +2087,22 @@
         "by": "Iniciada por"
       }
     },
+    "refundFees": {
+      "heading": "Comisiones de red de reembolsos",
+      "intro": "Comisiones de red retenidas de los reembolsos de los compradores. La plataforma paga la comisión de la cadena; lo retenido pasa a la billetera caliente con el barrido de la venta, o por separado cuando aporta más de lo que cuesta.",
+      "withheld": "Retenido a compradores",
+      "collected": "En la billetera caliente",
+      "inTransit": "En camino",
+      "onDeposits": "Aún en depósitos",
+      "refundChainCost": "Gasto en cadena de la plataforma por esos reembolsos",
+      "collectionChainCost": "Gasto en cadena de la plataforma por las recolecciones",
+      "net": "Neto (retenido − gasto en cadena)",
+      "inUsdt": "(≈ {amount} USDT)",
+      "costNoteTRON": "El gasto en cadena es lo que salió de las billeteras de la plataforma, no solo la comisión del reembolso: el TRX que la billetera caliente envió al depósito (activación de la cuenta, recarga para quemar) más las comisiones de esos envíos. El TRX que el depósito no quema queda allí y no se recolecta. Los valores en USDT usan el precio de TRX en el momento en que se confirmó cada transferencia.",
+      "costNoteETHEREUM": "El gasto en cadena es lo que salió de las billeteras de la plataforma, no solo la comisión del reembolso: el ETH de combustible enviado al depósito más la comisión del propio envío (un reembolso desde la billetera caliente: su comisión). El depósito paga la comisión del reembolso con ese combustible; lo que no quema queda allí y no se recolecta. Los valores en USDT usan el precio de ETH en el momento en que se confirmó cada transferencia.",
+      "unmeasured": "Gasto o precio sin medir en {count} transferencia(s): quedan fuera de las cifras en USDT y se cuentan con su comisión de recibo (un mínimo) en los totales nativos.",
+      "ariaLabel": "Comisiones de red de reembolsos en {network}"
+    },
     "outboundRows": {
       "heading": "Transferencias salientes recientes",
       "empty": "Aún no hay transferencias salientes.",
@@ -2108,7 +2124,8 @@
       "WRONG_TOKEN_REFUND": "Reembolso por token equivocado",
       "INCORRECT_AMOUNT_REFUND": "Reembolso por importe incorrecto",
       "LATE_PAYMENT_REFUND": "Reembolso por pago tardío",
-      "SWEEP": "Barrido (sweep)"
+      "SWEEP": "Barrido (sweep)",
+      "REFUND_FEE_SWEEP": "Recolección de comisiones de reembolso"
     },
     "outboundStatus": {
       "DETECTED": "Detectada",

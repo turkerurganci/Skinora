@@ -119,6 +119,7 @@ export function refundHandler(service: RefundService) {
         delegationMode: result.delegationMode,
         delegationAmountSun: result.delegationAmountSun,
         fallbackAmountSun: result.fallbackAmountSun,
+        platformSpendSun: result.platformSpendSun,
       });
     } catch (err) {
       handleTransferError(err, res, req, 'refund');
@@ -191,6 +192,7 @@ export function sweepHandler(service: TransferService) {
         delegationMode: result.delegationMode,
         delegationAmountSun: result.delegationAmountSun,
         fallbackAmountSun: result.fallbackAmountSun,
+        platformSpendSun: result.platformSpendSun,
       });
     } catch (err) {
       handleTransferError(err, res, req, 'sweep');

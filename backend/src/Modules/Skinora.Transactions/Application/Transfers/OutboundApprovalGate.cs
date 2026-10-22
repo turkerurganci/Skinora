@@ -15,9 +15,10 @@ namespace Skinora.Transactions.Application.Transfers;
 /// While <see cref="AutoSendKey"/> is <c>false</c> the outgoing-transfer
 /// dispatcher sends a money-out row — <see cref="RequiresApproval"/>: the
 /// seller payout and every buyer refund — only after an admin approved it
-/// (<c>BlockchainTransaction.ApprovedAt</c>, AD41). The sweep (deposit → hot
-/// wallet) is the platform moving its own money between its own addresses, so
-/// it never waits. The gate does not change what a row pays or to whom — the
+/// (<c>BlockchainTransaction.ApprovedAt</c>, AD41). The sweep and the T160c
+/// refund-fee sweep (<c>REFUND_FEE_SWEEP</c>, deposit → hot wallet) are the
+/// platform moving its own money between its own addresses, so they never
+/// wait. The gate does not change what a row pays or to whom — the
 /// amount and the recipient are fixed when the row is created — it only holds
 /// the moment it is sent.
 /// </para>
@@ -34,7 +35,7 @@ public static class OutboundApprovalGate
     /// <summary>SystemSetting key: <c>true</c> = send without approval.</summary>
     public const string AutoSendKey = "outbound.auto_send_enabled";
 
-    /// <summary>The outbound types the gate holds (all but SWEEP).</summary>
+    /// <summary>The outbound types the gate holds (all but SWEEP and REFUND_FEE_SWEEP — platform-internal).</summary>
     public static readonly BlockchainTransactionType[] ApprovalTypes =
     [
         BlockchainTransactionType.SELLER_PAYOUT,

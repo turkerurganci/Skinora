@@ -81,6 +81,17 @@ public sealed class ReconciliationService : IReconciliationService
     private static readonly decimal TokenScale = (decimal)Math.Pow(10, TokenDecimals);
 
     /// <summary>
+    /// Deposit → hot wallet types, the hot wallet's inflow: the sale's
+    /// <see cref="BlockchainTransactionType.SWEEP"/> and (T160c) the
+    /// collection of withheld refund fees.
+    /// </summary>
+    private static readonly BlockchainTransactionType[] HotWalletInflowTypes =
+    [
+        BlockchainTransactionType.SWEEP,
+        BlockchainTransactionType.REFUND_FEE_SWEEP,
+    ];
+
+    /// <summary>
     /// Outbound BlockchainTransaction types for the hot wallet — these are
     /// the on-chain transfers that draw the hot wallet down.
     /// <see cref="BlockchainTransactionType.SWEEP"/> is treated as an
@@ -115,6 +126,8 @@ public sealed class ReconciliationService : IReconciliationService
     private static readonly BlockchainTransactionType[] DepositOutflowTypes =
     [
         BlockchainTransactionType.SWEEP,
+        // T160c — collection of withheld refund fees (deposit → hot).
+        BlockchainTransactionType.REFUND_FEE_SWEEP,
         BlockchainTransactionType.BUYER_REFUND,
         BlockchainTransactionType.EXCESS_REFUND,
         BlockchainTransactionType.WRONG_TOKEN_REFUND,
@@ -414,7 +427,7 @@ public sealed class ReconciliationService : IReconciliationService
             .AsNoTracking()
             .IgnoreQueryFilters()
             .Where(bx => bx.Status == BlockchainTransactionStatus.CONFIRMED
-                         && ((bx.ToAddress == hotWallet && bx.Type == BlockchainTransactionType.SWEEP)
+                         && ((bx.ToAddress == hotWallet && HotWalletInflowTypes.Contains(bx.Type))
                              || (bx.FromAddress == hotWallet
                                  && HotWalletOutboundTypes.Contains(bx.Type))))
             .GroupBy(bx => new { bx.Type, bx.Token })
@@ -423,7 +436,7 @@ public sealed class ReconciliationService : IReconciliationService
             .ToListAsync(cancellationToken);
 
         var expectedByToken = ComputeSignedExpected(ledgerRows,
-            inflowTypes: [BlockchainTransactionType.SWEEP],
+            inflowTypes: HotWalletInflowTypes,
             outflowTypes: HotWalletOutboundTypes);
 
         // Subtract every hot→cold transfer recorded in the ColdWalletTransfer

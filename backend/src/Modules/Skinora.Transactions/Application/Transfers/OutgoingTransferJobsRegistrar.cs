@@ -59,6 +59,14 @@ public sealed class OutgoingTransferJobsRegistrar : IHostedService
                 job => job.Execute(),
                 SweepQueueJob.Cron);
 
+            // T160c — collect the refund fees withheld from buyers that the
+            // sale's own sweep could not carry (cancelled / refunded deposits,
+            // a wrong-token refund's fee, a refund final after the sweep).
+            scheduler.AddOrUpdateRecurring<RefundFeeSweepQueueJob>(
+                RefundFeeSweepQueueJob.RecurringJobId,
+                job => job.Execute(),
+                RefundFeeSweepQueueJob.Cron);
+
             // T129 — the end-of-window settlement check (02 §4.5.1). Both
             // producers above now gate on the clearance this job stamps, so
             // without it registered nothing after ITEM_DELIVERED ever moves:

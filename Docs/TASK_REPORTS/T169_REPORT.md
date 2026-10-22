@@ -54,7 +54,7 @@
 - Backend test: yeni `Skinora.API.Tests/Integration/NetworkDimension/OutboundApprovalTests.cs`; değişen `OutgoingTransferDispatchJobTests`, `TransactionCreationServiceTests`, `TransactionAcceptanceServiceTests`, `TransactionDetailServiceTests`, `TransactionParamsServiceTests`, `HotWalletMonitorServiceTests`, `AuditLogCategoryMapTests`, `EnumTests`, `SeedDataTests`, `SettingsBootstrapTests`, `NetworkContractTests`, `NetworkFeePolicyMigrationRehearsalTests`, `NetworkQueueIsolationTests`, `AdminWalletOverviewTests`, `BlockchainWebhookEndpointTests`, `TransactionLifecycleEndpointTests`.
 - Frontend yeni: `components/admin/OutboundApprovalPanel.tsx` (+ test), `lib/hooks/useOutboundApprovals.ts`; değişen `WalletsOverview.tsx` (+ test), `AcceptForm.tsx` (+ test), `NewTransactionForm.tsx` (+ networks test), `Step2Details.tsx`, `lib/api/admin.ts`, `lib/api/transactions.ts`, `lib/transactions/networkChoice.ts` (+ test), `types/enums.ts`, `i18n/messages/{en,tr,es,zh}.json`, `i18n/catalog-parity.test.ts`.
 - Yapılandırma: `.env.example`, `docker-compose.trial.yml`, `e2e/src/db.ts`.
-- Doküman: `02_PRODUCT_REQUIREMENTS.md` v4.18, `06_DATA_MODEL.md` v6.36, `07_API_DESIGN.md` v4.20, `DEPLOY_RUNBOOK.md` (§A, §C, §C.3, yeni §L, §M), `plan/11_F9.md` v1.21, `DEFERRED_BACKLOG.md`, `DOC_CHANGELOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`, bu rapor.
+- Doküman: `02_PRODUCT_REQUIREMENTS.md` v4.19, `06_DATA_MODEL.md` v6.37, `07_API_DESIGN.md` v4.21, `DEPLOY_RUNBOOK.md` (§A, §C, §C.3, yeni §L, §M), `plan/11_F9.md` v1.22, `DEFERRED_BACKLOG.md`, `DOC_CHANGELOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`, bu rapor.
 
 ## Kabul Kriterleri Kontrolü
 
@@ -100,7 +100,8 @@
 - CI: __CI__
 
 ## Admin onay kapısının tasarımı (⚠ PARA)
-- **Ne tutulur:** `SELLER_PAYOUT`, `BUYER_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `INCORRECT_AMOUNT_REFUND`, `LATE_PAYMENT_REFUND`. **Ne tutulmaz:** `SWEEP` (platformun kendi adresleri arası), sıcak→soğuk aktarım (AD39, zaten elle).
+- **T160c ile birleşme (main `403fe257`):** T160c yeni bir giden tür ekledi, `REFUND_FEE_SWEEP` (depozitte kalan iade kesintisini sıcak cüzdana toplar). Platformun kendi adresleri arası olduğu için kapı onu **tutmaz** (sweep gibi); `OutboundApprovalGateTests` her enum değerini sınıflandırır — yeni bir giden tür eklenirse test kırılır ve bilinçli yerleştirme ister.
+- **Ne tutulur:** `SELLER_PAYOUT`, `BUYER_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `INCORRECT_AMOUNT_REFUND`, `LATE_PAYMENT_REFUND`. **Ne tutulmaz:** `SWEEP` ve `REFUND_FEE_SWEEP` (platformun kendi adresleri arası), sıcak→soğuk aktarım (AD39, zaten elle).
 - **Nerede:** tek gönderim noktası `OutgoingTransferDispatchJob` (repoda `BroadcastAsync`'in tek çağrıcısı — `grep` ile doğrulandı). Aday sorgusu `autoSend || tür onay gerektirmez || ApprovedAt != null`; `DispatchOneAsync` aynı koşulu satır açılınca yeniden sınar. Onaysız satır `PENDING` kalır, deneme hakkı harcanmaz, `FAILED` olmaz, parti yeri almaz.
 - **Onay:** AD41 yalnız `ApprovedAt`/`ApprovedByAdminId` yazar + audit; hiçbir şey göndermez, tutar/alıcı değişmez. Onaylayan oturumdaki admin. Sweep 422, açık olmayan satır 409, ikinci onay 409, bilinmeyen 404.
 - **Fail-closed:** ayar yok / yapılandırılmamış / bozuk ⇒ kapı kapalı. Env'den açılamaz; yalnız admin AD9 ile açar (audit'li).
@@ -117,6 +118,7 @@
 - Paralel dallar: T163 (#369, compose/.env.example), T168 (#370, i18n), T160c (#365) ile çakışma riski — değişiklikler küçük bloklarda; çözüm yöneticide.
 
 ## Notlar
+- **main birleştirmesi:** dal açıkken T160c (#365) main'e girdi (`403fe257`) ve PR belge başlıklarında/changelog'larda çakıştı (çakışmalı PR'da GitHub CI run'ı yaratmıyor). `origin/main` dala birleştirildi: iki görevin belge girişleri korundu, T169 başlıkları bir üst sürüme alındı (02 v4.19, 06 v6.37, 07 v4.21, 11_F9 v1.22), migration `T169_OwnerDecisions` Designer'ı birleşik model snapshot'ıyla hizalandı (`dotnet ef migrations has-pending-model-changes` → değişiklik yok). Kodda çakışma yoktu.
 - Working tree: başlangıçta önceki ajanın commit edilmemiş 51 dosyası (yönetici talimatıyla devralındı) → `4d92d9b0` WIP commit.
 - Main CI startup: son 3 main run — `39615975640` CI success, `39615975624` Docker Publish success, `39607353298` Docker Publish success.
 - Dış varsayım: yok (değerler karar sayfasındaki 2026-10-21 ölçümlerine dayanır; yeni dış bağımlılık yok).

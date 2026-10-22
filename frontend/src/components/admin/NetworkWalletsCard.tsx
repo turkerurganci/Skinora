@@ -79,6 +79,70 @@ function WalletRow({ wallet, data }: { wallet: PlatformWallet; data: NetworkWall
   );
 }
 
+/**
+ * T160c — the network's refund-fee books: what buyers paid for their refunds'
+ * chain fees, how much of it is in the hot wallet, on its way or still on
+ * deposits, and what the chain charged for those refunds and collections.
+ */
+function RefundFeeBooksSection({ data, label }: { data: NetworkWallets; label: string }) {
+  const t = useTranslations("adminWallets.refundFees");
+  const books = data.refundFees;
+  const rows: Array<{ term: string; amount: string; unit: string; usdt?: string }> = [
+    { term: t("withheld"), amount: books.withheld, unit: "USDT" },
+    { term: t("collected"), amount: books.collected, unit: "USDT" },
+    { term: t("inTransit"), amount: books.inTransit, unit: "USDT" },
+    { term: t("onDeposits"), amount: books.onDeposits, unit: "USDT" },
+    // T160c düzeltme turu — what the platform spent, in its own asset and in
+    // USDT at each transfer's confirmation price.
+    {
+      term: t("refundChainCost"),
+      amount: books.refundChainCost,
+      unit: data.nativeAsset,
+      usdt: books.refundChainCostUsdt,
+    },
+    {
+      term: t("collectionChainCost"),
+      amount: books.collectionChainCost,
+      unit: data.nativeAsset,
+      usdt: books.collectionChainCostUsdt,
+    },
+    { term: t("net"), amount: books.netUsdt, unit: "USDT" },
+  ];
+  return (
+    <div className="flex flex-col gap-2" data-testid={`refund-fees-${data.network}`}>
+      <h3 className="text-sm font-semibold text-gray-900">{t("heading")}</h3>
+      <p className="text-xs text-gray-500">{t("intro")}</p>
+      <dl
+        aria-label={t("ariaLabel", { network: label })}
+        className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2"
+      >
+        {rows.map((r) => (
+          <div key={r.term} className="flex justify-between gap-4">
+            <dt className="text-gray-600">{r.term}</dt>
+            <dd className="tabular-nums">
+              {r.amount} {r.unit}
+              {r.usdt !== undefined && (
+                <span className="text-gray-500"> {t("inUsdt", { amount: r.usdt })}</span>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-gray-500">
+        {data.network === "TRON" ? t("costNoteTRON") : t("costNoteETHEREUM")}
+      </p>
+      {books.costUnmeasured > 0 && (
+        <p
+          className="text-xs text-amber-700"
+          data-testid={`refund-fees-unmeasured-${data.network}`}
+        >
+          {t("unmeasured", { count: books.costUnmeasured })}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export interface NetworkWalletsCardProps {
   data: NetworkWallets;
 }
@@ -248,6 +312,8 @@ export function NetworkWalletsCard({ data }: NetworkWalletsCardProps) {
           </div>
         )}
       </div>
+
+      <RefundFeeBooksSection data={data} label={label} />
 
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold text-gray-900">{t("outboundRows.heading")}</h3>

@@ -2087,6 +2087,22 @@
         "by": "Initiated by"
       }
     },
+    "refundFees": {
+      "heading": "Refund network fees",
+      "intro": "Network fees withheld from buyers' refunds. The platform pays the chain fee; what was withheld is moved to the hot wallet with the sale's sweep, or separately when that is worth more than it costs.",
+      "withheld": "Withheld from buyers",
+      "collected": "In the hot wallet",
+      "inTransit": "On its way",
+      "onDeposits": "Still on deposits",
+      "refundChainCost": "Platform's chain spend for those refunds",
+      "collectionChainCost": "Platform's chain spend for separate collections",
+      "net": "Net (withheld − chain spend)",
+      "inUsdt": "(≈ {amount} USDT)",
+      "costNoteTRON": "Chain spend is what left the platform's wallets, not only the refund's own fee: the TRX the hot wallet sent the deposit (account activation, burn top-up) plus those sends' fees. TRX the deposit does not burn stays there and is not collected. USDT values use the TRX price at the moment each transfer was confirmed.",
+      "costNoteETHEREUM": "Chain spend is what left the platform's wallets, not only the refund's own fee: the fuel ETH sent to the deposit plus the fuel's own fee (a refund from the hot wallet: its fee). The deposit pays the refund's fee out of that fuel; what it does not burn stays there and is not collected. USDT values use the ETH price at the moment each transfer was confirmed.",
+      "unmeasured": "Spend or price not measured for {count} transfer(s): left out of the USDT figures, counted with their receipt fee (a lower bound) in the native totals.",
+      "ariaLabel": "Refund network fees on {network}"
+    },
     "outboundRows": {
       "heading": "Recent outbound transfers",
       "empty": "No outbound transfers yet.",
@@ -2108,7 +2124,8 @@
       "WRONG_TOKEN_REFUND": "Wrong-token refund",
       "INCORRECT_AMOUNT_REFUND": "Incorrect-amount refund",
       "LATE_PAYMENT_REFUND": "Late-payment refund",
-      "SWEEP": "Sweep"
+      "SWEEP": "Sweep",
+      "REFUND_FEE_SWEEP": "Refund-fee collection"
     },
     "outboundStatus": {
       "DETECTED": "Detected",

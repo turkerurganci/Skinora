@@ -160,6 +160,78 @@ describe("WalletsOverview — one section per network", () => {
     expect(tron().getByRole("button", { name: "Review transfer" })).toBeInTheDocument();
   });
 
+  it("T160c: shows each network's refund-fee books in its own section, chain cost in its own asset", async () => {
+    await renderOverview([
+      tronWallets(),
+      ethWallets({
+        refundFees: {
+          withheld: "0.09",
+          collected: "0",
+          inTransit: "0",
+          onDeposits: "0.09",
+          refundChainCost: "0.00074710600506859",
+          collectionChainCost: "0",
+          refundChainCostUsdt: "1.826571",
+          collectionChainCostUsdt: "0",
+          netUsdt: "-0.406571",
+          costUnmeasured: 2,
+        },
+        recentOutbound: [
+          {
+            id: "o10",
+            transactionId: "t10",
+            type: "REFUND_FEE_SWEEP",
+            status: "PENDING",
+            token: "USDC",
+            amount: 0.37,
+            toAddress: ETH_HOT,
+            txHash: null,
+            retryCount: 0,
+            createdAt: "2026-10-21T10:00:00Z",
+          },
+        ],
+      }),
+    ]);
+
+    const tronBooks = within(tron().getByTestId("refund-fees-TRON"));
+    expect(tronBooks.getByRole("heading", { level: 3 })).toHaveTextContent("Refund network fees");
+    expect(tronBooks.getByText("Withheld from buyers").nextSibling).toHaveTextContent("7.31 USDT");
+    expect(tronBooks.getByText("In the hot wallet").nextSibling).toHaveTextContent("4.06 USDT");
+    expect(tronBooks.getByText("Still on deposits").nextSibling).toHaveTextContent("3.25 USDT");
+    // T160c düzeltme turu — the platform's spend, in its asset and in USDT, and the net.
+    expect(
+      tronBooks.getByText("Platform's chain spend for those refunds").nextSibling,
+    ).toHaveTextContent("21.4 TRX (≈ 7.09 USDT)");
+    expect(
+      tronBooks.getByText("Platform's chain spend for separate collections").nextSibling,
+    ).toHaveTextContent("6.27 TRX (≈ 2.08 USDT)");
+    expect(tronBooks.getByText("Net (withheld − chain spend)").nextSibling).toHaveTextContent(
+      "-1.86 USDT",
+    );
+    expect(
+      tronBooks.getByText(/TRX price at the moment each transfer was confirmed/),
+    ).toBeInTheDocument();
+    expect(tron().queryByTestId("refund-fees-unmeasured-TRON")).toBeNull();
+
+    const ethBooks = within(eth().getByTestId("refund-fees-ETHEREUM"));
+    expect(ethBooks.getByText("Still on deposits").nextSibling).toHaveTextContent("0.09 USDT");
+    expect(
+      ethBooks.getByText("Platform's chain spend for those refunds").nextSibling,
+    ).toHaveTextContent("0.00074710600506859 ETH (≈ 1.826571 USDT)");
+    expect(ethBooks.getByText("Net (withheld − chain spend)").nextSibling).toHaveTextContent(
+      "-0.406571 USDT",
+    );
+    expect(
+      ethBooks.getByText(/the fuel ETH sent to the deposit plus the fuel's own fee/),
+    ).toBeInTheDocument();
+    expect(eth().getByTestId("refund-fees-unmeasured-ETHEREUM")).toHaveTextContent(
+      "Spend or price not measured for 2 transfer(s)",
+    );
+    expect(ethBooks.queryByText(/TRX/)).toBeNull();
+    // The new outbound type has its own label.
+    expect(eth().getByText("Refund-fee collection")).toBeInTheDocument();
+  });
+
   it("links recent hashes to the explorer of their own network", async () => {
     await renderOverview([
       tronWallets(),

@@ -2087,6 +2087,22 @@
         "by": "Başlatan"
       }
     },
+    "refundFees": {
+      "heading": "İade ağ ücretleri",
+      "intro": "Alıcıların iadelerinden kesilen ağ ücretleri. Zincir ücretini platform öder; kesilen tutar satışın sweep'iyle, ya da maliyetinden fazla getirecekse ayrıca sıcak cüzdana taşınır.",
+      "withheld": "Alıcılardan kesilen",
+      "collected": "Sıcak cüzdanda",
+      "inTransit": "Yolda",
+      "onDeposits": "Hâlâ depozitlerde",
+      "refundChainCost": "Bu iadeler için platformun zincir harcaması",
+      "collectionChainCost": "Ayrı toplamalar için platformun zincir harcaması",
+      "net": "Net (kesilen − zincir harcaması)",
+      "inUsdt": "(≈ {amount} USDT)",
+      "costNoteTRON": "Zincir harcaması yalnız iadenin kendi ücreti değil, platform cüzdanlarından çıkan tutardır: sıcak cüzdanın depozite gönderdiği TRX (hesap açma, yakma takviyesi) ve bu gönderimlerin ücreti. Depozitin yakmadığı TRX orada kalır ve toplanmaz. USDT karşılıkları her transferin onaylandığı andaki TRX fiyatıyladır.",
+      "costNoteETHEREUM": "Zincir harcaması yalnız iadenin kendi ücreti değil, platform cüzdanlarından çıkan tutardır: depozite gönderilen yakıt ETH'si ve yakıt gönderiminin kendi ücreti (sıcak cüzdandan iade: kendi ücreti). Depozit iadenin ücretini bu yakıttan öder; yakmadığı kısım orada kalır ve toplanmaz. USDT karşılıkları her transferin onaylandığı andaki ETH fiyatıyladır.",
+      "unmeasured": "{count} transferin harcaması ya da fiyatı ölçülmedi: USDT toplamlarına girmedi, yerel varlık toplamlarında makbuz ücretiyle (alt sınır) sayıldı.",
+      "ariaLabel": "{network} iade ağ ücretleri"
+    },
     "outboundRows": {
       "heading": "Son giden transferler",
       "empty": "Henüz giden transfer yok.",
@@ -2108,7 +2124,8 @@
       "WRONG_TOKEN_REFUND": "Yanlış token iadesi",
       "INCORRECT_AMOUNT_REFUND": "Hatalı tutar iadesi",
       "LATE_PAYMENT_REFUND": "Geç ödeme iadesi",
-      "SWEEP": "Toplama (sweep)"
+      "SWEEP": "Toplama (sweep)",
+      "REFUND_FEE_SWEEP": "İade kesinti toplama"
     },
     "outboundStatus": {
       "DETECTED": "Tespit edildi",
