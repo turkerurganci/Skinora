@@ -6,6 +6,8 @@
 
 **Önceki güncelleme:** 2026-10-22 — T168 ⏳ düzeltme turu, yeniden doğrulama bekliyor (doğrulama FAIL: 3 × S1 ⚠ HUKUK + 6 × S4 → B2/B3 + 5 S4 kapandı, B1 T169'a bağımlı; T168_REPORT.md, PR #370)
 
+**Önceki güncelleme:** 2026-10-22 — chore (görev değil): `next` + `eslint-config-next` 16.3.8 → 16.4.2 güvenlik yükseltmesi — 2026-10-22 danışmaları GHSA-2464-fhr4-w9xw (critical RCE) + GHSA-p3m5-59mp-jv5r (high DoS) bloke edici frontend audit adımını tüm dallarda kırmızıya döndürmüştü; `npm audit --omit=dev` 0, backlog ✅ `FrontendNextAdvisories1642` (§7), dal `chore/next-16.4.2-guvenlik`.
+
 **Önceki güncelleme:** 2026-10-21 — T160c ✓ Tamamlandı, yeniden doğrulama PASS (iade kesinti kalıntısı sıcak cüzdana, AD38 gerçek zincir gideri; T160c_REPORT.md, PR #365)
 
 **Önceki güncelleme:** 2026-10-21 — T168 ⏳ yapım bitti, doğrulama bekliyor (hukuk metinleri 4 dil, şirket alanları işaretli + taslak etiketi kalır, kabul etmeyen hesap kendini silebilir; T168_REPORT.md)

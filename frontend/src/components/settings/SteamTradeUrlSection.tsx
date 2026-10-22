@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ApiError } from "@/lib/api/client";
@@ -47,10 +47,13 @@ export function SteamTradeUrlSection({ className }: { className?: string }) {
   const maActive = profile.data?.mobileAuthenticatorActive ?? false;
 
   // Kaydedilmiş URL geldiğinde alanı bir kez doldur; kullanıcı yazmaya
-  // başladıysa üstüne yazma.
-  useEffect(() => {
+  // başladıysa üstüne yazma. Effect yerine render sırasında önceki değeri
+  // izleyerek ayarlanır (react-hooks 7.1 `set-state-in-effect` kuralı).
+  const [seededFrom, setSeededFrom] = useState<string | null>(null);
+  if (saved !== seededFrom) {
+    setSeededFrom(saved);
     if (saved) setValue((v) => (v === "" ? saved : v));
-  }, [saved]);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
