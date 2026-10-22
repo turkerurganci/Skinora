@@ -95,9 +95,9 @@
 
 ## Commit & PR
 - Branch: `task/T169-sahip-kararlari`
-- Commit: `4d92d9b0` — T169: yarım iş (devralındı); `1381036f` — testler, env, trial, e2e, belgeler; son commit dal HEAD'i
+- Commit: `4d92d9b0` — yarım iş (devralındı); `1381036f` — testler, env, trial, e2e, belgeler; `fc35ca9f` — main (T160c) birleştirmesi; `03803186` — dotnet format; son commit dal HEAD'i
 - PR: #371
-- CI: __CI__
+- CI: ✓ run `39818690916` success (HEAD `03803186`). Önceki run `39813247296` failure — `dotnet format` WHITESPACE (`OutboundApprovalService.cs:133`), `03803186` ile düzeltildi. Raporu güncelleyen son commit'in run'ı PR'da
 
 ## Admin onay kapısının tasarımı (⚠ PARA)
 - **T160c ile birleşme (main `403fe257`):** T160c yeni bir giden tür ekledi, `REFUND_FEE_SWEEP` (depozitte kalan iade kesintisini sıcak cüzdana toplar). Platformun kendi adresleri arası olduğu için kapı onu **tutmaz** (sweep gibi); `OutboundApprovalGateTests` her enum değerini sınıflandırır — yeni bir giden tür eklenirse test kırılır ve bilinçli yerleştirme ister.
