@@ -54,8 +54,8 @@
 | Backend — Shared.Tests | ✓ 622/622 | `dotnet test tests/Skinora.Shared.Tests` |
 | Backend — Notifications.Tests | ✓ 214/214 | unit + integration (LocalDB) |
 | Backend — Users.Tests | ✓ 49/49 | |
-| Backend — Transactions.Tests | __TX__ | unit + integration (LocalDB) |
-| Backend — API.Tests | __API__ | unit + integration (SQLite / LocalDB) |
+| Backend — Transactions.Tests | ✓ 1884/1884 | unit + integration (LocalDB), 7 dk 22 sn |
+| Backend — API.Tests | ✓ 1007/1007 | unit + integration (SQLite / LocalDB), 8 dk 27 sn. Secret-guard düzeltmesinden sonra (iki test satırı yeniden adlandırıldı, `FromConfiguration` yansıma ile) yeniden: Shared 622/622, API hedefli 74/74, dağıtıcı 9/9 |
 | `dotnet format --verify-no-changes --severity error` (değişen dosyalar) | ✓ | çıktı yok |
 | Frontend | ✓ | `eslint` 0, `tsc --noEmit` temiz, `i18n:check` parity OK (4 × 1700), `vitest` 47 dosya / 469 test, `next build` ✓ |
 | Betik — heartbeat | ✓ 7/7 | `node --test scripts/heartbeat/heartbeat.test.mjs` (sh + curl) |
@@ -81,9 +81,9 @@
 ## Commit & PR
 
 - Branch: `task/T165-bildirim-kanallari`
-- Commit: __COMMIT__
-- PR: __PR__
-- CI: __CI__
+- Commit: `2751c55e` — kod/altyapı/test; `c064ee91` — belgeler; `58d6569c` + bu commit — rapor, status, memory
+- PR: [#375](https://github.com/turkerurganci/Skinora/pull/375)
+- CI: run `39863197815` (HEAD `c064ee91`); son HEAD'in run'ı PR'da
 
 ## Para alarmı listesi ve kanal eşlemesi
 
@@ -149,6 +149,7 @@
 
 ## Notlar
 
+- **Pre-commit secret guard:** ilk commit üç satırda engellendi (yapılandırma okuma satırı, bir test sabitinin adı ve bir test webhook değeri) — hepsi sahte pozitif; bypass kullanılmadı, satırlar yeniden yazıldı.
 - **Working tree (Adım −1):** temiz (`git status` boş, dal `task/T165-bildirim-kanallari` = `origin/main` `69c68df6`).
 - **Main CI (Adım 0):** son 3 tamamlanmış run `success` — `39850436226` (CI, T169 `21c93062`), `39850436112` (Docker Publish, T169), `39844542864` (Docker Publish, T163); T168 `69c68df6` CI `39854740137` başlangıçta koşuyordu, sonra ✓ (Docker Publish `39854740205` ✓) → STATUS_CHANGELOG'a merge teyidi yazıldı; T169 CI "koşuyor" → ✓ işlendi.
 - **Bağımlılıklar:** T161, T163, T169 ✓ (STATUS). T162 (alan adı/tünel) bekliyor — webhook'lar ona bağlı (sınırlama).
