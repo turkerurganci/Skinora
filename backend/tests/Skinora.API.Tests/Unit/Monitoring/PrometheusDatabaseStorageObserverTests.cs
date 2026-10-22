@@ -187,9 +187,17 @@ public sealed class PrometheusDatabaseStorageObserverTests
         probe.Next = () => null;
         Assert.False(await sut.ProbeOnceAsync(CancellationToken.None));
 
+        // A good reading first: the gauges start at 0 in a fresh process, so a
+        // failure is only proven to report anything if they were 1 before it.
+        probe.Next = () => Snapshot();
+        Assert.True(await sut.ProbeOnceAsync(CancellationToken.None));
+        Assert.Equal(1, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("storage").Value);
+        Assert.Equal(1, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("backup_history").Value);
+
         probe.Next = () => throw new InvalidOperationException("server gone");
         Assert.False(await sut.ProbeOnceAsync(CancellationToken.None));
         Assert.Equal(0, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("storage").Value);
+        Assert.Equal(0, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("backup_history").Value);
 
         probe.Next = () => Snapshot(used: 123 * MiB);
         Assert.True(await sut.ProbeOnceAsync(CancellationToken.None));
