@@ -46,7 +46,10 @@ describe("OutboundApprovalPanel", () => {
   it("says the gate is closed and lists the waiting rows", async () => {
     api.listOutboundApprovals.mockResolvedValue({
       autoSendEnabled: false,
-      rows: [row(), row({ blockchainTransactionId: "bt-2", type: "BUYER_REFUND", toAddress: BUYER })],
+      rows: [
+        row(),
+        row({ blockchainTransactionId: "bt-2", type: "BUYER_REFUND", toAddress: BUYER }),
+      ],
     });
     renderWithProviders(<OutboundApprovalPanel />);
 
