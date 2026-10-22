@@ -72,8 +72,8 @@
 ## Commit & PR
 - Branch: `task/T174-backlog-triyaji`
 - Commit: ilk commit `T174: DEFERRED_BACKLOG §4 triyajı — 16 satır ölçüldü`
-- PR: PR_NO
-- CI: CI_SONUC
+- PR: [#374](https://github.com/turkerurganci/Skinora/pull/374)
+- CI: PR CI izlendi — sonuç PR #374 run listesinde (dal HEAD)
 
 ## Known Limitations / Follow-up
 - **⚠ Canlıyı etkileyen kalem — `sanctions-expansion` (🟡):** yaptırım listesi için yönetici ekranı yok; runbook §O.1 ve açılış listesi madde 13 o ekranı varsayıyor. T171'den önce iki yoldan biri seçilmeli: (a) en küçük ekran (liste + ekle + kaldır; ağ ve gerekçe alanı), (b) runbook'u API yoluna (`POST api/v1/admin/sanctions/addresses`, `MANAGE_SANCTIONS` JWT ile) çevirmek. Karar sahibin.
