@@ -96,7 +96,7 @@
 ## Commit & PR
 - Branch: `task/T169-sahip-kararlari`
 - Commit: `4d92d9b0` — T169: yarım iş (devralındı); `1381036f` — testler, env, trial, e2e, belgeler; son commit dal HEAD'i
-- PR: #__PR__
+- PR: #371
 - CI: __CI__
 
 ## Admin onay kapısının tasarımı (⚠ PARA)
