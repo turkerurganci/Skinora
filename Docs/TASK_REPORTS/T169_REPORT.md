@@ -11,8 +11,8 @@
 - **Test boyunca bütün ödemeler admin onaylı (karar 3, ⚠ PARA):** yeni ayar `outbound.auto_send_enabled` = `false` (seed 80; `Default(...)` ⇒ env'den doldurulamaz, T125/T129 kapılarıyla aynı kural; satır okunamazsa kapı **kapalı**). `BlockchainTransaction` += `ApprovedAt`, `ApprovedByAdminId`. Gönderim işi (`OutgoingTransferDispatchJob`) kapı kapalıyken onaysız `SELLER_PAYOUT` / `*_REFUND` satırını aday sorgusunda almaz ve satırı açarken ikinci kez sınar; sweep beklemez. Yeni uçlar AD40 `GET /admin/wallets/outbound-approvals`, AD41 `POST /admin/wallets/outbound-approvals/:id/approve` (`MANAGE_SETTINGS`), audit `OUTBOUND_TRANSFER_APPROVED` (Fon). Admin paneli S22 cüzdan ekranının üstünde "Onay bekleyen ödemeler" paneli (kapı durumu, liste, "geri alınamaz" uyarılı onay penceresi).
 - **Yasaklı ülkeler (karar 4):** `auth.banned_countries` seed varsayılanı `NONE` → `IR,KP,CU,MM`; migration hâlâ `NONE` olan satırı taşır.
 - **Tutar sınırları (karar 1):** `min_transaction_amount` 10, `max_transaction_amount` 2900 (`.env.example`, runbook §A, `SettingsBootstrapTests` fikstürü; migration hâlâ eski örnek değerdeki satırı taşır).
-- **Teslimat süresi 720 dk (⚠; yönetici notu — T168 doğrulaması B1):** `.env.example` 60 → 720; deneme yayını overlay'i `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES=${…:-720}` (`.env.trial` boş bırakırsa 720); runbook §A #6 örneği 720 + uyarı notu; `SettingsBootstrapTests` fikstürü 720; migration hâlâ 60 olan veritabanını 720'ye çeker; runbook yeni §M (T171 kurulum günü) satır 1 "teslimat süresi 720 dk mı?".
-- **KMS/HSM (karar 5):** karar yok — runbook §M.2 "pilot (T173) sonrası proje sahibine sorulacak".
+- **Teslimat süresi 720 dk (⚠; yönetici notu — T168 doğrulaması B1):** `.env.example` 60 → 720; deneme yayını overlay'i `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES=${…:-720}` (`.env.trial` boş bırakırsa 720); runbook §A #6 örneği 720 + uyarı notu; `SettingsBootstrapTests` fikstürü 720; migration hâlâ 60 olan veritabanını 720'ye çeker; runbook yeni §O (T171 kurulum günü) satır 1 "teslimat süresi 720 dk mı?".
+- **KMS/HSM (karar 5):** karar yok — runbook §O.2 "pilot (T173) sonrası proje sahibine sorulacak".
 - **T169a (karar 6):** bu dalda yapılmadı; `plan/11_F9.md`'ye görev satırı (verilen metinle) + `IMPLEMENTATION_STATUS.md` F9 tablosuna `⬚ Bekliyor`; DEFERRED_BACKLOG `DepositRefundDailyLimitUndecided` ⚪ → 🟡 (karar verildi, hedef T169a).
 - **Bulgular:** `.env.example`'a `ETHEREUM_MAX_SINGLE_TRANSFER_USDT` / `ETHEREUM_MAX_DAILY_OUTFLOW_USDT` satırları eklendi (3000 / 9000). Ethereum sıcak cüzdan USDT üst limiti izlenmiyor — ucuz değil (izleyiciyi ağ başına yapmak AuditLog/SignalR yükünde ağ alanı = sözleşme değişikliği, ETH 18 ondalık ölçeği, testler); backlog 🟡 `EthereumHotWalletUsdtLimitUnmonitored`, hedef T170.
 - **e2e:** `seedHappyPath` kapıyı açar (`outbound.auto_send_enabled = true`) — süitler para hattını (iade CONFIRMED, payout → COMPLETED) ölçer, onay adımını değil; onay yolu backend testlerinde.
@@ -27,7 +27,7 @@
 | 2 | 50 $ altında TRON yok | sahip | `blockchain.tron.min_transaction_amount_usdt` (yeni, seed 79) | — → **50** |
 | 3 | Test boyunca ödemeler admin onaylı | sahip | `outbound.auto_send_enabled` (yeni, seed 80) | — → **false** |
 | 4 | Yasaklı ülkeler | sahip | `auth.banned_countries` | NONE → **IR,KP,CU,MM** |
-| 5 | KMS/HSM eşiği | sahip: karar yok | runbook §M.2 | — → "pilot sonrası sahibe sorulacak" |
+| 5 | KMS/HSM eşiği | sahip: karar yok | runbook §O.2 | — → "pilot sonrası sahibe sorulacak" |
 | 6 | T169a (tam maliyet kesintisi + depozit iade 100 $/gün) | sahip | `plan/11_F9.md`, STATUS | — → görev ⬚ |
 | 7 | Teslimat süresi | yönetici ⚠ (sahip 2026-10-04: 12 saat) | `delivery_timeout_minutes` (env), trial overlay varsayılanı | 60 → **720** |
 | 8 | Tek / günlük gönderim tavanı (TRON + Ethereum USDT) | yönetici ⚠ (mainnet öncesi yeniden sorulur) | `MAX_SINGLE_TRANSFER_USDT`, `MAX_DAILY_OUTFLOW_USDT`, `ETHEREUM_MAX_SINGLE_TRANSFER_USDT`, `ETHEREUM_MAX_DAILY_OUTFLOW_USDT` (`.env.example`) | boş → **3000 / 9000** |
@@ -39,9 +39,9 @@
 | 14 | TRON ağ ücreti satırı yedeği | yönetici ⚠ | `blockchain.tron.network_fee_fallback_usdt` | 3.00 → 3.00 (kalır) |
 | 15 | Ethereum iade yedek ücreti | yönetici ⚠ | `blockchain.ethereum.refund_gas_fee_estimate_usdt` | 0.50 → **0.20** |
 | 16 | Ethereum payout yedeği / ücret tavanı | yönetici ⚠ | `blockchain.ethereum.payout_gas_fee_estimate_usdt`, `…fee_cap_usd_per_transfer` | 0.50 / 0.50 (kalır) |
-| 17 | Yaptırım listesi | yönetici ⚠ | runbook §M.1 | OFAC SDN elle + aylık |
-| 18 | TronGrid planı | yönetici ⚠ | runbook §M satır 12 | ücretsiz (mainnet anahtarı ayrı hesaptan) |
-| 19 | Ethereum RPC planları | yönetici ⚠ | runbook §M satır 12 | Alchemy Free + Chainstack Developer |
+| 17 | Yaptırım listesi | yönetici ⚠ | runbook §O.1 | OFAC SDN elle + aylık |
+| 18 | TronGrid planı | yönetici ⚠ | runbook §O satır 12 | ücretsiz (mainnet anahtarı ayrı hesaptan) |
+| 19 | Ethereum RPC planları | yönetici ⚠ | runbook §O satır 12 | Alchemy Free + Chainstack Developer |
 | 20 | Fiyat sapma kuralı | yönetici ⚠ | `price_deviation_threshold` | 1.0 (kapalı kalır) |
 | 21 | `MANAGE_WALLETS` izni | yönetici ⚠ | — | gerekmez (`MANAGE_SETTINGS`) |
 | 22 | MASAK "2 kat" yorumu | yönetici ⚠ | — | avukata |
@@ -54,7 +54,7 @@
 - Backend test: yeni `Skinora.API.Tests/Integration/NetworkDimension/OutboundApprovalTests.cs`, kapanışta `Skinora.API.Tests/Integration/AdminOutboundApprovalsEndpointTests.cs` (+ `AdminWalletsEndpointTests.Factory`'ye `FakeApprovalService`); değişen `OutgoingTransferDispatchJobTests`, `TransactionCreationServiceTests`, `TransactionAcceptanceServiceTests`, `TransactionDetailServiceTests`, `TransactionParamsServiceTests`, `HotWalletMonitorServiceTests`, `AuditLogCategoryMapTests`, `EnumTests`, `SeedDataTests`, `SettingsBootstrapTests`, `NetworkContractTests`, `NetworkFeePolicyMigrationRehearsalTests`, `NetworkQueueIsolationTests`, `AdminWalletOverviewTests`, `BlockchainWebhookEndpointTests`, `TransactionLifecycleEndpointTests`.
 - Frontend yeni: `components/admin/OutboundApprovalPanel.tsx` (+ test), `lib/hooks/useOutboundApprovals.ts`; değişen `WalletsOverview.tsx` (+ test), `AcceptForm.tsx` (+ test), `NewTransactionForm.tsx` (+ networks test), `Step2Details.tsx`, `lib/api/admin.ts`, `lib/api/transactions.ts`, `lib/transactions/networkChoice.ts` (+ test), `types/enums.ts`, `i18n/messages/{en,tr,es,zh}.json`, `i18n/catalog-parity.test.ts`.
 - Yapılandırma: `.env.example`, `docker-compose.trial.yml`, `e2e/src/db.ts`.
-- Doküman: `02_PRODUCT_REQUIREMENTS.md` v4.19, `04_UI_SPECS.md` v4.14 (kapanış), `05_TECHNICAL_ARCHITECTURE.md` v3.32 (kapanış), `06_DATA_MODEL.md` v6.37, `07_API_DESIGN.md` v4.22, `08_INTEGRATION_SPEC.md` v3.45 (kapanış), `DEPLOY_RUNBOOK.md` (§A, §C, §C.3, yeni §L, §M; kapanışta §L.3), `plan/11_F9.md` v1.23, `DEFERRED_BACKLOG.md`, `DOC_CHANGELOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`, bu rapor.
+- Doküman: `02_PRODUCT_REQUIREMENTS.md` v4.19, `04_UI_SPECS.md` v4.14 (kapanış), `05_TECHNICAL_ARCHITECTURE.md` v3.33 (kapanış), `06_DATA_MODEL.md` v6.37, `07_API_DESIGN.md` v4.22, `08_INTEGRATION_SPEC.md` v3.45 (kapanış), `DEPLOY_RUNBOOK.md` (§A, §C, §C.3, yeni §M, §O; kapanışta §M.3), `plan/11_F9.md` v1.24, `DEFERRED_BACKLOG.md`, `DOC_CHANGELOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`, bu rapor.
 
 ## Kabul Kriterleri Kontrolü
 
@@ -62,12 +62,12 @@
 |---|---|---|---|
 | 1 | En düşük/en yüksek işlem tutarı kararlaştırıldı ve ayarlara işlendi | ✓ | 10 / 2900: `.env.example:352-357`, runbook §A #7/#8, migration `SetIfStillDefault(min_transaction_amount…)`; `SettingsBootstrapTests` fikstürü |
 | 2 | Sıcak cüzdan limiti | ✓ (⚠) | 4000: `.env.example`, runbook §A #18, migration; Ethereum izleyicisi yok → backlog `EthereumHotWalletUsdtLimitUnmonitored` (T170) |
-| 3 | Tek/günlük gönderim tavanı (ağ başına) | ✓ (⚠) | `.env.example` TRON + Ethereum 3000/9000; runbook §C.3, §M satır 6 |
-| 4 | Yaptırım listesi | ✓ (⚠) | runbook §M.1 (OFAC SDN elle + aylık) |
+| 3 | Tek/günlük gönderim tavanı (ağ başına) | ✓ (⚠) | `.env.example` TRON + Ethereum 3000/9000; runbook §C.3, §O satır 6 |
+| 4 | Yaptırım listesi | ✓ (⚠) | runbook §O.1 (OFAC SDN elle + aylık) |
 | 5 | Yasaklı ülkeler | ✓ | seed `IR,KP,CU,MM`; migration; `SeedDataTests` + `CleanDatabase_Has_Every_Seeded_Key…` (her seed değeri migration sonrası DB'de) |
 | 6 | Depozitten iadeye günlük tavan | ✓ (karar) | sahip kararı → görev T169a (plan + status), backlog satırı 🟡 |
-| 7 | KMS/HSM eşiği | ~ | Karar yok (sahip); runbook §M.2 "pilot sonrası sahibe sorulacak" |
-| 8 | TronGrid ve Ethereum RPC planları | ✓ (⚠) | runbook §M satır 12 |
+| 7 | KMS/HSM eşiği | ~ | Karar yok (sahip); runbook §O.2 "pilot sonrası sahibe sorulacak" |
+| 8 | TronGrid ve Ethereum RPC planları | ✓ (⚠) | runbook §O satır 12 |
 | 9 | TRON için ayrı en düşük satış tutarı (50 $ altında TRON yok) — sunucu + arayüz, testli | ✓ | Backend: `TransactionCreationServiceTests` (T169 testleri: TRON-only reddedilir, iki ağlıda reddedilir, 50'de kabul, Ethereum-only kabul, bozuk satır varsayılana düşer), `TransactionAcceptanceServiceTests.T169_Tron_Below_Its_Minimum_Is_Refused_At_Acceptance_And_Ethereum_Still_Accepts`, `TransactionDetailServiceTests` (quote `unavailableReason`), `TransactionParamsServiceTests` (`networkMinPrices`). Frontend: `networkChoice.test.ts` (`withPriceMinimums`, `buyerNetworkOptions`), `NewTransactionForm.networks.test.tsx` (4 dil: TRON devre dışı + neden; POST'ta TRON yok), `AcceptForm.test.tsx` (TRON devre dışı, Ethereum seçili) |
 | 10 | Test boyunca ödemeler admin onaylı (T175 kapısı kapalı başlıyor) | ✓ | `OutboundApprovalTests` (migre DB'de kapı kapalı; payout + iade onaysız gönderilmez, onaylanan aynen gider, audit; sweep beklemez ve listelenmez; tek sefer / açık satır / bilinmeyen satır reddi hiçbir şey yazmaz; kapı açıkken onaysız gider), `OutgoingTransferDispatchJobTests` (T169 birim testleri), `OutboundApprovalPanel.test.tsx`, `WalletsOverview.test.tsx` |
 
@@ -89,7 +89,7 @@
 | Doğrulama durumu | ✓ PASS — bağımsız doğrulama (Opus high), HEAD `5027d0d1`, 2026-10-22 |
 | Kabul kriterleri / kararlar | 17 satır ✓ (17. satır "belgeler" ~ → S4-3 kapanışta kapandı); kapıyı atlayan para yolu yok (S1 yok) |
 | Bulgu sayısı | 4 × S4 (bloke etmez) — hepsi kapanışta kapandı |
-| S4-1 ⚠ PARA — tur ortası kapatma | Kapandı: `OutgoingTransferDispatchJob.DispatchOneAsync` onaysız her ödeme/iade satırını açarken (göndermeden önce, satıra dokunmadan) ayarı `OutboundApprovalGate.IsAutoSendEnabledAsync` ile veritabanından yeniden okur (önbellek yok; yalnız tur başında açıksa — açık → kapalı hemen, kapalı → açık sonraki tur). Test `T169_Gate_Closed_Mid_Tick_Stops_Every_Unapproved_Row_Left_In_The_Batch`: kapı açık başlar, onaylı payout + 3 onaysız payout + sweep; ilk gönderim sırasında kapı başka bir oturumdan kapatılır → onaysız 3 satırın **0/3**'ü gider (onaylı satır ve sweep gider). Düzeltme geri alınınca aynı test kırıldı: 3/3 gönderildi (probe P5 yeniden üretildi). Ek test `T169_Gate_Opened_Mid_Tick_Opens_On_The_Next_Tick`. Runbook §L.3 adım 5 düzeltildi |
+| S4-1 ⚠ PARA — tur ortası kapatma | Kapandı: `OutgoingTransferDispatchJob.DispatchOneAsync` onaysız her ödeme/iade satırını açarken (göndermeden önce, satıra dokunmadan) ayarı `OutboundApprovalGate.IsAutoSendEnabledAsync` ile veritabanından yeniden okur (önbellek yok; yalnız tur başında açıksa — açık → kapalı hemen, kapalı → açık sonraki tur). Test `T169_Gate_Closed_Mid_Tick_Stops_Every_Unapproved_Row_Left_In_The_Batch`: kapı açık başlar, onaylı payout + 3 onaysız payout + sweep; ilk gönderim sırasında kapı başka bir oturumdan kapatılır → onaysız 3 satırın **0/3**'ü gider (onaylı satır ve sweep gider). Düzeltme geri alınınca aynı test kırıldı: 3/3 gönderildi (probe P5 yeniden üretildi). Ek test `T169_Gate_Opened_Mid_Tick_Opens_On_The_Next_Tick`. Runbook §M.3 adım 5 düzeltildi |
 | S4-2 — aday sorgusu testi | Kapandı: `T169_Held_Rows_Do_Not_Take_Batch_Slots_From_An_Approved_Row` (BatchSize + 5 eski onaysız + 1 yeni onaylı; onaylı satır gider). Aday sorgusundaki kapı koşulu silinince test kırıldı (`Assert.Single` → boş) |
 | S4-3 — belge yayılımı | Kapandı: `04_UI_SPECS` v4.14 (S06 2. adım + 4. adım ret listesi, S07 "Ödeme ağı", S22 "Onay bekleyen ödemeler paneli"), `08_INTEGRATION_SPEC` v3.45 yeni §3.3b (admin onay kapısı), `07_API_DESIGN` v4.22 §9.35 atıfı + tur ortası kuralı |
 | S4-4 ⚠ GÜVENLİK — HTTP yetki testi | Kapandı: yeni `AdminOutboundApprovalsEndpointTests` (T157 deseni, `AdminWalletsEndpointTests.Factory` + `FakeApprovalService`): girişsiz 401 ve `MANAGE_SETTINGS`'siz 403 (iki uç; servis hiç çağrılmaz), `MANAGE_SETTINGS` ile GET 200 / POST 200, onaylayan JWT claim'inden (gövdedeki `approvedByAdminId`/`amount`/`toAddress` yok sayılır), 4 ret kodu eşlemesi + her `ApprovalError` için satır, guid olmayan kimlik yönlenmez. AD41'in `[Authorize]`'ı `[AllowAnonymous]` yapılınca 403 testi kırıldı |
@@ -120,8 +120,8 @@
 
 - **Doğrulama bulguları:** S4-1…S4-4 kapandı (ayrıntı "Doğrulama" tablosu).
 - **Proje sahibi kararları (2026-10-22, modal) — plana işlendi:**
-  - (a) Yedekten geri yükleme sonrası para araçları **gerçek para pilotundan (T173) önce**: `plan/11_F9.md` v1.23 yeni **Task T172a** (TRON'da zincirde gönderilmiş ama veritabanında PENDING kalan giden satırı zincir kanıtıyla kapatan admin aracı — verify + AuditLog; depozit adres indeksine yapılandırılabilir taban; runbook geri yükleme bölümüne bağlı; testler) + `IMPLEMENTATION_STATUS.md` satırı `⬚ Bekliyor`. Kaynak backlog satırı `PostRestoreChainReconciliationTooling` T164 dalında açıldı, main'de yok → bu dala eklenmedi (talimat).
-  - (b) `05_TECHNICAL_ARCHITECTURE` v3.32 §8.6 "Encryption at rest": şimdilik BitLocker + şifreli makine dışı yedek; ücretli SQL Server sürümüne geçilince TDE.
+  - (a) Yedekten geri yükleme sonrası para araçları **gerçek para pilotundan (T173) önce**: `plan/11_F9.md` v1.24 yeni **Task T172a** (TRON'da zincirde gönderilmiş ama veritabanında PENDING kalan giden satırı zincir kanıtıyla kapatan admin aracı — verify + AuditLog; depozit adres indeksine yapılandırılabilir taban; runbook geri yükleme bölümüne bağlı; testler) + `IMPLEMENTATION_STATUS.md` satırı `⬚ Bekliyor`. Kaynak backlog satırı `PostRestoreChainReconciliationTooling` T164 dalında açıldı, main'de yok → bu dala eklenmedi (talimat).
+  - (b) `05_TECHNICAL_ARCHITECTURE` v3.33 §8.6 "Encryption at rest": şimdilik BitLocker + şifreli makine dışı yedek; ücretli SQL Server sürümüne geçilince TDE.
 - **main birleştirmesi:** `origin/main` `4b48c82d` (chore #373, next 16.4.2) merge commit `65304a91` ile alındı. Çakışma yalnız `DEFERRED_BACKLOG.md` ve `STATUS_CHANGELOG.md` başlık/geçmiş satırlarında; iki tarafın satırları korundu (changelog'da chore satırı en üstte, T160c altında). Kodda çakışma yok; runbook bölüm harfi çakışması yok (T163/T164 henüz main'de değil). Backlog sayımı dosyanın `awk`'iyle (§1'den itibaren): **54 aktif / 160 çözülmüş** (main 53/160 → +1).
 - **Devir kaydı:** STATUS_CHANGELOG'a merge teyitleri: T160c (#365) `403fe257` → CI `39813399071` ✓, Docker Publish `39813399137` ✓; chore (#373) `4b48c82d` → CI `39831472907` ✓, Docker Publish `39831472834` ✓.
 
@@ -135,9 +135,9 @@
 - Paralel dallar: T163 (#369, compose/.env.example), T168 (#370, i18n), T160c (#365) ile çakışma riski — değişiklikler küçük bloklarda; çözüm yöneticide.
 
 ## Notlar
-- **main birleştirmesi:** dal açıkken T160c (#365) main'e girdi (`403fe257`) ve PR belge başlıklarında/changelog'larda çakıştı (çakışmalı PR'da GitHub CI run'ı yaratmıyor). `origin/main` dala birleştirildi: iki görevin belge girişleri korundu, T169 başlıkları bir üst sürüme alındı (02 v4.19, 06 v6.37, 07 v4.21, 11_F9 v1.22), migration `T169_OwnerDecisions` Designer'ı birleşik model snapshot'ıyla hizalandı (`dotnet ef migrations has-pending-model-changes` → değişiklik yok). Kodda çakışma yoktu.
+- **main birleştirmesi:** dal açıkken T160c (#365) main'e girdi (`403fe257`) ve PR belge başlıklarında/changelog'larda çakıştı (çakışmalı PR'da GitHub CI run'ı yaratmıyor). `origin/main` dala birleştirildi: iki görevin belge girişleri korundu, T169 başlıkları bir üst sürüme alındı (02 v4.19, 06 v6.37, 07 v4.21, 11_F9 v1.23), migration `T169_OwnerDecisions` Designer'ı birleşik model snapshot'ıyla hizalandı (`dotnet ef migrations has-pending-model-changes` → değişiklik yok). Kodda çakışma yoktu.
 - Working tree: başlangıçta önceki ajanın commit edilmemiş 51 dosyası (yönetici talimatıyla devralındı) → `4d92d9b0` WIP commit.
 - Main CI startup: son 3 main run — `39615975640` CI success, `39615975624` Docker Publish success, `39607353298` Docker Publish success.
 - Dış varsayım: yok (değerler karar sayfasındaki 2026-10-21 ölçümlerine dayanır; yeni dış bağımlılık yok).
 - Docker kullanılmadı (RAM sınırı, talimat); integration LocalDB `(localdb)\MSSQLLocalDB`.
-- Yönetici notu (2026-10-22): teslimat 720 dk `.env.example`, deneme yayını overlay'i ve runbook örneğinde uygulandı; runbook §M satır 1 eklendi; karar tablosu satır 7.
+- Yönetici notu (2026-10-22): teslimat 720 dk `.env.example`, deneme yayını overlay'i ve runbook örneğinde uygulandı; runbook §O satır 1 eklendi; karar tablosu satır 7.

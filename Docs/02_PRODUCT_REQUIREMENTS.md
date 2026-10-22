@@ -154,7 +154,7 @@ Her işlem adımı için ayrı timeout süresi bulunur:
 | Mutabakat süresi | Varsayılan **8 gün**. Steam'in trade geri alma penceresi (7 gün) kapanana kadar ödeme yapılmaz. Süre admin tarafından ayarlanır (§16.2) |
 | Ödeme öncesi son kontrol | Süre dolduğunda, ödeme yapılmadan **hemen önce** item'ın hâlâ alıcının envanterinde olduğu doğrulanır. Değilse trade geri alınmıştır → ödeme yapılmaz, para alıcıya iade edilir (§4.5.1) |
 | Akış | Platform komisyonu keser, kalan tutarı satıcının cüzdan adresine gönderir |
-| Admin onayı (test dönemi) | **Test boyunca her satıcı ödemesi ve her alıcı iadesi gönderilmeden önce admin onayı bekler** (proje sahibi kararı 2026-10-21, T169; ayar `outbound.auto_send_enabled` = `false`). Onay tutarı ve alıcıyı değiştirmez, yalnız gönderim anını tutar; her onay AuditLog'a yazılır (07 §9.35). Platformun kendi iç aktarımı (depozit → sıcak cüzdan sweep'i) beklemez. Kapı ilk en az 5 gerçek teslimat elle incelendikten sonra açılır (11 T175, DEPLOY_RUNBOOK §L) |
+| Admin onayı (test dönemi) | **Test boyunca her satıcı ödemesi ve her alıcı iadesi gönderilmeden önce admin onayı bekler** (proje sahibi kararı 2026-10-21, T169; ayar `outbound.auto_send_enabled` = `false`). Onay tutarı ve alıcıyı değiştirmez, yalnız gönderim anını tutar; her onay AuditLog'a yazılır (07 §9.35). Platformun kendi iç aktarımı (depozit → sıcak cüzdan sweep'i) beklemez. Kapı ilk en az 5 gerçek teslimat elle incelendikten sonra açılır (11 T175, DEPLOY_RUNBOOK §M) |
 | Cüzdan adresi | Satıcı profilinde varsayılan adres tanımlar; işlem başlatırken isterse farklı adres girebilir, girmezse profildeki kullanılır |
 
 ### 4.5.1 Mutabakat Süresi ve Trade Geri Alma Koruması

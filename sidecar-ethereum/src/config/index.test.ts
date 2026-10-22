@@ -57,6 +57,24 @@ describe('loadConfig — refuses to start without what the service needs', () =>
     ).toBe('HD_WALLET_NOT_CONFIGURED');
   });
 
+  // T163 — a secret path that exists but is not a readable file (Docker made a
+  // directory for a missing source file) is named, not reported as STARTUP_FAILED.
+  it.each([
+    ['seed', DEFAULT_SECRET_PATHS.hdMnemonic],
+    ['hot wallet key', DEFAULT_SECRET_PATHS.hotWalletKey],
+    ['fuel wallet key', DEFAULT_SECRET_PATHS.fuelWalletKey],
+  ])('with an unreadable %s secret (SECRET_UNREADABLE, path named)', (_label, unreadable) => {
+    const reader = (path: string) => {
+      if (path === unreadable)
+        throw new Error(`Secret file ${path} exists but cannot be read: EISDIR`);
+      return secrets()(path);
+    };
+    const err = errorOf(() => loadConfig(baseEnv, reader));
+    expect(err.code).toBe('SECRET_UNREADABLE');
+    expect(err.message).toContain(unreadable);
+    expect(err.message).toContain('DIRECTORY');
+  });
+
   it('reads the seed from ETHEREUM_HD_MNEMONIC_FILE when set', () => {
     const config = loadConfig(
       { ...baseEnv, ETHEREUM_HD_MNEMONIC_FILE: '/elsewhere/seed' },

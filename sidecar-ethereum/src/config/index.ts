@@ -264,6 +264,28 @@ function signingKey(raw: string | null, name: string): string | null {
   return '0x' + hex.toLowerCase();
 }
 
+/**
+ * T163 — a secret that exists but is not a readable file stops the service
+ * with a code that says so. The usual cause is measured (Docker Desktop +
+ * Compose v5.1.0, 2026-10-21): compose starts a service whose secret SOURCE
+ * file is missing and Docker creates an empty directory at the mount point —
+ * before T163 that surfaced as an anonymous STARTUP_FAILED.
+ */
+function readMountedSecret(
+  readMounted: MountedFileReader,
+  path: string,
+  label: string,
+): string | null {
+  try {
+    return readMounted(path);
+  } catch {
+    throw new ConfigError(
+      'SECRET_UNREADABLE',
+      `${label} ${path} exists but cannot be read as a file. A missing source file makes Docker create a DIRECTORY at the mount point — create the file (secrets/README.md) and remove the directory.`,
+    );
+  }
+}
+
 export function loadConfig(
   env: Env,
   readMounted: MountedFileReader = readSecretFile,
@@ -292,7 +314,7 @@ export function loadConfig(
   const chain = chainRaw as EthereumChainName;
 
   const mnemonicPath = value(env, 'ETHEREUM_HD_MNEMONIC_FILE') || DEFAULT_SECRET_PATHS.hdMnemonic;
-  const hdMnemonic = readMounted(mnemonicPath);
+  const hdMnemonic = readMountedSecret(readMounted, mnemonicPath, 'The Ethereum seed secret');
   if (hdMnemonic === null) {
     throw new ConfigError(
       'HD_WALLET_NOT_CONFIGURED',
@@ -301,14 +323,18 @@ export function loadConfig(
   }
 
   const hotWalletKey = signingKey(
-    readMounted(
+    readMountedSecret(
+      readMounted,
       value(env, 'ETHEREUM_HOT_WALLET_PRIVATE_KEY_FILE') || DEFAULT_SECRET_PATHS.hotWalletKey,
+      'The hot wallet key secret',
     ),
     'The hot wallet key secret',
   );
   const fuelWalletKey = signingKey(
-    readMounted(
+    readMountedSecret(
+      readMounted,
       value(env, 'ETHEREUM_FUEL_WALLET_PRIVATE_KEY_FILE') || DEFAULT_SECRET_PATHS.fuelWalletKey,
+      'The fuel wallet key secret',
     ),
     'The fuel wallet key secret',
   );

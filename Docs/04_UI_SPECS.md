@@ -1868,7 +1868,7 @@ Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sa
 - **Kapı durumu:** `outbound.auto_send_enabled` kapalıysa belirgin uyarı "Otomatik gönderim KAPALI: her satıcı ödemesi ve alıcı iadesi siz onaylayana kadar bekler."; açıksa "Otomatik gönderim açık: ödemeler ve iadeler onay beklemeden gönderilir." Kısa açıklama: onay satırı olduğu gibi gönderime bırakır (tutar ve alıcı satır oluşurken sabitlenmiştir), gönderimi sonraki dakikalık tur yapar, sweep onay beklemez, kapı Ayarlar ekranındaki ayardır.
 - **Liste (en eski önce):** onay bekleyen `SELLER_PAYOUT` / `*_REFUND` satırları — ağ, tür, tutar (iadede düşülen ağ ücreti ayrı satırda), alıcı adres (kopyalanabilir), oluşma zamanı, **Onayla**. Boşsa "Onay bekleyen ödeme ya da iade yok."
 - **Onay penceresi:** ağ, tür, tutar, alıcı adres ve işlem kimliği; uyarı "Onaydan sonra bu tutar zincirde gerçekten gönderilir ve geri alınamaz. Ağı, tutarı ve alıcı adresini kontrol edin."; düğmeler "Vazgeç" / "Onayla ve gönderime bırak". Onaylanan satır panelden düşer. Reddedilen onay (`ROW_NOT_APPROVABLE`, `ROW_NOT_OPEN`, `ALREADY_APPROVED`, `ROW_NOT_FOUND`) hata olarak gösterilir; hiçbir şey yazılmaz.
-- Onay işlemi kendisi para göndermez ve tutara/alıcıya dokunmaz; her onay AuditLog `OUTBOUND_TRANSFER_APPROVED` (runbook §L).
+- Onay işlemi kendisi para göndermez ve tutara/alıcıya dokunmaz; her onay AuditLog `OUTBOUND_TRANSFER_APPROVED` (runbook §M).
 
 **Bölümler (her ağ için ayrı kart, ağ etiketiyle: "TRON (TRC-20)" / "Ethereum (ERC-20)"):**
 

@@ -679,7 +679,7 @@ Blockchain sidecar yalnız *nasıl* imzalayacağını değil, **neyi imzalamayac
 | **Onay** | AD41 (07 §9.35) yalnız `BlockchainTransaction.ApprovedAt` / `ApprovedByAdminId` yazar ve `OUTBOUND_TRANSFER_APPROVED` audit satırını ekler; tutar ve alıcı değişmez, onay para göndermez. Satırı sonraki tur gönderir — kapı yokmuş gibi, aynı istekle |
 | **Alarm** | Ethereum ücret "bekle" alarmı (§3.7.7, `FeeCapWaitAlarmMinutes`) onay bekleyen satırı saymaz; onaylanan satırın yaşı onay anından başlar |
 
-Prosedür (günlük onay, kapıyı açma/kapatma) DEPLOY_RUNBOOK §L.
+Prosedür (günlük onay, kapıyı açma/kapatma) DEPLOY_RUNBOOK §M.
 
 ### 3.4 Monitoring ve Polling Stratejisi
 

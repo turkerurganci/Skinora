@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-22 — T169 — sahip kararlarının değerleri (§A, §C), §L ödeme onay kapısı (kapanış: §L.3 kapatma tur ortasında da hemen etkili), §M kurulum günü kontrol listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-22 — T169 — sahip kararlarının değerleri (§A, §C), §M ödeme onay kapısı (kapanış: §M.3 kapatma tur ortasında da hemen etkili), §O kurulum günü kontrol listesi (main birleştirmesinde T163'ün §L'si korundu; T169 bölümleri §L → §M, §M → §O kaydırıldı, §N T164'e ayrıldı). · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (77 satır — T169 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -17,9 +17,10 @@
 | **E. Runtime-tunable** | — | Admin UI'dan değişir; cron'lar **restart'sız** re-register olur (WP14), gas/retry her çalıştırmada taze okunur. |
 | **G. Lokal gerçek-konfigürasyon provası** | — | Uçtan uca çalıştırma reçetesi: sır yönetimi, migration, bootstrap SQL'leri, doğrulama listesi, bilinen tuzaklar. |
 | **J. Ethereum kurulumu ve alarmları (F8)** | Ethereum açılmadan ZORUNLU | Sırlar, RPC, fiyat kaynağı probu, cüzdan doldurma, açılış adımı (`ETHEREUM_SIDECAR_BASE_URL`), her Ethereum alarmının anlamı ve yordamı, uzun kesinti ve yanlış EVM ağı kurtarması (T158). |
+| **L. İmza sırları — Docker secret + çevrimdışı yedek (T163)** | Para girmeden önce ZORUNLU | İki ağın tohumu ve anahtarları yalnız secret dosyası (env yolu üretimde kapalı); şifreli yedek (`scripts/wallet-backup/`), saklama, geri yükleme ve prova kaydı |
 | **K. Deneme yayını (bu PC, Docker Desktop + Cloudflare Tunnel — T161)** | Deneme yayınından önce ZORUNLU | Ayrı compose projesi (`skinora-trial`, ayrı volume / `.env.trial` / `secrets/trial/`); dışarıya açık port yok, dış trafik yalnız tünelden; tünel token'sız açılmaz. Gelecekteki Linux sunucu için 80/443 + güvenlik duvarı notu §K.6. |
-| **L. Launch checklist — ödeme onay kapısı (T169)** | **Test boyunca KAPALI, açılış T175'te** | `outbound.auto_send_enabled` `false` seed edilir: her satıcı ödemesi ve alıcı iadesi admin onayı (S22 paneli, 07 §9.35) bekler; sweep beklemez. Açma prosedürü §L. |
-| **M. Kurulum günü kontrol listesi (T171)** | **Kurulumda ZORUNLU** | T169 sahip kararlarının değerleri (tutar sınırları, teslimat 720 dk, tavanlar, yasaklı ülkeler, kapılar) kurulan ortamda tek tek doğrulanır; yaptırım listesi yordamı ve KMS/HSM notu. |
+| **M. Launch checklist — ödeme onay kapısı (T169)** | **Test boyunca KAPALI, açılış T175'te** | `outbound.auto_send_enabled` `false` seed edilir: her satıcı ödemesi ve alıcı iadesi admin onayı (S22 paneli, 07 §9.35) bekler; sweep beklemez. Açma prosedürü §M. |
+| **O. Kurulum günü kontrol listesi (T171)** | **Kurulumda ZORUNLU** | T169 sahip kararlarının değerleri (tutar sınırları, teslimat 720 dk, tavanlar, yasaklı ülkeler, kapılar) kurulan ortamda tek tek doğrulanır; yaptırım listesi yordamı ve KMS/HSM notu. |
 | **H. Launch checklist — teslimat kanıtı kapısı** | **Launch'ta ZORUNLU adım** | `delivery.inventory_evidence_auto_release_enabled` `false` seed edilir. İlk N gerçek teslimatın kanıtı insan tarafından incelenmeden envanter kanıtına dayalı otomatik para bırakma **açılmaz** (02 §9.2, T125). |
 
 ---
@@ -56,7 +57,7 @@ Bu 19 ayar `SystemSettingSeed.cs`'te **Unconfigured** (default'suz) gelir. `Sett
 
 > **Anahtar yeniden adlandırma (T123, 2026-08-13):** #2 ve #6'nın hem SystemSetting anahtarı hem env var adı değişti (`trade_offer_seller_timeout_minutes` → `seller_confirm_timeout_minutes`, `trade_offer_buyer_timeout_minutes` → `delivery_timeout_minutes`). Env adı anahtardan türetildiği için (`SettingsBootstrapService`: `SKINORA_SETTING_{KEY_UPPER}`) **eski env var adları artık hiçbir şeyi doldurmaz** — bu ikisini `.env`'inde eski adla taşıyan bir ortam startup'ta fail-fast eder. `.env.example`, `docker-compose.yml` ve `docker-compose.e2e.yml` güncellendi; kendi `.env` dosyanı elle güncelle. DB tarafında migration `T123_RenameTimeoutSettings` bir `UpdateData`'dır (satır `Id`'leri sabit) → admin UI'dan girilmiş değerler korunur.
 
-> **#6 uyarısı (T122 doğrulaması, 2026-08-13; anahtar adı T123'te düzeltildi, tüketici T124'te bağlandı, **doğrulama turu T127'de canlı**) — `delivery_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır.** Bu ayar **satıcının teslimat penceresini** besliyor: `TimeoutSchedulingService.ArmDeliveryDeadlineAsync` ödeme onayında (`ConfirmPayment`) okuyup `DeliveryDeadline`'ı yazıyor. **T127 itibarıyla bu değeri düşük vermek doğrudan para hareketi üretir** — süre dolduğunda scanner bir doğrulama turu çalıştırır ve tur "item hâlâ satıcıda" derse iptal + alıcıya iade + satıcıya kusur uygular (03 §4.4). T127 öncesinde süre dolması bir şey tetiklemiyordu; artık tetikliyor. T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. ~~Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır.~~ **T169 (2026-10-22):** satırın değeri artık **720**'dir (sahibin 12 saatlik teslimat süresi, 2026-10-04); `.env.example`, deneme yayını overlay'i (`docker-compose.trial.yml`: `.env.trial` boş bırakırsa 720) ve `SettingsBootstrapTests` aynı değeri taşır. Migration `T169_OwnerDecisions` hâlâ 60 olan bir veritabanını 720'ye çeker (admin'in değiştirdiği değer korunur). Ölçüm üretimden gelince daraltma kuralı (§H.4) aynen geçerli. Kurulum günü kontrolü: §M satır 1. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
+> **#6 uyarısı (T122 doğrulaması, 2026-08-13; anahtar adı T123'te düzeltildi, tüketici T124'te bağlandı, **doğrulama turu T127'de canlı**) — `delivery_timeout_minutes` örneği (60 dk) ölçülmemiş bir sayıdır.** Bu ayar **satıcının teslimat penceresini** besliyor: `TimeoutSchedulingService.ArmDeliveryDeadlineAsync` ödeme onayında (`ConfirmPayment`) okuyup `DeliveryDeadline`'ı yazıyor. **T127 itibarıyla bu değeri düşük vermek doğrudan para hareketi üretir** — süre dolduğunda scanner bir doğrulama turu çalıştırır ve tur "item hâlâ satıcıda" derse iptal + alıcıya iade + satıcıya kusur uygular (03 §4.4). T127 öncesinde süre dolması bir şey tetiklemiyordu; artık tetikliyor. T122'nin canlı ölçümü teslimat gecikmesini **ölçemedi** (trade yapılamadı — 11 §P2.5), dolayısıyla 60 dk bir teslimat penceresi olarak **doğrulanmadı**; T122 runbook §7.3 launch'ta **muhafazakâr yüksek** bir değerle açılmasını ve ölçüm üretimden geldiğinde daraltılmasını öneriyor. ~~Bu satırdaki 60, `SettingsBootstrapTests` ile hizalı bir **örnek**tir — launch değeri olarak kopyalanmamalıdır.~~ **T169 (2026-10-22):** satırın değeri artık **720**'dir (sahibin 12 saatlik teslimat süresi, 2026-10-04); `.env.example`, deneme yayını overlay'i (`docker-compose.trial.yml`: `.env.trial` boş bırakırsa 720) ve `SettingsBootstrapTests` aynı değeri taşır. Migration `T169_OwnerDecisions` hâlâ 60 olan bir veritabanını 720'ye çeker (admin'in değiştirdiği değer korunur). Ölçüm üretimden gelince daraltma kuralı (§H.4) aynen geçerli. Kurulum günü kontrolü: §O satır 1. Kapanış T125 launch kapısına bağlı ([`INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md`](INTEGRATION_RUNBOOKS/STEAM_INVENTORY_READ_BEHAVIOR.md) §7).
 
 ---
 
@@ -81,7 +82,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `STEAM_SIDECAR_REDIS_URL` | steam sidecar | Envanter cache (08 §2.3); boşsa in-memory fallback |
 | `STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE` | steam sidecar | Steam Community envanter ucunun kuyruk tavanı, istek/dakika (08 §2.6, T120). Web API kuyruğundan **ayrı**. Boş/geçersiz → **10/dk** (tahmini 10-20/dk/IP aralığının muhafazakâr ucu; aşım IP bloğuyla cezalandırılır). Her teslimat doğrulaması **iki** okuma harcadığı için (satıcı + alıcı) bu değer aynı zamanda eşzamanlı doğrulama tavanıdır (10 §4). Yalnız proxy havuzu arkasında veya T122 gerçek limiti ölçtükten sonra yükseltilir. Değişiklik sidecar restart gerektirir |
 | `STEAM_SIDECAR_LIMITED_ACCOUNT_SAMPLES` (+ `_SAMPLE_DELAY_MS`, `_DEADLINE_MS`, `_CACHE_TTL_SECONDS`) | steam sidecar | Limited-account probunun örnekleme ayarları (08 §2.2a). Aynı Community kotasını harcar. `0` (kısıtlı değil) ancak bu kadar **ardışık** örnek aynı sonucu verirse kabul edilir; `1` tek okumada bağlayıcıdır. Boş → **3 örnek / 3 sn ara / 20 sn üst sınır / 24 sa temiz-önbellek**. Varsayılan 3, §G.5'teki insan yordamının **5**'inin altındadır ve bilerek öyledir: oradaki kural tek seferlik koşar, buradaki her soğuk kullanıcı için örnek sayısı kadar Community isteği harcar. Gerçek IP limiti ölçüldüğünde **rebuild'siz** yükseltilir — yalnız sidecar restart gerekir. `_DEADLINE_MS` backend istemcisinin 30 sn'lik timeout'unun **altında** kalmalı, yoksa arıza kodlu 503 yerine "backend timeout" olarak görünür |
-| `HD_WALLET_MNEMONIC` | blockchain sidecar | Deposit adresi türetme (08 §3.2) |
+| **TRON servisi — Docker secret dosyaları** (`secrets/tron_hd_mnemonic.txt`, `secrets/tron_hot_wallet_private_key.txt`; deneme yayını `secrets/trial/`) | **yalnız** blockchain sidecar | **T163 — DEFERRED_BACKLOG `SigningSecretsInPlainEnv`.** Depozit tohumu (BIP-39, `m/44'/195'/0'/0/{index}` kök düğümden, 08 §3.2) ve sıcak cüzdan anahtarı env değil **dosya**; compose `secrets:` ile yalnız bu servise `/run/secrets/` altına bağlar. Dosyalar **her stack'te** gerekir (boş olabilir: boş tohum → derive 503, boş anahtar → payout/iade/sweep reddedilir). **Env yolu kapalı:** `NODE_ENV` tam `development`/`test` değilken `HD_WALLET_MNEMONIC` ya da `HOT_WALLET_PRIVATE_KEY` doluysa servis açılmaz (`SIGNING_SECRET_IN_ENV`). Doluysa sıcak anahtar `HOT_WALLET_ADDRESS`'i kontrol etmeli (`HOT_WALLET_ADDRESS_MISMATCH`). Eksik kaynak dosyada Docker o yolda **boş dizin** açar → `SIGNING_SECRET_UNREADABLE`. Yedek, geri yükleme, prova: **§L**; hazırlama ve `.env`'den geçiş: [`secrets/README.md`](../secrets/README.md) |
 | `TRON_USDT_CONTRACT` / `TRON_USDC_CONTRACT` | blockchain sidecar **+ backend** | **Yalnız testnet'te (nile/shasta) zorunlu** — mainnet adresleri koda gömülü. Boşsa desteklenen-token allowlist'i boş kalır ve gelen her transfer wrong/spam token sayılır (08 §3.3). **Aynı iki değer backend'e de `StablecoinContracts__Usdt` / `__Usdc` olarak geçer** (`docker-compose.yml`); ikisi ayrışırsa ödeme sessizce ölür — backend izleyiciyi `expectedContract` ile kurar, sidecar geleni ona göre sınıflar, ve eşleşmeyen **doğru** bir ödeme `wrong_token` sayılıp otomatik iadeye gider |
 | `TRONSCAN_TX_BASE_URL` | frontend (**build-time**) | İşlem hash'lerinin bağlandığı blok gezgini. `NEXT_PUBLIC_*` derleme anında bundle'a gömülür, bu yüzden `build.args` ile geçer — **değiştirmek frontend imajının yeniden kurulmasını gerektirir**. Boş = mainnet `tronscan.org`. Nile'da `https://nile.tronscan.org/#/transaction/` |
 | `ETHERSCAN_TX_BASE_URL` *(T156)* | frontend (**build-time**) | Ethereum işlem hash'lerinin bağlandığı gezgin; kural `TRONSCAN_TX_BASE_URL` ile aynı (derleme anında gömülür, değiştirmek yeni frontend imajı ister). Boş = mainnet `etherscan.io`. Sepolia'da `https://sepolia.etherscan.io/tx/`. T156'dan önce boş bırakılan Tronscan değeri istemcide boş metin olarak kalıyordu (`??`); artık boş değer de mainnet'e düşer |
@@ -90,12 +91,11 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `MAX_SINGLE_TRANSFER_USDT` / `MAX_DAILY_OUTFLOW_USDT` | blockchain sidecar | Tek gönderim ve sıcak cüzdanın 24 saatlik çıkış tavanı (ondalık USDT, 08 §3.3a). **Fail-closed: boş ya da bozuksa payout ve iade yapılmaz.** Boyutlandırma §C.3 |
 | `STAKE_ACCOUNT_ADDRESS` (+ `STAKE_ACCOUNT_PERMISSION_ID`) | blockchain sidecar | Enerji kilidinin durduğu ayrı hesabın **adresi**. Owner anahtarı çevrimdışıdır ve hiçbir servise verilmez; sıcak cüzdanın anahtarı bu hesapta yalnız devretme/geri alma yetkisiyle listelidir. Boş = sıcak cüzdan kendi kilidini kullanır (eski düzen, kırılma yok). Bozuk ya da base58 olmayan adres (`41…` hex dahil) ya da 2'den küçük / tam sayı olmayan izin kimliği sidecar'ı açılışta durdurur (`STAKE_ACCOUNT_MISCONFIGURED`); açılan sidecar hangi hesaptan devredeceğini `Energy delegation:` satırında yazar. Kurulum, ödeme payının sıcak cüzdana kalıcı devretilmesi ve bant boyutlandırması §C.2. **F8 (T141): kilit uykuda — boş bırakın** (§C.2 başındaki not); T149'dan sonra `ENERGY_STAKING_ENABLED` kapalıyken bu iki değer okunmaz bile |
 | `ENERGY_STAKING_ENABLED` | blockchain sidecar | **T149 — hibrit kilidin kapama anahtarı, varsayılan `false`** (compose `:-false`). Kapalıyken kilit okunmaz, devretme yapılmaz, her depozit transferi yakar; `true` yalnız proje sahibi kilidi yeniden açarsa (§C.2). Yalnız `true`/`false`/boş kabul edilir — başka değer sidecar'ı açılışta durdurur. Açılış log'unun `Energy delegation:` satırı `stakingEnabled` alanını yazar |
-| `HOT_WALLET_PRIVATE_KEY` | blockchain sidecar | Payout/refund/sweep imzası + sweeper Energy delegation. **Bugün düz env değişkeni** (`docker inspect` ile görünür); Docker secret'a taşınması ve çevrimdışı yedek prosedürü owner kararı 2026-09-17 ile ayrı bir tura bırakıldı (05 §3.3/§3.5) |
 | `TRON_NETWORK` (+ `TRON_*_CONTRACT` testnet'te) | blockchain sidecar | mainnet/nile/shasta + token kontratları (08 §3.3) |
 | `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10). **Aynı TronGrid hesabının anahtarları toplam kotayı paylaşabilir** (TronGrid belgesi, 2026-09-08) — ikinci anahtar bütçe ekleyecekse başka bir hesaptan alınmalıdır |
 | `TRONGRID_DAILY_REQUEST_BUDGET` | blockchain sidecar | Planın günlük istek bütçesi; açılışta `skinora_blockchain_trongrid_daily_request_budget` gauge'una yazılır ve `tron-quota-projection` alarmı ölçülen istek hızını buna böler (oran > 0,8 → uyarı). Varsayılan 100.000 = 2026'da raporlanan ücretsiz plan; TronGrid bütçeyi ne yanıtta ne belgede veriyor, **gerçek planın değeri girilir**. Pozitif tam sayı değilse sidecar açılmaz. Kapasite hesabı 08 §3.4 |
 | `ETHEREUM_SIDECAR_BASE_URL` / `ETHEREUM_SIDECAR_INTERNAL_KEY` | backend (+ iç anahtar Ethereum servisine) | **T148 — Ethereum servisinin adresi ve iç anahtarı (`EthereumSidecar__*`).** Servis T158 itibarıyla **tamamdır** (izleme T151, gönderim T152, yakıt T153, ücret ve kur T154). `ETHEREUM_SIDECAR_BASE_URL`'i doldurmak Ethereum'u **yeni işlemlere açar** — bu bir açılış kararıdır, varsayılan değil: §J.1'in sırası (sırlar, RPC, fiyat kaynağı probu, cüzdanlar, alarmlar) tamamlanmadan doldurmayın. Değer: `http://skinora-ethereum-sidecar:5300`. Boş = backend Ethereum'a hiçbir istek göndermez; Ethereum'a ait her çağrı "yapılamadı" döner, Ethereum gönderim satırları `PENDING` bekler (yeniden deneme hakkı harcanmaz), sağlık yoklaması Ethereum'u yoklamaz. TRON bundan etkilenmez: bekleyen Ethereum satırları TRON'un gönderim/onay/adres/sweep sırasını tutmaz (iş adayları sorguda yapılandırılmış ağlarla sınırlı — 05 §3.3a, T148 düzeltme turu 1). **Yapılandırılmış ama erişilemeyen** Ethereum servisi de TRON'u tutmaz (T150): toplu işler ağ başına ayrı parti alır, sırayla işler, bir ağın servisi ilk "erişilemez" cevabında o turu bırakır; sağlık yoklaması kesinti ilan edince o ağa hiç dokunulmaz; outbox başarısız olayı geri çekilmeyle (5 sn'den 15 dk'ya) yeniden dener. İç anahtar TRON'unkinden (`BLOCKCHAIN_SIDECAR_INTERNAL_KEY`/`INTERNAL_KEY`) **farklı** olmalı; Ethereum servisi kendi iç anahtarı olmadan ya da 32 karakterden kısa anahtarla **açılmaz** (`INTERNAL_KEY_MISSING` / `INTERNAL_KEY_TOO_SHORT`) — `INTERNAL_KEY`'e düşen bir yedek yoktur |
-| **Ethereum servisi — Docker secret dosyaları** (`secrets/ethereum_hd_mnemonic.txt`, `secrets/ethereum_hot_wallet_private_key.txt`, `secrets/ethereum_fuel_wallet_private_key.txt`) | **yalnız** Ethereum servisi | **T150 — 11 §F8 K7.** Tohum (BIP-39, yol `m/44'/60'/0'/0/{index}` kök düğümden) ve iki imza anahtarı env değil **dosya** olarak, compose `secrets:` ile `/run/secrets/` altına bağlanır; başka hiçbir konteynere gitmez, TRON tohumu bu servise hiç girmez. Tohum dosyası yoksa ya da boşsa servis açılmaz (`HD_WALLET_NOT_CONFIGURED`). Anahtar dosyaları T152/T153'e kadar boş olabilir; doluysa sıcak anahtar `ETHEREUM_HOT_WALLET_ADDRESS`'i kontrol etmeli (`HOT_WALLET_ADDRESS_MISMATCH`), yakıt anahtarı sıcak anahtardan farklı olmalı ve sıcak/soğuk adresi kontrol etmemeli (`WALLET_KEYS_NOT_DISTINCT`, öneriyle kaydedildi — ⚠). Dosyalar yalnız `ethereum` profiliyle gerekir: `docker compose -f docker-compose.yml --profile ethereum up -d`. Hazırlama: [`secrets/README.md`](../secrets/README.md) |
+| **Ethereum servisi — Docker secret dosyaları** (`secrets/ethereum_hd_mnemonic.txt`, `secrets/ethereum_hot_wallet_private_key.txt`, `secrets/ethereum_fuel_wallet_private_key.txt`) | **yalnız** Ethereum servisi | **T150 — 11 §F8 K7.** Tohum (BIP-39, yol `m/44'/60'/0'/0/{index}` kök düğümden) ve iki imza anahtarı env değil **dosya** olarak, compose `secrets:` ile `/run/secrets/` altına bağlanır; başka hiçbir konteynere gitmez, TRON tohumu bu servise hiç girmez. Tohum dosyası yoksa ya da boşsa servis açılmaz (`HD_WALLET_NOT_CONFIGURED`). Anahtar dosyaları T152/T153'e kadar boş olabilir; doluysa sıcak anahtar `ETHEREUM_HOT_WALLET_ADDRESS`'i kontrol etmeli (`HOT_WALLET_ADDRESS_MISMATCH`), yakıt anahtarı sıcak anahtardan farklı olmalı ve sıcak/soğuk adresi kontrol etmemeli (`WALLET_KEYS_NOT_DISTINCT`, öneriyle kaydedildi — ⚠). Dosyalar yalnız `ethereum` profiliyle gerekir: `docker compose -f docker-compose.yml --profile ethereum up -d`. Okunamayan secret (Docker'ın eksik dosya yerine açtığı dizin) servisi `SECRET_UNREADABLE` ile durdurur (T163). Hazırlama: [`secrets/README.md`](../secrets/README.md); çevrimdışı yedek §L |
 | `ETHEREUM_NETWORK` (+ `ETHEREUM_SIDECAR_PORT`) | Ethereum servisi | `sepolia` (chainId 11155111, varsayılan) ya da `mainnet` (chainId 1) (08 §3.7.1). Sağlayıcının `eth_chainId`'si bu zincir değilse o sağlayıcı hiç kullanılmaz (log'a yazılır, yedek cevap verir) |
 | `ETHEREUM_RPC_PRIMARY_URL` / `ETHEREUM_RPC_BACKUP_URL` (+ `_NAME`, `_MAX_BLOCK_RANGE`, `_MAX_ADDRESSES`) | Ethereum servisi | **T150 — birincil + yedek JSON-RPC (08 §3.7.1, öneriyle kaydedildi — ⚠: Alchemy Free birincil, Chainstack Developer yedek).** URL'ler sağlayıcının API anahtarını taşır — sır gibi davranın; log'lara yalnız sunucu adı yazılır. Birincil zorunlu (yoksa servis açılmaz: `RPC_NOT_CONFIGURED`); yedek yoksa açılır ama uyarır (yedeğe geçiş yok). `eth_getLogs` sınırları sağlayıcı başına ayardır (08 §3.7.4): blok aralığı Alchemy Free **10**, Chainstack Developer **100**; arama konumu başına en çok **1.000** adres. Sağlayıcı yine "çok büyük" derse istek yarıya bölünür. Taşıma hatası (bağlantı, zaman aşımı, 429/5xx, `-32005`, arşiv reddi) alan sağlayıcı 30 sn atlanır, diğeri cevap verir. Anahtarlı sınırlar belgeden alındı; anahtarlar gelince T142 probu bu uçlara koşulmalı (11 §F8 T150 ⚠) |
 | `ETHEREUM_FINALIZED_POLL_INTERVAL_MS` / `ETHEREUM_FINALIZED_STALL_SECONDS` | Ethereum servisi | `finalized` başı 30 sn'de bir okunur (08 §3.7.4); son `finalized` bloğun zaman damgası **1.800 sn**'den (30 dk) eskiyse servis `/health`'te **503** verir (backend Ethereum'u dondurur, yeni işleme kapatır; TRON etkilenmez) ve `ethereum-finalized-stalled` alarmı çalar (08 §3.7.8). Eşik `skinora_ethereum_finalized_stall_threshold_seconds` gauge'una yazılır; alarm aynı değere böler. Backend'deki `blockchain.ethereum.finality_stall_alarm_minutes` ile parite §D |
@@ -131,7 +131,7 @@ Seed default'u `NONE`/varsayılan ile açılır ama set edilmezse ilgili kapsam 
 | `multi_account.exchange_addresses` | NONE | Çoklu-hesap kontrolünde exchange adres allowlist'i boş |
 | `price_deviation_threshold` | 1.0 (= %100) | Seed default'la PRICE_DEVIATION fraud kuralı pratikte hiç ateşlemez (WP4a bilinçli geniş default). Prod'da daraltılmalı (02 §14.4) — **aşağıdaki `SteamMarket__Provider` ile birlikte** anlamlı olur |
 | `delivery.inventory_evidence_auto_release_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — envanter kanıtı kaydedilir ve gösterilir ama parayı tek başına serbest bırakmaz. Açma prosedürü §H'de; alıcının kendi onayı bundan etkilenmez (T125, 02 §9.2) |
-| `outbound.auto_send_enabled` | `false` | **Test boyunca ve açılışta bilinçli olarak `false` kalır** — her satıcı ödemesi ve alıcı iadesi admin onayı bekler (07 §9.35, S22 paneli); sweep beklemez. Açma prosedürü §L (T169, 11 T175) |
+| `outbound.auto_send_enabled` | `false` | **Test boyunca ve açılışta bilinçli olarak `false` kalır** — her satıcı ödemesi ve alıcı iadesi admin onayı bekler (07 §9.35, S22 paneli); sweep beklemez. Açma prosedürü §M (T169, 11 T175) |
 | `settlement.reversal_auto_refund_enabled` | `false` | **Launch'ta bilinçli olarak `false` kalır** — mutabakat sonu kontrolü geri alma imzası bulursa admin'e eskale eder, otomatik iade + fraud flag uygulamaz. Açma prosedürü §I'de (T129, 02 §4.5.1) |
 | `payout_settlement_days` | `8` | Seed default'u zaten doğru değerdir (7 günlük Steam penceresi + 1 gün marj). Değiştirilecekse **7'nin altına inilemez** — validator reddeder (02 §16.2) |
 | `settlement.unreadable_escalation_hours` | `48` | Mutabakat kontrolü envanter okunamadığı için sonuca varamadığında admin'e ne kadar sonra düşeceği. Kısaltmak admin kuyruğunu şişirir, uzatmak satıcının ödemesini geciktirir — ödeme her iki hâlde de parkta kalır (03 §2.4) |
@@ -462,10 +462,10 @@ Kalan etki kozmetiktir: AD14 rol detayında fazladan bir eleman görünür. Migr
 
 Değerler **hiçbir zaman** repo'ya girmez. Yerleri:
 
-- `.env` — env olarak taşınan sırların **tamamı** (gitignored; şablon `.env.example`). Dosya olarak taşınan sırlar yalnız Ethereum servisinindir (T150): `secrets/ethereum_*.txt`, compose `secrets:` ile yalnız o servise bağlanır ve yalnız `ethereum` profiliyle gerekir — bkz. [`secrets/README.md`](../secrets/README.md)
+- `.env` — env olarak taşınan sırlar (gitignored; şablon `.env.example`). **İmza sırları env değildir:** TRON'un tohumu ve sıcak anahtarı `secrets/tron_*.txt` (T163, her stack'te), Ethereum'unkiler `secrets/ethereum_*.txt` (T150, yalnız `ethereum` profiliyle); compose `secrets:` ile her biri yalnız kendi servisine bağlanır — bkz. [`secrets/README.md`](../secrets/README.md), çevrimdışı yedek §L
 - `scripts/git-hooks/pre-commit` — staged içerikte sır kalıbı bulursa **commit'i** bloklar (`bash scripts/git-hooks/install.sh` ile kurulur)
 
-`docker-compose.yml` yalnız `${VAR}` referansı taşır. Her servis **yalnız kendi** env'ini alır: `HOT_WALLET_PRIVATE_KEY` ve `HD_WALLET_MNEMONIC` sadece blockchain sidecar'a gider — backend imza materyalini hiç görmez (F4 gate check garantisi). Ethereum'un tohumu ve anahtarları yalnız Ethereum servisine, Docker secret olarak gider (T150, K7).
+`docker-compose.yml` yalnız `${VAR}` referansı taşır. Her servis **yalnız kendi** env'ini alır. TRON'un tohumu ve sıcak anahtarı yalnız blockchain sidecar'a, Ethereum'un tohumu ve anahtarları yalnız Ethereum servisine **Docker secret** olarak gider (T163, T150, K7) — backend imza materyalini hiç görmez (F4 gate check garantisi).
 
 ### G.2 Adımlar
 
@@ -901,7 +901,7 @@ Servis hiçbir gas miktarını sabit varsaymaz (yönetici kararı, ⚠ PARA; 08 
 |---|---|
 | Docker Desktop + Compose ≥ 2.24 | `!reset` / `!override` etiketleri. Bu makinede v5.1.0 |
 | .NET 9 SDK + `dotnet-ef` 9.0.3 | Yalnız migration **betiğini üretmek** için (host'tan veritabanına bağlanılmaz — deneme yayınında DB portu yok) |
-| Deneme yayınına **ayrı** testnet cüzdanları | TRON: `HD_WALLET_MNEMONIC`, sıcak/soğuk cüzdan; Ethereum: `secrets/trial/` altındaki tohum ve anahtarlar. **Geliştirme stack'inin cüzdanları paylaşılmaz:** iki veritabanı aynı tohumdan aynı indeksleri (0, 1, 2 …) türetir ve iki stack aynı depozit adreslerini izler; iki imzacı aynı sıcak cüzdandan gönderir (Ethereum'da aynı hesabın nonce'u iki ayrı günlükle yarışır, günlük çıkış tavanları ikiye bölünmez) |
+| Deneme yayınına **ayrı** testnet cüzdanları | TRON: `secrets/trial/tron_*.txt` (tohum + sıcak anahtar, T163), sıcak/soğuk adres `.env.trial`'da; Ethereum: `secrets/trial/ethereum_*.txt`. İkisi de üretildiği gün yedeklenir (§L). **Geliştirme stack'inin cüzdanları paylaşılmaz:** iki veritabanı aynı tohumdan aynı indeksleri (0, 1, 2 …) türetir ve iki stack aynı depozit adreslerini izler; iki imzacı aynı sıcak cüzdandan gönderir (Ethereum'da aynı hesabın nonce'u iki ayrı günlükle yarışır, günlük çıkış tavanları ikiye bölünmez) |
 | Yeni sırlar | `JWT_SECRET`, `WEBHOOK_SECRET`/`BLOCKCHAIN_WEBHOOK_SECRET`, `ETHEREUM_WEBHOOK_SECRET`, `*_INTERNAL_KEY` (≥ 32, servis başına ayrı), `MSSQL_SA_PASSWORD`, `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD` — hepsi `openssl rand -hex 32` ile **yeniden** üretilir, `.env`'den kopyalanmaz |
 | `STEAM_API_KEY`, `TRON_API_KEY`, Ethereum RPC URL'leri | §G.0, §J.1 ile aynı |
 | Bilgisayar açık ve uyumaz | Deneme yayını bu makine kadar ayaktadır; Windows uyku/hazırda bekletme kapatılır (Güç seçenekleri), Docker Desktop "Start when you sign in" açık |
@@ -931,7 +931,9 @@ echo 'SKINORA_TRIAL_STACK=1' >> .env.trial     # zorunlu işaret; .env.example'a
 # 2) Sırlar — dosya olarak taşınanlar
 umask 077; mkdir -p secrets/trial
 : > secrets/trial/cloudflare_tunnel_token.txt          # T162'de token yazılır
+: > secrets/trial/tron_hd_mnemonic.txt; : > secrets/trial/tron_hot_wallet_private_key.txt   # T163 — HER ZAMAN gerekir; testnet tohumu/anahtarı yazılır
 #    --profile ethereum için: secrets/trial/ethereum_*.txt (secrets/README.md)
+#    Sırlar yazıldıktan sonra çevrimdışı yedek: §L.4
 
 # 3) Render kontrolü — uyarısız ve hatasız olmalı
 $TRIAL config --quiet
@@ -1028,23 +1030,133 @@ Yığın `-p skinora-t161` proje adıyla (geliştirme projesi `escrow`'a dokunma
 
 ---
 
-## L. Launch checklist — ödeme onay kapısı (T169)
+## L. İmza sırları — Docker secret ve çevrimdışı yedek (T163)
+
+> **Bağlam (proje sahibi kararı, 2026-09-17; DEFERRED_BACKLOG `SigningSecretsInPlainEnv`).** İki ağın tohumları ve cüzdan anahtarları **düz ortam değişkeni değil, Docker secret dosyasıdır** ve **çevrimdışı, şifreli** yedeklenir. Sunucunun (bugün: deneme yayını PC'si) diski kaybolursa depozitlerde bekleyen para da, iadeler de, sıcak cüzdan da **yalnız bu yedekten** geri alınır — başka kopya yoktur. Bu bölüm prosedürü **öneriyle** yazar; işaretli noktalar (⚠) proje sahibinin seçimidir.
+
+### L.1 Hangi sırlar, nerede, kaybolursa ne olur
+
+| Dosya (`secrets/` · deneme yayını `secrets/trial/`) | Servis | Kaybolursa |
+|---|---|---|
+| `tron_hd_mnemonic.txt` | yalnız TRON servisi | Bütün TRON depozit adreslerinin anahtarı: sweep edilmemiş ödemeler ve iadeler **erişilemez** |
+| `tron_hot_wallet_private_key.txt` | yalnız TRON servisi | TRON sıcak cüzdanındaki bakiye (komisyon, payout bakiyesi) erişilemez |
+| `ethereum_hd_mnemonic.txt` | yalnız Ethereum servisi | Ethereum depozitleri (aynı sonuç) |
+| `ethereum_hot_wallet_private_key.txt` | yalnız Ethereum servisi | Ethereum sıcak cüzdanı |
+| `ethereum_fuel_wallet_private_key.txt` | yalnız Ethereum servisi | Yakıt cüzdanındaki ETH |
+
+- **Env yolu kapalı (T163).** TRON servisi `NODE_ENV` tam olarak `development`/`test` değilken `HD_WALLET_MNEMONIC` ya da `HOT_WALLET_PRIVATE_KEY` değişkeni doluysa **açılmaz** (`SIGNING_SECRET_IN_ENV`); compose bu iki değişkeni hiç geçmez. Ethereum servisi zaten yalnız dosyadan okur (T150, T158 (c)). Kontrol: `docker inspect <container> --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -ciE 'MNEMONIC|PRIVATE_KEY'` → **0**.
+- **Açılış kuralları.** Sıcak anahtar `HOT_WALLET_ADDRESS`'i kontrol etmiyorsa TRON servisi açılmaz (`HOT_WALLET_ADDRESS_MISMATCH` — yanlış yedekten geri yükleme ilk payout'ta değil açılışta yakalanır); 64 hex değilse `INVALID_SIGNING_KEY`. Okunamayan secret (çoğunlukla Docker'ın eksik dosya yerine açtığı **dizin**, bkz. [`secrets/README.md`](../secrets/README.md)) iki serviste de açılışı durdurur: TRON `SIGNING_SECRET_UNREADABLE`, Ethereum `SECRET_UNREADABLE`.
+- **Hiçbir yere değer yazılmaz.** Açılış satırları yalnız **kaynağı** ve **açık adresleri** yazar: TRON `Signing secrets: loaded` (`hdMnemonicSource`, `hotWalletKeySource`, `hotWalletAddressFromKey`) + `HD wallet initialized` (`depositIndex0`); Ethereum `Ethereum service configured` (`depositIndex0`, `hotWalletAddress`, `fuelWalletAddress`). Bunlar yedeğin özetiyle karşılaştırılan değerlerdir (§L.6).
+- **Kapsam dışı.** Soğuk cüzdanların ve kilit hesabının anahtarları bu makineye hiç girmez; onların yedeği kendi donanım cüzdanı/tohumudur (T171). Cloudflare tünel token'ı panelden yeniden alınır. JWT, webhook ve iç anahtarlar yeniden üretilebilir (kayıpları para kaybı değildir) ve bugün hâlâ env'dedir — DEFERRED_BACKLOG `SharedSecretsInPlainEnv` (T171). Veritabanı yedeği T164.
+
+### L.2 Araç: GnuPG (öneriyle kaydedildi — ⚠ GÜVENLİK)
+
+Betik: [`scripts/wallet-backup/wallet-backup.sh`](../scripts/wallet-backup/wallet-backup.sh) (+ adres kontrolü `wallet-manifest.mjs`). Şifreleme **GnuPG simetrik**: AES-256, parola türetme S2K SHA-512 en yüksek yineleme sayısıyla (65.011.712), bütünlük korumalı (MDC — bir baytı değiştirilmiş arşiv açılmaz, testle). Arşiv içinde `MANIFEST.json`: her dosyanın SHA-256'sı ve dosyalardan türetilen **açık adresler** (tohum başına 5 depozit adresi, sıcak ve yakıt cüzdanı).
+
+| Seçenek | Artı | Eksi |
+|---|---|---|
+| **GnuPG (öneri)** | Git for Windows'la **gelir** (bu PC'de 2.2.41, kurulum yok), Linux'ta hazır; açık standart (OpenPGP) — yıllar sonra herhangi bir makinede açılır (Windows'ta Gpg4win/Kleopatra arayüzüyle de); bütünlük denetimi; betikle uçtan uca test edildi | Komut satırı |
+| 7-Zip AES-256 | Windows'ta sağ tık ile kolay; "dosya adlarını şifrele" seçeneği | Bu PC'de **kurulu değil**; bütünlük yalnız CRC; betik bu yolu desteklemiyor (elle) |
+| `age` | Modern, sade | Kurulum gerekir (`winget install FiloSottile.age`); betik desteklemiyor |
+
+Gerekenler: Git Bash (`bash`, `tar`, `gpg`, `shred`), `node` ve bir kez `npm ci` (sidecar-ethereum — adres kontrolü servislerin kendi `ethers` sürümüyle yapılır). **Ağ gerekmez.** Betik parolayı ekrana yazmadan iki kez sorar, gpg'ye argüman değil dosya tanımlayıcısıyla verir; gpg geçici bir `GNUPGHOME` ile çalışır (kendi anahtarlığınıza hiçbir şey yazılmaz, parola önbelleğe alınmaz); açık metin yalnız geçici özel bir dizinde (`$TMPDIR/skinora-wallet-backup.*`) durur ve çıkışta `shred` ile silinir — iş Ctrl+C (INT), pencereyi kapatma (HUP) ya da `kill` (TERM) ile kesildiğinde de (testle). Yakalanamayan kesintide (`kill -9`, elektrik kesilmesi) dizin kalır: §L.8. `--passphrase-file` yalnız prova ve testler içindir.
+
+### L.3 Parola (⚠ GÜVENLİK — saklama yeri sahibin kararı)
+
+- **Güç (öneri):** 6 rastgele kelime (diceware) ya da ≥ 20 rastgele karakter. Betik **16 karakterin altını reddeder.**
+- **testnet ve mainnet için ayrı parola** (öneri).
+- **Parola şifreli arşivle aynı yerde durmaz.** Nerede durduğu sahibin kararıdır; öneri: (a) parola yöneticisi + (b) kapalı zarfta kağıt, USB'lerden **ayrı** bir yerde. Parola kaybolursa arşiv açılamaz — kağıt tohum (§L.5) tek kurtuluştur.
+
+### L.4 Yedek alma — kim, ne zaman
+
+- **Kim (öneri):** proje sahibi, tek başına; ekran paylaşımı / uzak masaüstü kapalıyken.
+- **Ne zaman (öneri):** (1) cüzdan **üretildiği gün, para girmeden önce** — mainnet için T171 kurulum günü; (2) bir sır **değiştiğinde** (sıcak/yakıt cüzdanı döndürme); (3) **6 ayda bir geri yükleme provası** (§L.6: yedeği açıp adresleri karşılaştırmak). Tohum değişmedikçe yeni yedek gerekmez: türetme deterministiktir, yeni depozit indeksleri aynı tohumdan aynı adresi verir.
+
+```bash
+# Deneme yayını (testnet) — USB E: sürücüsünde
+bash scripts/wallet-backup/wallet-backup.sh backup secrets/trial /e/skinora-backup --label testnet
+#   1) parola iki kez, 2) arşiv yazılır, 3) parola BİR KEZ DAHA istenir ve arşiv
+#   geri açılıp manifestle + kaynak dizinle karşılaştırılır (parolanın bilindiği kanıtlanır).
+#   Çıktı: arşiv yolu, arşivin SHA-256'sı, dahil edilen/eksik dosyalar, adresler.
+
+# İkinci kopya — ikinci USB'ye kopyala ve her kopyayı doğrula
+cp /e/skinora-backup/skinora-wallets-testnet-*.tar.gpg* /f/skinora-backup/
+(cd /f/skinora-backup && sha256sum -c skinora-wallets-testnet-*.tar.gpg.sha256)
+bash scripts/wallet-backup/wallet-backup.sh verify /f/skinora-backup/skinora-wallets-testnet-<zaman>.tar.gpg
+```
+
+Çıktıdaki **adresleri** `.env`'deki `HOT_WALLET_ADDRESS` / `ETHEREUM_HOT_WALLET_ADDRESS` ve admin panelindeki depozit adresleriyle karşılaştırın; USB etiketine label, tarih ve sıcak cüzdan adreslerini yazın (**parolayı değil**).
+
+### L.5 Yedek ortamı ve saklama (öneri — ⚠ PARA, sahip seçer)
+
+- **Şifreli arşiv:** iki USB bellek (farklı marka), **iki ayrı yerde** (ör. ev + ikinci adres / banka kiralık kasası). Mainnet arşivi buluta konmaz (öneri); testnet arşivi için kısıt yok.
+- **Kağıt (yalnız iki tohum):** TRON ve Ethereum tohum kelimeleri elle, kalıcı mürekkeple, numaralı; başlık "Skinora mainnet — TRON — m/44'/195'/0'/0, BIP-39 parolası yok" / "… Ethereum — m/44'/60'/0'/0". **Fotoğraf, tarama, yazıcı, bulut notu yok.** Kağıt tohum şifresizdir — arşivden daha hassastır; iki kopya, mühürlü zarflarda.
+- **Paylaştırma şeması:** öneri **yok** — iki tam kopya iki ayrı güvenli yerde. Shamir/SLIP-39 (ör. 2-of-3) tek kişilik işletmede payların kaybolma riskini çalınma riskinden fazla artırır; ama bu geri dönüşü zor bir karardır, **sahibin seçimidir**.
+- **Sıcak/yakıt anahtarları (64 hex) kağıda yazılmaz** (öneri): elle kopyalama hatası riski yüksek, kayıpları sıcak cüzdan limitiyle sınırlı, ve USB arşivlerinde vardır. Sahibin seçimi.
+- **testnet / mainnet ayrımı:** ayrı `--label` (arşiv adında ve manifestte; `restore` etiketi tutmayan arşivi **reddeder**), ayrı parola, ayrı USB/zarf. Testnet sırları geliştirme PC'sinde durabilir; **mainnet sırları bu PC'ye girmez** ([`secrets/README.md`](../secrets/README.md)) — mainnet yedeği T171'de, cüzdanların üretildiği makinede alınır.
+
+### L.6 Geri yükleme
+
+```bash
+TRIAL="docker compose -p skinora-trial --env-file .env.trial -f docker-compose.yml -f docker-compose.trial.yml --profile ethereum"
+# 1) İki servisi durdur
+$TRIAL stop skinora-blockchain-sidecar skinora-ethereum-sidecar
+# 2) Geri yükle — dolu ve FARKLI bir dosyanın üstüne yazmaz (--force yalnız onu yedekledikten sonra);
+#    Docker'ın eksik dosya yerine bıraktığı boş dizinleri kaldırır; geri yüklenen dizinden
+#    adresleri yeniden türetip arşivdekilerle karşılaştırır.
+bash scripts/wallet-backup/wallet-backup.sh restore /e/skinora-backup/skinora-wallets-testnet-<zaman>.tar.gpg secrets/trial --label testnet
+# 3) Başlat ve servislerin bildirdiği adresleri betiğin özetiyle karşılaştır
+$TRIAL up -d --no-deps skinora-blockchain-sidecar skinora-ethereum-sidecar
+$TRIAL logs skinora-blockchain-sidecar | grep -E 'Signing secrets:|HD wallet initialized'   # hotWalletAddressFromKey, depositIndex0
+$TRIAL logs skinora-ethereum-sidecar | grep 'Ethereum service configured'                   # depositIndex0, hotWalletAddress, fuelWalletAddress
+```
+
+İlk beş depozit adresi için servisin kendi ucu da sorulabilir (`POST /api/wallet/derive {"index":N,"network":"TRON"|"ETHEREUM"}`, `X-Internal-Key` ile; Ethereum ucu bir `finalized` blok okumuş olmalı). Adreslerden **biri bile** farklıysa servisi açık bırakmayın: yanlış arşiv ya da yanlış ortam.
+
+### L.7 Prova (2026-10-21, bu PC — T163 kabul kriteri)
+
+Rastgele üretilmiş **test** sırları (5 dosya; hiçbir ağda bakiyesi yok, ekrana yazılmadı, prova sonunda `shred` ile silindi), ayrı compose projesi `-p skinora-t163`, yalnız iki imza servisi (`--no-deps`, `NODE_ENV=production`, Ethereum için anahtarsız genel Sepolia RPC'si).
+
+| Adım | Sonuç |
+|---|---|
+| 1. Servisler sırlarla açıldı | İkisi `healthy`; TRON `hdMnemonicSource: file`, `hotWalletKeySource: file`; iki konteynerin env'inde `MNEMONIC`/`PRIVATE_KEY` adlı değişken **0**; mount'lar yalnız `/run/secrets/tron_*` (TRON) ve `/run/secrets/ethereum_*` + günlük volume'ü (Ethereum) |
+| 2. Servislerin bildirdiği adresler = betiğin türettiği adresler | TRON 5 depozit + sıcak, Ethereum 5 depozit + sıcak + yakıt — **hepsi eşit** |
+| 3. `backup … --label testnet` | Arşiv + `.sha256`; parola ikinci kez okunup arşiv geri açıldı, manifest ve kaynak eşleşti |
+| 4. Sırlar silindi (`shred`), servisler yeniden başlatıldı | Docker host'ta 5 **boş dizin** açtı; TRON `SIGNING_SECRET_UNREADABLE`, Ethereum açılamadı (o turda adsız `STARTUP_FAILED`; T163 bu durumu adlandırdı — düzeltmeden sonra aynı durum konteynerde yeniden ölçüldü: `SECRET_UNREADABLE`, çıkış 1) — ikisi de yeniden başlama döngüsünde, **para yolu açık değil** |
+| 5. `restore … --label testnet` | 5 boş dizini kaldırdı, 5 dosyayı geri yazdı, adresler arşivle eşleşti |
+| 6. Servisler yeniden açıldı | İkisi `healthy`; bildirilen adresler **1. adımla birebir aynı** (karşılaştırma JSON'u eşit) |
+| 7. Sızıntı taraması | 5 sır dosyasının içeriği servis log'larında **0**, `docker inspect` çıktısında **0**, iki `/health` cevabında **0** |
+
+Prova adresleri (açık adres — sır değil): TRON depozit #0–#4 `TSQeyjaVwWP7qnZRMtj5Lf1364qYGGypwb`, `TTdE4esWS34u9aBSCThkCbSty9e8agSusf`, `TP47xVF4hVNBcQCW64jMStBLq2qFn18uog`, `TLK5B6vH5p7RuRztSHTZzLPmpDjSZGniZa`, `TJoReQi6VYopwLV5ZRWTk2zZWQye657YD6`; TRON sıcak `TChQy2yUsZgzcsyCBc4iidG5cSHf7tvytt`; Ethereum depozit #0–#4 `0x119FDBcC121851e6F8bE3e63B3a8d0FAaf7c64B5`, `0x41ed71BfB186796CBD11EC386e0867F56676b0E7`, `0x791E4ED0484D8d7245703306975E75c039F36f70`, `0xe9d9de38AA70AB6B07428984d2fB2c88186E4A8a`, `0xb118DFA72a576272329CE46eD97D99b44ba94B04`; Ethereum sıcak `0xcc61C48c0119edf378128BeE64C0eaD1005E1411`, yakıt `0x323C053007B96B9E471DF279D61565B2FCcCdA40`.
+
+Aynı akışın küçük hâli CI'da her Ethereum servisi değişikliğinde koşar (`sidecar-ethereum/src/config/walletBackupScript.test.ts`: yedek → sil → Docker dizini → geri yükle → aynı adresler; yanlış parola, değiştirilmiş arşiv, yanlış label ve üstüne yazma reddi).
+
+### L.8 Bilinen sınırlar
+
+- **Disk.** `secrets/*.txt` host'ta düz metindir (compose secret'ı swarm dışında bir bind mount'tur); koruma host erişimi ve **disk şifrelemesidir** — bu PC'de BitLocker açık olmalı (öneri, ⚠ GÜVENLİK). `shred` NTFS/SSD'de silmeyi garanti etmez (aşınma dengeleme, günlük); bu yüzden de disk şifrelemesi.
+- **Bellek.** İki servis tohumun kök düğümünü süreç boyunca bellekte tutar (05 §3.3). **KMS/HSM tetiği:** depozitlerde bekleyen para sahibin belirleyeceği eşiği (T169 "KMS/HSM eşiği") geçince imza KMS/HSM'e taşınır; bulut KMS'leri HD türetme yapmadığı için bu, depozit başına ayrı anahtar ve imza yolunun yeniden yazımı demektir.
+- **Yakalanamayan kesinti.** `kill -9` ya da elektrik kesilmesi betiğin temizliğini çalıştırmaz; `$TMPDIR/skinora-wallet-backup.*` dizini (içinde açık metin sırlar) kalabilir. Böyle bir kesintiden sonra o dizini `find … -type f -exec shred -u {} +` ve `rm -rf` ile elle silin.
+- **Ortak sırlar** (JWT, iki webhook sırrı, üç iç anahtar) hâlâ env'dedir → DEFERRED_BACKLOG `SharedSecretsInPlainEnv` (T171).
+
+---
+
+## M. Launch checklist — ödeme onay kapısı (T169)
 
 > **Proje sahibi kararı 2026-10-21:** test boyunca bütün ödemeler admin onayı gerektirir. 11 T175: "otomatik ödeme kapıları kapalı başlıyor ve ilk en az 5 gerçek teslimat elle incelendikten sonra açılıyor."
 
-### L.1 Kapı kapalıyken ne olur
+### M.1 Kapı kapalıyken ne olur
 - `outbound.auto_send_enabled` = `false` (seed; env'den doldurulamaz, T125/T129 kapıları gibi). Satır okunamazsa kapı **kapalı** sayılır.
 - Gönderim işi `SELLER_PAYOUT` ve bütün iade türlerini (`BUYER_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `INCORRECT_AMOUNT_REFUND`, `LATE_PAYMENT_REFUND`) admin onaylayana kadar **göndermez**: satır `PENDING` kalır, `RetryCount` artmaz, `FAILED` olmaz. Log her turda ağ başına bir uyarı satırı yazar (`… wait for an admin approval`).
 - Sweep (depozit → sıcak cüzdan) ve sıcak→soğuk aktarım bundan etkilenmez.
 - Onay **tutarı ve alıcıyı değiştirmez**; yalnız gönderim anını tutar. İmzalayan servisin tavanları (§C.3) onaydan sonra da aynen uygulanır.
 
-### L.2 Günlük iş (kapı kapalıyken)
+### M.2 Günlük iş (kapı kapalıyken)
 1. Admin paneli → **Cüzdanlar** (S22) → üstteki **"Onay bekleyen ödemeler"** paneli.
 2. Her satır için: işlemi (`transactionId`) aç, durumu ve teslimatı kontrol et; ağ, tür, tutar ve alıcı adresinin işlemle uyuştuğunu doğrula.
 3. **Onayla** → onay penceresindeki özet son kez kontrol edilir → onay. Satır sonraki dakikada gönderilir; panelden düşer, cüzdan ekranının "son giden satırlar" listesine geçer.
 4. Her onay AuditLog'da `OUTBOUND_TRANSFER_APPROVED` (Fon kategorisi) — kim, ne zaman, hangi satır, IP.
 
-### L.3 Kapıyı açma (T175)
+### M.3 Kapıyı açma (T175)
 1. En az 5 gerçek teslimat elle incelenmiş, ödemeleri onayla gönderilmiş ve zincirde doğrulanmış olmalı.
 2. Proje sahibinin açık kararı alınır.
 3. Admin → Ayarlar → `outbound.auto_send_enabled` = `true` (AD9; ayar değişikliği audit'lenir).
@@ -1053,7 +1165,7 @@ Yığın `-p skinora-t161` proje adıyla (geliştirme projesi `escrow`'a dokunma
 
 ---
 
-## M. Kurulum günü kontrol listesi (T171) — T169 değerleri
+## O. Kurulum günü kontrol listesi (T171) — T169 değerleri
 
 Gerçek ağ kurulumunda (T171) ve deneme yayınında (§K) bu liste satır satır doğrulanır. Değerler: 02 §4.2/§8/§21.1, 06 §3.17, `.env.example`. "⚠" = öneriyle kaydedildi; mainnet öncesi sahibe yeniden sorulur.
 
@@ -1062,7 +1174,7 @@ Gerçek ağ kurulumunda (T171) ve deneme yayınında (§K) bu liste satır satı
 | 1 | **Teslimat süresi 720 dk mı?** | `delivery_timeout_minutes` = **720** | `SELECT Value FROM SystemSettings WHERE [Key]='delivery_timeout_minutes'` → `720`; `.env` / `.env.trial`'da `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES=720`. Düşük değer teslim etmiş satıcıyı iptal + kusurla cezalandırır (§A #6); hukuk metni "12 saat" der |
 | 2 | En düşük / en yüksek işlem tutarı | 10 / 2900 | `min_transaction_amount`, `max_transaction_amount` |
 | 3 | TRON'un kendi en düşük tutarı | 50 | `blockchain.tron.min_transaction_amount_usdt`; sihirbazda 49 $'lık fiyatta TRON devre dışı |
-| 4 | Ödeme onay kapısı kapalı | `outbound.auto_send_enabled` = `false` | §L |
+| 4 | Ödeme onay kapısı kapalı | `outbound.auto_send_enabled` = `false` | §M |
 | 5 | Yasaklı ülkeler | `IR,KP,CU,MM` | `auth.banned_countries` |
 | 6 | Gönderim tavanları (⚠) | TRON + Ethereum: tek 3000 / günlük 9000 | `MAX_SINGLE_TRANSFER_USDT`, `MAX_DAILY_OUTFLOW_USDT`, `ETHEREUM_MAX_SINGLE_TRANSFER_USDT`, `ETHEREUM_MAX_DAILY_OUTFLOW_USDT` (boşsa payout/iade hiç imzalanmaz) |
 | 7 | Ethereum yakıt tavanları (⚠) | 0.001 / 0.02 ETH | `ETHEREUM_FUEL_MAX_SINGLE_ETH`, `ETHEREUM_FUEL_MAX_DAILY_ETH` |
@@ -1071,12 +1183,12 @@ Gerçek ağ kurulumunda (T171) ve deneme yayınında (§K) bu liste satır satı
 | 10 | Yedek ücretler (⚠) | TRON iade 2.60 / payout 2.25 / ağ ücreti satırı 3.00; Ethereum iade 0.20, payout 0.50, tavan 0.50 | `blockchain.refund_gas_fee_estimate_usdt`, `blockchain.payout_gas_fee_estimate_usdt`, `blockchain.tron.network_fee_fallback_usdt`, `blockchain.ethereum.*` |
 | 11 | Fiyat sapma kuralı kapalı (⚠) | `price_deviation_threshold` = 1.0, `STEAM_MARKET_PROVIDER=logging` | §C.1; pilottan sonra yeniden bakılır |
 | 12 | Sağlayıcı planları (⚠) | TronGrid ücretsiz (mainnet anahtarı Nile'dan **ayrı hesaptan**); Alchemy Free + Chainstack Developer | %80 kota alarmı gelirse ya da günde 25'ten fazla TRON satışı olursa TronGrid özel plan; Alchemy %80'i geçerse kullandıkça öde |
-| 13 | Yaptırım listesi yüklendi | OFAC SDN "Digital Currency Address – TRX / ETH / USDT" adresleri girildi | §M.1 |
+| 13 | Yaptırım listesi yüklendi | OFAC SDN "Digital Currency Address – TRX / ETH / USDT" adresleri girildi | §O.1 |
 
-### M.1 Yaptırım listesi yordamı (öneriyle kaydedildi — ⚠)
+### O.1 Yaptırım listesi yordamı (öneriyle kaydedildi — ⚠)
 - **Kaynak:** OFAC SDN listesi (resmî, ücretsiz: sanctionslist.ofac.treas.gov) — "Digital Currency Address – TRX", "– ETH", "– USDT" alanları.
 - **Açılışta:** bu adresler admin panelinden elle girilir (yaptırım listesi ekranı, `MANAGE_SANCTIONS`; ağ `TRON` / `ETHEREUM`).
 - **Takvim:** ayda bir ve OFAC her güncelleme duyurduğunda gözden geçirilir; sorumlu kişi admin (bugün proje sahibi). Otomatik besleme açılıştan sonra ayrı görev (`sanctions-expansion`). Ethereum'da USDT kontratının kendi kara liste kontrolü (`isBlackListed`, T152) ek katmandır.
 
-### M.2 KMS/HSM (karar yok)
+### O.2 KMS/HSM (karar yok)
 Anahtarların donanım güvenlik modülüne taşınma eşiği **kararlaştırılmadı** — pilot (T173) sonrası proje sahibine sorulacak (T169, 2026-10-21). O zamana kadar tohum ve imza anahtarları Docker secret + çevrimdışı yedekte (T163) yazılım anahtarı olarak durur (DEFERRED_BACKLOG `SigningSecretsInPlainEnv`).

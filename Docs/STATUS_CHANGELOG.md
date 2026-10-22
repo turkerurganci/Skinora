@@ -4,11 +4,15 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-22 — T163 ✓ Tamamlandı, doğrulama PASS (TRON imza sırları Docker secret, env yolu üretimde kapalı, çevrimdışı yedek + geri yükleme provası; kapanışta yedek betiği kesintide de siler; T163_REPORT.md, PR #369) **Merge teyidi (T169 dalında işlendi):** T163 (#369) main `7089b549` → CI `39844542606` (koşuyor), Docker Publish `39844542864` ✓.
+
 **Önceki güncelleme:** 2026-10-22 — T169 ⏳ yapım bitti, doğrulama bekliyor (işlem 10–2.900 $, 50 $ altında TRON yok, ödemeler admin onaylı, yasaklı ülkeler, teslimat 720 dk; T169a açıldı; T169_REPORT.md, PR #371)
 
 **Önceki güncelleme:** 2026-10-22 — chore (görev değil): `next` + `eslint-config-next` 16.3.8 → 16.4.2 güvenlik yükseltmesi — 2026-10-22 danışmaları GHSA-2464-fhr4-w9xw (critical RCE) + GHSA-p3m5-59mp-jv5r (high DoS) bloke edici frontend audit adımını tüm dallarda kırmızıya döndürmüştü; `npm audit --omit=dev` 0, backlog ✅ `FrontendNextAdvisories1642` (§7), dal `chore/next-16.4.2-guvenlik`. **Merge teyidi (T169 dalında işlendi):** chore (#373) main `4b48c82d` → CI `39831472907` ✓, Docker Publish `39831472834` ✓.
 
-**Önceki güncelleme:** 2026-10-21 — T160c ✓ Tamamlandı, yeniden doğrulama PASS (iade kesinti kalıntısı sıcak cüzdana, AD38 gerçek zincir gideri; T160c_REPORT.md, PR #365). **Merge teyidi (T169 dalında işlendi):** T160c (#365) main `403fe257` → CI `39813399071` ✓, Docker Publish `39813399137` ✓.
+**Önceki güncelleme:** 2026-10-21 — T160c ✓ Tamamlandı, yeniden doğrulama PASS (iade kesinti kalıntısı sıcak cüzdana, AD38 gerçek zincir gideri; T160c_REPORT.md, PR #365). **Merge teyidi (T163 dalında işlendi):** T160c (#365) main `403fe257` → CI `39813399071` ✓, Docker Publish `39813399137` ✓.
+
+**Önceki güncelleme:** 2026-10-21 — T163 ⏳ yapım bitti, doğrulama bekliyor (TRON imza sırları Docker secret, env yolu üretimde kapalı, çevrimdışı yedek + geri yükleme provası; T163_REPORT.md, PR #369)
 
 **Önceki güncelleme:** 2026-10-21 — T167 ✓ Tamamlandı, doğrulama PASS (MASAK notları ödeme ekranları + yardım, P3 payout gönderim adresi, Resmî Gazete karşılaştırması; T167_REPORT.md, PR #368). **Merge teyidi (T160c dalında işlendi):** T167 (#368) main `daf0e301` → CI `39615975640` ✓, Docker Publish `39615975624` ✓.
 
