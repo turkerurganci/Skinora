@@ -130,8 +130,17 @@ public sealed class OutboundApprovalService : IOutboundApprovalService
             .Take(200)
             .Select(b => new
             {
-                b.Id, b.TransactionId, b.Network, b.Type, b.Token, b.ActualTokenAddress,
-                b.Amount, b.GasFee, b.ToAddress, b.RetryCount, b.CreatedAt,
+                b.Id,
+                b.TransactionId,
+                b.Network,
+                b.Type,
+                b.Token,
+                b.ActualTokenAddress,
+                b.Amount,
+                b.GasFee,
+                b.ToAddress,
+                b.RetryCount,
+                b.CreatedAt,
             })
             .ToListAsync(cancellationToken);
 
