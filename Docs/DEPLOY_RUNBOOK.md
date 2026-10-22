@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-22 — T169 — sahip kararlarının değerleri (§A, §C), §L ödeme onay kapısı, §M kurulum günü kontrol listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-22 — T169 — sahip kararlarının değerleri (§A, §C), §L ödeme onay kapısı (kapanış: §L.3 kapatma tur ortasında da hemen etkili), §M kurulum günü kontrol listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (77 satır — T169 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -1049,7 +1049,7 @@ Yığın `-p skinora-t161` proje adıyla (geliştirme projesi `escrow`'a dokunma
 2. Proje sahibinin açık kararı alınır.
 3. Admin → Ayarlar → `outbound.auto_send_enabled` = `true` (AD9; ayar değişikliği audit'lenir).
 4. Doğrula: `SELECT Value FROM SystemSettings WHERE [Key]='outbound.auto_send_enabled'` → `true`; panel "Otomatik gönderim açık" der; bekleyen onaysız satırlar sonraki turda gönderilir.
-5. Geri kapatmak aynı ayarla yapılır; kapalıya döndüğü andan sonra onaysız satır yine bekler (daha önce onaylanmış olanlar gider).
+5. Geri kapatmak (acil durdurma dahil) aynı ayarla yapılır ve **hemen** etkilidir: gönderim işi onaysız her ödeme/iade satırını göndermeden hemen önce ayarı veritabanından yeniden okur (önbellek yok), yani o anda süren turda henüz gönderilmemiş onaysız satırlar da bekler. Kapatma anında imzalanmakta olan tek satır (en çok bir tane) geri alınamaz. Daha önce onaylanmış satırlar ve sweep'ler gitmeye devam eder. Ters yön (kapalı → açık) bir tur gecikmeli işler: açma, süren turu değiştirmez; onaysız satırlar sonraki turda (≤ 1 dk) gider.
 
 ---
 

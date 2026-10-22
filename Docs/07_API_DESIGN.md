@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.21** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T169 — NETWORK_MIN_AMOUNT_NOT_MET, networkMinPrices, §9.35 ödeme onayı (AD40/AD41). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.22** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T169 — NETWORK_MIN_AMOUNT_NOT_MET, networkMinPrices, §9.35 ödeme onayı (AD40/AD41), tur ortası kapatma. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -2770,7 +2770,7 @@ Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity)
 
 **Kurallar:** yalnız ödeme/iade satırı (sweep → 422 `ROW_NOT_APPROVABLE`); yalnız `PENDING` ve hash'siz (değilse 409 `ROW_NOT_OPEN`); bir kez (409 `ALREADY_APPROVED`); bilinmeyen kimlik 404 `ROW_NOT_FOUND`. Reddedilen her istek hiçbir şey yazmaz. Kapı açıkken verilen onay da kaydedilir; kapı kapanana kadar etkisi yoktur.
 
-**Gönderim işi (08 §3.3):** kapı kapalıyken onaysız ödeme/iade satırı aday sayılmaz — gönderilmez, `RetryCount` artmaz, `FAILED` olmaz, parti yerini de almaz; işin ikinci katmanı satırı tek tek açarken de aynı koşulu yeniden sınar. Ayar okunamazsa (satır yok, yapılandırılmamış, bozuk) kapı **kapalı** sayılır. Ethereum ücret "bekle" alarmı (`FeeCapWaitAlarmMinutes`) onay bekleyen satırı saymaz; onaylanan satır onay anından itibaren sayılır. Kapıyı açmak/kapatmak AD9 (`PUT /admin/settings/outbound.auto_send_enabled`) ile olur ve her ayar değişikliği gibi audit'lenir; env'den doldurulamaz. Açılış prosedürü DEPLOY_RUNBOOK §L.
+**Gönderim işi (08 §3.3b):** kapı kapalıyken onaysız ödeme/iade satırı aday sayılmaz — gönderilmez, `RetryCount` artmaz, `FAILED` olmaz, parti yerini de almaz; işin ikinci katmanı satırı tek tek açarken ayarı veritabanından yeniden okuyarak aynı koşulu sınar, böylece tur ortasında kapatılan kapı turda kalan onaysız satırları da durdurur (kapalı → açık geçiş sonraki turda). Ayar okunamazsa (satır yok, yapılandırılmamış, bozuk) kapı **kapalı** sayılır. Ethereum ücret "bekle" alarmı (`FeeCapWaitAlarmMinutes`) onay bekleyen satırı saymaz; onaylanan satır onay anından itibaren sayılır. Kapıyı açmak/kapatmak AD9 (`PUT /admin/settings/outbound.auto_send_enabled`) ile olur ve her ayar değişikliği gibi audit'lenir; env'den doldurulamaz. Açılış prosedürü DEPLOY_RUNBOOK §L.
 
 **Ekran:** S22 cüzdan ekranının üstünde "Onay bekleyen ödemeler" paneli (kapı durumu, liste, onay penceresi — ağ, tür, tutar, alıcı ve "geri alınamaz" uyarısı).
 
