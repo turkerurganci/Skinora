@@ -153,9 +153,9 @@ Görev talimatındaki ek noktalar: yeni toplama göre yedek değerler gözden ge
 
 ## Commit & PR
 - Branch: `task/T169a-iade-tam-maliyet`
-- Commit: `8c97a391` — tam maliyet kesintisi (servisler); `adfb2f00` — günlük tavan + yedek 2,80 (backend, frontend, alarm); `33585d99` — main (`69c68df6`, T168 #370) birleştirmesi; __LASTCOMMITS__
-- PR: #__PR__
-- CI: __CI__
+- Commit: `8c97a391` — tam maliyet kesintisi (servisler); `adfb2f00` — günlük tavan + yedek 2,80 (backend, frontend, alarm); `33585d99` — main (`69c68df6`, T168 #370) birleştirmesi; `14189439` — belgeler, hukuk metni, e2e harness, rapor/status/memory; PR numarasını işleyen son commit dal HEAD'i
+- PR: #376
+- CI: PR #376 run'ı — sonuç ve run ID yöneticiye son mesajda (dal HEAD'inin run'ı)
 
 ## Kararlar (öneriyle kaydedildi — ⚠ PARA)
 1. **TRON takviyesinin bandı** sıcak cüzdanın o anki kalan bandından hesaplanır (bant ≥ 270 bayt → 0, değilse 270 × `getTransactionFee`). Sweep satırı (T149) her zaman "yakılmış" sayar; iade tahmini gönderimden dakikalar önce alındığı için canlı okuma gerçeğe daha yakın (Nile 6'da takviyenin ücreti 0 ölçüldü). Ana ağda günde 5–20 satışta ücretsiz bant erken biter → kesinti çoğunlukla bandı içerir.
