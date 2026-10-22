@@ -121,7 +121,7 @@ Doldururken ayrıca: `LEGAL_TEXT_DATE` güncellenir; sözleşme esaslı değişt
 5. **7518 / SPK.** Metinlerde Skinora'nın lisanslı olduğu ya da lisans gerekmediği yazılmadı (test: 4 dilde "lisanslı/licensed/licenciad/持牌" yok). T167'nin "saklama hizmeti / platform tanımı Skinora'ya uygulanır mı" sorusu T175 öncesi hukukçuya sorulacak.
 6. **Yurt dışına aktarımın hukuki dayanağı** (KVKK yurt dışı aktarım kuralları; sağlayıcılarla sözleşme) hukukçuya sorulacak — metin bugün yalnız aktarımın olduğunu söylüyor.
 7. **Giriş kayıtlarının hukuki dayanağı (düzeltme turu).** Metin "güvenlik ve dolandırıcılık tespiti için 1 yıl" diyor, kanun atfı yok. 5651 sayılı Kanun'daki trafik bilgisi saklama yükümlülüğünün Skinora'ya uygulanıp uygulanmadığı (yer sağlayıcı mı?) hukukçuya sorulacak; uygulanıyorsa süre ve atıf eklenir.
-8. **02 §7 iptal cooldown'u (düzeltme turu).** Ürün belgesi her ödeme sonrası satıcı iptalinde "itibar cezası ve cooldown" diyor; kod cooldown'u yalnız pencere içindeki sorumlu iptal sayısı `cancel_limit_count`'u aşınca uygular (`CancelCooldownEvaluator`). Hukuk metni bugün kodu anlatıyor; 02 §7 değiştirilmedi. Hangisi doğru?
+8. **✓ Kapandı (2026-10-22, sahip kararı: kod doğru — 02 §7 v4.21 koda göre düzeltildi). 02 §7 iptal cooldown'u (düzeltme turu).** Ürün belgesi her ödeme sonrası satıcı iptalinde "itibar cezası ve cooldown" diyor; kod cooldown'u yalnız pencere içindeki sorumlu iptal sayısı `cancel_limit_count`'u aşınca uygular (`CancelCooldownEvaluator`). Hukuk metni bugün kodu anlatıyor; 02 §7 değiştirilmedi. Hangisi doğru?
 
 ## Düzeltme turu (2026-10-22)
 
@@ -172,7 +172,7 @@ Metin (4 dil, `legal.privacy.sections.dataRetention` + `yourRights`):
 | S4-5 | 02 §22 notu "teslimat 12 sa (§9.2)" yanlış atıf | ✓ kapandı | 02 v4.19: "(proje sahibi kararı 2026-10-04, `plan/11_F9.md`; ayar `delivery_timeout_minutes` = 720 — T169)" |
 | S4-6 | Metin esaslı değişti ama `NEXT_PUBLIC_TOS_VERSION` 1.0 | bilinen sınırlama | B3 ve B5 (2. tur) düzeldikten sonra sürüm artışı güvenli (yeni sürümü reddeden hesabın çıkışı var). Gerçek kullanıcı yok; sürüm işletmeci bilgisiyle birlikte artırılır — artık T173 kriterinde yazılı (S4-3) |
 
-**Kapanmayan, bilinen:** 02 §7 iptal tablosu ile kod arasındaki cooldown farkı (sahip sorusu 8).
+**02 §7 cooldown farkı (sahip sorusu 8):** 2. düzeltme turunda kapandı — sahip kararı 2026-10-22 "kod doğru"; 02 §7 v4.21 koda göre düzeltildi.
 
 ### Bu turun testleri
 
@@ -221,6 +221,10 @@ T169 (PR #371) `outbound.auto_send_enabled` = `false` ile test boyunca her satı
 - `terms.paymentAndNetworks`: "Yanlışlıkla USDC gönderirseniz otomatik iade edilir." → "…talep etmeniz gerekmeden iade edilir."
 - `support.faq` "Satıcı olarak param ne zaman gelir?": sona "Bazı dönemlerde (ör. deneme yayını) ödeme gönderilmeden önce yönetici onayı bekler; bu, ödemeyi biraz geciktirebilir."
 - Kalan "otomatik" ifadeleri olumsuz ya da gönderimle ilgisiz (ör. "iade otomatik gönderilmez", "otomatik iade edilemez", ödemenin otomatik doğrulanması) — dokunulmadı. Hukuk metni dışı: ana sayfa `home.features.autoSettle` "Otomatik doğrulama ve ödeme" pazarlama başlığı T168 kapsamında değil, değiştirilmedi.
+
+### Sahip sorusu 8 — 02 §7 iptal cooldown'u (kapandı)
+
+Sahip kararı (2026-10-22): kod doğru — tek iptal cezalandırılmaz, cooldown yalnız pencere içindeki sorumlu iptal sayısı limiti aşınca (`CancelCooldownEvaluator`: `responsibleCount <= LimitCount` → yasak yok). `Docs/02_PRODUCT_REQUIREMENTS.md` v4.21 §7: ödeme sonrası satıcı iptali satırı ("iptal itibara yazılır; tek iptal yasak doğurmaz; §14.2") ve "İptal sonrası cooldown" satırı düzeltildi; başlık + DOC_CHANGELOG. Hukuk metni (`terms.cancellation`) zaten kodu anlatıyordu, değişmedi.
 
 ### 2. turun testleri
 

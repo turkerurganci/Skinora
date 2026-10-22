@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v4.20** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-22 — T168 (§22 hukuk metinleri, §19 kabul etmeyen hesap) main'deki T160c (§4.7) ile birleşti; giriş kayıtları 1 yıl. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
+**Versiyon: v4.21** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-22 — T168: §7 satıcı iptal cooldown'u koda göre düzeltildi, tek iptal yasak doğurmaz (sahip kararı 2026-10-22). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -277,9 +277,9 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Ödeme öncesi — Satıcı | Satıcı iptal edebilir. İade gerekmez — item satıcıda, para henüz gönderilmemiştir |
 | Ödeme öncesi — Alıcı | Alıcı iptal edebilir. İade gerekmez |
 | Alıcı ödemeyi gönderdiyse — Alıcı | Alıcı tek taraflı iptal edemez |
-| Alıcı ödemeyi gönderdiyse — Satıcı | Satıcı iptal edebilir (item'ı göndermekten vazgeçebilir). Para alıcıya iade edilir, satıcıya itibar cezası ve cooldown uygulanır (§13). Alıcının parasını satıcının insafına bırakmamak için bu yol açık tutulmuştur — kapatılırsa satıcı hiçbir şey yapmayıp timeout'u bekler, alıcı daha uzun süre beklemiş olur |
+| Alıcı ödemeyi gönderdiyse — Satıcı | Satıcı iptal edebilir (item'ı göndermekten vazgeçebilir). Para alıcıya iade edilir ve iptal satıcının itibarına yazılır (§13). Tek iptal işlem yasağı doğurmaz; cooldown yalnız yuvarlanan pencere içindeki sorumlu iptal sayısı limiti aşınca uygulanır (§14.2; proje sahibi kararı 2026-10-22: kod doğru). Alıcının parasını satıcının insafına bırakmamak için bu yol açık tutulmuştur — kapatılırsa satıcı hiçbir şey yapmayıp timeout'u bekler, alıcı daha uzun süre beklemiş olur |
 | Satıcı item'ı teslim etmezse (timeout) | Para alıcıya iade, işlem iptal, teslimat gecikmesi satıcıya yazılır (§3.1). İptalden hemen önce son bir teslimat doğrulaması yapılır (§3.2) |
-| İptal sonrası cooldown | Var — süre admin tarafından dinamik belirlenir |
+| İptal sonrası cooldown | Her iptalde değil: yuvarlanan pencere içindeki sorumlu iptal sayısı limiti aşınca geçici işlem başlatma yasağı (§14.2). Pencere, limit ve yasak süresi admin tarafından dinamik belirlenir (proje sahibi kararı 2026-10-22) |
 | İptal sebebi | Zorunlu — iptal eden taraf sebep belirtmek zorunda |
 | Admin doğrudan iptal | Admin, CREATED'dan PAYMENT_RECEIVED'a kadar olan aktif işlemleri (+ FLAGGED) doğrudan iptal edebilir. Sebep zorunludur. İade kuralları standart iptal iade kurallarıyla aynıdır. İşlem CANCELLED_ADMIN durumuna geçer. Ayrı bir yetki (`CANCEL_TRANSACTIONS`) gerektirir |
 | Admin doğrudan iptal — ITEM_DELIVERED sonrası | ITEM_DELIVERED aşamasında item alıcıya teslim edilmiş olduğundan standart iptal/iade uygulanamaz. Bu aşamadan sonra admin yalnızca exceptional resolution (manuel inceleme ve müdahale) başlatabilir |
