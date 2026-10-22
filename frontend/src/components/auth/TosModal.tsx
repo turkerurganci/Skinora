@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils/cn";
 
@@ -16,6 +16,13 @@ export interface TosModalProps {
   description?: string;
   onAccept: (payload: { tosVersion: string; ageOver18: true }) => void;
   onAgeRejected?: () => void;
+  /**
+   * T168 — what an account that declines the terms (first acceptance or a
+   * re-prompt after a version bump) can do instead: close or delete itself
+   * (KVKK erasure right). The server exempts exactly those two endpoints from
+   * the ToS gate (07 §4.4). Shown behind a "I do not accept" toggle.
+   */
+  declineSlot?: ReactNode;
   className?: string;
 }
 
@@ -29,6 +36,7 @@ export function TosModal({
   description,
   onAccept,
   onAgeRejected,
+  declineSlot,
   className,
 }: TosModalProps) {
   const t = useTranslations("auth.tos");
@@ -36,6 +44,7 @@ export function TosModal({
   const descId = useId();
   const [ageChecked, setAgeChecked] = useState(false);
   const [tosChecked, setTosChecked] = useState(false);
+  const [declineOpen, setDeclineOpen] = useState(false);
   const ageInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -61,7 +70,7 @@ export function TosModal({
         className,
       )}
     >
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
         <h2 id={titleId} className="text-xl font-semibold text-gray-900">
           {title ?? t("title")}
         </h2>
@@ -149,7 +158,25 @@ export function TosModal({
               {t("notEligible")}
             </button>
           )}
+          {declineSlot && (
+            <button
+              type="button"
+              onClick={() => setDeclineOpen((v) => !v)}
+              aria-expanded={declineOpen}
+              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+              data-testid="tos-decline-toggle"
+            >
+              {t("decline.toggle")}
+            </button>
+          )}
         </div>
+
+        {declineSlot && declineOpen && (
+          <div className="mt-4 space-y-3" data-testid="tos-decline-panel">
+            <p className="text-sm text-gray-700">{t("decline.description")}</p>
+            {declineSlot}
+          </div>
+        )}
       </div>
     </div>
   );

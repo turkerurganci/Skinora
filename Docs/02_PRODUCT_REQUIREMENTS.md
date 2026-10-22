@@ -1,6 +1,6 @@
 # Skinora — Product Requirements
 
-**Versiyon: v4.19** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-22 — T169 — işlem 10–2.900 $, 50 $ altında TRON yok, test boyunca ödemeler admin onaylı, yasaklı ülkeler. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
+**Versiyon: v4.20** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `PRODUCT_DISCOVERY_STATUS.md` | **Son güncelleme:** 2026-10-22 — T168: §7 satıcı iptal cooldown'u koda göre düzeltildi, tek iptal yasak doğurmaz (sahip kararı 2026-10-22). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#02_product_requirementsmd)
 
 > **v3.1 (2026-08-13, T122):** §9.2 canlı Steam ölçümüne göre revize edildi — item eşleştirmesinin **sayım**
 > tabanlı olma zorunluluğu kanıtla gerekçelendirildi; aşınma/desen kapsam dışılığının gerekçesi "veri yok"tan
@@ -279,9 +279,9 @@ Beklemek tek başına korumaz; korumayı sağlayan, sürenin **sonundaki kontrol
 | Ödeme öncesi — Satıcı | Satıcı iptal edebilir. İade gerekmez — item satıcıda, para henüz gönderilmemiştir |
 | Ödeme öncesi — Alıcı | Alıcı iptal edebilir. İade gerekmez |
 | Alıcı ödemeyi gönderdiyse — Alıcı | Alıcı tek taraflı iptal edemez |
-| Alıcı ödemeyi gönderdiyse — Satıcı | Satıcı iptal edebilir (item'ı göndermekten vazgeçebilir). Para alıcıya iade edilir, satıcıya itibar cezası ve cooldown uygulanır (§13). Alıcının parasını satıcının insafına bırakmamak için bu yol açık tutulmuştur — kapatılırsa satıcı hiçbir şey yapmayıp timeout'u bekler, alıcı daha uzun süre beklemiş olur |
+| Alıcı ödemeyi gönderdiyse — Satıcı | Satıcı iptal edebilir (item'ı göndermekten vazgeçebilir). Para alıcıya iade edilir ve iptal satıcının itibarına yazılır (§13). Tek iptal işlem yasağı doğurmaz; cooldown yalnız yuvarlanan pencere içindeki sorumlu iptal sayısı limiti aşınca uygulanır (§14.2; proje sahibi kararı 2026-10-22: kod doğru). Alıcının parasını satıcının insafına bırakmamak için bu yol açık tutulmuştur — kapatılırsa satıcı hiçbir şey yapmayıp timeout'u bekler, alıcı daha uzun süre beklemiş olur |
 | Satıcı item'ı teslim etmezse (timeout) | Para alıcıya iade, işlem iptal, teslimat gecikmesi satıcıya yazılır (§3.1). İptalden hemen önce son bir teslimat doğrulaması yapılır (§3.2) |
-| İptal sonrası cooldown | Var — süre admin tarafından dinamik belirlenir |
+| İptal sonrası cooldown | Her iptalde değil: yuvarlanan pencere içindeki sorumlu iptal sayısı limiti aşınca geçici işlem başlatma yasağı (§14.2). Pencere, limit ve yasak süresi admin tarafından dinamik belirlenir (proje sahibi kararı 2026-10-22) |
 | İptal sebebi | Zorunlu — iptal eden taraf sebep belirtmek zorunda |
 | Admin doğrudan iptal | Admin, CREATED'dan PAYMENT_RECEIVED'a kadar olan aktif işlemleri (+ FLAGGED) doğrudan iptal edebilir. Sebep zorunludur. İade kuralları standart iptal iade kurallarıyla aynıdır. İşlem CANCELLED_ADMIN durumuna geçer. Ayrı bir yetki (`CANCEL_TRANSACTIONS`) gerektirir |
 | Admin doğrudan iptal — ITEM_DELIVERED sonrası | ITEM_DELIVERED aşamasında item alıcıya teslim edilmiş olduğundan standart iptal/iade uygulanamaz. Bu aşamadan sonra admin yalnızca exceptional resolution (manuel inceleme ve müdahale) başlatabilir |
@@ -623,6 +623,7 @@ Bu bölümün kaldırılmasıyla ortadan kalkan gereksinimler: bot havuzu ve ris
 | Hesap silme/deaktif etme | Kullanıcı hesabını silebilir veya deaktif edebilir |
 | Aktif işlem varken | Hesap silinemez — önce işlemlerin tamamlanması veya iptal edilmesi gerekir |
 | Veri saklama | Hesap silindiğinde kişisel veriler temizlenir, işlem geçmişi ve audit logları anonim olarak saklanır (audit trail) |
+| Şartları kabul etmemiş hesap (T168) | Kapatma ve silme Kullanım Şartları kabulünü beklemez — kabul ekranındaki "Şartları kabul etmiyorum" seçeneğinden de yapılır — ilk kabulde ve yeni sürümün yeniden onayında (KVKK silme hakkı; sunucuda yalnız bu iki uç ToS kapısından muaftır — 07 §4.4) |
 
 > **Veri modeli notu:** Anonimleştirme formatı: `User.SteamId → ANON_{kısa GUID}` (UNIQUE + NOT NULL korunur), `SteamDisplayName → 'Deleted User'`. Bağlı entity'ler (UserNotificationPreference, RefreshToken) de temizlenir. Ek olarak NotificationDelivery.TargetExternalId (gönderim anı email/chat ID snapshot'ı) masked formata dönüştürülür — delivery kaydı korunur ama kişisel hedef bilgisi anonimleştirilir (06 §6.2).
 
@@ -685,6 +686,8 @@ Platform kendi sürecini garanti eder, üçüncü taraflardan (Steam, blockchain
 - Kullanıcı sözleşmesi / Terms of Service olacak
 - Detayları ileriye bırakıldı
 - **P2P modeliyle sözleşmede yer alması zorunlu hale gelen konular:** platformun item custody'si üstlenmediği ve teslimatı garanti edemediği (§20.1), Steam kaynaklı trade reversal riskinin kullanıcıda olduğu (§20.2), tarafların birbirinin Steam profilini ve trade URL'ini göreceği (§21)
+
+> **Uygulandı (T168, 2026-10-21):** Kullanıcı Sözleşmesi, Gizlilik Politikası + KVKK aydınlatma metni ve destek metinleri dört dilde yazıldı (TR esas; frontend `legal.*` mesajları). Yukarıdaki üç konu ile işlem akışı (§2.2), teslimat süresi 12 sa (proje sahibi kararı 2026-10-04, `plan/11_F9.md`; ayar `delivery_timeout_minutes` = 720 — T169), mutabakat 8 gün (§4.5.1), iptal (§7), iade ve ağ ücreti kesintileri (§4.4, §4.6, §4.7), itiraz (§10), ağlar ve yalnız USDT (§4.1–§4.2), MASAK notu (T167) ve uygulanacak hukuk / yetkili mahkeme maddesi metindedir. Trade reversal ifadesi §20.2 notuyla hizalıdır: mutabakat süresi içindeki geri almaya karşı platform korur; Steam'in kendi kararıyla yaptığı geri alma, el koyma ve ban kullanıcı riskidir. **İşletmeci (şirket) bilgisi yok** (proje sahibi kararı 2026-10-21, "şirketsiz olacak şimdilik"): unvan, adres, vergi dairesi/no, MERSİS, KEP ve yetkili mahkeme yeri tek kayıtta (`frontend/src/lib/legal/operator.ts`) boş durur, metinler bu alanlarda "şirket bilgisi eklenecek" işaretini gösterir ve **"taslak" etiketi bu alanlar dolana kadar kalır**; gerçek ağ açılışı bunu bekler. Şartları — ilk kabulde ya da güncellenmiş bir sürümde — kabul etmeyen kullanıcı hesabını kapatabilir ve silebilir (§19; 07 §4.4). Gizlilik metni silmede giriş kayıtlarının (IP, tarayıcı bilgisi) anonim hesaba bağlı olarak 1 yıl saklama süresi dolana kadar kaldığını söyler (06 §6.1, `retention.user_login_log_days`).
 
 ---
 

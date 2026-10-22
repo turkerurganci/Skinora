@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AccountManagementSection } from "@/components/settings/AccountManagementSection";
 import { TosModal } from "./TosModal";
 import { acceptTos, getMe } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
@@ -67,7 +68,19 @@ export function TosRepromptGate() {
     staleTime: 60_000,
   });
 
-  const mode = DORMANT_ROUTE.test(pathname) ? null : tosGateMode(data, CURRENT_TOS_VERSION);
+  // T168 B5 — the gate follows the SESSION, not the query cache. Disabling the
+  // query on sign-out keeps the last `/auth/me` answer in the cache, so a user
+  // who closed or deleted the account from this very modal (decline path →
+  // signOut → `/${locale}`) kept seeing the full-screen "accept the terms"
+  // prompt on the home page, every button now failing with 401. No token →
+  // no prompt; the stale answer is also dropped so the next sign-in (possibly
+  // another account) fetches its own.
+  useEffect(() => {
+    if (!accessToken) queryClient.removeQueries({ queryKey: ["auth", "me"] });
+  }, [accessToken, queryClient]);
+
+  const mode =
+    !accessToken || DORMANT_ROUTE.test(pathname) ? null : tosGateMode(data, CURRENT_TOS_VERSION);
 
   if (mode === null) return null;
 
@@ -103,6 +116,13 @@ export function TosRepromptGate() {
       onAgeRejected={
         mode === "first" ? () => router.replace(`/${locale}/auth/age-gate`) : undefined
       }
+      // T168 — declining the terms must not take away account closure /
+      // deletion (KVKK erasure). Offered in BOTH modes: the modal is
+      // full-screen and /settings is not a dormant route, so a re-prompted
+      // account that rejects the new version has no other way out. The server
+      // accepts U13/U14 in both states (first: [SkipTosAcceptanceGate];
+      // reprompt: the version is not enforced server-side).
+      declineSlot={<AccountManagementSection />}
     />
   );
 }

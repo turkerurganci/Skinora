@@ -14,7 +14,16 @@
 
 ## 02_PRODUCT_REQUIREMENTS.md
 
+2026-10-22 (**T168 — main (T169, #371) birleştirmesi (v4.20):** T168'in v4.19 / v4.20 / v4.21 girişleri main'deki T169'un v4.19'uyla çakıştı; üç görevin girişleri korundu, başlık main'in v4.19'unun bir üstü olan v4.20'ye alındı. Anlam değişikliği yok.)
+
 2026-10-22 (**T169 — kalan sahip kararları (v4.19):** §4.2 — 50 USDT altındaki satışlarda TRON yok (`blockchain.tron.min_transaction_amount_usdt`, sunucu 422 `NETWORK_MIN_AMOUNT_NOT_MET`); §4.5 — test boyunca her satıcı ödemesi ve alıcı iadesi admin onayı bekler (`outbound.auto_send_enabled`, 07 §9.35; sweep beklemez); §8 — açılış tutar sınırları 10 / 2.900 USDT (gerekçeli); §21.1 — açılış yasaklı ülke listesi IR, KP, CU, MM.)
+
+2026-10-22 (**T168 — §7 iptal cooldown'u (v4.21):** ödeme sonrası satıcı iptali satırı ve "İptal sonrası cooldown" satırı koda (`CancelCooldownEvaluator`) göre düzeltildi: iptal itibara yazılır, tek iptal yasak doğurmaz; cooldown yalnız yuvarlanan pencere içindeki sorumlu iptal sayısı limiti aşınca (§14.2). Proje sahibi kararı 2026-10-22: kod doğru. Hukuk metni (`terms.cancellation`) zaten bunu anlatıyordu, değişmedi.)
+
+2026-10-22 (**T168 — main (T160c) birleştirmesi (v4.20):** T168'in v4.18 / v4.19'u T160c'nin v4.18'iyle çakıştı; iki görevin girişleri korundu, başlık bir üst sürüm v4.20 oldu ve iki görevi birlikte anar.)
+
+2026-10-22 (**T168 düzeltme turu (v4.19):** §22 "Uygulandı (T168)" notunda teslimat süresinin atfı düzeltildi — 12 sa §9.2'den değil proje sahibi kararından (2026-10-04, `plan/11_F9.md`); ayar `delivery_timeout_minutes` 720 dk T169'da. Not, gizlilik metninin silmede giriş kayıtlarının (`UserLoginLog`: IP, tarayıcı bilgisi) anonim hesaba bağlı olarak 1 yıllık saklama süresi dolana kadar kaldığını söylediğini ekler (06 §6.1). §19 "Şartları kabul etmemiş hesap" satırı: kapatma/silme yolu yeni sürümün yeniden onayında da var.) · 2026-10-21 (**T168 — hukuk metinleri (v4.18):** §22'ye "Uygulandı (T168)" notu — Kullanıcı Sözleşmesi, Gizlilik/KVKK aydınlatma ve destek metinleri dört dilde; P2P maddeleri, teslimat 12 sa, mutabakat 8 gün, iptal, iade/ağ ücreti kesintileri, itiraz, ağlar, MASAK notu ve uygulanacak hukuk/yetkili mahkeme maddesi metinde; trade reversal ifadesi §20.2 notuyla hizalı; işletmeci bilgisi yok (sahip kararı 2026-10-21), alanlar tek kayıtta boş ve işaretli, taslak etiketi alanlar dolana kadar kalır, mainnet bunu bekler. §19'a satır: şartları kabul etmemiş hesap kapatılabilir/silinebilir (07 §4.4).)
+
 
 2026-10-21 (**T160c düzeltme turu — zararına toplama (proje sahibi kararı 2026-10-21) ve gerçek gider (⚠ PARA), v4.18 — T166 ile aynı gün v4.17 çakıştığı için bir üstü:** §4.7 "İade gas fee'leri" satırına: zararına toplama yapılmaz — toplamanın tahmini ücreti kalıntıdan küçük değilse kalıntı depozitte kalır ve admin cüzdan ekranında "hâlâ depozitlerde" görünür (sahip kararı, modal); admin ekranındaki gider platformun gerçek zincir harcamasıdır (iade için gönderilen TRX / yakıt ETH'si + o gönderimlerin ücreti), USDT karşılığı transferin onaylandığı andaki fiyatla (07 §9.33).)
 
@@ -69,9 +78,16 @@
 
 ## 07_API_DESIGN.md
 
+2026-10-22 (**T168 — main (T169, #371) birleştirmesi (v4.23):** T168'in v4.21 / v4.22 girişleri main'deki T169'un v4.21 / v4.22'siyle çakıştı; girişler korundu, başlık main'in v4.22'sinin bir üstü olan v4.23'e alındı. Anlam değişikliği yok.)
+
 2026-10-22 (**T169 kapanışı — doğrulama S4-1 (v4.22, ⚠ PARA):** §9.35 "Gönderim işi" paragrafı: ikinci katman ayarı her onaysız ödeme/iade satırını açarken veritabanından yeniden okur — tur ortasında kapatılan kapı turda kalan onaysız satırları da durdurur; kapalı → açık geçiş sonraki turda. Atıf 08 §3.3 → yeni 08 §3.3b.)
 
 2026-10-22 (**T169 — kalan sahip kararları (v4.21):** §7.2 ve §7.6 yeni hata 422 `NETWORK_MIN_AMOUNT_NOT_MET` (+ `details.network`, `details.minAmount`) — fiyat ağın kendi en düşük tutarının altında (TRON 50); §7.4 `networkMinPrices`; §7.5 `networkQuotes[].unavailableReason` / `minAmount`; yeni §9.35 AD40/AD41 ödeme ve iade onayı (`/admin/wallets/outbound-approvals`, `MANAGE_SETTINGS`, hata kodları, gönderim işinin kapı davranışı); §9 izin tablosunda `MANAGE_SETTINGS` satırı.)
+
+2026-10-22 (**T168 — main (T160c) birleştirmesi (v4.22):** T168'in v4.20 / v4.21'i main'deki v4.20 (T160c + T167 birleştirmesi) ile çakıştı; girişler korundu, başlık v4.22.)
+
+2026-10-22 (**T168 düzeltme turu (v4.21):** §4.4'e cümle — istemcinin onay penceresi ilk kabulde ve yeni sürümün yeniden onayında "Şartları kabul etmiyorum" → hesabı kapat / sil yolunu gösterir; pencere tam ekran olduğundan ve ayarlar sayfasını da örttüğünden yeni sürümü kabul etmeyen hesabın başka çıkışı yoktu (doğrulama bulgusu B3). Sunucu tarafı değişmedi.) · 2026-10-21 (**T168 — ToS kapısı muafiyeti (v4.20):** §4.4 kapsam dışı listesine (c) `POST /users/me/deactivate` (U13) ve `DELETE /users/me` (U14) eklendi — şartları kabul etmeyen kullanıcı hesabını kapatıp silebilsin (KVKK silme hakkı, DEFERRED_BACKLOG `TosNotAcceptedAccountCannotSelfDelete`; öneriyle kaydedildi — ⚠ GÜVENLİK/HUKUK); muafiyet uç başına, diğer `/users/me` uçları kapıda; sürümün sunucuda zorunlu tutulmaması T168'de yeniden ele alındı ve değişmedi (taslak kalktığında istemci sürümü artırılır).)
+
 
 2026-10-21 (**T160c — main (T167) birleştirmesi (v4.20):** T160c düzeltme turunun v4.18'i T167'nin v4.18 / v4.19'uyla çakıştı; iki görevin girişleri korundu, başlık bir üst sürüm v4.20 oldu ve iki görevi birlikte anar.)
 
@@ -109,11 +125,18 @@
 
 ## 11_IMPLEMENTATION_PLAN.md
 
+2026-10-22 (**T168 — main (T169, #371) birleştirmesi (`plan/11_F9.md` v1.25):** T168'in v1.21 / v1.22 / v1.23 girişleri main'deki T169'un v1.22 / v1.23 / v1.24'ü ile çakıştı; girişler korundu, başlık main'in v1.24'ünün bir üstü olan v1.25'e alındı. Anlam değişikliği yok.)
+
 2026-10-22 (**T169 kapanışı — proje sahibi kararı 2026-10-22 (modal) (`plan/11_F9.md` v1.24 — T163 ile v1.22 çakıştığı için T169'un iki sürümü bir üste kaydı):** yeni görev **T172a** "Yedekten geri yükleme sonrası para araçları (⚠ PARA)" — TRON'da zincirde gönderilmiş ama veritabanında PENDING kalan giden satırı zincir kanıtıyla kapatan admin aracı (verify + AuditLog), depozit adres indeksine yapılandırılabilir taban, runbook geri yükleme bölümüne bağlı, testler; **gerçek para pilotundan (T173) önce** yapılır. Kaynak: T164 dalında açılan backlog `PostRestoreChainReconciliationTooling` (main'de henüz yok; satır o dal birleşince T172a'ya bağlanır).)
 
 2026-10-22 (**T169 — kalan sahip kararları (`plan/11_F9.md` v1.23):** yeni görev **T169a** — iade tam maliyet kesintisi (token gas + Ethereum yakıt değeri ve ücreti + TRON enerji/TRX) + depozitten iadeye ağ başına günlük 100 $ tavanı (aşan iade bekler, alarm) — ⚠ PARA, sahip kararı 2026-10-21; T169 dalında yapılmadı.)
 
 2026-10-22 (**T163 kapanış — `plan/11_F9.md` v1.22 — T160c ile v1.21 çakıştığı için bir üstü):** T171 kabul kriterine iki madde: ortak sırlar (JWT, iki webhook sırrı, üç iç anahtar) env yerine secret dosyasından okunur ve DEFERRED_BACKLOG `SharedSecretsInPlainEnv` kapanır (T163 doğrulaması B7); mainnet cüzdanları aynı gün çevrimdışı yedeklenir (DEPLOY_RUNBOOK §L).)
+
+2026-10-22 (**T168 — main (T160c) birleştirmesi (`plan/11_F9.md` v1.23):** T168'in v1.21 / v1.22'si T160c'nin v1.21'iyle çakıştı; T168 ve T160c girişleri korundu, başlık v1.23.)
+
+2026-10-22 (**T168 düzeltme turu (`plan/11_F9.md` v1.22):** T173 (mainnet pilotu) kriterine "başlamadan önce işletmeci bilgisi dolu — `isOperatorInfoComplete()` doğru, hukuk metinlerinde taslak etiketi yok, `NEXT_PUBLIC_TOS_VERSION` artırıldı", T175 (çıkış kapısı) kriterine "hukuk metinlerinde taslak etiketi yok" eklendi — T168 kriterindeki "mainnet şirket bilgisini bekler" sahip kararı ilgili görevlere yansıtıldı (doğrulama bulgusu S4-3).) · 2026-10-21 (**T168 — hukuk metinleri kabul kriteri (`plan/11_F9.md` v1.21, proje sahibi kararı 2026-10-21, modal — "şirketsiz olacak şimdilik"):** T168'in "'taslak' etiketi kalktı" kriteri uyarlandı: metinler tamamlanır, şirket/kişi alanları (unvan, adres, vergi dairesi/no, MERSİS, KEP, yetkili mahkeme yeri) tek yerde boş ve işaretli kalır, taslak etiketi şirket bilgisi gelene kadar kalır (dolunca kendiliğinden kalkar); kriterlere 4 dil + i18n eşitliği, tek destek alan adı `skinora.com` ve şartları kabul etmeyen hesabın kendini silebilmesi eklendi; mainnet açılışı şirket bilgisini bekler.)
+
 
 2026-10-21 (**T160c düzeltme turu (`plan/11_F9.md` v1.21 — T161 ile aynı gün v1.20 çakıştığı için bir üstü):** "T160c kararları"na (xi) zararına toplama — proje sahibi kararı 2026-10-21 (modal): ayrı toplama yalnız tahmini ücret kalıntıdan küçükse, kalan depozitte ve admin ekranında görünür; (xii) gider platformun gerçek zincir harcaması (`PlatformNetworkCost`, USDT'si onay anı fiyatıyla) — (ix)'taki "USD'ye çevrilmez" değişti.)
 
