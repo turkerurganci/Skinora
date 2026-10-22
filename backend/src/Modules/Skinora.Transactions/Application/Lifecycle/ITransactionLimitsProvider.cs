@@ -32,4 +32,7 @@ public sealed record TransactionLimits(
     decimal? CommissionRate,
     decimal? MinTransactionAmount,
     decimal? MaxTransactionAmount,
-    bool OpenLinkEnabled);
+    bool OpenLinkEnabled,
+    // T169 — per-network minimum prices (NetworkMinimumPrice); null when the
+    // provider does not read them (test stubs) = no network minimum on offer.
+    IReadOnlyDictionary<Skinora.Shared.Enums.BlockchainNetwork, decimal>? NetworkMinimums = null);

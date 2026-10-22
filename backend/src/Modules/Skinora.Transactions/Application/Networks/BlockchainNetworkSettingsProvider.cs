@@ -32,7 +32,8 @@ public sealed record BlockchainNetworkSettings(
     int? FinalityStallAlarmMinutes,
     decimal MinRefundThresholdRatio,
     decimal? NetworkFeeBufferRatio,
-    decimal? NetworkFeeFallbackUsdt);
+    decimal? NetworkFeeFallbackUsdt,
+    decimal? MinTransactionAmountUsdt = null);
 
 /// <summary>
 /// Default <see cref="IBlockchainNetworkSettingsProvider"/>. Same read-side
@@ -45,22 +46,23 @@ public sealed class BlockchainNetworkSettingsProvider : IBlockchainNetworkSettin
     /// <summary>Seeded defaults (06 §3.17) — the read-side fallback per network.</summary>
     public static readonly BlockchainNetworkSettings TronDefaults = new(
         Network: BlockchainNetwork.TRON,
-        RefundGasFeeFallbackUsdt: 2.0m,
-        PayoutGasFeeFallbackUsdt: 0.50m,
+        RefundGasFeeFallbackUsdt: 2.60m,
+        PayoutGasFeeFallbackUsdt: 2.25m,
         MaxChargedGasFeeUsdt: 10.0m,
-        HotWalletNativeBalanceMinimum: 100m,
+        HotWalletNativeBalanceMinimum: 1500m,
         FuelWalletNativeBalanceMinimum: null,
         FeeCapUsdPerTransfer: null,
         FeeCapWaitAlarmMinutes: null,
         FinalityStallAlarmMinutes: null,
         MinRefundThresholdRatio: 2.0m,
         NetworkFeeBufferRatio: 0.007m,
-        NetworkFeeFallbackUsdt: 3.00m);
+        NetworkFeeFallbackUsdt: 3.00m,
+        MinTransactionAmountUsdt: 50m);
 
     /// <inheritdoc cref="TronDefaults"/>
     public static readonly BlockchainNetworkSettings EthereumDefaults = new(
         Network: BlockchainNetwork.ETHEREUM,
-        RefundGasFeeFallbackUsdt: 0.50m,
+        RefundGasFeeFallbackUsdt: 0.20m,
         PayoutGasFeeFallbackUsdt: 0.50m,
         MaxChargedGasFeeUsdt: 10.0m,
         HotWalletNativeBalanceMinimum: 0.06m,
@@ -112,7 +114,8 @@ public sealed class BlockchainNetworkSettingsProvider : IBlockchainNetworkSettin
             FinalityStallAlarmMinutes: ReadOptionalInt(rows, keys.FinalityStallAlarmMinutes, defaults.FinalityStallAlarmMinutes),
             MinRefundThresholdRatio: ReadDecimal(rows, keys.MinRefundThresholdRatio, defaults.MinRefundThresholdRatio),
             NetworkFeeBufferRatio: ReadOptionalBufferRatio(rows, keys.NetworkFeeBufferRatio, defaults.NetworkFeeBufferRatio),
-            NetworkFeeFallbackUsdt: ReadOptionalDecimal(rows, keys.NetworkFeeFallbackUsdt, defaults.NetworkFeeFallbackUsdt));
+            NetworkFeeFallbackUsdt: ReadOptionalDecimal(rows, keys.NetworkFeeFallbackUsdt, defaults.NetworkFeeFallbackUsdt),
+            MinTransactionAmountUsdt: ReadOptionalDecimal(rows, keys.MinTransactionAmountUsdt, defaults.MinTransactionAmountUsdt));
     }
 
     /// <summary>

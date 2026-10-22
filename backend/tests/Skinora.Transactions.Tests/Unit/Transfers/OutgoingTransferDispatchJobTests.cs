@@ -58,6 +58,10 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             .Options;
         _db = new AppDbContext(options);
         _db.Database.EnsureCreated();
+        // T169 — the payout/refund launch gate is seeded CLOSED. The tests
+        // outside the "approval gate" section exercise the send path itself, so
+        // they run with the gate open; the gate's own tests close it again.
+        SetAutoSend("true");
 
         _client = new StubBlockchainTransferClient();
         _registry = FakeBlockchainServiceRegistry.ForTron(transfers: _client);
@@ -80,6 +84,14 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             _walletAddresses,
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
+    }
+
+    private void SetAutoSend(string? value)
+    {
+        var row = _db.Set<Skinora.Platform.Domain.Entities.SystemSetting>()
+            .Single(s => s.Key == OutboundApprovalGate.AutoSendKey);
+        row.Value = value;
+        _db.SaveChanges();
     }
 
     private readonly SeededNetworkSettings _settings = new();
@@ -747,6 +759,151 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         var tron = _observer.Last[BlockchainNetwork.TRON];
         Assert.Equal(0, tron.Rows);
         Assert.Null(tron.Alarm);
+    }
+
+    // -------------------- T169 — payout/refund approval gate (⚠ PARA) --------------------
+
+    [Fact]
+    public void T169_The_Gate_Is_Seeded_Closed()
+    {
+        var seeded = Skinora.Platform.Infrastructure.Persistence.SystemSettingSeed.All
+            .Single(s => s.Key == OutboundApprovalGate.AutoSendKey);
+        Assert.Equal("false", seeded.Value);
+        Assert.True(seeded.IsConfigured); // not env-bootstrappable (the T125 rule)
+    }
+
+    [Fact]
+    public async Task T169_Gate_Closed_Unapproved_Payout_And_Refund_Wait_Untouched_Sweep_Still_Goes()
+    {
+        SetAutoSend("false");
+        var payout = await SeedPayoutAsync(amount: 100m);
+        var refund = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 40m);
+        await SeedSweepAsync(amount: 100m, hotWallet: "THotWalletDispatch00000000000000000");
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-gate", null, null);
+
+        await _sut.ExecuteAsync();
+
+        // Only the sweep is sent.
+        var call = Assert.Single(_client.Calls);
+        Assert.Equal(BlockchainTransactionType.SWEEP, call.Type);
+        foreach (var id in new[] { payout.PayoutRow.Id, refund.RefundRow.Id })
+        {
+            var row = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == id);
+            Assert.Equal(BlockchainTransactionStatus.PENDING, row.Status);
+            Assert.Null(row.TxHash);
+            Assert.Equal(0, row.RetryCount);
+            Assert.Null(row.NextAttemptAt);
+            Assert.Null(row.ErrorMessage);
+        }
+        Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+    }
+
+    [Theory]
+    [InlineData(BlockchainTransactionType.EXCESS_REFUND)]
+    [InlineData(BlockchainTransactionType.INCORRECT_AMOUNT_REFUND)]
+    [InlineData(BlockchainTransactionType.LATE_PAYMENT_REFUND)]
+    [InlineData(BlockchainTransactionType.WRONG_TOKEN_REFUND)]
+    public async Task T169_Gate_Closed_Every_Refund_Type_Waits(BlockchainTransactionType type)
+    {
+        SetAutoSend("false");
+        await SeedRefundAsync(type, amount: 30m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+    }
+
+    [Fact]
+    public async Task T169_Gate_Closed_An_Approved_Row_Is_Sent_Exactly_As_Without_The_Gate()
+    {
+        SetAutoSend("false");
+        var payout = await SeedPayoutAsync(amount: 100m);
+        var waiting = await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 40m);
+        payout.PayoutRow.ApprovedAt = _clock.GetUtcNow().UtcDateTime;
+        payout.PayoutRow.ApprovedByAdminId = Guid.NewGuid();
+        await _db.SaveChangesAsync();
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-approved", null, null);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_client.Calls);
+        Assert.Equal(payout.PayoutRow.Id, call.BlockchainTransactionId);
+        Assert.Equal(payout.PayoutRow.Amount, call.Amount);
+        Assert.Equal(payout.PayoutRow.ToAddress, call.ToAddress);
+        var sent = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == payout.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, sent.Status);
+        var held = await _db.Set<BlockchainTransaction>().AsNoTracking().FirstAsync(b => b.Id == waiting.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, held.Status);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("yes")]
+    [InlineData("false")]
+    public async Task T169_An_Unreadable_Or_False_Gate_Reads_Closed(string? value)
+    {
+        SetAutoSend(value);
+        await SeedPayoutAsync(amount: 100m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+    }
+
+    [Fact]
+    public async Task T169_An_Unconfigured_Gate_Row_Reads_Closed()
+    {
+        var row = _db.Set<Skinora.Platform.Domain.Entities.SystemSetting>()
+            .Single(s => s.Key == OutboundApprovalGate.AutoSendKey);
+        row.Value = "true";
+        row.IsConfigured = false;
+        await _db.SaveChangesAsync();
+        await SeedPayoutAsync(amount: 100m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+    }
+
+    [Fact]
+    public async Task T169_Gate_Open_Sends_Without_Approval()
+    {
+        SetAutoSend("True"); // bool.TryParse ignores case
+        await SeedPayoutAsync(amount: 100m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-open", null, null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Single(_client.Calls);
+    }
+
+    [Fact]
+    public async Task T169_Held_Rows_Are_Not_In_The_Stall_Queue_And_An_Approved_Row_Counts_From_Its_Approval()
+    {
+        SetAutoSend("false");
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: new StubBlockchainTransferClient
+        {
+            NextResult = new TransferBroadcastResult(TransferBroadcastStatus.TransientFailure, null, "INTERNAL_ERROR", "500"),
+        });
+        var held = await SeedPayoutAsync(amount: 20m);
+        held.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        var approved = await SeedPayoutAsync(amount: 21m);
+        approved.PayoutRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+        _clock.Advance(TimeSpan.FromHours(5));               // both rows were created 5 h ago
+        approved.PayoutRow.ApprovedAt = _clock.GetUtcNow().UtcDateTime.AddMinutes(-10);
+        await _db.SaveChangesAsync();
+        _health.Degraded.Add(BlockchainNetwork.ETHEREUM);     // reported, nothing sent
+
+        await _sut.ExecuteAsync();
+
+        var eth = _observer.Last[BlockchainNetwork.ETHEREUM];
+        Assert.Equal(1, eth.Rows);                            // the held row waits for a person, not the fee
+        Assert.Equal(TimeSpan.FromMinutes(10).TotalSeconds, eth.Oldest);
     }
 
     /// <summary>T158 (f) — the Ethereum hot wallet a post-sweep refund leaves from.</summary>

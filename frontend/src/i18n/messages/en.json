@@ -498,7 +498,8 @@
       "OUTBOUND_ROW_CLOSURE_PROPOSED": "Outbound row closure proposed",
       "OUTBOUND_ROW_CLOSURE_APPROVED": "Outbound row closure approved",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "Outbound row closure rejected",
-      "OUTBOUND_ROW_CLOSURE_REFUSED": "Outbound row closure refused"
+      "OUTBOUND_ROW_CLOSURE_REFUSED": "Outbound row closure refused",
+      "OUTBOUND_TRANSFER_APPROVED": "Outbound payment approved"
     }
   },
   "adminTransactions": {
@@ -1262,6 +1263,7 @@
         "addInProfile": "Add it on your profile",
         "tronFeeNote": "On TRON the buyer also pays a TRON network fee, fixed when they accept. The part of your payout's network fee that the commission does not cover is deducted from your payout.",
         "ethereumFeeNote": "On Ethereum neither you nor the buyer pays a network fee.",
+        "belowNetworkMin": "{network} is not available for sales under {min} USDT: its network fee would be too large for the sale. At this price pick the other network or raise the price.",
         "noneSelected": "Select at least one network."
       }
     },
@@ -1327,7 +1329,8 @@
         "BUYER_STEAM_ID_NOT_FOUND": "The Steam ID you entered does not belong to a registered user.",
         "PAYOUT_ADDRESS_COOLDOWN_ACTIVE": "The payout address cooldown is still in effect.",
         "SELLER_WALLET_ADDRESS_MISSING": "Your profile has no payout address. Add one in your profile first.",
-        "NETWORK_UNAVAILABLE": "One of the selected networks is temporarily unavailable. Remove it or try again later."
+        "NETWORK_UNAVAILABLE": "One of the selected networks is temporarily unavailable. Remove it or try again later.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "The price is below the minimum sale amount of a network you selected. Remove that network or raise the price."
       },
       "errorNetwork": "Network: {network}"
     }
@@ -1499,10 +1502,12 @@
         "addressFormat": "Enter a valid {network} address.",
         "CHECKSUM_CONFIRMATION_REQUIRED": "Confirm that you checked the address without a checksum.",
         "NETWORK_NOT_ACCEPTED": "The seller does not accept {network} for this transaction. Choose another network.",
-        "NETWORK_UNAVAILABLE": "{network} is temporarily unavailable. Choose another network or try again later."
+        "NETWORK_UNAVAILABLE": "{network} is temporarily unavailable. Choose another network or try again later.",
+        "NETWORK_MIN_AMOUNT_NOT_MET": "{network} is not available for a sale of this amount. Choose another network."
       },
       "networkLabel": "Payment network",
       "networkHint": "Choose the network you will pay on. Your payment, the seller's payout and any refund all move on this network. On TRON the network fee is fixed when you accept.",
+      "belowNetworkMin": "{network} is not available for this sale: {network} can be used for sales of at least {min} USDT.",
       "quote": {
         "total": "You send: {amount}",
         "tronFee": "includes TRON network fee: {amount}",
@@ -2225,6 +2230,35 @@
         "cancel": "Cancel"
       }
     },
+    "approvals": {
+      "heading": "Payments waiting for approval",
+      "gateClosed": "Automatic sending is OFF: every seller payout and buyer refund waits until you approve it.",
+      "gateOpen": "Automatic sending is on: payouts and refunds are sent without waiting for an approval.",
+      "intro": "Approving releases the row for sending as it is; its amount and recipient were fixed when it was created. The next one-minute run sends it. The sweep from a deposit to the hot wallet never waits. The gate is the outbound.auto_send_enabled setting on the Settings screen.",
+      "empty": "No payout or refund is waiting for approval.",
+      "ariaLabel": "Outbound rows waiting for approval",
+      "columns": {
+        "network": "Network",
+        "type": "Type",
+        "amount": "Amount",
+        "to": "Recipient",
+        "created": "Created",
+        "action": "Action"
+      },
+      "gasFee": "Network fee: {amount}",
+      "approve": "Approve",
+      "confirm": {
+        "title": "Approve payment",
+        "warning": "After approval this amount is really sent on chain and cannot be undone. Check the network, the amount and the recipient.",
+        "network": "Network",
+        "type": "Type",
+        "amount": "Amount",
+        "to": "Recipient",
+        "transaction": "Transaction id",
+        "cancel": "Cancel",
+        "submit": "Approve and release for sending"
+      }
+    },
     "errors": {
       "GENERIC": "The action could not be completed. Please try again.",
       "VALIDATION_ERROR": "The request is invalid. Check the fields and try again.",
@@ -2232,6 +2266,8 @@
       "HASH_CONFIRMATION_MISMATCH": "The typed hash does not match the proposed hash.",
       "SELF_APPROVAL_FORBIDDEN": "You cannot approve your own proposal. A different admin must do it.",
       "ROW_NOT_FOUND": "The outbound row was not found.",
+      "ROW_NOT_APPROVABLE": "This row is not a seller payout or a refund; it never waits for an approval.",
+      "ALREADY_APPROVED": "This row is already approved.",
       "CLOSURE_NOT_FOUND": "The closure was not found.",
       "ROW_NOT_ETHEREUM": "The row is not on Ethereum.",
       "ROW_NOT_OUTBOUND": "The row is not an outbound transfer.",

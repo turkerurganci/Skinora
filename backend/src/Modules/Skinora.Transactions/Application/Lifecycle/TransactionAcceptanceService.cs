@@ -224,6 +224,16 @@ public sealed class TransactionAcceptanceService : ITransactionAcceptanceService
                 $"The {network} network is not open for new transactions.",
                 NetworkDetails(network));
 
+        // T169 — the network's own minimum price (no TRON below 50 USDT). The
+        // listing may predate the rule or a raised minimum, so creation's check
+        // alone does not cover it; refused before any write.
+        var networkMinimums = await NetworkMinimumPrice.ReadAsync(_db, cancellationToken);
+        if (NetworkMinimumPrice.IsBelow(transaction.Price, network, networkMinimums, out var networkMinimum))
+            return Failure(AcceptTransactionStatus.NetworkMinAmountNotMet,
+                TransactionErrorCodes.NetworkMinAmountNotMet,
+                $"Price {transaction.Price} is below the {network} minimum {networkMinimum}.",
+                NetworkMinimumPrice.Details(network, networkMinimum));
+
         // ---------- Stage 4: refund wallet pipeline (02 §12.3) ----------
         // The refund address is validated and screened on the chosen network
         // with the per-network validator the profile write path uses (T146 —

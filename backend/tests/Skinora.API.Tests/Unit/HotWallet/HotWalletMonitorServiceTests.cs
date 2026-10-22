@@ -101,7 +101,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             {
                 ["USDT"] = "500000000",   // 500 USDT (under 1000)
                 ["USDC"] = "750000000",   // 750 USDC (under 1000)
-                ["TRX"] = "200000000",    // 200 TRX (above 100)
+                ["TRX"] = "2000000000",   // 2000 TRX (above 100)
             },
         });
 
@@ -125,7 +125,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             {
                 ["USDT"] = "1500000000",  // 1500 > 1000
                 ["USDC"] = "0",
-                ["TRX"] = "200000000",
+                ["TRX"] = "2000000000",  // 2000 TRX — above the seeded 1500 floor (T169)
             },
         });
 
@@ -164,7 +164,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             {
                 ["USDT"] = "200000000",  // 200 > 100
                 ["USDC"] = "300000000",  // 300 > 100
-                ["TRX"] = "200000000",
+                ["TRX"] = "2000000000",  // 2000 TRX — above the seeded 1500 floor (T169)
             },
         });
 
@@ -219,7 +219,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             {
                 ["USDT"] = "99999000000",  // huge; should NOT alert since no limit configured
                 ["USDC"] = "0",
-                ["TRX"] = "200000000",
+                ["TRX"] = "2000000000",  // 2000 TRX — above the seeded 1500 floor (T169)
             },
         });
 
@@ -246,7 +246,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             {
                 ["USDT"] = "1500000000",
                 ["USDC"] = "0",
-                ["TRX"] = "200000000",
+                ["TRX"] = "2000000000",  // 2000 TRX — above the seeded 1500 floor (T169)
             },
         });
 

@@ -151,6 +151,21 @@ public sealed class TransactionCreationService : ITransactionCreationService
             return Failure(CreateTransactionStatus.PriceOutOfRange, TransactionErrorCodes.PriceOutOfRange,
                 $"Price {price} above configured maximum {limits.MaxTransactionAmount.Value}.");
 
+        // T169 — a network's own minimum price (proje sahibi kararı 2026-10-21:
+        // no TRON below 50 USDT; its network fee would eat too much of a cheap
+        // sale). The listing is refused rather than silently stripped of the
+        // network: the seller ticked it, so the seller hears why it cannot be
+        // offered (the wizard already shows it disabled).
+        var networkMinimums = await NetworkMinimumPrice.ReadAsync(_db, cancellationToken);
+        foreach (var network in acceptedNetworks)
+        {
+            if (NetworkMinimumPrice.IsBelow(price, network, networkMinimums, out var networkMinimum))
+                return Failure(CreateTransactionStatus.NetworkMinAmountNotMet,
+                    TransactionErrorCodes.NetworkMinAmountNotMet,
+                    $"Price {price} is below the {network} minimum {networkMinimum}.",
+                    NetworkMinimumPrice.Details(network, networkMinimum));
+        }
+
         var paymentTimeoutMinutes = request.PaymentTimeoutHours * 60;
         if (limits.PaymentTimeoutMinMinutes.HasValue && paymentTimeoutMinutes < limits.PaymentTimeoutMinMinutes.Value)
             return Failure(CreateTransactionStatus.TimeoutOutOfRange, TransactionErrorCodes.TimeoutOutOfRange,

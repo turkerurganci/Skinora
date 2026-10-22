@@ -137,6 +137,14 @@ public static class TransactionErrorCodes
     /// </summary>
     public const string NetworkUnavailable = "NETWORK_UNAVAILABLE";
 
+    /// <summary>
+    /// 422 — the price is below the network's own minimum (T169, proje sahibi
+    /// kararı 2026-10-21: no TRON below 50 USDT). Returned by create (an
+    /// accepted network) and by accept (the chosen network);
+    /// <c>details.network</c> + <c>details.minAmount</c>.
+    /// </summary>
+    public const string NetworkMinAmountNotMet = "NETWORK_MIN_AMOUNT_NOT_MET";
+
     // T51 — cancel (07 §7.7).
     public const string PaymentAlreadySent = "PAYMENT_ALREADY_SENT";
     public const string CancelReasonRequired = "CANCEL_REASON_REQUIRED";

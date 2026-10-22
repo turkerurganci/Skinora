@@ -134,5 +134,13 @@ public enum AuditAction
     // see: the same admin, a hash that differs from the proposal, a hash the
     // chain does not show as final and successful. NewValue = {code, txHash}.
     // SECURITY_EVENT category.
-    OUTBOUND_ROW_CLOSURE_REFUSED
+    OUTBOUND_ROW_CLOSURE_REFUSED,
+
+    // T169 — an admin approved an outbound payout/refund row for sending while
+    // the launch gate outbound.auto_send_enabled is false (07 §9.33 AD41).
+    // ⚠ PARA. EntityType = "BlockchainTransaction"; EntityId = its Id;
+    // NewValue = {blockchainTransactionId, transactionId, network, type, token,
+    // amount, gasFee, toAddress, retryCount}. ActorType = ADMIN.
+    // FUND_MOVEMENT category: the approval lets the money leave.
+    OUTBOUND_TRANSFER_APPROVED
 }
