@@ -303,10 +303,18 @@ public sealed class OutgoingTransferDispatchJob
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
         if (row is null || row.Status != BlockchainTransactionStatus.PENDING) return false;
 
-        // T169 — defensive second layer of the approval gate (the candidate
-        // query is the first): an unapproved payout/refund is never sent while
-        // the gate is closed. Left untouched — no retry spent, not FAILED.
-        if (!autoSend && OutboundApprovalGate.RequiresApproval(row.Type) && row.ApprovedAt is null)
+        // T169 — second layer of the approval gate (the candidate query is the
+        // first): an unapproved payout/refund is never sent while the gate is
+        // closed. Left untouched — no retry spent, not FAILED.
+        // Doğrulama S4-1 (⚠ PARA): the tick read the gate once, and a batch can
+        // run for minutes (deposit sends wait for blocks), so an admin closing
+        // the gate mid-tick must stop the very next unapproved row. The setting
+        // is therefore read again — straight from the database, no cache — for
+        // every unapproved payout/refund the tick would otherwise send. Only
+        // the open → closed change takes effect mid-tick; a gate opened mid-tick
+        // opens on the next tick (the candidate query already left those rows out).
+        if (OutboundApprovalGate.RequiresApproval(row.Type) && row.ApprovedAt is null
+            && !(autoSend && await OutboundApprovalGate.IsAutoSendEnabledAsync(_db, cancellationToken)))
         {
             _logger.LogWarning(
                 "Outbound row {Id} ({Type}) on {Network} has no admin approval and {Key} is false — left PENDING, nothing sent.",
