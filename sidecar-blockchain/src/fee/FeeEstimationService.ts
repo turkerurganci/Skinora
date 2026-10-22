@@ -48,6 +48,21 @@ import type { DelegationSource } from '../wallet/EnergyDelegationService.js';
  *     2-decimal charge precision.</item>
  * </list>
  *
+ * <para>
+ * T169a (proje sahibi kararı 2026-10-21 — ⚠ PARA): a REFUND (deposit sender)
+ * is charged the platform's whole outlay for it, not only what the chain
+ * bills the deposit — exactly what <c>EnergyDelegationService</c> sends and
+ * reports as <c>platformSpendSun</c> (T160c F1): the activation's 1 SUN and
+ * its creation fee, the TRX top-up sized for the WHOLE transfer with its 10%
+ * margin less what the deposit already holds (<c>topUpSun</c> — the part the
+ * deposit does not burn stays there and is never collected), and the
+ * top-up's own Bandwidth when the hot wallet has none left. The caller share
+ * (point 2) no longer lowers a refund's charge: the TRX goes out for all of
+ * the transfer whoever pays it on chain (Nile: the owner pays, the top-up
+ * stays on the deposit). A payout keeps the chain-billed burn (payout rule
+ * untouched — 02 §4.7).
+ * </para>
+ *
  * The estimate can still drift from the realized fee (recipient balance, the
  * owner's remaining Energy or chain prices may change between estimate and
  * broadcast); that residual variance stays on the platform by design — the
@@ -58,6 +73,16 @@ import type { DelegationSource } from '../wallet/EnergyDelegationService.js';
 // Lives with the planner so the delegation flow can use it without importing this
 // module (which imports TransferService, which imports the delegation flow).
 export { ESTIMATED_TRANSFER_TX_BYTES } from '../wallet/DelegationPlanner.js';
+
+/** The SUN the activation sends to create a deposit account (EnergyDelegationService.ensureAccount). */
+const ACTIVATION_SUN = 1;
+
+/**
+ * T169a — bytes of the hot wallet's plain TRX send (the top-up). Same size as
+ * the activation send it mirrors (`ACTIVATION_TX_BYTES`, 270 — the sweep line
+ * prices its top-up the same way).
+ */
+const TRX_SEND_TX_BYTES = ACTIVATION_TX_BYTES;
 
 export interface FeeEstimateRequest {
   /** Sender. Omitted → hot wallet (payout path). Refunds pass the deposit address. */
@@ -101,7 +126,25 @@ export interface FeeEstimateResult {
    * refund (refund path only; 0 otherwise). Included in <c>burnSun</c>.
    */
   activationBurnSun: number;
-  /** Everything the charge prices: Energy shortfall + Bandwidth + activation. */
+  /**
+   * T169a — refund path: TRX the broadcast sends the deposit to burn for the
+   * transfer (Energy for ALL of it unless delegated, plus its Bandwidth), with
+   * the 10% margin, less what the deposit already holds (after activation: 1
+   * SUN) — <c>topUpSun</c> of the delegation flow. 0 on a payout.
+   */
+  topUpSun: number;
+  /**
+   * T169a — refund path: the top-up transaction's own Bandwidth, burned when
+   * the hot wallet's remaining Bandwidth cannot carry it (270 bytes ×
+   * <c>getTransactionFee</c>); 0 when it can, when nothing is sent, and on a payout.
+   */
+  topUpFeeSun: number;
+  /**
+   * Everything the charge prices, SUN. Payout: the hot wallet's burn (Energy
+   * shortfall + Bandwidth). Refund (T169a): the platform's whole outlay — 1 SUN
+   * activation + <c>activationBurnSun</c> + <c>topUpSun</c> + <c>topUpFeeSun</c>,
+   * the same total the broadcast reports as <c>platformSpendSun</c>.
+   */
   burnSun: number;
   trxPriceUsdt: number;
   priceSource: TrxPriceSource;
@@ -250,9 +293,10 @@ export class FeeEstimationService {
     //     the refund path the sender is a deposit address and the broadcast
     //     follows `planDelegation`, which plans the WHOLE transfer: the stake
     //     covers all of it or none of it. The path is decided exactly as the
-    //     broadcast decides it; what the user pays on the burn path is only
-    //     what the chain bills the deposit (TRX sent for the owner's share
-    //     stays in the deposit unburned).
+    //     broadcast decides it. T169a: on the burn path the refund is charged
+    //     the TRX the broadcast sends for the WHOLE transfer (step 4), not
+    //     only the chain-billed share — the TRX sent for the owner's share
+    //     stays in the deposit unburned and is never collected.
     let energyAvailable: number;
     let energyShortfall: number;
     let delegationPlan: DelegationPlan['kind'] | null = null;
@@ -269,8 +313,10 @@ export class FeeEstimationService {
       delegationSun = plan.kind === 'delegate' ? plan.delegationSun : null;
       energyAvailable =
         plan.kind === 'delegate' ? energyRequired : Math.min(energyRequired, depositEnergy);
-      energyShortfall =
-        plan.kind === 'burn' ? Math.max(0, energyPayableByCaller - depositEnergy) : 0;
+      // T169a — the burn path's top-up is sized for the WHOLE transfer (the
+      // broadcast's own shortfall, owner share ignored), and that TRX is what
+      // the refund is charged.
+      energyShortfall = plan.kind === 'burn' ? plan.energyShortfall : 0;
     } else {
       energyAvailable = hotWalletResources.energyAvailable;
       energyShortfall = Math.max(0, energyPayableByCaller - energyAvailable);
@@ -311,10 +357,39 @@ export class FeeEstimationService {
       );
     }
 
-    const burnSun =
-      energyShortfall * feeParams.energyFeeSun +
-      bandwidthBurnBytes * feeParams.bandwidthFeeSun +
-      activationSun;
+    // (4) WHAT IS CHARGED. A payout: the hot wallet's own burn. A refund
+    //     (T169a — proje sahibi kararı 2026-10-21, ⚠ PARA): the platform's
+    //     whole outlay, mirroring EnergyDelegationService step by step — the
+    //     1 SUN activation and its creation fee, the top-up it sends
+    //     (`topUpSun` of the burn it plans, less the deposit's balance) and that
+    //     top-up's own Bandwidth. TRX the deposit does not burn stays on it and
+    //     is never collected, so it is spent all the same (T160c F1).
+    let topUp = 0;
+    let topUpFee = 0;
+    let burnSun: number;
+    if (isDelegatedPath) {
+      const depositExists = senderState!.exists;
+      const requiredBurn = transferBurnSun({
+        energyToBurn: energyShortfall,
+        energyFeeSun: feeParams.energyFeeSun,
+        bandwidthAvailable,
+        txBytes: bandwidthRequired,
+        bandwidthFeeSun: feeParams.bandwidthFeeSun,
+      });
+      // After activation the deposit holds the 1 SUN that created it.
+      const balanceSun = depositExists ? senderState!.balanceSun : ACTIVATION_SUN;
+      topUp = topUpSun(requiredBurn, balanceSun);
+      topUpFee =
+        topUp > 0 && hotWalletResources.bandwidthAvailable < TRX_SEND_TX_BYTES
+          ? TRX_SEND_TX_BYTES * feeParams.bandwidthFeeSun
+          : 0;
+      burnSun = (depositExists ? 0 : ACTIVATION_SUN) + activationSun + topUp + topUpFee;
+    } else {
+      burnSun =
+        energyShortfall * feeParams.energyFeeSun +
+        bandwidthBurnBytes * feeParams.bandwidthFeeSun +
+        activationSun;
+    }
 
     // Sun → TRX → USDT, rounded UP to the 2-decimal charge precision so the
     // charge never undershoots its own basis by a sub-cent artifact.
@@ -335,6 +410,8 @@ export class FeeEstimationService {
       bandwidthRequired,
       bandwidthAvailable,
       activationBurnSun: activationSun,
+      topUpSun: topUp,
+      topUpFeeSun: topUpFee,
       burnSun,
       trxPriceUsdt: priceQuote.priceUsdt,
       priceSource: priceQuote.source,
