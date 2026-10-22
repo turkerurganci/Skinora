@@ -100,6 +100,7 @@ Ek: betiğin türettiği adresler T143 bilinen-cevap vektörleriyle (TRON `TUEZS
 
 - Branch: `task/T163-imza-sirlari-secret`
 - Commit: `d0bb3c31` — T163: TRON imza sırları Docker secret, env yolu üretimde kapalı, çevrimdışı yedek betiği (+ rapor/status commit'i)
+- Kapanış commit'leri: `5f3110a7` — B1/B3/B4/B5/B7 düzeltmeleri; `eb492850` — `origin/main` `403fe257` (T167 #368 + T160c #365) merge commit'i, belge çakışmaları iki taraf korunarak (05 v3.32, plan v1.22, backlog 53/160 awk ile), kod çakışması yok (T160c'nin `TransferService.ts` / `EnergyDelegationService.ts` değişiklikleri otomatik birleşti; B3 hata metinleri üstünde)
 - PR: #369
 - CI: ✓ PASS — run `39615737136` (HEAD `b55498b2`, kod + rapor): CI Gate ✓; Sidecar-blockchain vitest (`signingSecrets` 20, `signingSecretsStartup` 9) ✓, Sidecar-ethereum vitest (`walletBackupScript` 6 — CI runner'da atlanmadan koştu) ✓, 3c Script test ✓, 7 Docker build ✓, 11 E2E (advisory) ✓. Önceki run `39615073534` (`d0bb3c31`) yeni push yüzünden `cancelled` (concurrency). Not: API, Ethereum Docker build job'ını run bittikten sonra da `in_progress` gösterdi; adımlarının hepsi ("Complete job" dahil) `success`. Bu satırı ekleyen commit yalnız rapordur
 
