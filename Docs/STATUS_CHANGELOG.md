@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-22 — T164 ⏳ yapım bitti, doğrulama bekliyor (otomatik tam + log yedeği, 10 GB alarmı, Express'te geri yükleme provası, geri dönüş planı; T164_REPORT.md). Sonra bağımsız doğrulama FAIL (HEAD `3e2441c0`, 1 × S1 ⚠ PARA + 3 × S3 + 7 × S4) → düzeltme turu.
+
 **Önceki güncelleme:** 2026-10-22 — chore (görev değil): `next` + `eslint-config-next` 16.3.8 → 16.4.2 güvenlik yükseltmesi — 2026-10-22 danışmaları GHSA-2464-fhr4-w9xw (critical RCE) + GHSA-p3m5-59mp-jv5r (high DoS) bloke edici frontend audit adımını tüm dallarda kırmızıya döndürmüştü; `npm audit --omit=dev` 0, backlog ✅ `FrontendNextAdvisories1642` (§7), dal `chore/next-16.4.2-guvenlik`.
 
 **Önceki güncelleme:** 2026-10-21 — T160c ✓ Tamamlandı, yeniden doğrulama PASS (iade kesinti kalıntısı sıcak cüzdana, AD38 gerçek zincir gideri; T160c_REPORT.md, PR #365). **Merge teyidi (T163 dalında işlendi):** T160c (#365) main `403fe257` → CI `39813399071` ✓, Docker Publish `39813399137` ✓.

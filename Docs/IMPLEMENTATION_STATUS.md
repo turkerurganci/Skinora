@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-22 — T164 ⏳ yapım bitti, doğrulama bekliyor (otomatik tam + log yedeği, 10 GB alarmı, Express'te geri yükleme provası, geri dönüş planı; T164_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-22 — T164 ⏳ düzeltme turu, yeniden doğrulama bekliyor (doğrulama FAIL: S1 ⚠ PARA geri yükleme sonrası açılış sırası — §N.8 T169 onay kapısı + bekleyen bütün giden satırlar listesi + kapatma, gerçek SQL Server'da provalı; S3 stopat, başarısız tam yedekte log, metrik yokken alarm; T164_REPORT.md, PR #372) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -366,7 +366,7 @@
 | T161 | Sunucu sıkılaştırma | ✓ Tamamlandı — doğrulama PASS (7/7, 6 × S4; bağımsız doğrulama Opus high, HEAD `d3e97a50`): host portları `127.0.0.1` (LAN dahil dışarıya port yok), deneme yayını `skinora-trial` overlay'i + Cloudflare Tunnel (token'sız açılmaz), Steam/TRON/Ethereum servisleri iç anahtarsız açılmaz, CI `compose-exposure` kapısı, runbook §K; kapanışta `--env-file .env.trial` unutulursa overlay render etmez (`SKINORA_TRIAL_STACK`) ([rapor](TASK_REPORTS/T161_REPORT.md), PR [#367](https://github.com/turkerurganci/Skinora/pull/367)) |
 | T162 | HTTPS + alan adı (skinora.com) | ⬚ Bekliyor |
 | T163 | İmza sırları Docker secret + çevrimdışı yedek | ⬚ Bekliyor |
-| T164 | Veritabanı yedeği ve geri dönüş planı | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor: `skinora-db-backup` (tam 24 sa, log 15 dk, 14 gün, host klasörü), backend boyut/yedek yaşı metrikleri + 4 Grafana alarmı (%70/%85, 26 sa, 45 dk), Express'te prova (32 tablo eşit, volume kaybı, point-in-time), DEPLOY_RUNBOOK §M |
+| T164 | Veritabanı yedeği ve geri dönüş planı | ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor: ilk doğrulama FAIL (1 × S1 ⚠ PARA, 3 × S3, 7 × S4); S1 → DEPLOY_RUNBOOK §N.8 açılış sırası T169 onay kapısına dayanır, geri yüklemeden sonra yeni kimlikle açılan satırlar dahil bekleyen bütün giden satırlar listelenip kapatılır (gerçek SQL Server provası: eski yordam ikinci ödemeyi gönderdi, yeni yordamla 0); S3 → stopat en yeni yedekten sonraysa durur, tam yedek düşünce log yedekleri sürer, `db-monitor-probe-failing` alarmı; runbook bölümü §N ([rapor](TASK_REPORTS/T164_REPORT.md), PR [#372](https://github.com/turkerurganci/Skinora/pull/372)) |
 | T165 | Bildirim kanalları ve dış alarm | ⬚ Bekliyor |
 | T166 | Küçük düzeltmeler (tek PR) | ✓ Tamamlandı — doğrulama PASS (6/6, 4 × S4; B2 kapanışta düzeltildi): `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
 | T167 | MASAK akışı | ✓ Tamamlandı — doğrulama PASS (5/5, 6 × S4; bağımsız doğrulama Opus high, HEAD `422e5570`; S4-1/2/3/5/6 kapanışta kapandı, S4-4 T168'e): Tebliğ 29 notları ödeme ekranlarında ve yardımda, P3 payout gönderim adresi, payout tek adres + depozit işlem başına kodda ölçüldü ([rapor](TASK_REPORTS/T167_REPORT.md), PR [#368](https://github.com/turkerurganci/Skinora/pull/368)) |
