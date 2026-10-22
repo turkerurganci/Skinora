@@ -105,10 +105,12 @@ export function TosRepromptGate() {
         mode === "first" ? () => router.replace(`/${locale}/auth/age-gate`) : undefined
       }
       // T168 — declining the terms must not take away account closure /
-      // deletion (KVKK erasure; the server exempts exactly U13/U14 from the
-      // ToS gate). Only for first-time acceptance: a re-prompted account has
-      // accepted before and reaches the settings page normally.
-      declineSlot={mode === "first" ? <AccountManagementSection /> : undefined}
+      // deletion (KVKK erasure). Offered in BOTH modes: the modal is
+      // full-screen and /settings is not a dormant route, so a re-prompted
+      // account that rejects the new version has no other way out. The server
+      // accepts U13/U14 in both states (first: [SkipTosAcceptanceGate];
+      // reprompt: the version is not enforced server-side).
+      declineSlot={<AccountManagementSection />}
     />
   );
 }

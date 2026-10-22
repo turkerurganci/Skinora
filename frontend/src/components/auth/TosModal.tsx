@@ -17,10 +17,10 @@ export interface TosModalProps {
   onAccept: (payload: { tosVersion: string; ageOver18: true }) => void;
   onAgeRejected?: () => void;
   /**
-   * T168 — first-time acceptance only: what an account that declines the
-   * terms can do instead (close or delete itself — KVKK erasure right). The
-   * server exempts exactly those two endpoints from the ToS gate (07 §4.4).
-   * Shown behind a "I do not accept" toggle.
+   * T168 — what an account that declines the terms (first acceptance or a
+   * re-prompt after a version bump) can do instead: close or delete itself
+   * (KVKK erasure right). The server exempts exactly those two endpoints from
+   * the ToS gate (07 §4.4). Shown behind a "I do not accept" toggle.
    */
   declineSlot?: ReactNode;
   className?: string;

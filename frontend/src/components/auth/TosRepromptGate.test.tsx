@@ -49,6 +49,18 @@ function me(tosAccepted: boolean, tosAcceptedVersion: string | null) {
   return { tosAccepted, tosAcceptedVersion };
 }
 
+// jsdom has no modal dialog; the confirm modal only needs `open` to flip.
+function installDialogPolyfill() {
+  if (!HTMLDialogElement.prototype.showModal) {
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+      this.open = false;
+    };
+  }
+}
+
 function renderGate() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -134,15 +146,7 @@ describe("TosRepromptGate (T166)", () => {
   });
 
   it("T168 — first-time: declining the terms offers account closure and deletion", async () => {
-    // jsdom has no modal dialog; the confirm modal only needs `open` to flip.
-    if (!HTMLDialogElement.prototype.showModal) {
-      HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
-        this.open = true;
-      };
-      HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
-        this.open = false;
-      };
-    }
+    installDialogPolyfill();
     getMe.mockResolvedValue(me(false, null));
     deleteAccount.mockResolvedValue({ deletedAt: "2026-10-21T00:00:00Z", message: "ok" });
     signOut.mockResolvedValue(undefined);
@@ -169,13 +173,29 @@ describe("TosRepromptGate (T166)", () => {
     expect(acceptTos).not.toHaveBeenCalled();
   });
 
-  it("T168 — re-prompt (accepted before): no decline path, settings are reachable normally", async () => {
+  it("T168 — re-prompt (new version): the modal blocks /settings, so declining offers closure and deletion here too", async () => {
+    installDialogPolyfill();
+    // The re-prompt covers every non-dormant route, the settings page included.
+    pathname.current = "/en/settings";
     getMe.mockResolvedValue(me(true, "0.9"));
+    deactivateAccount.mockResolvedValue({ deactivatedAt: "2026-10-22T00:00:00Z", message: "ok" });
+    signOut.mockResolvedValue(undefined);
 
     renderGate();
 
-    await waitFor(() => expect(screen.getByTestId("tos-submit")).toBeTruthy());
-    expect(screen.queryByTestId("tos-decline-toggle")).toBeNull();
+    await waitFor(() => expect(screen.getByText(messages.auth.tos.reprompt.title)).toBeTruthy());
+    fireEvent.click(screen.getByTestId("tos-decline-toggle"));
+
+    const panel = screen.getByTestId("tos-decline-panel");
+    expect(panel).toHaveTextContent(messages.auth.tos.decline.description);
+    expect(panel).toHaveTextContent(messages.settings.accountManagement.delete.button);
+
+    fireEvent.click(screen.getByText(messages.settings.accountManagement.deactivate.button));
+    fireEvent.click(document.querySelector("dialog button[type=submit]") as HTMLButtonElement);
+
+    await waitFor(() => expect(deactivateAccount).toHaveBeenCalled());
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/en"));
+    expect(acceptTos).not.toHaveBeenCalled();
   });
 
   it("renders nothing for an account on the current version", async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "@/i18n/messages/tr.json";
 import SteamCallbackPage from "./page";
@@ -36,6 +36,20 @@ vi.mock("@/lib/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/client")>()),
   refreshAccessToken,
 }));
+
+// T168 — the first-time ToS modal's decline path reuses the settings
+// account-management section; its API calls are mocked here.
+const { deleteAccount, deactivateAccount, signOut } = vi.hoisted(() => ({
+  deleteAccount: vi.fn(),
+  deactivateAccount: vi.fn(),
+  signOut: vi.fn(),
+}));
+vi.mock("@/lib/api/settings", () => ({
+  DELETE_ACCOUNT_CONFIRMATION: "SİL",
+  deleteAccount,
+  deactivateAccount,
+}));
+vi.mock("@/lib/auth/signOut", () => ({ signOut }));
 
 function renderCallback(locale: Locale = "tr") {
   return render(
@@ -135,5 +149,41 @@ describe("SteamCallbackPage — politika reddi kendi ekranına gider (F4c)", () 
     params = new URLSearchParams("error=some_future_code");
     renderCallback("tr");
     expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("SteamCallbackPage — ilk kabul modalında reddetme yolu (T168)", () => {
+  it("yeni kullanıcı şartları kabul etmeden hesabını silebilir (KVKK silme hakkı)", async () => {
+    // jsdom'da modal dialog yok; onay penceresi yalnız `open`ın dönmesini bekler.
+    if (!HTMLDialogElement.prototype.showModal) {
+      HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+        this.open = true;
+      };
+      HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+        this.open = false;
+      };
+    }
+    deleteAccount.mockResolvedValue({ deletedAt: "2026-10-22T00:00:00Z", message: "ok" });
+    signOut.mockResolvedValue(undefined);
+    params = new URLSearchParams("status=new_user&returnUrl=%2Ftr%2Fdashboard");
+
+    renderCallback("tr");
+
+    await waitFor(() => expect(screen.getByTestId("tos-decline-toggle")).toBeTruthy());
+    fireEvent.click(screen.getByTestId("tos-decline-toggle"));
+    const panel = screen.getByTestId("tos-decline-panel");
+    expect(panel).toHaveTextContent(messages.auth.tos.decline.description);
+    expect(panel).toHaveTextContent(messages.settings.accountManagement.deactivate.button);
+
+    fireEvent.click(
+      screen.getAllByText(messages.settings.accountManagement.delete.button)[0] as HTMLElement,
+    );
+    fireEvent.change(screen.getByPlaceholderText("SİL"), { target: { value: "SİL" } });
+    fireEvent.click(document.querySelector("dialog button[type=submit]") as HTMLButtonElement);
+
+    await waitFor(() => expect(deleteAccount).toHaveBeenCalledWith("SİL"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/tr"));
+    // Kabul edilmedi; panele de gidilmedi.
+    expect(replace).not.toHaveBeenCalledWith("/tr/dashboard");
   });
 });

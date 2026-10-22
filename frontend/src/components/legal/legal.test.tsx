@@ -240,7 +240,32 @@ describe("terms — 02 §22 P2P clauses and the network rules (TR, authoritative
       expect(messages.legal.terms.sections.governingLaw.body).toContain("{courtVenue}");
     }
   });
+  it("T168 fix S4-1/S4-2 — a single seller cancellation lowers reputation only (the ban needs repeated cancellations); the refund fee is shown on the transaction page", () => {
+    // CancelCooldownEvaluator: the cooldown starts only past cancel_limit_count.
+    expect(s.cancellation.body).not.toMatch(/yeni işlem açma yasağı/);
+    expect(s.cancellation.body).toMatch(/Kısa sürede çok sayıda iptal/);
+    // PAYMENT_REFUNDED carries no fee; the transaction page does.
+    expect(s.refunds.body).toMatch(/Düşülen ücret işlem sayfasında/);
+  });
+  it("T168 fix B3 — the decline path is promised for an updated version too", () => {
+    expect(s.suspension.body).toMatch(/güncellenmiş bir sürümünü kabul etmeden de/);
+  });
   it("no hedging words in the Turkish legal texts (GUARDRAILS §5)", () => {
     expect(JSON.stringify(tr.legal)).not.toMatch(/muhtemelen|belki/i);
+  });
+});
+
+describe("privacy — retention matches AccountLifecycleService + the login-log retention job (T168 fix B2)", () => {
+  const p = tr.legal.privacy.sections;
+  it("account deletion clears the device/IP data of the SESSION records (RefreshToken), not every log", () => {
+    expect(p.dataRetention.body).toMatch(/oturum kayıtlarınızdaki cihaz ve IP bilgisi silinir/);
+    expect(p.dataRetention.body).not.toMatch(/oturum kayıtlarınız \(cihaz ve IP bilgisi dahil\)/);
+  });
+  it("sign-in records (UserLoginLog) stay 1 year (retention.user_login_log_days = 365), also after deletion", () => {
+    expect(p.dataRetention.body).toMatch(/Giriş kayıtları/);
+    expect(p.dataRetention.body).toMatch(/1 yıl saklanır, sonra kalıcı olarak silinir/);
+    expect(p.dataRetention.body).toMatch(/hemen silinmez/);
+    // DeviceFingerprint is never written by LoginAuditService — not promised.
+    expect(p.dataRetention.body).not.toMatch(/parmak izi/);
   });
 });
