@@ -84,7 +84,7 @@ services:
   # limit the db-data-size alarms watch), whatever .env.trial says. Backups
   # into the TRIAL's own host folder — never the development one (both
   # databases are named Skinora; the files would mix). TRIAL_DB_BACKUP_DIR may
-  # point at another disk (DEPLOY_RUNBOOK §M.3); .env.example does not carry
+  # point at another disk (DEPLOY_RUNBOOK §N.3); .env.example does not carry
   # it, so a copied .env.trial keeps the default.
   skinora-db:
     container_name: !reset null

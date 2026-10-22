@@ -83,6 +83,36 @@ public sealed class PrometheusDatabaseStorageObserverTests
     }
 
     [Fact]
+    public void Every_Reading_Publishes_Which_Part_Was_Read_So_No_Data_Cannot_Silence_The_Backup_Alarms()
+    {
+        // T164 düzeltme turu (S3 F4): a backend restarted without msdb access
+        // never publishes a backup timestamp, and the stale rules (or
+        // vector(0)) stay silent — backup_history = 0 is what fires instead.
+        Observer().Report(Snapshot(fullAge: null, logAge: null, historyRead: false));
+        Assert.Equal(1, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("storage").Value);
+        Assert.Equal(0, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("backup_history").Value);
+
+        Observer().Report(Snapshot());
+        Assert.Equal(1, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("backup_history").Value);
+
+        Observer().ReportFailure();
+        Assert.Equal(0, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("storage").Value);
+        Assert.Equal(0, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("backup_history").Value);
+    }
+
+    [Fact]
+    public void The_Probe_Rule_Fires_When_A_Part_Was_Not_Read_For_15_Minutes()
+    {
+        var block = RuleBlock("db-monitor-probe-failing");
+
+        Assert.Contains(
+            $"(1 - max by (part) (max_over_time({PrometheusDatabaseStorageObserver.ProbeSuccess.Name}[15m]))) or vector(0)",
+            block);
+        Assert.Matches(@"type: gt\s+params: \[0\.5\]", block);
+        Assert.Contains("severity: critical", block);
+    }
+
+    [Fact]
     public void Simple_Recovery_Publishes_Zero_The_Log_Rule_Is_Gated_On_It()
     {
         Observer().Report(Snapshot(recovery: "SIMPLE", logAge: null));
@@ -159,6 +189,7 @@ public sealed class PrometheusDatabaseStorageObserverTests
 
         probe.Next = () => throw new InvalidOperationException("server gone");
         Assert.False(await sut.ProbeOnceAsync(CancellationToken.None));
+        Assert.Equal(0, PrometheusDatabaseStorageObserver.ProbeSuccess.WithLabels("storage").Value);
 
         probe.Next = () => Snapshot(used: 123 * MiB);
         Assert.True(await sut.ProbeOnceAsync(CancellationToken.None));

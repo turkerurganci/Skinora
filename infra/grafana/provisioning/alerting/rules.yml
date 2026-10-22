@@ -640,7 +640,7 @@ groups:
             the limit the backend publishes (skinora_backend_db_data_limit_bytes —
             10240 MB on Express). At 100% writes fail and the platform stops
             taking sales and payments. Act now: purge what the retention jobs
-            allow, move to a paid edition, or archive (DEPLOY_RUNBOOK §M.5).
+            allow, move to a paid edition, or archive (DEPLOY_RUNBOOK §N.5).
 
       # T164 — the newest scheduled full backup (msdb, copy-only excluded) is
       # older than the threshold the backend publishes (default 26 h = the 24 h
@@ -687,7 +687,59 @@ groups:
             26 h), or there is none. Check the skinora-db-backup container (docker
             compose logs skinora-db-backup — "FAILED" lines), the backup folder
             on the host (disk full, permissions) and that the database is ONLINE
-            (DEPLOY_RUNBOOK §M).
+            (DEPLOY_RUNBOOK §N).
+
+      # T164 düzeltme turu (S3 F4) — the size and backup rules above end in
+      # "or vector(0)": a series that is never published keeps them silent. A
+      # backend restarted without read access to msdb (or with the database
+      # unreachable) never publishes a backup timestamp at all. The backend
+      # publishes skinora_backend_db_probe_success{part} on every reading,
+      # failed ones included; a part not read once in 15 minutes fires here.
+      # A backend that is down publishes nothing: backend-down covers that.
+      - uid: db-monitor-probe-failing
+        title: Database Size And Backup Readings Failing
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (1 - max by (part) (max_over_time(skinora_backend_db_probe_success[15m]))) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.5]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The backend cannot read the database size or the backup history — the backup and 10 GB alarms are blind
+          description: >-
+            For 15 minutes every reading of one part (the alert's part label) failed
+            (part=storage: sys.database_files on the Skinora database;
+            part=backup_history: msdb.dbo.backupset). Until it reads again,
+            db-backup-full-stale, db-backup-log-stale and the 10 GB alarms
+            cannot fire. Check the backend log ("Database storage reading
+            failed"), that the database is ONLINE, and that the backend's login
+            can read msdb (sa can; another login needs SELECT on
+            msdb.dbo.backupset). DEPLOY_RUNBOOK §N.5.
 
   - orgId: 1
     name: Skinora Warning Alerts
@@ -1463,7 +1515,7 @@ groups:
             the limit the backend publishes (10240 MB on Express). Plan the next
             step before 85% (db-data-size-critical): which tables grow
             (sp_spaceused), retention, a paid edition or archiving
-            (DEPLOY_RUNBOOK §M.5).
+            (DEPLOY_RUNBOOK §N.5).
 
       # T164 — only while the database is in FULL recovery: there the
       # transaction log grows until a log backup truncates it, and the log
@@ -1509,4 +1561,4 @@ groups:
             three missed 15-minute backups), or there is none. Data written since
             the last log backup is not in any backup, and the transaction log
             keeps growing. Check docker compose logs skinora-db-backup
-            (DEPLOY_RUNBOOK §M).
+            (DEPLOY_RUNBOOK §N).

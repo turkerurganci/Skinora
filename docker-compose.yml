@@ -449,7 +449,7 @@ services:
     networks:
       - skinora-network
 
-  # --- Database backup (T164, DEPLOY_RUNBOOK §M) ---
+  # --- Database backup (T164, DEPLOY_RUNBOOK §N) ---
   # SQL Server Express has no SQL Agent: this container is the scheduler. It
   # runs scripts/db-backup/db-backup.sh (full every 24 h, log every 15 min,
   # 14 days kept — the T164 proposal) against skinora-db over the compose

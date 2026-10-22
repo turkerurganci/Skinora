@@ -6,7 +6,7 @@ namespace Skinora.API.Monitoring;
 /// Deployment configuration, not an admin setting (same reasoning as
 /// <see cref="HealthProbeOptions"/>). The alert rules divide by the thresholds
 /// the backend publishes, so they carry no number of their own except the
-/// size ratios (70 % / 85 %) — DEPLOY_RUNBOOK §M.5.
+/// size ratios (70 % / 85 %) — DEPLOY_RUNBOOK §N.5.
 /// </summary>
 public sealed class DatabaseStorageMonitorOptions
 {

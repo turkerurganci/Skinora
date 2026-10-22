@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Skinora — automatic SQL Server backups (T164, DEPLOY_RUNBOOK §M).
+# Skinora — automatic SQL Server backups (T164, DEPLOY_RUNBOOK §N).
 #
 # SQL Server Express has no SQL Agent, so nothing inside the database server
 # schedules a backup. This script is the scheduler. It runs as the long-lived
@@ -27,9 +27,12 @@
 #                          stopat) + every later log backup, in order, into a
 #                          NEW database <target>; stopat = YYYY-MM-DDTHH:MM:SSZ
 #                          (UTC) for a point-in-time restore. Never overwrites.
+#                          Refuses a stopat later than the newest log backup
+#                          (the restore would silently end earlier) and prints
+#                          the point it reached.
 #   swap <restored>        rename the live database to <db>_before_restore_<ts>
 #                          and <restored> to <db>; the old copy is KEPT for the
-#                          reconciliation (DEPLOY_RUNBOOK §M.6). Then a full.
+#                          reconciliation (DEPLOY_RUNBOOK §N.6). Then a full.
 #
 # Environment (compose passes them; defaults are the T164 proposal — ⚠):
 #   MSSQL_SA_PASSWORD               required (handed to sqlcmd as SQLCMDPASSWORD)
@@ -55,6 +58,10 @@ LOCK="${DB_BACKUP_LOCK:-/tmp/skinora-db-backup.lock}"
 # Always kept, whatever their age: a stalled schedule must never prune away
 # the last good backups.
 MIN_KEEP_FULL=2
+# A failed full is retried at most this often (disk full, verify failure ...);
+# meanwhile the log backups keep running on the previous full's chain.
+FULL_RETRY_MINUTES=60
+FULL_FAILED_MARK="${LOCK}.full-failed"
 
 log() { printf '%s db-backup %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 die() { log "FATAL $*"; exit 1; }
@@ -131,7 +138,14 @@ do_backup() {
     log "FAILED $kind backup: tag must match [a-z0-9-]{1,32}"
     return 1
   fi
-  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+  # Names are second-resolution: two backups of a kind in the same second
+  # (a manual one next to the scheduler) would overwrite each other and break
+  # the log chain - wait for a free second instead.
+  while :; do
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    compgen -G "$DIR/${DB}_${kind}_${ts}*" >/dev/null || break
+    sleep 1
+  done
   if [ "$kind" = FULL ]; then
     name="${DB}_FULL_${ts}${tag:+_$tag}.bak"
     stmt="BACKUP DATABASE [$DB] TO DISK = N'$DIR/$name.inprogress' WITH CHECKSUM, INIT, NAME = N'$DB full $ts';"
@@ -153,10 +167,11 @@ do_backup() {
     log "FAILED $kind backup $name: verify: $(echo "$out" | tr '\n' ' ')"
     return 1
   fi
-  mv -f "$tmp" "$DIR/$name" || { log "FAILED $kind backup $name: rename"; return 1; }
+  mv -n "$tmp" "$DIR/$name" && [ ! -e "$tmp" ] || { rm -f "$tmp"; log "FAILED $kind backup $name: rename"; return 1; }
   chmod 600 "$DIR/$name" 2>/dev/null || true
   size="$(stat -c %s "$DIR/$name" 2>/dev/null || echo '?')"
   log "OK $kind $name bytes=$size verified"
+  [ "$kind" = FULL ] && rm -f "$FULL_FAILED_MARK"
   return 0
 }
 
@@ -167,12 +182,15 @@ prune() {
   count=${#fulls[@]}
   [ "$count" -eq 0 ] && return 0
   # Index of the first full that stays: every full newer than the cutoff,
-  # and never fewer than MIN_KEEP_FULL.
+  # plus the newest one before it (a point in time just after the cutoff
+  # restores from that full and its logs, so the window really is
+  # RETENTION_DAYS long), and never fewer than MIN_KEEP_FULL.
   keep_from=$count
   for ((i = 0; i < count; i++)); do
     e="$(file_epoch "${fulls[$i]}")" || continue
     if [ "$e" -ge "$cutoff" ]; then keep_from=$i; break; fi
   done
+  [ "$keep_from" -gt 0 ] && keep_from=$((keep_from - 1))
   if [ $((count - keep_from)) -lt "$MIN_KEEP_FULL" ]; then
     keep_from=$((count - MIN_KEEP_FULL)); [ "$keep_from" -lt 0 ] && keep_from=0
   fi
@@ -217,17 +235,36 @@ tick() {
   now=$(now_epoch)
   full_e="$(newest_epoch FULL || true)"
   if [ "$rc" -eq 2 ] || [ -z "$full_e" ] || [ $((now - full_e)) -ge $((FULL_HOURS * 3600)) ]; then
-    do_backup FULL && prune
-    return 0
+    if full_retry_due "$now"; then
+      if do_backup FULL; then prune; return 0; fi
+      echo "$now" > "$FULL_FAILED_MARK"
+      log "full backup will be retried in ${FULL_RETRY_MINUTES} min; log backups continue on the previous full"
+    fi
+    # No full to chain on (new database, recovery model just changed): a log
+    # backup would be refused (Msg 4214) - nothing more this tick.
+    if [ "$rc" -eq 2 ] || [ -z "$full_e" ]; then return 0; fi
   fi
   [ "$LOG_MINUTES" -eq 0 ] && return 0
   log_e="$(newest_epoch LOG || true)"
   [ -z "$log_e" ] || [ "$log_e" -lt "$full_e" ] && log_e="$full_e"
   if [ $((now - log_e)) -ge $((LOG_MINUTES * 60)) ]; then
     do_backup LOG; rc=$?
-    [ "$rc" -eq 3 ] && do_backup FULL && prune
+    if [ "$rc" -eq 3 ] && full_retry_due "$now"; then
+      if do_backup FULL; then prune; else echo "$now" > "$FULL_FAILED_MARK"; fi
+    fi
   fi
   return 0
+}
+
+# A failed full is retried after FULL_RETRY_MINUTES, not on every tick: each
+# attempt writes (and deletes) a whole backup - a full disk gets fuller - and
+# the log backups must not wait behind it.
+full_retry_due() {
+  local failed
+  [ -f "$FULL_FAILED_MARK" ] || return 0
+  failed="$(cat "$FULL_FAILED_MARK" 2>/dev/null)"
+  is_uint "$failed" || return 0
+  [ $(( $1 - failed )) -ge $((FULL_RETRY_MINUTES * 60)) ]
 }
 
 locked() { exec 9>"$LOCK"; flock 9; "$@"; local rc=$?; flock -u 9; return $rc; }
@@ -271,7 +308,7 @@ restore_chain() {
 }
 
 cmd_restore() {
-  local target="${1:-}" stopat="${2:-}" stopat_e="" stopat_sql="" exists chain moves first=1 f out
+  local target="${1:-}" stopat="${2:-}" stopat_e="" stopat_sql="" exists chain moves first=1 f out last last_e reached
   [[ "$target" =~ ^[A-Za-z0-9_]+$ ]] || die "usage: restore <target-db [A-Za-z0-9_]+> [stopat YYYY-MM-DDTHH:MM:SSZ]"
   [ "$target" != "$DB" ] || die "restore never overwrites $DB — restore into a new name, then swap"
   if [ -n "$stopat" ]; then
@@ -283,6 +320,16 @@ cmd_restore() {
   [ "$exists" = 0 ] || die "database $target already exists"
   mapfile -t chain < <(restore_chain "$stopat_e")
   [ "${#chain[@]}" -gt 0 ] || die "no full backup${stopat:+ at or before $stopat} in $DIR"
+  last="${chain[${#chain[@]}-1]}"
+  last_e="$(file_epoch "$last")"
+  reached="end of $last (taken $(date -u -d "@$last_e" +%Y-%m-%dT%H:%M:%SZ))"
+  if [ -n "$stopat_e" ]; then
+    # No backup at or after stopat: SQL Server would stop at the end of the
+    # last log without a word, and the restored database would be up to one
+    # log interval older than asked (DEPLOY_RUNBOOK §N.6).
+    [ "$last_e" -ge "$stopat_e" ] || die "stopat $stopat is later than the newest backup ($last, taken $(date -u -d "@$last_e" +%Y-%m-%dT%H:%M:%SZ)) - the restore would silently end there. Take a log backup first (log; the live database must be readable), or restore without stopat to get the newest point the backups hold"
+    reached="$stopat (STOPAT)"
+  fi
   log "restore $target from: ${chain[*]}${stopat:+ (stopat $stopat UTC)}"
   # New physical files next to the server's defaults, named after the target and
   # the time: after a swap the live database keeps the files of the name it was
@@ -293,15 +340,15 @@ cmd_restore() {
   [ -n "$moves" ] || die "could not read the file list of ${chain[0]}"
   for f in "${chain[@]}"; do
     if [ "$first" = 1 ]; then
-      out="$(sql "RESTORE DATABASE [$target] FROM DISK = N'$DIR/$f' WITH NORECOVERY, CHECKSUM$moves;")" || die "restore $f: $(echo "$out" | tr '\n' ' ')"
+      out="$(sql "RESTORE DATABASE [$target] FROM DISK = N'$DIR/$f' WITH NORECOVERY, CHECKSUM$moves;")" || die "restore $f: $(echo "$out" | tr '\n' ' ') - $target is left RESTORING: DROP DATABASE [$target] before trying again"
       first=0
     else
-      out="$(sql "RESTORE LOG [$target] FROM DISK = N'$DIR/$f' WITH NORECOVERY, CHECKSUM$stopat_sql;")" || die "restore $f: $(echo "$out" | tr '\n' ' ')"
+      out="$(sql "RESTORE LOG [$target] FROM DISK = N'$DIR/$f' WITH NORECOVERY, CHECKSUM$stopat_sql;")" || die "restore $f: $(echo "$out" | tr '\n' ' ') - $target is left RESTORING: DROP DATABASE [$target] before trying again"
     fi
     log "applied $f"
   done
-  out="$(sql "RESTORE DATABASE [$target] WITH RECOVERY;")" || die "recovery: $(echo "$out" | tr '\n' ' ')"
-  log "OK restored $target ($(( ${#chain[@]} )) file(s)); check it, then: swap $target"
+  out="$(sql "RESTORE DATABASE [$target] WITH RECOVERY;")" || die "recovery: $(echo "$out" | tr '\n' ' ') - $target is left RESTORING: DROP DATABASE [$target] before trying again"
+  log "OK restored $target ($(( ${#chain[@]} )) file(s)) to the $reached; check it, then: swap $target"
 }
 
 cmd_swap() {

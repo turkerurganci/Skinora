@@ -382,7 +382,7 @@ builder.Services.AddScoped<IPlatformHealthProbeJob, PlatformHealthProbeJob>();
 builder.Services.AddHostedService<HealthProbeRegistrar>();
 
 // T164 — database size (SQL Server Express 10 GB limit) and backup age series
-// for the db-data-size-* / db-backup-*-stale alarms (DEPLOY_RUNBOOK §M.5).
+// for the db-data-size-* / db-backup-*-stale alarms (DEPLOY_RUNBOOK §N.5).
 builder.Services.Configure<DatabaseStorageMonitorOptions>(
     builder.Configuration.GetSection(DatabaseStorageMonitorOptions.SectionName));
 builder.Services.AddSingleton<PrometheusDatabaseStorageObserver>();

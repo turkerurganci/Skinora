@@ -31,7 +31,7 @@ public interface IDatabaseStorageProbe
 
 /// <summary>
 /// Reads <see cref="DatabaseStorageSnapshot"/> through the application's own
-/// connection (no exporter, no extra login — DEPLOY_RUNBOOK §M.5). The size
+/// connection (no exporter, no extra login — DEPLOY_RUNBOOK §N.5). The size
 /// comes from <c>sys.database_files</c> of the current database; the backup
 /// history from <c>msdb.dbo.backupset</c>, which needs read access to
 /// <c>msdb</c> (the deployment's <c>sa</c> login has it). A failed history read
@@ -114,7 +114,7 @@ public sealed class SqlServerDatabaseStorageProbe : IDatabaseStorageProbe
             catch (DbException ex)
             {
                 _logger.LogWarning(ex,
-                    "Database backup history (msdb.dbo.backupset) could not be read — the backup age series keep their last value (DEPLOY_RUNBOOK §M.5).");
+                    "Database backup history (msdb.dbo.backupset) could not be read — the backup age series keep their last value (DEPLOY_RUNBOOK §N.5).");
             }
 
             return new DatabaseStorageSnapshot(

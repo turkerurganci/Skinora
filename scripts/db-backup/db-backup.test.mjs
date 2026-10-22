@@ -38,6 +38,8 @@ case "$q" in
   *"SELECT recovery_model_desc"*) cat "$FAKE/recovery"; exit 0;;
   *"SET RECOVERY FULL"*) echo FULL > "$FAKE/recovery"; exit 0;;
   *"SET RECOVERY SIMPLE"*) echo SIMPLE > "$FAKE/recovery"; exit 0;;
+  *"BACKUP DATABASE"*)
+    if [ -f "$FAKE/fullfail" ]; then echo "Msg 3202, Level 16, State 1: Write on the backup device failed: There is not enough space on the disk."; exit 1; fi;;
   *"BACKUP LOG"*)
     if [ -f "$FAKE/log4214" ]; then echo "Msg 4214, Level 16, State 1: BACKUP LOG cannot be performed because there is no current database backup."; exit 1; fi;;
 esac
@@ -197,6 +199,53 @@ describe("db-backup.sh (T164)", () => {
       assert.equal(files().filter((f) => f.includes("_FULL_")).length, 2);
     });
 
+    test("a failing full does not stop the log backups, and is retried an hour later — not every tick", () => {
+      // T164 düzeltme turu (S3 F3): disk full / verify failure on the full
+      // used to return before the log step, so RPO grew to "until fixed".
+      put(`Skinora_FULL_${stamp(25 * H)}.bak`);
+      put(`Skinora_LOG_${stamp(20 * 60_000)}.trn`);
+      writeFileSync(join(fake, "fullfail"), "");
+      const r = run(["tick"]);
+      assert.equal(r.code, 0, r.out);
+      assert.match(r.out, /FAILED FULL .*Msg 3202/);
+      assert.match(r.out, /retried in 60 min; log backups continue/);
+      assert.equal(files().filter((f) => f.includes("_LOG_")).length, 2, "the log backup still ran");
+      assert.equal(files().filter((f) => f.endsWith(".inprogress")).length, 0);
+      const mark = join(work, "lock.full-failed");
+      assert.ok(existsSync(mark));
+
+      // Next tick inside the hour: no second attempt at the full.
+      const before = queries().filter((q) => q.includes("BACKUP DATABASE")).length;
+      run(["tick"]);
+      assert.equal(queries().filter((q) => q.includes("BACKUP DATABASE")).length, before);
+
+      // An hour later it is tried again; once it succeeds the mark is gone.
+      writeFileSync(mark, String(Math.floor(Date.now() / 1000) - 61 * 60));
+      rmSync(join(fake, "fullfail"));
+      run(["tick"]);
+      assert.equal(queries().filter((q) => q.includes("BACKUP DATABASE")).length, before + 1);
+      assert.equal(files().filter((f) => f.includes("_FULL_")).length, 2);
+      assert.equal(existsSync(mark), false);
+    });
+
+    test("a failing first full takes no log backup (there is no chain to extend)", () => {
+      writeFileSync(join(fake, "fullfail"), "");
+      run(["tick"]);
+      assert.ok(!queries().some((q) => q.includes("BACKUP LOG")));
+      assert.deepEqual(files(), []);
+    });
+
+    test("two backups in the same second never share a file name (the second waits)", () => {
+      put(`Skinora_FULL_${stamp(2 * H)}.bak`);
+      const taken = [0, 1000, 2000].map((ms) => `Skinora_LOG_${stamp(-ms)}.trn`);
+      for (const f of taken) put(f);
+      const r = run(["log"]);
+      assert.equal(r.code, 0, r.out);
+      const logs = files().filter((f) => f.includes("_LOG_"));
+      assert.equal(logs.length, 4, logs.join(" "));
+      for (const f of taken) assert.equal(readFileSync(join(dir, f), "utf8"), "old backup", `${f} was overwritten`);
+    });
+
     test("a backup that fails verification leaves no file behind", () => {
       writeFileSync(join(fake, "verifyfail"), "");
       const r = run(["tick"]);
@@ -207,19 +256,26 @@ describe("db-backup.sh (T164)", () => {
 
   describe("retention", () => {
     test("deletes fulls past the retention and the logs older than the oldest kept full", () => {
+      // The newest full BEFORE the 14-day cutoff stays (with its logs): a
+      // point in time just after the cutoff restores from it, so the window
+      // is the full 14 days (T164 düzeltme turu, S4 F6).
+      const bridgeFull = `Skinora_FULL_${stamp(16 * D)}.bak`;
+      const bridgeLog = `Skinora_LOG_${stamp(13.5 * D)}.trn`;
       const keepFull = `Skinora_FULL_${stamp(10 * D)}.bak`;
       const keepLog = `Skinora_LOG_${stamp(10 * D - H)}.trn`;
       put(`Skinora_FULL_${stamp(20 * D)}.bak`);
       put(`Skinora_LOG_${stamp(20 * D - H)}.trn`);
-      put(`Skinora_FULL_${stamp(16 * D)}.bak`);
-      put(`Skinora_LOG_${stamp(11 * D)}.trn`);
+      put(`Skinora_FULL_${stamp(18 * D)}.bak`);
+      put(`Skinora_LOG_${stamp(17 * D)}.trn`);
+      put(bridgeFull);
+      put(bridgeLog);
       put(keepFull);
       put(keepLog);
       const newest = `Skinora_FULL_${stamp(1 * D)}.bak`;
       put(newest);
       const r = run(["prune"]);
       assert.equal(r.code, 0, r.out);
-      assert.deepEqual(files(), [keepFull, newest, keepLog].sort());
+      assert.deepEqual(files(), [bridgeFull, keepFull, newest, bridgeLog, keepLog].sort());
       assert.ok(queries().some((q) => q.includes("sp_delete_backuphistory")), "msdb history shrinks with the files");
     });
 
@@ -289,6 +345,45 @@ describe("db-backup.sh (T164)", () => {
       assert.ok(q[0].includes(full));
       assert.ok(q[1].includes(l1) && q[1].includes(`STOPAT = N'${stopat.slice(0, 10)} ${stopat.slice(11, 19)}'`));
       assert.ok(q[2].includes(l2));
+    });
+
+    test("refuses a stopat later than the newest backup instead of silently ending earlier", () => {
+      // T164 düzeltme turu (S3 F2 ⚠ PARA): the last log was taken 1 h ago;
+      // asking for 10 min ago would quietly restore the state of 1 h ago.
+      const iso = (ms) => new Date(Date.now() - ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+      put(`Skinora_FULL_${stamp(5 * H)}.bak`);
+      put(`Skinora_LOG_${stamp(2 * H)}.trn`);
+      const last = `Skinora_LOG_${stamp(1 * H)}.trn`;
+      put(last);
+      const r = run(["restore", "Skinora_late", iso(10 * 60_000)]);
+      assert.equal(r.code, 1, r.out);
+      assert.match(r.out, new RegExp(`later than the newest backup \\(${last}`));
+      assert.match(r.out, /Take a log backup first/);
+      assert.ok(!queries().some((q) => q.includes("RESTORE DATABASE")), "nothing restored");
+    });
+
+    test("says which point it reached: the end of the last file, or the stopat", () => {
+      put(`Skinora_FULL_${stamp(5 * H)}.bak`);
+      const last = `Skinora_LOG_${stamp(1 * H)}.trn`;
+      put(last);
+      const r = run(["restore", "Skinora_r"]);
+      assert.equal(r.code, 0, r.out);
+      assert.match(r.out, new RegExp(`OK restored Skinora_r \\(2 file\\(s\\)\\) to the end of ${last} \\(taken \\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ\\)`));
+      const stopat = new Date(Date.now() - 2 * H).toISOString().replace(/\.\d{3}Z$/, "Z");
+      const p = run(["restore", "Skinora_p", stopat]);
+      assert.equal(p.code, 0, p.out);
+      assert.match(p.out, new RegExp(`to the ${stopat} \\(STOPAT\\)`));
+    });
+
+    test("a failed restore step says the half-restored target must be dropped", () => {
+      put(`Skinora_FULL_${stamp(5 * H)}.bak`);
+      put(`Skinora_LOG_${stamp(1 * H)}.trn`);
+      writeFileSync(join(work, "sqlcmd"), FAKE_SQLCMD.replace(/\r\n/g, "\n").replace(
+        `case "$q" in\n  *"SELECT state_desc`,
+        `case "$q" in\n  *"RESTORE LOG"*) echo "Msg 3186, The backup set has been damaged"; exit 1;;\n  *"SELECT state_desc`));
+      const r = run(["restore", "Skinora_bad"]);
+      assert.equal(r.code, 1, r.out);
+      assert.match(r.out, /Msg 3186.*left RESTORING: DROP DATABASE \[Skinora_bad\]/);
     });
 
     test("never restores over the live database or an existing one", () => {

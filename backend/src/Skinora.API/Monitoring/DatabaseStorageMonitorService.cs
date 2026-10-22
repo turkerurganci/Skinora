@@ -69,8 +69,9 @@ public sealed class DatabaseStorageMonitorService : BackgroundService
         }
         catch (Exception ex)
         {
+            _observer.ReportFailure();
             _logger.LogWarning(ex,
-                "Database storage reading failed — size and backup series keep their last value; retrying in {Interval}.",
+                "Database storage reading failed — size and backup series keep their last value, skinora_backend_db_probe_success is 0 (db-monitor-probe-failing after 15 min); retrying in {Interval}.",
                 Interval);
             return false;
         }
