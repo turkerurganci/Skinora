@@ -109,6 +109,24 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Equal(0, reloaded.RetryCount);
         Assert.Null(reloaded.NextAttemptAt);
         Assert.Empty(_outbox.Events.OfType<TransferDispatchFailedEvent>());
+        Assert.Null(reloaded.PlatformNetworkCost); // nothing reported → not measured, not 0
+    }
+
+    [Fact]
+    public async Task T160c_Tron_Broadcast_Records_What_The_Send_Cost_The_Hot_Wallet()
+    {
+        // T159b senaryo 6 (Nile): 1 SUN + 1.1 TRX activation + a 1.611499 TRX burn top-up.
+        var fixture = await SeedRefundAsync(BlockchainTransactionType.INCORRECT_AMOUNT_REFUND, amount: 2.30m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-006", null, null, PlatformSpendSun: 2_711_500L);
+
+        await _sut.ExecuteAsync();
+
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+        Assert.Equal(2_711_500m, reloaded.PlatformNetworkCost);
+        Assert.Null(reloaded.PlatformNetworkCostUsdt); // valued at confirmation, not here
     }
 
     [Fact]
@@ -574,6 +592,59 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
         Assert.Equal("tx-hash-sweep", reloaded.TxHash);
         Assert.Equal(fixture.PaymentAddress.Address, reloaded.FromAddress);
+    }
+
+    // -------------------- T160c — collection of withheld refund fees --------------------
+
+    [Fact]
+    public async Task T160c_RefundFeeSweep_Leaves_The_Deposit_For_The_Hot_Wallet_Like_A_Sweep()
+    {
+        var fixture = await SeedSweepAsync(amount: 1.37m, hotWallet: "THotWalletDispatch00000000000000000");
+        fixture.SweepRow.Type = BlockchainTransactionType.REFUND_FEE_SWEEP;
+        fixture.SweepRow.RefundFeeRecovered = 1.37m;
+        await _db.SaveChangesAsync();
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-fee-sweep", null, null);
+
+        await _sut.ExecuteAsync();
+
+        var call = Assert.Single(_client.Calls);
+        Assert.Equal(BlockchainTransactionType.REFUND_FEE_SWEEP, call.Type);
+        Assert.Equal(1.37m, call.Amount);
+        Assert.Equal(fixture.PaymentAddress.HdWalletIndex, call.DepositIndex);
+        Assert.Equal(fixture.PaymentAddress.Address, call.DepositAddress);
+        Assert.Equal("THotWalletDispatch00000000000000000", call.ToAddress);
+        Assert.False(call.FromHotWallet);
+        Assert.Null(call.FeeCapUsd); // TRON: no cap.
+        var reloaded = await _db.Set<BlockchainTransaction>().AsNoTracking()
+            .FirstAsync(b => b.Id == fixture.SweepRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, reloaded.Status);
+    }
+
+    [Theory]
+    [InlineData(0.31, 0.31)]   // below the cap: the signer may spend at most what is collected
+    [InlineData(0.75, 0.75)]   // exactly the cap
+    [InlineData(2.43, 0.75)]   // above the cap: the cap
+    public async Task T160c_Ethereum_RefundFeeSweep_Is_Capped_At_The_Smaller_Of_The_Cap_And_The_Amount(
+        double amount, double expectedCap)
+    {
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _settings.EthereumFeeCap = 0.75m;
+        var fixture = await SeedSweepAsync(amount: (decimal)amount, hotWallet: "0xhot");
+        fixture.SweepRow.Type = BlockchainTransactionType.REFUND_FEE_SWEEP;
+        fixture.SweepRow.RefundFeeRecovered = (decimal)amount;
+        fixture.SweepRow.Network = BlockchainNetwork.ETHEREUM;
+        var sale = await SeedSweepAsync(amount: 20m, hotWallet: "0xhot");
+        sale.SweepRow.Network = BlockchainNetwork.ETHEREUM;
+        await _db.SaveChangesAsync();
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal((decimal)expectedCap,
+            ethereum.Calls.Single(c => c.Type == BlockchainTransactionType.REFUND_FEE_SWEEP).FeeCapUsd);
+        // The sale's own sweep keeps the whole cap.
+        Assert.Equal(0.75m, ethereum.Calls.Single(c => c.Type == BlockchainTransactionType.SWEEP).FeeCapUsd);
     }
 
     // -------------------- T152 — fee cap and deferral (08 §3.7.7) --------------------

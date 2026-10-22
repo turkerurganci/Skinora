@@ -426,7 +426,24 @@ describe('status (GET /api/transfer/status/:txHash)', () => {
       confirmations: -1,
       finalized: false,
       realizedFeeWei: null,
+      platformSpendWei: null,
+      nativePriceUsdt: null,
     });
+  });
+
+  it('T160c düzeltme turu — a final hot-wallet send reports its receipt fee as the platform spend; no price → null price, the status still answers', async () => {
+    chain.receiptGasUsed = 63_209n;
+    chain.receiptEffectiveGasPrice = 3_000_000_011n;
+    const { service } = build();
+    const { txHash } = await service.payout(payout());
+    chain.mine();
+    finalizeAll();
+    price = null; // the feed is down when the final status is read
+    const status = await service.status(txHash);
+    expect(status.contractRet).toBe('SUCCESS');
+    expect(status.platformSpendWei).toBe((63_209n * 3_000_000_011n).toString());
+    expect(status.platformSpendWei).toBe(status.realizedFeeWei);
+    expect(status.nativePriceUsdt).toBeNull();
   });
 
   it('mined above finalized → not final; at finalized → SUCCESS, final', async () => {
@@ -852,6 +869,66 @@ describe('pinned destinations and limits (§3.3a twin)', () => {
       canonicalAddress(HOT.address),
     );
     expect(ok.nonce).toBe(0);
+  });
+
+  it('T160c: a USDC sweep (the fee a wrong-token refund withheld) moves USDC, only to the pinned hot wallet', async () => {
+    chain.setToken(USDC, DEPOSIT.address, 370_000n);
+    const { service, journal } = build();
+    await expect(
+      service.sweep({
+        ...sweepRequest(70),
+        amount: '0.37',
+        token: 'USDC',
+        toHotWalletAddress: SELLER,
+      }),
+    ).rejects.toMatchObject({ code: 'DESTINATION_NOT_ALLOWED' });
+    expect(chain.sent).toHaveLength(0);
+
+    await service.sweep({ ...sweepRequest(71), amount: '0.37', token: 'USDC' });
+    const tx = Transaction.from(chain.sent[0]);
+    expect(canonicalAddress(tx.to!)).toBe(USDC);
+    expect(canonicalAddress(tx.from!)).toBe(canonicalAddress(DEPOSIT.address));
+    expect(decodeTransferCall(tx.data)).toEqual({
+      to: canonicalAddress(HOT.address),
+      amountUnits: 370_000n,
+    });
+    expect(journal.get(`transfer:${ID(71)}`)?.token).toBe('USDC');
+  });
+
+  it('T160c: a USDC sweep that waits 5 min is re-signed by the fee bump (the bump keeps the flow, so USDC stays allowed)', async () => {
+    chain.setToken(USDC, DEPOSIT.address, 370_000n);
+    const { service, journal } = build();
+    await service.sweep({ ...sweepRequest(73), amount: '0.37', token: 'USDC' });
+    const original = Transaction.from(chain.sent[0]);
+
+    chain.baseFee = 1_300_000_000n;
+    clock += 300_000;
+    await service.keepAll();
+
+    const record = journal.get(`transfer:${ID(73)}`)!;
+    expect(record.attempts).toHaveLength(2);
+    const bumped = Transaction.from(record.attempts[1].raw);
+    expect(bumped.nonce).toBe(original.nonce);
+    expect(canonicalAddress(bumped.to!)).toBe(USDC);
+    expect(decodeTransferCall(bumped.data)).toEqual(decodeTransferCall(original.data));
+  });
+
+  it('T160c: USDC is still refused on every other deposit flow but a wrong-token refund', async () => {
+    chain.setToken(USDC, DEPOSIT.address, 5_000_000n);
+    const { service } = build();
+    await expect(
+      service.refund({
+        blockchainTransactionId: ID(72),
+        depositIndex: 5,
+        depositAddress: DEPOSIT.address,
+        toBuyerAddress: BUYER,
+        amount: '1',
+        token: 'USDC',
+        refundType: 'EXCESS_REFUND',
+        feeCapUsd: '0.50',
+      }),
+    ).rejects.toMatchObject({ code: 'TOKEN_NOT_ALLOWED' });
+    expect(chain.sent).toHaveLength(0);
   });
 
   it('the deposit key must derive the named deposit address', async () => {

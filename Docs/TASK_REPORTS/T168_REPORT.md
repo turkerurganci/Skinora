@@ -77,7 +77,8 @@ Kriterler `plan/11_F9.md` v1.21 (sahip kararıyla uyarlanmış metin).
 - Commit (düzeltme turu): `7aafbf01` — T168: Düzeltme turu — yeniden onayda kapat/sil yolu, giriş kayıtları 1 yıl, iptal/iade metni
 - PR: #370
 - CI (1. tur): ✓ PASS — run `39625283885` (HEAD `9ce1f5f3`)
-- CI (düzeltme turu): rapor commit'inin run'ı PR'da izlenir (yönetici/doğrulayıcı `gh run list --branch task/T168-hukuk-metinleri`)
+- Commit (düzeltme turu): `664d3198` — T168: Düzeltme turu raporu, status ve memory — CI `39812829124` **cancelled**: bloke edici bütün joblar ve CI Gate ✓, yalnız advisory "E2E happy-path UI" 45 dk'da iptal; main birleştirmesiyle yeniden koşuldu
+- Commit (düzeltme turu): main (T160c `403fe257`) birleştirmesi — CI sonucu PR #370'te (`gh run list --branch task/T168-hukuk-metinleri`)
 
 ## Doldurulmayı bekleyen işletmeci alanları
 
@@ -126,7 +127,7 @@ Doldururken ayrıca: `LEGAL_TEXT_DATE` güncellenir; sözleşme esaslı değişt
 
 Bağımsız doğrulama ✗ FAIL verdi (HEAD `9ce1f5f3`; 3 × S1 ⚠ HUKUK + 6 × S4).
 
-**Ön kontroller:** working tree temiz, HEAD `9ce1f5f3` = `origin/task/T168-hukuk-metinleri`. `origin/main` hâlâ `daf0e301` (dalın tabanı) — merge gerekmedi. Main CI son 3 run: `39615975640` ✓, `39615975624` ✓, `39607353298` ✓. Docker kullanılmadı.
+**Ön kontroller:** working tree temiz, HEAD `9ce1f5f3` = `origin/task/T168-hukuk-metinleri`. Tur başında `origin/main` = `daf0e301` (dalın tabanı); tur sırasında T160c (#365, `403fe257`) birleşti ve **main dala merge commit ile alındı**. Çakışmalar yalnız belgelerde: 02 / 07 / `plan/11_F9.md` başlıkları (sürümler çakıştı → bir üstü: 02 v4.20, 07 v4.22, 11_F9 v1.23; DOC_CHANGELOG'a birleştirme girişleri), DOC_CHANGELOG (iki tarafın girişleri korundu), IMPLEMENTATION_STATUS "Son güncelleme" (T168 kaldı, T160c satırı STATUS_CHANGELOG'a taşındı), STATUS_CHANGELOG (iki taraf; T167 merge teyidi tek satırda "T160c ve T168 dallarında"), DEFERRED_BACKLOG (durum satırı + satırlar; T160c'nin yeni ⚪ `RefundFeeSpendOnFailedAttemptsNotBooked` korundu; dosyanın kendi `awk`'iyle main 53/159 → **52/160**). i18n dosyaları kendiliğinden birleşti. Main CI son 3 run: `39615975640` ✓, `39615975624` ✓, `39607353298` ✓. Docker kullanılmadı.
 
 ### B1 — Teslimat süresi 12 sa ↔ ayar 60 dk (⚠ HUKUK) — T169'a bağımlı
 

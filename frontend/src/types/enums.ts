@@ -59,6 +59,8 @@ export enum BlockchainTransactionType {
   INCORRECT_AMOUNT_REFUND = "INCORRECT_AMOUNT_REFUND",
   // WP3 — deposit address → hot wallet sweep ledger entry.
   SWEEP = "SWEEP",
+  // T160c — deposit → hot wallet collection of refund fees withheld from buyers.
+  REFUND_FEE_SWEEP = "REFUND_FEE_SWEEP",
 }
 
 // §2.6 — 4 values

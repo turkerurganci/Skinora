@@ -58,7 +58,12 @@ import { TxJournal } from './TxJournal.js';
 // service built (bulgu b — what `maxForSendWei` the signer is given).
 vi.mock('./SignerPolicy.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('./SignerPolicy.js')>();
-  return { ...original, assertSignableFuel: vi.fn(original.assertSignableFuel) };
+  return {
+    ...original,
+    assertSignableFuel: vi.fn(original.assertSignableFuel),
+    // T160c düzeltme turu (F7) — read the token intent's USDC flag per flow.
+    assertSignableTokenTransfer: vi.fn(original.assertSignableTokenTransfer),
+  };
 });
 const fuelIntents = () =>
   vi.mocked(signerPolicy.assertSignableFuel).mock.calls.map((call) => call[1] as FuelIntent);
@@ -99,6 +104,7 @@ beforeEach(() => {
   clock = 1_800_000_000_000;
   ledger = new FuelLedger();
   vi.mocked(signerPolicy.assertSignableFuel).mockClear();
+  vi.mocked(signerPolicy.assertSignableTokenTransfer).mockClear();
 });
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -1154,3 +1160,122 @@ async function abnormalCount(): Promise<number> {
   const metric = await gasEstimateAbnormalTotal.get();
   return metric.values.reduce((sum, v) => sum + v.value, 0);
 }
+
+/*
+ * T160c düzeltme turu (F1, ⚠ PARA) — the status reports what the PLATFORM
+ * spent in ETH for a send, not only the token transfer's receipt fee. A
+ * deposit send is paid from fuel: the fuel wallet loses the fuel's value plus
+ * the fuel's own fee; the token transfer's fee comes out of that value, and
+ * what it does not burn stays on the deposit (never collected, T153). The
+ * T159b rehearsal's shape (Sepolia: fuel 204,600 gas, first USDT receipt
+ * ~152,400 gas) is where the receipt fee alone showed ~40 % of the spend.
+ */
+describe('T160c düzeltme turu — platformSpendWei is the ETH that left the platform', () => {
+  beforeEach(() => {
+    chain.tariff = SEPOLIA_T159_GAS_TARIFF;
+    chain.baseFee = 100_000_000n;
+    chain.receiptEffectiveGasPrice = 130_000_007n; // not the quoted 2 × base + tip
+  });
+
+  async function finalStatus(service: TransferService, txHash: string) {
+    chain.finalized = chain.head;
+    return service.status(txHash);
+  }
+
+  it('refund before the sweep: fuel value + fuel fee = the fuel wallet’s ETH loss; the receipt fee alone is far less', async () => {
+    const { service } = build();
+    const fuelWalletBefore = chain.ethOf(FUEL.address);
+    const hotBefore = chain.ethOf(HOT.address);
+    expect(await reason(service.refund(refund()))).toBe('FUEL_PENDING');
+    const [fuel] = fuelTxs();
+    chain.mine();
+    const { txHash } = await service.refund(refund());
+    chain.mine();
+
+    const status = await finalStatus(service, txHash);
+    const fuelFee = 204_600n * chain.receiptEffectiveGasPrice!;
+    const receiptFee = 152_405n * chain.receiptEffectiveGasPrice!;
+    expect(status.platformSpendWei).toBe((fuel.value + fuelFee).toString());
+    expect(BigInt(status.platformSpendWei!)).toBe(fuelWalletBefore - chain.ethOf(FUEL.address));
+    expect(chain.ethOf(HOT.address)).toBe(hotBefore);
+    expect(status.realizedFeeWei).toBe(receiptFee.toString());
+    // The receipt fee was paid out of the fuel; the rest stayed on the deposit.
+    expect(chain.ethOf(DEPOSIT.address)).toBe(fuel.value - receiptFee);
+    expect(BigInt(status.realizedFeeWei!) * 2n).toBeLessThan(BigInt(status.platformSpendWei!));
+    expect(status.nativePriceUsdt).toBe('2364.480000');
+  });
+
+  it('a deposit send with no fuel of its own (the deposit already held the gas) reports 0', async () => {
+    chain.setEth(DEPOSIT.address, ONE_ETH / 100n);
+    const { service } = build();
+    const { txHash } = await service.sweep(sweep());
+    expect(fuelTxs()).toHaveLength(0);
+    chain.mine();
+    expect((await finalStatus(service, txHash)).platformSpendWei).toBe('0');
+  });
+
+  it('a reverted fuel delivered nothing — only its fee counts', async () => {
+    const { service, journal } = build();
+    expect(await reason(service.refund(refund()))).toBe('FUEL_PENDING');
+    chain.mine();
+    const { txHash } = await service.refund(refund());
+    chain.mine();
+    // Re-read the same fuel as if it had reverted on chain.
+    const fuelHash = journal.get(`fuel:${ID(2)}`)!.attempts[0].hash;
+    const mined = chain.receipts.get(fuelHash)!;
+    chain.receipts.set(fuelHash, { ...mined, status: 0 });
+    const status = await finalStatus(service, txHash);
+    expect(status.platformSpendWei).toBe((204_600n * chain.receiptEffectiveGasPrice!).toString());
+  });
+
+  it('not final yet: neither the spend nor the price is reported', async () => {
+    const { service } = build();
+    await reason(service.refund(refund()));
+    chain.mine();
+    const { txHash } = await service.refund(refund());
+    chain.mine();
+    chain.finalized = 0n;
+    const status = await service.status(txHash);
+    expect(status.platformSpendWei).toBeNull();
+    expect(status.nativePriceUsdt).toBeNull();
+  });
+});
+
+/*
+ * T160c düzeltme turu (F7) — the signer allows USDC only when the service
+ * raises the intent's `wrongTokenRefund` flag, and the service raises it only
+ * for a wrong-token refund and a sweep (whose destination is pinned to the hot
+ * wallet). The service's own token check (TOKEN_NOT_ALLOWED) stops USDC in the
+ * other flows first, so the flag is read here directly: a service that raised
+ * it for every flow would let the signer accept USDC everywhere.
+ */
+describe('T160c düzeltme turu — the USDC flag the signer is given, per flow', () => {
+  const tokenIntentFlags = () =>
+    vi
+      .mocked(signerPolicy.assertSignableTokenTransfer)
+      .mock.calls.map((call) => (call[1] as { wrongTokenRefund: boolean }).wrongTokenRefund);
+
+  async function signedWithFuel(send: () => Promise<unknown>): Promise<void> {
+    expect(await reason(send())).toBe('FUEL_PENDING');
+    chain.mine();
+    await send();
+  }
+
+  it.each([
+    ['EXCESS_REFUND', 'USDT', false],
+    ['INCORRECT_AMOUNT_REFUND', 'USDT', false],
+    ['BUYER_REFUND', 'USDT', false],
+    ['WRONG_TOKEN_REFUND', 'USDC', true],
+  ] as const)('refund %s (%s) → flag %s', async (refundType, token, flag) => {
+    if (token === 'USDC') chain.setToken(USDC, DEPOSIT.address, 10_200_000n);
+    const { service } = build();
+    await signedWithFuel(() => service.refund(refund(2, { refundType, token })));
+    expect(tokenIntentFlags()).toEqual([flag]);
+  });
+
+  it('sweep → flag true (USDT or USDC: the hot wallet is the only destination)', async () => {
+    const { service } = build();
+    await signedWithFuel(() => service.sweep(sweep()));
+    expect(tokenIntentFlags()).toEqual([true]);
+  });
+});

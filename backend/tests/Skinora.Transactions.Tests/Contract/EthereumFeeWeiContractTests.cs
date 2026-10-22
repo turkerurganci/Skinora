@@ -212,6 +212,10 @@ public sealed class EthereumFeeWeiContractTests
         Assert.Equal(TransferStatusOutcome.Confirmed, status.Outcome);
         Assert.Equal(9_007_282_507_774_707m, status.RealizedFeeWei);
         Assert.Equal(Text(body, "realizedFeeWei"), status.RealizedFeeWei!.Value.ToString(CultureInfo.InvariantCulture));
+        // T160c düzeltme turu — the platform spend (a hot-wallet payout: its
+        // receipt fee) and the price the backend values it at.
+        Assert.Equal(Text(body, "platformSpendWei"), status.PlatformSpendWei!.Value.ToString(CultureInfo.InvariantCulture));
+        Assert.Equal(decimal.Parse(Text(body, "nativePriceUsdt"), CultureInfo.InvariantCulture), status.NativePriceUsdt);
     }
 
     private static readonly GasFeeEstimateRequest Request = new(
