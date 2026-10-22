@@ -66,6 +66,7 @@ export default function SteamCallbackPage() {
   const tCommon = useTranslations("common");
   const tTos = useTranslations("auth.tos");
   const setAccessToken = useAuthStore((s) => s.setAccessToken);
+  const accessToken = useAuthStore((s) => s.accessToken);
 
   const rawStatus = searchParams.get("status");
   const rawError = searchParams.get("error");
@@ -199,7 +200,9 @@ export default function SteamCallbackPage() {
           <div className="h-10 w-10 animate-pulse rounded-full bg-blue-100" />
           <p className="text-sm text-gray-500">{t("preparing")}</p>
         </div>
-        {tokenReady && (
+        {/* T168 B5 — closed with the session: declining → close/delete →
+            signOut must take the modal down even if this page is still mounted. */}
+        {tokenReady && accessToken && (
           <TosModal
             open
             tosVersion={DEFAULT_TOS_VERSION}

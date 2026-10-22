@@ -29,21 +29,26 @@ vi.mock("next/navigation", () => ({
   notFound: vi.fn(),
 }));
 
-const { getMe, acceptTos } = vi.hoisted(() => ({ getMe: vi.fn(), acceptTos: vi.fn() }));
-vi.mock("@/lib/api/auth", () => ({ getMe, acceptTos }));
+// `logout` is the server half of the REAL signOut (lib/auth/signOut is not
+// mocked): the decline path must go through the actual sign-out, which clears
+// the auth store — T168 B5.
+const { getMe, acceptTos, logoutRequest } = vi.hoisted(() => ({
+  getMe: vi.fn(),
+  acceptTos: vi.fn(),
+  logoutRequest: vi.fn(),
+}));
+vi.mock("@/lib/api/auth", () => ({ getMe, acceptTos, logout: logoutRequest }));
 
 // T168 — the decline path reuses the settings account-management section.
-const { deleteAccount, deactivateAccount, signOut } = vi.hoisted(() => ({
+const { deleteAccount, deactivateAccount } = vi.hoisted(() => ({
   deleteAccount: vi.fn(),
   deactivateAccount: vi.fn(),
-  signOut: vi.fn(),
 }));
 vi.mock("@/lib/api/settings", () => ({
   DELETE_ACCOUNT_CONFIRMATION: "SİL",
   deleteAccount,
   deactivateAccount,
 }));
-vi.mock("@/lib/auth/signOut", () => ({ signOut }));
 
 function me(tosAccepted: boolean, tosAcceptedVersion: string | null) {
   return { tosAccepted, tosAcceptedVersion };
@@ -61,15 +66,19 @@ function installDialogPolyfill() {
   }
 }
 
-function renderGate() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+function gateTree(client: QueryClient) {
+  return (
     <QueryClientProvider client={client}>
       <NextIntlClientProvider locale="en" messages={messages}>
         <TosRepromptGate />
       </NextIntlClientProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+}
+
+function renderGate(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+  const result = render(gateTree(client));
+  return { ...result, client };
 }
 
 describe("tosGateMode", () => {
@@ -92,6 +101,7 @@ describe("tosGateMode", () => {
 describe("TosRepromptGate (T166)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    replace.mockReset();
     pathname.current = "/en/dashboard";
     useAuthStore.getState().setAccessToken("token");
   });
@@ -149,7 +159,6 @@ describe("TosRepromptGate (T166)", () => {
     installDialogPolyfill();
     getMe.mockResolvedValue(me(false, null));
     deleteAccount.mockResolvedValue({ deletedAt: "2026-10-21T00:00:00Z", message: "ok" });
-    signOut.mockResolvedValue(undefined);
 
     renderGate();
 
@@ -179,7 +188,6 @@ describe("TosRepromptGate (T166)", () => {
     pathname.current = "/en/settings";
     getMe.mockResolvedValue(me(true, "0.9"));
     deactivateAccount.mockResolvedValue({ deactivatedAt: "2026-10-22T00:00:00Z", message: "ok" });
-    signOut.mockResolvedValue(undefined);
 
     renderGate();
 
@@ -197,6 +205,63 @@ describe("TosRepromptGate (T166)", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/en"));
     expect(acceptTos).not.toHaveBeenCalled();
   });
+
+  /*
+   * T168 B5 — after closing / deleting the account from the modal the session
+   * is gone (real signOut → store token null) but the `["auth","me"]` cache
+   * still holds the old answer (not accepted / old version). The gate lives in
+   * the locale layout, so it survives the `/settings` → `/en` navigation; it
+   * must close with the session, not with a page reload.
+   */
+  it.each([
+    { label: "first-time", meValue: me(false, null), action: "delete" as const },
+    { label: "re-prompt", meValue: me(true, "0.9"), action: "deactivate" as const },
+  ])(
+    "T168 B5 — $label: after $action + sign-out the modal closes and no 'accept the terms' prompt is left",
+    async ({ meValue, action }) => {
+      installDialogPolyfill();
+      pathname.current = "/en/settings";
+      getMe.mockResolvedValue(meValue);
+      logoutRequest.mockResolvedValue(undefined);
+      deleteAccount.mockResolvedValue({ deletedAt: "2026-10-22T00:00:00Z", message: "ok" });
+      deactivateAccount.mockResolvedValue({ deactivatedAt: "2026-10-22T00:00:00Z", message: "ok" });
+      replace.mockImplementation((to: string) => {
+        pathname.current = to;
+      });
+
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      // The stale answer AuthInitializer left in the cache before the modal opened.
+      client.setQueryData(["auth", "me"], meValue);
+      const { rerender } = renderGate(client);
+
+      await waitFor(() => expect(screen.getByTestId("tos-submit")).toBeTruthy());
+      fireEvent.click(screen.getByTestId("tos-decline-toggle"));
+      if (action === "delete") {
+        fireEvent.click(
+          screen.getAllByText(messages.settings.accountManagement.delete.button)[0] as HTMLElement,
+        );
+        fireEvent.change(screen.getByPlaceholderText("SİL"), { target: { value: "SİL" } });
+      } else {
+        fireEvent.click(screen.getByText(messages.settings.accountManagement.deactivate.button));
+      }
+      fireEvent.click(document.querySelector("dialog button[type=submit]") as HTMLButtonElement);
+
+      // The real sign-out ran: server revoke + local token cleared, then home.
+      await waitFor(() => expect(logoutRequest).toHaveBeenCalled());
+      await waitFor(() => expect(replace).toHaveBeenCalledWith("/en"));
+      expect(useAuthStore.getState().accessToken).toBeNull();
+
+      rerender(gateTree(client));
+
+      await waitFor(() => expect(screen.queryByTestId("tos-submit")).toBeNull());
+      expect(screen.queryByText(messages.auth.tos.title)).toBeNull();
+      expect(screen.queryByText(messages.auth.tos.reprompt.title)).toBeNull();
+      expect(screen.queryByTestId("tos-decline-toggle")).toBeNull();
+      // The stale answer is dropped too: the next sign-in fetches its own.
+      expect(client.getQueryData(["auth", "me"])).toBeUndefined();
+      expect(acceptTos).not.toHaveBeenCalled();
+    },
+  );
 
   it("renders nothing for an account on the current version", async () => {
     getMe.mockResolvedValue(me(true, "1.0"));

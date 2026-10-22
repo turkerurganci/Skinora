@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -68,7 +68,19 @@ export function TosRepromptGate() {
     staleTime: 60_000,
   });
 
-  const mode = DORMANT_ROUTE.test(pathname) ? null : tosGateMode(data, CURRENT_TOS_VERSION);
+  // T168 B5 — the gate follows the SESSION, not the query cache. Disabling the
+  // query on sign-out keeps the last `/auth/me` answer in the cache, so a user
+  // who closed or deleted the account from this very modal (decline path →
+  // signOut → `/${locale}`) kept seeing the full-screen "accept the terms"
+  // prompt on the home page, every button now failing with 401. No token →
+  // no prompt; the stale answer is also dropped so the next sign-in (possibly
+  // another account) fetches its own.
+  useEffect(() => {
+    if (!accessToken) queryClient.removeQueries({ queryKey: ["auth", "me"] });
+  }, [accessToken, queryClient]);
+
+  const mode =
+    !accessToken || DORMANT_ROUTE.test(pathname) ? null : tosGateMode(data, CURRENT_TOS_VERSION);
 
   if (mode === null) return null;
 
