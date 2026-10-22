@@ -378,7 +378,7 @@
 | T172 | Sunucuda prova (Nile + Sepolia) | ⬚ Bekliyor |
 | T172a | Yedekten geri yükleme sonrası para araçları (⚠ PARA; T173'ten önce — sahip kararı 2026-10-22) | ⬚ Bekliyor |
 | T173 | Mainnet pilotu | ⬚ Bekliyor |
-| T174 | DEFERRED_BACKLOG §4 triyajı | ⏳ Devam ediyor — 2026-10-17'de ⚪ sayılan 16 satır bugünkü kodla ölçüldü: 5 ✅ bayat (WP1/WP2/WP4b+T147/WP7/WP9), 10 ⚪ kalır (metin güncel), `sanctions-expansion` ⚪ → 🟡 (öneriyle kaydedildi — ⚠: yaptırım listesi yönetici ekranı yok, runbook §O.1 açılış adımı ona dayanıyor); backlog 53/162 → 48/167; rapor [`T174_REPORT.md`](TASK_REPORTS/T174_REPORT.md) |
+| T174 | DEFERRED_BACKLOG §4 triyajı | ⏳ Devam ediyor — 2026-10-17'de ⚪ sayılan 16 satır bugünkü kodla ölçüldü: 5 ✅ bayat (WP1/WP2/WP4b+T147/WP7/WP9), 10 ⚪ kalır (metin güncel), `sanctions-expansion` ⚪ → 🟡 (öneriyle kaydedildi — ⚠: yaptırım listesi yönetici ekranı yok, runbook §O.1 açılış adımı ona dayanıyor); backlog 53/162 → 48/167; rapor [`T174_REPORT.md`](TASK_REPORTS/T174_REPORT.md), PR [#374](https://github.com/turkerurganci/Skinora/pull/374) |
 | T175 | Çıkış kapısı (12 §6.3) + açılış | ⬚ Bekliyor |
 
 ---
