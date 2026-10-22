@@ -107,6 +107,7 @@ Sonuç: dört kuraldan üçü canlıda doğru durumu aldı ve Grafana Alertmanag
 
 - Branch: `task/T164-veritabani-yedegi`
 - Commit: `95110e5c` — T164: Veritabanı yedeği ve geri dönüş planı (+ rapor/status commit'i)
+- Düzeltme turu: `d4644efd` (main #373 merge commit), `73ebdd87` (betik + izleme), `83e89299` (runbook §N.8 + belgeler) ve bu rapor commit'i
 - PR: #372
 - CI: ✗ — run `39824772868` dış nedenle kırmızı (Next.js critical danışması, frontend audit kapısı); T164'e ait iş yeşil, backend iş kolları Lint'e bağlı olduğu için atlandı
 
@@ -213,7 +214,15 @@ Ek: §N.4'e `export MSYS_NO_PATHCONV=1` eklendi. Git Bash'te `$BK` komutları `/
 ### Testler (düzeltme turu)
 
 - **Script:** `node --test "scripts/**/*.test.mjs"` **79/79**. db-backup 28 test (+6), compose-backup 4. Mutasyon: 5/5 yeni davranış bozulunca en az bir test kırıldı (köprü tam yedek, stopat reddi, log'a düşme, ad bekleme, geri çekilme).
-- **Backend:** API unit, LocalDB integration ve contract sonuçları aşağıdaki "Test Sonuçları (düzeltme turu)" tablosunda.
+- **Backend (`Skinora.API.Tests`, dokunulan tek proje):**
+
+| Kol | Sonuç |
+|---|---|
+| Unit (CI filtresi) | ✓ **156/156** (önce 154; +2 probe testi) |
+| Integration — LocalDB (`INTEGRATION_TEST_SQL_SERVER=(localdb)\MSSQLLocalDB`) | ✓ **775/775** (5 dk 40 sn) |
+| Contract | ✓ 24/24 |
+| `dotnet format Skinora.sln --verify-no-changes --severity error` (CI'daki komut) | ✓ rc=0 |
+
 
 ## Known Limitations / Follow-up
 
