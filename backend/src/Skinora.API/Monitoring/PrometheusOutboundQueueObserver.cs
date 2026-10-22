@@ -56,6 +56,18 @@ public sealed class PrometheusOutboundQueueObserver : IOutboundQueueObserver
         "PENDING outbound row count above which outbound-transfer-backlog fires, per network",
         new GaugeConfiguration { LabelNames = ["network"] });
 
+    /// <summary>T165 — payout/refund rows held by the T169 approval gate, per network.</summary>
+    public static readonly Gauge AwaitingApprovalRows = Metrics.CreateGauge(
+        "skinora_backend_outbound_awaiting_approval_rows",
+        "PENDING payout/refund rows waiting for an admin approval (T169 gate closed), per network",
+        new GaugeConfiguration { LabelNames = ["network"] });
+
+    /// <summary>T165 — how long the oldest held row has waited, per network.</summary>
+    public static readonly Gauge AwaitingApprovalOldestSeconds = Metrics.CreateGauge(
+        "skinora_backend_outbound_awaiting_approval_oldest_seconds",
+        "Age of the oldest payout/refund row waiting for an admin approval, per network, seconds",
+        new GaugeConfiguration { LabelNames = ["network"] });
+
     private readonly int _rowsThreshold;
 
     public PrometheusOutboundQueueObserver()
@@ -81,5 +93,12 @@ public sealed class PrometheusOutboundQueueObserver : IOutboundQueueObserver
         {
             AlarmSeconds.WithLabels(label).Set(threshold);
         }
+    }
+
+    public void ReportAwaitingApproval(BlockchainNetwork network, int awaitingRows, double oldestAwaitingSeconds)
+    {
+        var label = network.ToString();
+        AwaitingApprovalRows.WithLabels(label).Set(awaitingRows);
+        AwaitingApprovalOldestSeconds.WithLabels(label).Set(oldestAwaitingSeconds);
     }
 }

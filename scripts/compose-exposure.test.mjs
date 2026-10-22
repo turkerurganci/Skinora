@@ -123,6 +123,13 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
     assert.deepEqual([...new Set(open.map((r) => r.service))], ["skinora-reverse-proxy"]);
   });
 
+  test("T165: the development stack keeps every notification channel on the logging stub", () => {
+    const be = render([BASE], { profiles: ["ethereum"] }).services["skinora-backend"].environment;
+    assert.equal(be.Resend__Provider, "logging");
+    assert.equal(be.Telegram__Provider, "logging");
+    assert.equal(be.Discord__Provider, "logging");
+  });
+
   test("the dev override adds no LAN binding (compose appends override port lists)", () => {
     assertAllLoopback(published(render([BASE, OVERRIDE], { profiles: ["ethereum"] })));
   });
@@ -178,6 +185,34 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       const preflight = model.services["skinora-tunnel-preflight"];
       assert.deepEqual(preflight.secrets.map((s) => s.source), ["cloudflare_tunnel_token"]);
       assert.match(preflight.command.join(" "), /exit 1/);
+    });
+
+    test("T165: production notification channels — e-mail + Telegram real, Discord off, Grafana SMTP on", () => {
+      const be = model.services["skinora-backend"].environment;
+      assert.equal(be.Resend__Provider, "resend");
+      assert.equal(be.Telegram__Provider, "telegram");
+      assert.equal(be.Discord__Provider, "disabled");
+      // .env.example leaves the secrets empty: the trial boots with both real
+      // channels "misconfigured" (off + alarm) until the owner fills them.
+      assert.equal(be.Resend__ApiKey, "");
+      assert.equal(be.Telegram__WebhookSecretToken, "");
+      const grafana = model.services["skinora-grafana"].environment;
+      assert.equal(grafana.GF_SMTP_ENABLED, "true");
+      assert.equal(grafana.GF_SMTP_HOST, "smtp.resend.com:587");
+      assert.equal(grafana.GF_SMTP_STARTTLS_POLICY, "MandatoryStartTLS");
+    });
+
+    test("T165: the heartbeat publishes nothing, restarts with Docker and runs the repo script read-only", () => {
+      const hb = model.services["skinora-heartbeat"];
+      assert.ok(hb, "skinora-heartbeat missing from the trial");
+      assert.equal(hb.ports, undefined);
+      assert.equal(hb.restart, "unless-stopped");
+      assert.match(hb.image, /^curlimages\/curl:\d+\.\d+\.\d+$/, "pin an exact curl image");
+      const mount = hb.volumes.find((v) => v.target === "/opt/skinora/heartbeat.sh");
+      assert.ok(mount?.read_only, "the script is mounted read-only");
+      assert.ok(resolve(mount.source).endsWith(join("scripts", "heartbeat", "heartbeat.sh")));
+      assert.equal(hb.environment.HEARTBEAT_URL, "", "no ping URL in .env.example");
+      assert.match(hb.environment.HEARTBEAT_CHECK_URLS, /http:\/\/skinora-reverse-proxy\/api\/health/);
     });
 
     test("refuses to render without the .env.trial marker (a forgotten --env-file must not fall back to the development .env)", () => {

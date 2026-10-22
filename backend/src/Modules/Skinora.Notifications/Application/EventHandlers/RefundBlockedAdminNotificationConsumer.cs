@@ -3,6 +3,7 @@ using Skinora.Notifications.Application.Notifications;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Outbox;
 
 namespace Skinora.Notifications.Application.EventHandlers;
@@ -21,8 +22,11 @@ public sealed class RefundBlockedAdminNotificationConsumer
         INotificationDispatcher dispatcher,
         IProcessedEventStore processedEventStore,
         IAdminRecipientResolver adminRecipients,
+        IAdminMoneyAlarmObserver moneyAlarms,
         ILogger<RefundBlockedAdminNotificationConsumer> logger)
-        : base(dispatcher, processedEventStore, adminRecipients, logger)
+        // T165 — money alarm (IAdminMoneyAlarmObserver): also reaches the
+        // operator's Telegram chat / e-mail through Grafana.
+        : base(dispatcher, processedEventStore, adminRecipients, moneyAlarms, logger)
     {
     }
 

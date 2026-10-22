@@ -420,6 +420,8 @@ public static class TransactionsModule
         // ColdWalletTransfer ledger row alongside an audit entry; the
         // monitor job broadcasts threshold breaches over SignalR.
         services.AddScoped<IHotWalletService, HotWalletService>();
+        // T165 — breaches also published as a metric (hot-wallet-threshold-breached, money alarm).
+        services.AddSingleton<IHotWalletThresholdObserver, PrometheusHotWalletThresholdObserver>();
         services.AddScoped<IHotWalletMonitorService, HotWalletMonitorService>();
         // T157 — two-person closure of an Ethereum outbound row after journal loss (07 §9.32).
         services.AddScoped<IOutboundRowClosureService, OutboundRowClosureService>();

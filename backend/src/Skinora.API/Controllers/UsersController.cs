@@ -195,10 +195,21 @@ public sealed class UsersController : ControllerBase
     [Authorize(Policy = AuthPolicies.Authenticated)]
     [RateLimit("user-write")]
     public async Task<IActionResult> UpdateNotifications(
-        [FromBody] UpdateNotificationsRequest? request, CancellationToken cancellationToken)
+        [FromBody] UpdateNotificationsRequest? request,
+        [FromServices] Skinora.Shared.Notifications.INotificationChannelAvailability channels,
+        CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
         if (request is null) return ValidationError("Request body is required.");
+
+        // T165 — switching a channel ON that this deployment cannot send on is
+        // refused; switching it off (or only changing the e-mail address) is not.
+        if (request.Email?.Enabled == true && !channels.IsAvailable(NotificationChannel.EMAIL))
+            return ChannelUnavailable("email");
+        if (request.Telegram?.Enabled == true && !channels.IsAvailable(NotificationChannel.TELEGRAM))
+            return ChannelUnavailable("telegram");
+        if (request.Discord?.Enabled == true && !channels.IsAvailable(NotificationChannel.DISCORD))
+            return ChannelUnavailable("discord");
 
         var result = await _notificationPrefs.UpdateAsync(userId, request, cancellationToken);
 
@@ -230,9 +241,14 @@ public sealed class UsersController : ControllerBase
     [HttpPost("me/settings/email/send-verification")]
     [Authorize(Policy = AuthPolicies.Authenticated)]
     [RateLimit("user-write")]
-    public async Task<IActionResult> SendEmailVerification(CancellationToken cancellationToken)
+    public async Task<IActionResult> SendEmailVerification(
+        [FromServices] Skinora.Shared.Notifications.INotificationChannelAvailability channels,
+        CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
+
+        // T165 — no code goes out when e-mail cannot be sent in this deployment.
+        if (!channels.IsAvailable(NotificationChannel.EMAIL)) return ChannelUnavailable("email");
 
         var result = await _emailVerification.SendAsync(userId, cancellationToken);
         if (result.Status == EmailVerificationSendStatus.Cooldown)
@@ -302,9 +318,11 @@ public sealed class UsersController : ControllerBase
     [Authorize(Policy = AuthPolicies.Authenticated)]
     [RateLimit("user-write")]
     public async Task<ActionResult<TelegramConnectResponse>> InitiateTelegramConnect(
+        [FromServices] Skinora.Shared.Notifications.INotificationChannelAvailability channels,
         CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (!channels.IsAvailable(NotificationChannel.TELEGRAM)) return ChannelUnavailable("telegram");
 
         var result = await _telegramService.InitiateAsync(userId, cancellationToken);
         return Ok(new TelegramConnectResponse(
@@ -334,9 +352,12 @@ public sealed class UsersController : ControllerBase
     [Authorize(Policy = AuthPolicies.Authenticated)]
     [RateLimit("user-write")]
     public async Task<ActionResult<DiscordConnectResponse>> InitiateDiscordConnect(
+        [FromServices] Skinora.Shared.Notifications.INotificationChannelAvailability channels,
         CancellationToken cancellationToken)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
+        // T165 — production keeps Discord switched off (owner decision 2026-10-21).
+        if (!channels.IsAvailable(NotificationChannel.DISCORD)) return ChannelUnavailable("discord");
 
         var result = await _discordService.BuildAuthorizeUrlAsync(userId, cancellationToken);
         return Ok(new DiscordConnectResponse(result.Url));
@@ -684,6 +705,13 @@ public sealed class UsersController : ControllerBase
         var claim = User.FindFirstValue(AuthClaimTypes.UserId);
         return Guid.TryParse(claim, out userId);
     }
+
+    /// <summary>T165 — 409 for a channel this deployment has switched off or not configured.</summary>
+    private ObjectResult ChannelUnavailable(string channel)
+        => Conflict(ApiResponse<object>.Fail(
+            SettingsErrorCodes.ChannelUnavailable,
+            $"Notifications over '{channel}' are not available on this platform right now.",
+            traceId: HttpContext.TraceIdentifier));
 
     private IActionResult ValidationError(string message)
         => BadRequest(ApiResponse<object>.Fail(

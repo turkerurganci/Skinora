@@ -1835,7 +1835,8 @@
           "description": "Recibir notificaciones a través de Discord.",
           "connected": "Conectado: {username}",
           "notConnected": "Conecta tu cuenta de Discord para recibir notificaciones."
-        }
+        },
+        "unavailable": "Este canal no está disponible en la plataforma en este momento."
       },
       "email": {
         "addressLabel": "Dirección de email",
@@ -1897,6 +1898,7 @@
         "connected": "Conectado",
         "notConnected": "No conectado"
       },
+      "unavailable": "Este canal no está disponible en la plataforma en este momento.",
       "telegram": {
         "label": "Telegram",
         "modal": {

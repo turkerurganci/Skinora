@@ -4,6 +4,7 @@ using Skinora.Notifications.Application.Notifications;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Events;
 using Skinora.Shared.Interfaces;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Outbox;
 
 namespace Skinora.Notifications.Tests.Unit;
@@ -122,6 +123,7 @@ public class AdminAlertNotificationConsumerTests
         var dispatcher = new RecordingDispatcher();
         var sut = new SellerPayoutDeferredAdminNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            new RecordingMoneyAlarms(),
             NullLogger<SellerPayoutDeferredAdminNotificationConsumer>.Instance);
 
         var transactionId = Guid.NewGuid();
@@ -158,6 +160,7 @@ public class AdminAlertNotificationConsumerTests
         var dispatcher = new RecordingDispatcher();
         var sut = new RefundBlockedAdminNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            new RecordingMoneyAlarms(),
             NullLogger<RefundBlockedAdminNotificationConsumer>.Instance);
 
         var transactionId = Guid.NewGuid();
@@ -190,6 +193,7 @@ public class AdminAlertNotificationConsumerTests
         var dispatcher = new RecordingDispatcher();
         var sut = new TransferDispatchFailedAdminNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            new RecordingMoneyAlarms(),
             NullLogger<TransferDispatchFailedAdminNotificationConsumer>.Instance);
 
         var transactionId = Guid.NewGuid();
@@ -225,6 +229,7 @@ public class AdminAlertNotificationConsumerTests
         var dispatcher = new RecordingDispatcher();
         var sut = new TransferDispatchFailedAdminNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            new RecordingMoneyAlarms(),
             NullLogger<TransferDispatchFailedAdminNotificationConsumer>.Instance);
 
         var transactionId = Guid.NewGuid();
@@ -296,6 +301,7 @@ public class AdminAlertNotificationConsumerTests
         var sut = new RefundBlockedAdminNotificationConsumer(
             dispatcher, new InMemoryProcessedEventStore(),
             new StubAdminRecipientResolver(),
+            new RecordingMoneyAlarms(),
             NullLogger<RefundBlockedAdminNotificationConsumer>.Instance);
 
         var domainEvent = new RefundBlockedAdminAlertEvent(
@@ -338,6 +344,110 @@ public class AdminAlertNotificationConsumerTests
 
         await sut.Handle(domainEvent, CancellationToken.None);
         Assert.Equal(2, dispatcher.Requests.Count);
+    }
+
+    // ---- T165 — money-alarm category ("para alarmı") ----
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task MoneyAlarm_IsRaised_EvenWhenNoAdminExists()
+    {
+        // The Grafana path (operator Telegram chat / e-mail) must not depend on an
+        // admin account or a connected channel: the alarm is reported before the
+        // recipients are resolved, and the empty-recipient no-op stays a no-op.
+        var alarms = new RecordingMoneyAlarms();
+        var sut = new RefundBlockedAdminNotificationConsumer(
+            new RecordingDispatcher(), new InMemoryProcessedEventStore(),
+            new StubAdminRecipientResolver(), alarms,
+            NullLogger<RefundBlockedAdminNotificationConsumer>.Instance);
+
+        await sut.Handle(new RefundBlockedAdminAlertEvent(
+            EventId: Guid.NewGuid(),
+            TransactionId: Guid.NewGuid(),
+            Reason: RefundBlockedReason.NegativeAmount,
+            TotalPaid: 0.1m,
+            GasFee: 2.0m,
+            NetRefund: -1.9m,
+            MinimumThreshold: 1.0m,
+            OccurredAt: DateTime.UtcNow), CancellationToken.None);
+
+        Assert.Equal(["notifications.refund-blocked-admin"], alarms.Kinds);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task MoneyAlarm_IsRaisedOncePerEvent_NotPerAdmin_AndNotOnReplay()
+    {
+        var alarms = new RecordingMoneyAlarms();
+        var sut = new TransferDispatchFailedAdminNotificationConsumer(
+            new RecordingDispatcher(), new InMemoryProcessedEventStore(), TwoAdmins(), alarms,
+            NullLogger<TransferDispatchFailedAdminNotificationConsumer>.Instance);
+
+        var domainEvent = new TransferDispatchFailedEvent(
+            EventId: Guid.NewGuid(),
+            BlockchainTransactionId: Guid.NewGuid(),
+            TransactionId: Guid.NewGuid(),
+            Type: BlockchainTransactionType.SWEEP,
+            Token: StablecoinType.USDT,
+            Amount: 10m,
+            ToAddress: "TKnEzG4qX5n6ZRHot7B9C2D3E4F5G6H7",
+            LastErrorCode: "X",
+            LastErrorMessage: null,
+            RetryCount: 3,
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+        await sut.Handle(domainEvent, CancellationToken.None);
+
+        Assert.Equal(["notifications.transfer-dispatch-failed-admin"], alarms.Kinds);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void MoneyAlarmCategory_IsExactlyTheMoneyConsumers()
+    {
+        // Every admin-broadcast consumer is classified on purpose: a new one
+        // fails this test until it is placed in or out of the money category.
+        var money = new[]
+        {
+            typeof(TransferDispatchFailedAdminNotificationConsumer),
+            typeof(RefundBlockedAdminNotificationConsumer),
+            typeof(SellerPayoutDeferredAdminNotificationConsumer),
+            typeof(SettlementReviewAdminNotificationConsumer),
+        };
+        var notMoney = new[]
+        {
+            typeof(FraudFlagCreatedAdminNotificationConsumer),
+            typeof(DisputeEscalatedAdminNotificationConsumer),
+            typeof(PlatformOutageAdminNotificationConsumer),
+        };
+
+        var all = typeof(AdminBroadcastNotificationConsumerBase<>).Assembly.GetTypes()
+            .Where(t => !t.IsAbstract && IsAdminBroadcast(t))
+            .ToHashSet();
+        Assert.Equal(all, money.Concat(notMoney).ToHashSet());
+
+        foreach (var type in money)
+            Assert.Contains(type.GetConstructors().Single().GetParameters(),
+                p => p.ParameterType == typeof(IAdminMoneyAlarmObserver));
+        foreach (var type in notMoney)
+            Assert.DoesNotContain(type.GetConstructors().Single().GetParameters(),
+                p => p.ParameterType == typeof(IAdminMoneyAlarmObserver));
+
+        static bool IsAdminBroadcast(Type t)
+        {
+            for (var b = t.BaseType; b is not null; b = b.BaseType)
+                if (b.IsGenericType && b.GetGenericTypeDefinition() == typeof(AdminBroadcastNotificationConsumerBase<>))
+                    return true;
+            return false;
+        }
+    }
+
+    private sealed class RecordingMoneyAlarms : IAdminMoneyAlarmObserver
+    {
+        public List<string> Kinds { get; } = [];
+
+        public void Raised(string kind) => Kinds.Add(kind);
     }
 
     private static StubAdminRecipientResolver TwoAdmins() => new(Admin1, Admin2);

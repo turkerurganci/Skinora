@@ -21,6 +21,16 @@ public interface IOutboundQueueObserver
     /// × 60, the same 3 hours as the fee-cap wait alarm); null for a network without one.
     /// </param>
     void Report(BlockchainNetwork network, int pendingRows, double oldestPendingSeconds, double? alarmSeconds);
+
+    /// <summary>
+    /// T165 — the T169 approval gate's queue, every run for every network: how
+    /// many payout/refund rows wait for an admin approval and how long the oldest
+    /// has waited (0 / 0 when the gate is open or nothing waits). Published as
+    /// <c>skinora_backend_outbound_awaiting_approval_*</c>; the
+    /// <c>outbound-awaiting-approval</c> money alarm tells the operator outside
+    /// the panel (one notification per episode, reminder every 4 h).
+    /// </summary>
+    void ReportAwaitingApproval(BlockchainNetwork network, int awaitingRows, double oldestAwaitingSeconds);
 }
 
 /// <summary>Observer that records nothing (tests, hosts without metrics).</summary>
@@ -29,6 +39,10 @@ public sealed class NullOutboundQueueObserver : IOutboundQueueObserver
     public static readonly NullOutboundQueueObserver Instance = new();
 
     public void Report(BlockchainNetwork network, int pendingRows, double oldestPendingSeconds, double? alarmSeconds)
+    {
+    }
+
+    public void ReportAwaitingApproval(BlockchainNetwork network, int awaitingRows, double oldestAwaitingSeconds)
     {
     }
 }

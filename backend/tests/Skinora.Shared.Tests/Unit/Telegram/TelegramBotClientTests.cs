@@ -156,6 +156,81 @@ public class TelegramBotClientTests
         Assert.Contains("\"max_connections\":40", handler.Requests[0].body, StringComparison.Ordinal);
     }
 
+    // ---- T165 — the documented Bot API contract (core.telegram.org/bots/api) ----
+
+    [Fact]
+    public async Task SendMessageAsync_PostsToBotTokenPath_WithSnakeCaseJson()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"ok":true,"result":{"message_id":7}}""");
+        var sut = BuildClient(handler);
+
+        await sut.SendMessageAsync(
+            new TelegramSendMessageRequest("-1001234", "*T*", DisableNotification: true),
+            CancellationToken.None);
+
+        var (uri, body) = Assert.Single(handler.Requests);
+        Assert.Equal("https://api.telegram.org/bot111:test-token/sendMessage", uri);
+        using var json = System.Text.Json.JsonDocument.Parse(body);
+        var root = json.RootElement;
+        Assert.Equal("-1001234", root.GetProperty("chat_id").GetString());
+        Assert.Equal("*T*", root.GetProperty("text").GetString());
+        Assert.Equal("MarkdownV2", root.GetProperty("parse_mode").GetString());
+        Assert.True(root.GetProperty("disable_notification").GetBoolean());
+    }
+
+    [Fact]
+    public async Task SetWebhookAsync_Body_MatchesTheDocumentedParameters()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"ok":true,"result":true,"description":"Webhook was set"}""");
+        var sut = BuildClient(handler);
+
+        await sut.SetWebhookAsync(
+            new TelegramSetWebhookRequest(
+                Url: "https://skinora.com/api/v1/webhooks/telegram",
+                SecretToken: "test-webhook_SECRET_123",
+                MaxConnections: 40,
+                AllowedUpdates: null,
+                DropPendingUpdates: true),
+            CancellationToken.None);
+
+        using var json = System.Text.Json.JsonDocument.Parse(Assert.Single(handler.Requests).body);
+        var root = json.RootElement;
+        Assert.Equal("https://skinora.com/api/v1/webhooks/telegram", root.GetProperty("url").GetString());
+        Assert.Equal("test-webhook_SECRET_123", root.GetProperty("secret_token").GetString());
+        Assert.Equal(40, root.GetProperty("max_connections").GetInt32());
+        Assert.Equal(["message"], root.GetProperty("allowed_updates").EnumerateArray().Select(e => e.GetString()));
+        Assert.True(root.GetProperty("drop_pending_updates").GetBoolean());
+    }
+
+    [Theory]
+    // Documented failure envelope: {"ok":false,"error_code":…,"description":…}.
+    [InlineData(HttpStatusCode.Unauthorized, """{"ok":false,"error_code":401,"description":"Unauthorized"}""")]
+    [InlineData(HttpStatusCode.NotFound, """{"ok":false,"error_code":404,"description":"Not Found"}""")]
+    [InlineData(HttpStatusCode.BadRequest, """{"ok":false,"error_code":400,"description":"Bad Request: can't parse entities"}""")]
+    public async Task SendMessageAsync_RevokedTokenOrBadRequest_IsPermanent(HttpStatusCode status, string body)
+    {
+        // A revoked token (BotFather /revoke) answers 401 — permanent: retrying
+        // cannot help, the delivery fails and the exhausted-delivery alarm fires.
+        var sut = BuildClient(new StubHandler(status, body));
+
+        var ex = await Assert.ThrowsAsync<TelegramPermanentException>(() =>
+            sut.SendMessageAsync(new TelegramSendMessageRequest("1", "x"), CancellationToken.None));
+
+        Assert.Equal((int)status, ex.HttpStatusCode);
+        Assert.DoesNotContain("test-token", ex.Message);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_TransportError_DoesNotPutTheTokenInTheMessage()
+    {
+        var sut = BuildClient(new ThrowingHandler(new HttpRequestException("Connection refused (api.telegram.org:443)")));
+
+        var ex = await Assert.ThrowsAsync<TelegramTransientException>(() =>
+            sut.SendMessageAsync(new TelegramSendMessageRequest("1", "x"), CancellationToken.None));
+
+        Assert.DoesNotContain("test-token", ex.Message);
+    }
+
     [Fact]
     public void Constructor_MissingBotToken_Throws()
     {

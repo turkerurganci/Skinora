@@ -3,6 +3,7 @@ using Skinora.Notifications.Application.Notifications;
 using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Interfaces;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Outbox;
 
 namespace Skinora.Notifications.Application.EventHandlers;
@@ -28,6 +29,7 @@ public abstract class AdminBroadcastNotificationConsumerBase<TEvent>
     where TEvent : IDomainEvent
 {
     private readonly IAdminRecipientResolver _adminRecipients;
+    private readonly IAdminMoneyAlarmObserver? _moneyAlarms;
     private readonly ILogger _logger;
 
     protected AdminBroadcastNotificationConsumerBase(
@@ -42,6 +44,27 @@ public abstract class AdminBroadcastNotificationConsumerBase<TEvent>
     }
 
     /// <summary>
+    /// T165 — money-alarm constructor ("para alarmı", <see cref="IAdminMoneyAlarmObserver"/>):
+    /// besides the in-app + per-admin channel fan-out, every event is reported to
+    /// <paramref name="moneyAlarms"/> under <see cref="NotificationConsumerBase{TEvent}.ConsumerName"/>,
+    /// which the <c>admin-money-alarm-raised</c> Grafana rule routes to the
+    /// operator's Telegram chat and e-mail — also when no admin is resolved.
+    /// </summary>
+    protected AdminBroadcastNotificationConsumerBase(
+        INotificationDispatcher dispatcher,
+        IProcessedEventStore processedEventStore,
+        IAdminRecipientResolver adminRecipients,
+        IAdminMoneyAlarmObserver moneyAlarms,
+        ILogger logger)
+        : this(dispatcher, processedEventStore, adminRecipients, logger)
+    {
+        _moneyAlarms = moneyAlarms;
+    }
+
+    /// <summary>True when this consumer is in the money-alarm category.</summary>
+    public bool IsMoneyAlarm => _moneyAlarms is not null;
+
+    /// <summary>
     /// Describes the notification fanned out to every admin (type, template
     /// parameters and optional transaction/flag targets). Called once per
     /// event; the recipient <c>UserId</c> is filled in per admin by the base.
@@ -52,6 +75,10 @@ public abstract class AdminBroadcastNotificationConsumerBase<TEvent>
         TEvent domainEvent,
         CancellationToken cancellationToken)
     {
+        // T165 — the money-alarm path does not depend on admins existing or
+        // having connected a channel; report before resolving recipients.
+        _moneyAlarms?.Raised(ConsumerName);
+
         var adminUserIds = await _adminRecipients.GetAdminUserIdsAsync(cancellationToken);
         if (adminUserIds.Count == 0)
         {

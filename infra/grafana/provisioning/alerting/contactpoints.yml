@@ -1,6 +1,23 @@
 # T16 — Grafana Alerting contact points (05 §9.3)
-# Configure via environment variables:
-#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_HOST, SMTP_FROM, ALERT_EMAIL_TO
+# T165 — money-alarm contact point (Telegram + e-mail) and message templates fixed.
+#
+# Values are substituted by the skinora-grafana-provisioning render step
+# (docker-compose.yml), not by Grafana:
+#   TELEGRAM_BOT_TOKEN  bot token (the same bot the backend uses — DEPLOY_RUNBOOK §P)
+#   TELEGRAM_CHAT_ID    the operator's chat / group id the alerts go to
+#   ALERT_EMAIL_TO      the operator's alert mailbox
+# E-mail leaves through Grafana's own SMTP client (GF_SMTP_*, Resend SMTP —
+# docker-compose.yml skinora-grafana); with SMTP off the e-mail integrations
+# fail at send time (logged by Grafana) and Telegram still delivers.
+#
+# T165 — the message templates were written with Helm-style backtick
+# escaping (an action wrapping a raw-string copy of the template). Nothing
+# renders this file as a Go template before Grafana, so Grafana itself
+# executed them and printed the inner template text literally — every alert
+# would have arrived as raw template code instead of "FIRING: 2 alert(s)".
+# They are now plain Grafana notification templates. Grafana's provisioning
+# interpolates dollar-prefixed environment names, so no dollar sign appears in
+# a template here (use .Labels, not the dollar-labels variable).
 apiVersion: 1
 
 contactPoints:
@@ -13,11 +30,11 @@ contactPoints:
           bottoken: '${TELEGRAM_BOT_TOKEN}'
           chatid: '${TELEGRAM_CHAT_ID}'
           message: |
-            {{ `{{ if .Alerts.Firing }}` }}🔴 FIRING: {{ `{{ len .Alerts.Firing }}` }} alert(s){{ `{{ end }}` }}
-            {{ `{{ if .Alerts.Resolved }}` }}✅ RESOLVED: {{ `{{ len .Alerts.Resolved }}` }} alert(s){{ `{{ end }}` }}
-            {{ `{{ range .Alerts }}` }}
-            {{ `{{ .Labels.alertname }}` }} — {{ `{{ .Annotations.summary }}` }}
-            {{ `{{ end }}` }}
+            {{ if .Alerts.Firing }}🔴 FIRING: {{ len .Alerts.Firing }} alert(s){{ end }}
+            {{ if .Alerts.Resolved }}✅ RESOLVED: {{ len .Alerts.Resolved }} alert(s){{ end }}
+            {{ range .Alerts }}
+            {{ .Labels.alertname }} — {{ .Annotations.summary }}
+            {{ end }}
         disableResolveMessage: false
 
   - orgId: 1
@@ -39,9 +56,37 @@ contactPoints:
           bottoken: '${TELEGRAM_BOT_TOKEN}'
           chatid: '${TELEGRAM_CHAT_ID}'
           message: |
-            {{ `{{ if .Alerts.Firing }}` }}⚠️ WARNING: {{ `{{ len .Alerts.Firing }}` }} alert(s){{ `{{ end }}` }}
-            {{ `{{ if .Alerts.Resolved }}` }}✅ RESOLVED: {{ `{{ len .Alerts.Resolved }}` }} alert(s){{ `{{ end }}` }}
-            {{ `{{ range .Alerts }}` }}
-            {{ `{{ .Labels.alertname }}` }} — {{ `{{ .Annotations.summary }}` }}
-            {{ `{{ end }}` }}
+            {{ if .Alerts.Firing }}⚠️ WARNING: {{ len .Alerts.Firing }} alert(s){{ end }}
+            {{ if .Alerts.Resolved }}✅ RESOLVED: {{ len .Alerts.Resolved }} alert(s){{ end }}
+            {{ range .Alerts }}
+            {{ .Labels.alertname }} — {{ .Annotations.summary }}
+            {{ end }}
+        disableResolveMessage: false
+
+  # T165 — "para alarmı" (money alarm): every rule labelled category=money
+  # (policies.yml routes it here first, whatever its severity). Two
+  # integrations in one contact point, so a money alarm always reaches the
+  # operator on BOTH Telegram and e-mail — the panel is not the only place.
+  - orgId: 1
+    name: money-alarm
+    receivers:
+      - uid: money-alarm-telegram
+        type: telegram
+        settings:
+          bottoken: '${TELEGRAM_BOT_TOKEN}'
+          chatid: '${TELEGRAM_CHAT_ID}'
+          message: |
+            {{ if .Alerts.Firing }}💰 PARA ALARMI: {{ len .Alerts.Firing }} alert(s){{ end }}
+            {{ if .Alerts.Resolved }}✅ RESOLVED: {{ len .Alerts.Resolved }} alert(s){{ end }}
+            {{ range .Alerts }}
+            [{{ .Labels.severity }}] {{ .Labels.alertname }} — {{ .Annotations.summary }}
+            {{ end }}
+        disableResolveMessage: false
+      - uid: money-alarm-email
+        type: email
+        settings:
+          addresses: '${ALERT_EMAIL_TO}'
+          singleEmail: true
+          subject: |
+            {{ if .Alerts.Firing }}[Skinora] PARA ALARMI ({{ len .Alerts.Firing }}){{ else }}[Skinora] Para alarmı çözüldü{{ end }}
         disableResolveMessage: false

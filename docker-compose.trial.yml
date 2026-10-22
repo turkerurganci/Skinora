@@ -28,6 +28,9 @@
 #   * The Cloudflare tunnel (profile "tunnel"): cloudflared dials OUT to
 #     Cloudflare and forwards to the edge over the compose network. It does not
 #     start without its token (skinora-tunnel-preflight below).
+#   * T165 — notification channels in their production choice (e-mail +
+#     Telegram on, Discord off), Grafana e-mail through Resend SMTP, and the
+#     heartbeat container for the outside monitor (DEPLOY_RUNBOOK §P).
 #
 # Needs Docker Compose >= 2.24 (`!reset` / `!override`). The tags are written
 # on every service on purpose: through a YAML anchor (`<<: *x`) compose drops
@@ -63,6 +66,17 @@ services:
       # fresh database (SettingsBootstrapService); an existing database is
       # moved by the T169 migration.
       - SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES=${SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES:-720}
+      # T165 — the production channel choice (owner decision 2026-10-21):
+      # e-mail (Resend) and Telegram ON, Discord OFF. Forced here, not read from
+      # .env.trial, so filling the secrets (RESEND_API_KEY,
+      # RESEND_WEBHOOK_SIGNING_SECRET, TELEGRAM_BOT_TOKEN,
+      # TELEGRAM_WEBHOOK_SECRET_TOKEN, TELEGRAM_BOT_USERNAME) and restarting the
+      # backend is all it takes. Until then both channels run "misconfigured":
+      # off for users, error in the backend log, notification-channel-
+      # misconfigured alert — never the development stub (DEPLOY_RUNBOOK §P).
+      - Resend__Provider=resend
+      - Telegram__Provider=telegram
+      - Discord__Provider=disabled
 
   skinora-frontend:
     container_name: !reset null
@@ -114,6 +128,11 @@ services:
     environment:
       # No `admin` fallback on a deployment the internet can find.
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env.trial}
+      # T165 — e-mail alerts through Resend SMTP (base file: host, user,
+      # STARTTLS). Only GRAFANA_SMTP_PASSWORD (a sending-only Resend key) is
+      # needed; while it is empty the e-mail integrations fail at send time and
+      # Telegram still delivers (DEPLOY_RUNBOOK §P).
+      - GF_SMTP_ENABLED=true
 
   skinora-uptime-kuma:
     container_name: !reset null
@@ -127,6 +146,35 @@ services:
     container_name: !reset null
     ports: !override
       - "127.0.0.1:${TRIAL_HTTP_PORT:-8090}:80"
+
+  # T165 — heartbeat ("dead man's switch") to the outside monitor
+  # (Healthchecks.io, DEPLOY_RUNBOOK §P). Every HEARTBEAT_INTERVAL_SECONDS it
+  # checks the site from inside — the edge's /api/health (nginx → backend →
+  # database + Redis) and the front page — and pings HEARTBEAT_URL when both
+  # answer. When this PC, Docker or the stack is down, the pings stop and the
+  # outside service alerts the owner (e-mail / Telegram) after its grace
+  # time. HEARTBEAT_FAILURES_BEFORE_FAIL failed rounds in a row send /fail for
+  # an immediate alert. restart: unless-stopped brings it back with Docker
+  # Desktop after a reboot. Without HEARTBEAT_URL it idles (logs once).
+  # Outbound only; publishes no port.
+  skinora-heartbeat:
+    # curl, not busybox wget: the script's HTTP path is the one its CI test
+    # runs (scripts/heartbeat/heartbeat.test.mjs, on the runner's curl).
+    image: curlimages/curl:8.21.0
+    entrypoint: ["/bin/sh", "/opt/skinora/heartbeat.sh"]
+    environment:
+      - HEARTBEAT_URL=${HEARTBEAT_URL:-}
+      - HEARTBEAT_INTERVAL_SECONDS=${HEARTBEAT_INTERVAL_SECONDS:-60}
+      - HEARTBEAT_FAILURES_BEFORE_FAIL=${HEARTBEAT_FAILURES_BEFORE_FAIL:-3}
+      - HEARTBEAT_CHECK_URLS=http://skinora-reverse-proxy/api/health http://skinora-reverse-proxy/
+    volumes:
+      - ./scripts/heartbeat/heartbeat.sh:/opt/skinora/heartbeat.sh:ro
+    depends_on:
+      skinora-reverse-proxy:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - skinora-network
 
   # Fail-closed gate of the tunnel: exits 1 when the token secret is empty, so
   # cloudflared (which waits for it to complete successfully) never starts

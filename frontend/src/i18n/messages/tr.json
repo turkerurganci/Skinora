@@ -1835,7 +1835,8 @@
           "description": "Bildirimleri Discord üzerinden al.",
           "connected": "Bağlı: {username}",
           "notConnected": "Bildirim almak için önce Discord hesabınızı bağlayın."
-        }
+        },
+        "unavailable": "Bu kanal şu an platformda kullanılamıyor."
       },
       "email": {
         "addressLabel": "Email adresi",
@@ -1897,6 +1898,7 @@
         "connected": "Bağlı",
         "notConnected": "Bağlı değil"
       },
+      "unavailable": "Bu kanal şu an platformda kullanılamıyor.",
       "telegram": {
         "label": "Telegram",
         "modal": {
