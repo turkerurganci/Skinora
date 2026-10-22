@@ -84,9 +84,10 @@ Sonuç: dört kuraldan üçü canlıda doğru durumu aldı ve Grafana Alertmanag
 | Script (node --test) | ✓ 22/22 | `node --test scripts/db-backup/db-backup.test.mjs` — sahte `sqlcmd` ile takvim, saklama, geri yükleme zinciri, point-in-time, üstüne yazmama, parola argv'de değil. Mutasyon: 5/5 anlamlı bozma (en yeni 2 tamı koruma, tam aralığı, 4214 → tam, log budama, canlıya geri yükleme reddi) en az bir testi kırdı |
 | Script (compose) | ✓ 14/14 | `node --test scripts/db-backup/compose-backup.test.mjs scripts/compose-exposure.test.mjs` (T161 testleri yeni servisle yeşil: port yok, sabit container adı yok) |
 | Backend unit (CI filtresi) | ✓ 154/154 | `dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` |
+| Backend integration (yerel) | ✓ 775/775 | `dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName~.Integration"` (CI'da Lint yüzünden atlandı) |
 | Backend yeni testler | ✓ 18/18 | `--filter FullyQualifiedName~DatabaseStorage` — 16 unit (sınır çözümü 6 satır, yayımlama, "hiç yedek yok = 0", okunamayan geçmiş son değeri korur, eşikler, 4 kural ifadesi, servis) + 2 integration (Testcontainers SQL Server: boyut/sürüm/model, copy-only sayılmaz, tam + log yaşı) |
 | Build | ✓ | `dotnet build src/Skinora.API` 0 uyarı, 0 hata |
-| CI | ✗ (dış neden) | Run `39822082262` (HEAD `95110e5c`): **yalnız** "1. Lint" → "Frontend npm audit (blocking — prod highs)" kırmızı — bugün yayımlanan **critical** Next.js danışması `GHSA-2464-fhr4-w9xw` (Image Optimization API, SVG ile kimliksiz uzaktan kod çalıştırma; `next 16.0.0 – 16.4.0`, düzeltme 16.4.2) ve `GHSA-p3m5-59mp-jv5r`. T164 frontend'e dokunmadı; aynı denetim T168'in 17:12Z run'ında yeşildi. Lint kırmızı olduğu için 2. Build, 3. Unit, 4. Integration, 6. Migration, 7. Docker atlandı; 3b JS test ✓, **3c Script test ✓** (T164'ün betik testleri), E2E advisory'ler ✓. Ayrı bir `next` yükseltme PR'ı main'e girince dal yeniden koşulmalı |
+| CI | ✗ (dış neden) | Run `39822082262` (HEAD `95110e5c`, sonraki push iptal etti) ve `39824772868` (HEAD `3e2441c0`, **failure**): **yalnız** "1. Lint" → "Frontend npm audit (blocking — prod highs)" kırmızı — bugün yayımlanan **critical** Next.js danışması `GHSA-2464-fhr4-w9xw` (Image Optimization API, SVG ile kimliksiz uzaktan kod çalıştırma; `next 16.0.0 – 16.4.0`, düzeltme 16.4.2) ve `GHSA-p3m5-59mp-jv5r`. T164 frontend'e dokunmadı; aynı denetim T168'in 17:12Z run'ında yeşildi. Lint kırmızı olduğu için 2. Build, 3. Unit, 4. Integration, 6. Migration, 7. Docker atlandı; 3b JS test ✓, **3c Script test ✓** (T164'ün betik testleri), E2E advisory'ler ✓. Aynı adım aynı saatlerde T163 (`39821704801`) ve T169 (`39821996174`) dallarında da kırmızı. Atlanan backend kolları yerine yerelde: API integration **775/775** (`--filter FullyQualifiedName~.Integration`, 13 dk 27 sn). Ayrı bir `next` yükseltme PR'ı main'e girince dal yeniden koşulmalı |
 
 ## Doğrulama
 
@@ -107,7 +108,7 @@ Sonuç: dört kuraldan üçü canlıda doğru durumu aldı ve Grafana Alertmanag
 - Branch: `task/T164-veritabani-yedegi`
 - Commit: `95110e5c` — T164: Veritabanı yedeği ve geri dönüş planı (+ rapor/status commit'i)
 - PR: #372
-- CI: ✗ — run `39822082262` dış nedenle kırmızı (Next.js critical danışması, frontend audit kapısı); T164'e ait iş yeşil, backend iş kolları Lint'e bağlı olduğu için atlandı
+- CI: ✗ — run `39824772868` dış nedenle kırmızı (Next.js critical danışması, frontend audit kapısı); T164'e ait iş yeşil, backend iş kolları Lint'e bağlı olduğu için atlandı
 
 ## Kolay kararlar (öneriyle kaydedildi — ⚠)
 
