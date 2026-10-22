@@ -6,6 +6,7 @@ import type {
   AccountResources,
   AccountState,
   ChainFeeParameters,
+  TransactionLanding,
 } from '../tron/TronResourceClient.js';
 import {
   ESTIMATED_TRANSFER_TX_BYTES,
@@ -191,7 +192,7 @@ export class EnergyDelegationService implements DelegationSource {
     const startedAt = this.now();
     const deposit = transfer.depositAddress;
 
-    const activationSun = await this.ensureAccount(deposit, context);
+    const activation = await this.ensureAccount(deposit, context);
     const budget = await this.acquireBudget(transfer, context);
 
     const elapsedMs = this.now() - startedAt;
@@ -223,13 +224,26 @@ export class EnergyDelegationService implements DelegationSource {
       await this.tryUndelegate(deposit, budget.delegationAmountSun, context, 'action-succeeded');
     }
 
-    return { ...budget, activationSun, action: actionResult };
+    return {
+      ...budget,
+      activationSun: activation.activationSun,
+      platformSpendSun: activation.spentSun + budget.platformSpendSun,
+      action: actionResult,
+    };
   }
 
-  /** Create the deposit account if it does not exist yet. Returns SUN sent (0 or 1). */
-  private async ensureAccount(deposit: string, context: DelegationContext): Promise<number> {
+  /**
+   * Create the deposit account if it does not exist yet. Returns the SUN sent
+   * (0 or 1) and — T160c düzeltme turu (F1) — what the activation cost the hot
+   * wallet: the 1 SUN plus the fee its transaction burned (the account-creation
+   * fee, measured 1.1 TRX on Nile).
+   */
+  private async ensureAccount(
+    deposit: string,
+    context: DelegationContext,
+  ): Promise<{ activationSun: number; spentSun: number }> {
     const state = await this.resources.getAccountState(deposit);
-    if (state.exists) return 0;
+    if (state.exists) return { activationSun: 0, spentSun: 0 };
 
     const { txHash } = await this.client.sendTrx({
       fromAddress: this.sweeperAddress,
@@ -242,18 +256,18 @@ export class EnergyDelegationService implements DelegationSource {
       this.retryableWaitAttempts,
       async () => (await this.resources.getAccountState(deposit)).exists,
     );
-    if (landed !== 'confirmed') {
+    if (landed.outcome !== 'confirmed') {
       throw new SidecarError(
-        `Deposit ${deposit} activation ${txHash} ${describeWait(landed)}.`,
+        `Deposit ${deposit} activation ${txHash} ${describeWait(landed.outcome)}.`,
         'DEPOSIT_ACTIVATION_NOT_CONFIRMED',
         true,
       );
     }
     logger.info(
-      { depositAddress: deposit, txHash, ...contextFields(context) },
+      { depositAddress: deposit, txHash, feeSun: landed.feeSun, ...contextFields(context) },
       'Deposit account activated in a block (1 SUN; creation fee charged to the sweeper)',
     );
-    return 1;
+    return { activationSun: 1, spentSun: 1 + landed.feeSun };
   }
 
   private async acquireBudget(
@@ -282,11 +296,18 @@ export class EnergyDelegationService implements DelegationSource {
         { err: (err as Error).message, depositAddress: deposit, ...contextFields(context) },
         'Delegation plan unavailable — sending the fixed TRX fallback',
       );
-      await this.sendAndConfirmTrx(deposit, this.fallbackAmountSun, 0, context, 'FALLBACK');
+      const spent = await this.sendAndConfirmTrx(
+        deposit,
+        this.fallbackAmountSun,
+        0,
+        context,
+        'FALLBACK',
+      );
       return {
         mode: 'fallback',
         delegationAmountSun: 0,
         fallbackAmountSun: this.fallbackAmountSun,
+        platformSpendSun: spent,
       };
     }
 
@@ -301,7 +322,7 @@ export class EnergyDelegationService implements DelegationSource {
     if (plan.kind === 'delegate' && this.staking) {
       const delegated = await this.tryDelegate(deposit, plan, context);
       if (delegated) {
-        let sent: number;
+        let sent: { sentSun: number; spentSun: number };
         try {
           sent = await this.topUpBandwidthIfNeeded(deposit, probes, context);
         } catch (err) {
@@ -313,7 +334,8 @@ export class EnergyDelegationService implements DelegationSource {
         return {
           mode: 'delegated',
           delegationAmountSun: plan.delegationSun,
-          fallbackAmountSun: sent,
+          fallbackAmountSun: sent.sentSun,
+          platformSpendSun: sent.spentSun,
         };
       }
       // Delegation did not deliver: burn the whole shortfall instead.
@@ -327,7 +349,12 @@ export class EnergyDelegationService implements DelegationSource {
     // no-energy-needed — the deposit already holds the Energy for the whole
     // transfer; only Bandwidth can still be short.
     const sent = await this.topUpBandwidthIfNeeded(deposit, probes, context);
-    return { mode: 'no-energy', delegationAmountSun: 0, fallbackAmountSun: sent };
+    return {
+      mode: 'no-energy',
+      delegationAmountSun: 0,
+      fallbackAmountSun: sent.sentSun,
+      platformSpendSun: sent.spentSun,
+    };
   }
 
   private async readProbes(transfer: DelegatedTransfer): Promise<PlanProbes> {
@@ -398,7 +425,7 @@ export class EnergyDelegationService implements DelegationSource {
       return false;
     }
 
-    const landed = await this.landed(
+    const { outcome: landed } = await this.landed(
       txHash,
       this.expiryWaitAttempts,
       async () =>
@@ -435,8 +462,8 @@ export class EnergyDelegationService implements DelegationSource {
     txHash: string,
     context: DelegationContext,
   ): Promise<void> {
-    const block = await this.waitForBlock(txHash, this.expiryWaitAttempts);
-    if (block === null) {
+    const landing = await this.waitForBlock(txHash, this.expiryWaitAttempts);
+    if (landing === null) {
       logger.warn(
         { depositAddress: deposit, txHash, ...contextFields(context) },
         'Transfer is in no block after its expiration window — reclaiming the delegation anyway',
@@ -458,18 +485,24 @@ export class EnergyDelegationService implements DelegationSource {
       bandwidthFeeSun: probes.fees.bandwidthFeeSun,
     });
     const sent = topUpSun(required, probes.balanceSun);
-    if (sent > 0) {
-      await this.sendAndConfirmTrx(deposit, sent, probes.balanceSun, context, 'BURN_TOP_UP');
-    }
-    return { mode: 'burn', delegationAmountSun: 0, fallbackAmountSun: sent };
+    const spent =
+      sent > 0
+        ? await this.sendAndConfirmTrx(deposit, sent, probes.balanceSun, context, 'BURN_TOP_UP')
+        : 0;
+    return {
+      mode: 'burn',
+      delegationAmountSun: 0,
+      fallbackAmountSun: sent,
+      platformSpendSun: spent,
+    };
   }
 
-  /** Bandwidth only (delegated or no-energy paths). Returns SUN sent. */
+  /** Bandwidth only (delegated or no-energy paths). Returns SUN sent and what it cost the hot wallet. */
   private async topUpBandwidthIfNeeded(
     deposit: string,
     probes: PlanProbes,
     context: DelegationContext,
-  ): Promise<number> {
+  ): Promise<{ sentSun: number; spentSun: number }> {
     const required = burnSun({
       energyToBurn: 0,
       energyFeeSun: probes.fees.energyFeeSun,
@@ -478,10 +511,17 @@ export class EnergyDelegationService implements DelegationSource {
       bandwidthFeeSun: probes.fees.bandwidthFeeSun,
     });
     const sent = topUpSun(required, probes.balanceSun);
-    if (sent > 0) {
-      await this.sendAndConfirmTrx(deposit, sent, probes.balanceSun, context, 'BANDWIDTH_TOP_UP');
-    }
-    return sent;
+    const spent =
+      sent > 0
+        ? await this.sendAndConfirmTrx(
+            deposit,
+            sent,
+            probes.balanceSun,
+            context,
+            'BANDWIDTH_TOP_UP',
+          )
+        : 0;
+    return { sentSun: sent, spentSun: spent };
   }
 
   private async sendAndConfirmTrx(
@@ -490,7 +530,7 @@ export class EnergyDelegationService implements DelegationSource {
     balanceBeforeSun: number,
     context: DelegationContext,
     purpose: 'FALLBACK' | 'BURN_TOP_UP' | 'BANDWIDTH_TOP_UP',
-  ): Promise<void> {
+  ): Promise<number> {
     let txHash: string;
     try {
       ({ txHash } = await this.client.sendTrx({
@@ -514,17 +554,28 @@ export class EnergyDelegationService implements DelegationSource {
       async () =>
         (await this.resources.getAccountState(deposit)).balanceSun >= balanceBeforeSun + amountSun,
     );
-    if (landed !== 'confirmed') {
+    if (landed.outcome !== 'confirmed') {
       throw new SidecarError(
-        `TRX ${purpose} to ${deposit} (${txHash}) ${describeWait(landed)}.`,
+        `TRX ${purpose} to ${deposit} (${txHash}) ${describeWait(landed.outcome)}.`,
         'TRX_TOP_UP_NOT_CONFIRMED',
         true,
       );
     }
     logger.info(
-      { depositAddress: deposit, txHash, amountSun, purpose, ...contextFields(context) },
+      {
+        depositAddress: deposit,
+        txHash,
+        amountSun,
+        feeSun: landed.feeSun,
+        purpose,
+        ...contextFields(context),
+      },
       'TRX sent to deposit and confirmed in a block',
     );
+    // T160c düzeltme turu (F1) — what left the hot wallet: the TRX itself
+    // (its unburnt part stays on the deposit, never collected) and the fee
+    // its own transaction burned.
+    return amountSun + landed.feeSun;
   }
 
   private async tryUndelegate(
@@ -569,16 +620,20 @@ export class EnergyDelegationService implements DelegationSource {
     txHash: string,
     blockWaitAttempts: number,
     reflected: () => Promise<boolean>,
-  ): Promise<WaitOutcome> {
-    if ((await this.waitForBlock(txHash, blockWaitAttempts)) === null) return 'not-in-block';
-    return (await this.waitFor(reflected, this.stateWaitAttempts)) ? 'confirmed' : 'not-reflected';
+  ): Promise<{ outcome: WaitOutcome; feeSun: number }> {
+    const landing = await this.waitForBlock(txHash, blockWaitAttempts);
+    if (landing === null) return { outcome: 'not-in-block', feeSun: 0 };
+    const outcome = (await this.waitFor(reflected, this.stateWaitAttempts))
+      ? 'confirmed'
+      : 'not-reflected';
+    return { outcome, feeSun: landing.feeSun };
   }
 
-  private async waitForBlock(txHash: string, attempts: number): Promise<number | null> {
+  private async waitForBlock(txHash: string, attempts: number): Promise<TransactionLanding | null> {
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
-        const block = await this.resources.getTransactionBlockNumber(txHash);
-        if (block !== null) return block;
+        const landing = await this.resources.getTransactionLanding(txHash);
+        if (landing !== null) return landing;
       } catch {
         // A transient probe error is not an answer; keep polling.
       }
@@ -687,7 +742,8 @@ export interface DelegationResourceProbe {
   getAccountState(address: string): Promise<AccountState>;
   getDelegatableEnergySun(ownerAddress: string): Promise<number>;
   getChainFeeParameters(): Promise<ChainFeeParameters>;
-  getTransactionBlockNumber(txHash: string): Promise<number | null>;
+  /** In a block: its number and the SUN its sender burned (T160c düzeltme turu); null while not. */
+  getTransactionLanding(txHash: string): Promise<TransactionLanding | null>;
 }
 
 export interface EnergyDelegationServiceDeps {
@@ -757,6 +813,12 @@ interface Budget {
   delegationAmountSun: number;
   /** TRX sent to the deposit (burn top-up, bandwidth top-up or fixed fallback). */
   fallbackAmountSun: number;
+  /**
+   * T160c düzeltme turu (F1) — SUN that left the hot wallet for this budget:
+   * the TRX sent plus the fee each of those sends burned. The deposit's own
+   * transfer burns out of that TRX, so its receipt fee is not added on top.
+   */
+  platformSpendSun: number;
 }
 
 interface PlanProbes {
@@ -769,5 +831,13 @@ interface PlanProbes {
 export interface DelegationOutcome<T> extends Budget {
   /** 1 when this call created the deposit account, 0 otherwise. */
   activationSun: number;
+  /**
+   * T160c düzeltme turu (F1) — everything this call cost the hot wallet in
+   * SUN: the activation (1 SUN + the fee it burned) plus the budget's
+   * {@link Budget.platformSpendSun}. TRX the deposit does not burn stays
+   * there (never collected), so it is spent. A delegation (dormant, T149)
+   * costs no TRX here; its Bandwidth is not counted.
+   */
+  platformSpendSun: number;
   action: T;
 }

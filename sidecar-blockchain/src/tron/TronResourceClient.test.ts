@@ -406,3 +406,33 @@ describe('TronResourceClient.getDelegatableEnergySun', () => {
     });
   });
 });
+
+describe('TronResourceClient.getTransactionLanding — block and the SUN its sender burned (T160c düzeltme turu)', () => {
+  it('reads `fee` next to the block (an activation: the account-creation fee)', async () => {
+    const fetchFn = fetchReturning({ id: 'abc', blockNumber: 72_004_051, fee: 1_100_000 });
+
+    await expect(client().getTransactionLanding('abc', fetchFn)).resolves.toEqual({
+      blockNumber: 72_004_051,
+      feeSun: 1_100_000,
+    });
+  });
+
+  it.each([
+    { name: 'absent (the node omits a zero fee)', fee: undefined },
+    { name: 'a string', fee: '1100000' },
+    { name: 'negative', fee: -5 },
+  ])('reads a fee that is $name as 0', async ({ fee }) => {
+    const fetchFn = fetchReturning({ id: 'abc', blockNumber: 72_004_051, fee });
+
+    await expect(client().getTransactionLanding('abc', fetchFn)).resolves.toEqual({
+      blockNumber: 72_004_051,
+      feeSun: 0,
+    });
+  });
+
+  it('is null while no block holds it, whatever the fee field says', async () => {
+    const fetchFn = fetchReturning({ fee: 1_100_000 });
+
+    await expect(client().getTransactionLanding('abc', fetchFn)).resolves.toBeNull();
+  });
+});

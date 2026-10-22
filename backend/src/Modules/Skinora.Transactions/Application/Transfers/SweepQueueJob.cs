@@ -57,6 +57,21 @@ namespace Skinora.Transactions.Application.Transfers;
 /// </para>
 ///
 /// <para>
+/// <b>T160c — the refund fees withheld from the buyer ride along.</b> Since
+/// T159a every refund that leaves the deposit sends <c>base − gas</c> and keeps
+/// <c>gas</c> on the deposit (the platform paid the chain fee in TRX / ETH).
+/// The sweep adds the <c>GasFee</c> of the transaction's <i>confirmed</i>,
+/// deposit-sourced refunds in the transaction's own token (excess, multi- and
+/// under-payment refunds) to <c>TotalAmount</c> and records that part in
+/// <c>RefundFeeRecovered</c>: the transfer happens anyway, so moving the fees
+/// with it costs nothing extra (owner decision 2026-10-21: the remainder is
+/// collected). A refund that is not final yet keeps its whole base on the
+/// deposit — its fee is left for <see cref="RefundFeeSweepQueueJob"/>, which
+/// also handles fees in another token (a wrong-token refund) and deposits
+/// that never reach a sweep.
+/// </para>
+///
+/// <para>
 /// Concurrency hardening (WP1 F1 money-safety pattern). The <c>AnyAsync</c>
 /// idempotency check is not atomic with the insert, so two overlapping ticks
 /// could both pass it and queue two PENDING sweeps → double-sweep of the same
@@ -233,6 +248,13 @@ public sealed class SweepQueueJob
             return;
         }
 
+        // T160c — the refund fees the deposit holds for the platform in this
+        // token, minus any a REFUND_FEE_SWEEP already carried (normally none:
+        // that job waits for this sweep before it touches a delivered deposit).
+        var refundFees = await RefundFeeLedger.UncollectedAsync(
+            _db, transaction.Id, deposit.Address, transaction.StablecoinType, cancellationToken);
+        var recovered = refundFees > 0m ? refundFees : 0m;
+
         var sweepRow = new BlockchainTransaction
         {
             Id = Guid.NewGuid(),
@@ -243,10 +265,11 @@ public sealed class SweepQueueJob
             TxHash = null,
             FromAddress = deposit.Address,      // Source deposit; dispatcher re-resolves the same address.
             ToAddress = hotWallet,              // Sweep destination (reconciliation hot-wallet inflow key).
-            Amount = transaction.TotalAmount,   // Full escrowed total (price + commission + TRON network fee line, T149); excess drained separately.
+            Amount = transaction.TotalAmount + recovered, // Escrowed total (price + commission + TRON network fee line, T149) + refund fees withheld on this deposit (T160c); excess drained separately.
             Token = transaction.StablecoinType,
             ActualTokenAddress = null,          // CK_..._Type_Sweep: NULL (canonical stablecoin, no wrong-token).
             GasFee = null,                      // Not deducted: the hot wallet spends the TRX; on TRON the buyer paid it up front as the network fee line (T149, 11 §F8 K8).
+            RefundFeeRecovered = recovered > 0m ? recovered : null, // T160c — the part of Amount that is collected refund fees.
             Status = BlockchainTransactionStatus.PENDING,
             BlockNumber = null,
             ConfirmationCount = 0,
@@ -285,8 +308,8 @@ public sealed class SweepQueueJob
         }
 
         _logger.LogInformation(
-            "Sweep queued — transaction {TransactionId} sweep row {RowId} amount {Amount} {Token} from deposit {Deposit} → hot wallet",
-            transaction.Id, sweepRow.Id, transaction.TotalAmount, transaction.StablecoinType, deposit.Address);
+            "Sweep queued — transaction {TransactionId} sweep row {RowId} amount {Amount} {Token} (escrow {Escrow} + withheld refund fees {RefundFees}) from deposit {Deposit} → hot wallet",
+            transaction.Id, sweepRow.Id, sweepRow.Amount, transaction.StablecoinType, transaction.TotalAmount, recovered, deposit.Address);
     }
 
     // Hangfire serializes Expression<Action<T>>; expose a sync wrapper.

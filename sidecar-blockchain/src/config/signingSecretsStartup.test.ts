@@ -19,6 +19,14 @@ import { HdWalletService } from '../wallet/HdWalletService.js';
  */
 const SIDECAR_ROOT = resolve(__dirname, '../..');
 const TSX_CLI = resolve(SIDECAR_ROOT, 'node_modules/tsx/dist/cli.mjs');
+/**
+ * Each test cold-starts the service under tsx (transpiles the whole graph).
+ * Alone that takes a few seconds; in a full local run next to other process
+ * tests it went past 25 s (T163 validation B6). The wait only matters when
+ * the line never comes — a refusal ends it early on exit — so it is generous.
+ */
+const WAIT = 60_000;
+const TEST_TIMEOUT = WAIT + 30_000;
 const INTERNAL_KEY = 'test-internal-key-'.padEnd(64, 'k');
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
 /** Valid words, failing BIP-39 checksum. */
@@ -118,7 +126,7 @@ async function refusedWith(
   env: Record<string, string>,
 ): Promise<{ code: number | null; output: string }> {
   const run = launch(productionEnv(env), 'Blockchain sidecar listening');
-  const listening = await withTimeout(run.line, 20_000);
+  const listening = await withTimeout(run.line, WAIT);
   run.child.kill();
   const code = await run.exited;
   expect(listening, run.output()).toBeUndefined();
@@ -137,61 +145,69 @@ function freePort(): Promise<number> {
 }
 
 describe('TRON service startup — signing secrets from Docker secret files (T163)', () => {
-  it('starts in production from the two files and logs sources and public addresses only', async () => {
-    const run = launch(productionEnv({}), 'HD wallet initialized');
-    const initialized = await withTimeout(run.line, 25_000);
-    run.child.kill();
-    await run.exited;
-    const output = run.output();
-
-    expect(initialized, output).toMatchObject({ depositIndex0: HOT_ADDRESS });
-    const signing = output.split('\n').find((l) => l.includes('Signing secrets:'));
-    expect(signing, output).toBeDefined();
-    expect(JSON.parse(signing as string)).toMatchObject({
-      hdMnemonicSource: 'file',
-      hotWalletKeySource: 'file',
-      hotWalletAddressFromKey: HOT_ADDRESS,
-    });
-    expectNoSecret(output);
-  }, 40_000);
-
-  it('/health, the derive API and its errors carry no secret', async () => {
-    const port = await freePort();
-    const run = launch(productionEnv({ PORT: String(port) }), 'HD wallet initialized');
-    try {
-      expect(await withTimeout(run.line, 25_000), run.output()).toBeDefined();
-      const base = `http://127.0.0.1:${port}`;
-      const post = (body: unknown, key = INTERNAL_KEY) =>
-        fetch(`${base}/api/wallet/derive`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-internal-key': key },
-          body: JSON.stringify(body),
-        });
-
-      const health = await fetch(`${base}/health`);
-      const healthBody = await health.text();
-      const derived = await post({ index: 1, network: 'TRON' });
-      const derivedBody = await derived.text();
-      const invalid = await post({ index: -1, network: 'TRON' });
-      const invalidBody = await invalid.text();
-      const unauthorised = await post({ index: 1, network: 'TRON' }, 'wrong-key');
-      const unauthorisedBody = await unauthorised.text();
-
-      expect(healthBody).toContain('"service"');
-      expect(derived.status).toBe(200);
-      expect(JSON.parse(derivedBody)).toMatchObject({ address: DEPOSIT_1, index: 1 });
-      expect(invalid.status).toBe(400);
-      expect(unauthorised.status).toBe(401);
-      for (const body of [healthBody, derivedBody, invalidBody, unauthorisedBody]) {
-        expectNoSecret(body);
-        expect(body).not.toContain(INTERNAL_KEY);
-      }
-    } finally {
+  it(
+    'starts in production from the two files and logs sources and public addresses only',
+    async () => {
+      const run = launch(productionEnv({}), 'HD wallet initialized');
+      const initialized = await withTimeout(run.line, WAIT);
       run.child.kill();
       await run.exited;
-    }
-    expectNoSecret(run.output());
-  }, 40_000);
+      const output = run.output();
+
+      expect(initialized, output).toMatchObject({ depositIndex0: HOT_ADDRESS });
+      const signing = output.split('\n').find((l) => l.includes('Signing secrets:'));
+      expect(signing, output).toBeDefined();
+      expect(JSON.parse(signing as string)).toMatchObject({
+        hdMnemonicSource: 'file',
+        hotWalletKeySource: 'file',
+        hotWalletAddressFromKey: HOT_ADDRESS,
+      });
+      expectNoSecret(output);
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    '/health, the derive API and its errors carry no secret',
+    async () => {
+      const port = await freePort();
+      const run = launch(productionEnv({ PORT: String(port) }), 'HD wallet initialized');
+      try {
+        expect(await withTimeout(run.line, WAIT), run.output()).toBeDefined();
+        const base = `http://127.0.0.1:${port}`;
+        const post = (body: unknown, key = INTERNAL_KEY) =>
+          fetch(`${base}/api/wallet/derive`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-internal-key': key },
+            body: JSON.stringify(body),
+          });
+
+        const health = await fetch(`${base}/health`);
+        const healthBody = await health.text();
+        const derived = await post({ index: 1, network: 'TRON' });
+        const derivedBody = await derived.text();
+        const invalid = await post({ index: -1, network: 'TRON' });
+        const invalidBody = await invalid.text();
+        const unauthorised = await post({ index: 1, network: 'TRON' }, 'wrong-key');
+        const unauthorisedBody = await unauthorised.text();
+
+        expect(healthBody).toContain('"service"');
+        expect(derived.status).toBe(200);
+        expect(JSON.parse(derivedBody)).toMatchObject({ address: DEPOSIT_1, index: 1 });
+        expect(invalid.status).toBe(400);
+        expect(unauthorised.status).toBe(401);
+        for (const body of [healthBody, derivedBody, invalidBody, unauthorisedBody]) {
+          expectNoSecret(body);
+          expect(body).not.toContain(INTERNAL_KEY);
+        }
+      } finally {
+        run.child.kill();
+        await run.exited;
+      }
+      expectNoSecret(run.output());
+    },
+    TEST_TIMEOUT,
+  );
 });
 
 describe('TRON service startup — refuses unsafe signing secrets, without echoing them (T163)', () => {
@@ -245,21 +261,25 @@ describe('TRON service startup — refuses unsafe signing secrets, without echoi
       expect(refused.output).not.toContain('Signing secrets:');
       expectNoSecret(refused.output);
     },
-    40_000,
+    TEST_TIMEOUT,
   );
 
-  it('a seed file that fails its BIP-39 checksum stops the service and is not echoed', async () => {
-    const run = launch(
-      productionEnv({ HD_WALLET_MNEMONIC_FILE: files.badSeed }),
-      'HD wallet initialized',
-    );
-    const initialized = await withTimeout(run.line, 25_000);
-    run.child.kill();
-    const code = await run.exited;
+  it(
+    'a seed file that fails its BIP-39 checksum stops the service and is not echoed',
+    async () => {
+      const run = launch(
+        productionEnv({ HD_WALLET_MNEMONIC_FILE: files.badSeed }),
+        'HD wallet initialized',
+      );
+      const initialized = await withTimeout(run.line, WAIT);
+      run.child.kill();
+      const code = await run.exited;
 
-    expect(initialized, run.output()).toBeUndefined();
-    expect(code ?? 0, run.output()).toBeGreaterThan(0);
-    expect(run.output()).toContain('HD wallet initialization failed');
-    expectNoSecret(run.output());
-  }, 40_000);
+      expect(initialized, run.output()).toBeUndefined();
+      expect(code ?? 0, run.output()).toBeGreaterThan(0);
+      expect(run.output()).toContain('HD wallet initialization failed');
+      expectNoSecret(run.output());
+    },
+    TEST_TIMEOUT,
+  );
 });

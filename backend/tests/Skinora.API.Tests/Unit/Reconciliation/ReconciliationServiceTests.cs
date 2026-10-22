@@ -249,6 +249,32 @@ public sealed class ReconciliationServiceTests : IDisposable
         Assert.Equal(0, outcome.MismatchCount);
     }
 
+    [Fact]
+    public async Task T160c_A_Refund_Fee_Collection_Is_A_Deposit_Outflow_And_A_Hot_Wallet_Inflow()
+    {
+        await ConfigureHotWalletAsync();
+        var deposit = await SeedDepositAddressAsync("TDepositFixture-T160c");
+        // 0.83 USDT withheld from a refund stayed on the deposit; the collection moves it.
+        await SeedConfirmedDepositInflowAsync(deposit.Id, deposit.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 0.83m);
+        await SeedBlockchainTransactionAsync(
+            fromAddress: deposit.Address, paymentAddressId: deposit.Id,
+            type: BlockchainTransactionType.REFUND_FEE_SWEEP, token: StablecoinType.USDT,
+            amount: 0.83m, status: BlockchainTransactionStatus.CONFIRMED,
+            toAddress: HotWalletAddress);
+
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [deposit.Address] = SnapshotForUsdt("0"),
+            [HotWalletAddress] = SnapshotForUsdt("830000"),
+        });
+
+        var outcome = await _sut.RunAsync(CancellationToken.None);
+
+        Assert.True(outcome.HotWalletChecked);
+        Assert.Equal(0, outcome.MismatchCount);
+    }
+
     // ─── Hot wallet scope ───────────────────────────────────────────────
 
     [Fact]
@@ -530,6 +556,8 @@ public sealed class ReconciliationServiceTests : IDisposable
             Type = type,
             Token = token,
             Amount = amount,
+            // T160c — CK_..._Type_RefundFeeSweep: every unit a collection moves is a recovered fee.
+            RefundFeeRecovered = type == BlockchainTransactionType.REFUND_FEE_SWEEP ? amount : null,
             Status = status,
             FromAddress = fromAddress,
             ToAddress = toAddress,

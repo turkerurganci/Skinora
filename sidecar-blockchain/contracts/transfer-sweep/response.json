@@ -1,0 +1,7 @@
+{
+  "txHash": "tron-sweep-contract-example",
+  "delegationMode": "burn",
+  "delegationAmountSun": 0,
+  "fallbackAmountSun": 7071349,
+  "platformSpendSun": 8438350
+}

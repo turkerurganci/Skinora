@@ -135,6 +135,9 @@ const transferGuard = new TransferGuard({
   tokenContracts,
   history: tronGridClient,
 });
+// T160c düzeltme turu — one price service: the fee estimate and the status
+// read's `nativePriceUsdt` (the backend's accounting) share its cache.
+const trxPriceService = new TrxPriceService();
 const transferService = new TransferService({
   walletManager,
   client: tronTransferClient,
@@ -144,6 +147,7 @@ const transferService = new TransferService({
   tokenDecimals: config.tokenDecimals,
   energyDelegation,
   guard: transferGuard,
+  priceService: trxPriceService,
 });
 const refundService = new RefundService({
   walletManager,
@@ -155,7 +159,7 @@ const refundService = new RefundService({
 });
 const feeEstimationService = new FeeEstimationService({
   resourceClient: tronResourceClient,
-  priceService: new TrxPriceService(),
+  priceService: trxPriceService,
   tokenContracts,
   hotWalletAddress: config.hotWalletAddress,
   // A refund is charged for the path it will take: the estimate reads the

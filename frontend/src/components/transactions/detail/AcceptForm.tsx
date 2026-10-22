@@ -11,6 +11,7 @@ import { checkAddressShape, networkLabel, networkMeta } from "@/lib/utils/blockc
 import { formatStablecoin } from "@/lib/utils/format";
 import { tDynamic } from "@/lib/i18n/dynamicKey";
 import { BlockchainNetwork } from "@/types/enums";
+import { BuyerExchangeNotice } from "@/components/masak";
 
 export interface AcceptFormProps {
   transactionId: string;
@@ -328,6 +329,9 @@ export function AcceptForm({
           {disabledReason}
         </p>
       )}
+      {/* T167 — before committing: the payment window is far shorter than a
+          Turkish exchange's 48/72-hour withdrawal wait (MASAK Tebliğ 29 m. 4/3). */}
+      <BuyerExchangeNotice variant="short" />
       <button
         type="submit"
         data-testid="accept-submit"

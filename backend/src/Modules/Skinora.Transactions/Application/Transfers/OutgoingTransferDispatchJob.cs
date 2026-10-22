@@ -84,6 +84,9 @@ public sealed class OutgoingTransferDispatchJob
         // sibling BUYER_PAYMENT row); BuildRequest routes it to the sidecar's
         // /api/transfer/sweep endpoint (HttpBlockchainTransferClient).
         BlockchainTransactionType.SWEEP,
+        // T160c — collection of withheld refund fees: the same deposit →
+        // hot wallet send as a SWEEP, through the same endpoint.
+        BlockchainTransactionType.REFUND_FEE_SWEEP,
     ];
 
     private readonly AppDbContext _db;
@@ -271,7 +274,9 @@ public sealed class OutgoingTransferDispatchJob
         // waits while the sweep is in flight (RefundSourceResolver; 08 §3.7.6
         // "Kaynaklar"). Every other row keeps its deposit / hot-wallet sender.
         var refundSource = RefundSource.Deposit;
-        if (row.Type is not (BlockchainTransactionType.SELLER_PAYOUT or BlockchainTransactionType.SWEEP))
+        if (row.Type is not (BlockchainTransactionType.SELLER_PAYOUT
+            or BlockchainTransactionType.SWEEP
+            or BlockchainTransactionType.REFUND_FEE_SWEEP))
         {
             refundSource = await RefundSourceResolver.ResolveAsync(
                 _db, row.Network, row.Type, row.TransactionId, cancellationToken);
@@ -387,6 +392,13 @@ public sealed class OutgoingTransferDispatchJob
         // waits instead). TRON has no cap (null), so its bodies are unchanged.
         var feeCapUsd = (await _networkSettings.GetAsync(row.Network, cancellationToken))
             .FeeCapUsdPerTransfer;
+        // T160c (öneriyle kaydedildi — ⚠ PARA) — collecting withheld refund
+        // fees is never worth more than it brings: the signer gets the smaller
+        // of the cap and the amount collected, and waits above it.
+        if (row.Type == BlockchainTransactionType.REFUND_FEE_SWEEP && feeCapUsd is { } cap)
+        {
+            feeCapUsd = Math.Min(cap, row.Amount);
+        }
 
         var request = new TransferBroadcastRequest(
             BlockchainTransactionId: row.Id,
@@ -435,13 +447,21 @@ public sealed class OutgoingTransferDispatchJob
         row.Status = BlockchainTransactionStatus.DETECTED;
         row.NextAttemptAt = null;
         row.ErrorMessage = null;
+        // T160c düzeltme turu (F1) — TRON deposit sends report, with the
+        // broadcast, the TRX this call cost the hot wallet (activation + top-up
+        // + their fees). Recorded now: the TRX has already left. Ethereum's
+        // spend arrives with the final status (OutgoingTransferConfirmationJob).
+        if (result.PlatformSpendSun is { } spendSun)
+        {
+            row.PlatformNetworkCost = spendSun;
+        }
         // `RetryCount` and `ConfirmationCount` are preserved — confirmation
         // job flips DETECTED → CONFIRMED once the solidity node catches up.
 
         await _db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation(
-            "Outbound transfer broadcast OK — row {Id} ({Type}) → txHash {TxHash}",
-            row.Id, row.Type, result.TxHash);
+            "Outbound transfer broadcast OK — row {Id} ({Type}) → txHash {TxHash}; platform spend {PlatformSpendSun} SUN",
+            row.Id, row.Type, result.TxHash, result.PlatformSpendSun);
     }
 
     private async Task HandleDeferredAsync(

@@ -1,6 +1,6 @@
 # T163 — İmza sırları Docker secret + çevrimdışı yedek
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-10-21 (kapanış 2026-10-22)
 
 ---
 
@@ -22,7 +22,7 @@
 - `sidecar-ethereum/src/config/index.ts`, `index.test.ts` (+3), `composeWiring.test.ts`, `walletBackupScript.test.ts` (yeni, 6)
 - `scripts/wallet-backup/wallet-backup.sh`, `scripts/wallet-backup/wallet-manifest.mjs` (yeni)
 - `docker-compose.yml`, `docker-compose.trial.yml`, `.env.example`, `.github/workflows/ci.yml` (yol filtreleri)
-- `secrets/README.md`, `Docs/DEPLOY_RUNBOOK.md`, `Docs/05_TECHNICAL_ARCHITECTURE.md` (v3.31), `Docs/DOC_CHANGELOG.md`, `Docs/DEFERRED_BACKLOG.md`, `Docs/IMPLEMENTATION_STATUS.md`, `Docs/STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`
+- `secrets/README.md`, `Docs/DEPLOY_RUNBOOK.md`, `Docs/05_TECHNICAL_ARCHITECTURE.md` (v3.32 — merge'de T160c v3.31 ile çakıştı), `Docs/plan/11_F9.md` (v1.22, kapanış), `Docs/DOC_CHANGELOG.md`, `Docs/DEFERRED_BACKLOG.md`, `Docs/IMPLEMENTATION_STATUS.md`, `Docs/STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`
 
 ## Kabul Kriterleri Kontrolü
 
@@ -62,6 +62,7 @@ Ek: betiğin türettiği adresler T143 bilinen-cevap vektörleriyle (TRON `TUEZS
 |---|---|---|
 | sidecar-blockchain vitest | ✓ 637/637 (34 dosya) | `npx vitest run`; yeni: `signingSecrets.test.ts` 20, `signingSecretsStartup.test.ts` 9, `composeWiring.test.ts` +7 |
 | sidecar-ethereum vitest | ✓ 878/878 (37 dosya) | yeni: `walletBackupScript.test.ts` 6, `index.test.ts` +3 (`SECRET_UNREADABLE`) |
+| Kapanış (merge sonrası) | ✓ | sidecar-blockchain 654/654 (35 dosya; ilk tam koşuda 1 süreç testi zaman aşımı → B6 düzeltmesi sonrası temiz), sidecar-ethereum 894/894 (37 dosya; `walletBackupScript.test.ts` 9 — yeni 3: AES-256 + SIGTERM + SIGHUP), scripts 47/47, `tsc` + `lint` + `prettier` iki sidecar. Backend'e T163 dokunmadı (merge ile gelen T160c/T167 kodu main'de yeşil) |
 | scripts (`node --test "scripts/**/*.test.mjs"`) | ✓ 47/47 | `compose-exposure.test.mjs` dahil (deneme yayını secret'ları `secrets/trial/` dışından gelemez — yeni TRON secret'ları da kapsandı) |
 | Build | ✓ | `npm run build` iki sidecar; Docker imajları (prova) |
 | Lint / format | ✓ | `npm run lint` iki sidecar; `prettier --check` değişen dosyalar |
@@ -72,9 +73,22 @@ Ek: betiğin türettiği adresler T143 bilinen-cevap vektörleriyle (TRON `TUEZS
 
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici düzeni — ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (8/8 kriter) — bağımsız doğrulama alt ajanı, Opus high, HEAD `1173613d`, 2026-10-22 |
+| Bulgu sayısı | 7 — 1 × S1 ⚠ GÜVENLİK (B1), 6 × S4 (B2–B7) |
+| Düzeltme gerekli mi | Engelleyici değil; kapanışta kapatıldı (aşağıda) |
+| Geri yükleme provası | Doğrulamada bağımsız tekrarlandı (`-p skinora-t163val`, yeni rastgele sırlar): önce = sonra = arşiv manifesti, sızıntı taraması 0 |
+
+**Kapanışta kapananlar:**
+
+| # | Bulgu | Kapanış |
+|---|---|---|
+| B1 (S1 ⚠ GÜVENLİK) | SIGTERM/SIGHUP'ta açık metin sırlar geçici dizinde kalıyordu | `wallet-backup.sh`: `trap 'exit 129' HUP`, `trap 'exit 130' INT`, `trap 'exit 143' TERM` (çıkış → `cleanup`); ayrıca `cleanup` kendini kesilemez yapar (`trap '' HUP INT TERM` — ölçümde normal çıkıştaki temizlik süreç grubuna gelen sinyalle yarıda kalıp dosya bırakıyordu). Ölçüm (`timeout -s SIG t`, süreç grubuna sinyal — kapanan terminal gibi): eski betik `restore` 12/14 kesintide dizin bıraktı, yeni betik 0/14; `verify` TERM/HUP/INT × 11 zaman noktası (0,3–1,3 sn) → 0 kalıntı. Yeni test `walletBackupScript.test.ts` "shreds the plaintext temp directory when interrupted with SIGTERM/SIGHUP": PATH'e konan `node` ara betiği açık metin çıkarıldıktan sonra manifest kontrolünü 6 sn tutar, `timeout` 3. sn'de sinyal gönderir → çıkış 124, geçici dizin **0**; eski betikle iki test de kırılır (`left=1`). Sır içeriği yazdırılmadı (test çıktısı taranıyor). Runbook §L.2 cümlesi + §L.8 "yakalanamayan kesinti" (`kill -9`, elektrik) maddesi |
+| B2 (S4) | PR main ile çakışıyordu | `origin/main` (`403fe257`, T167 + T160c) merge commit ile alındı — aşağıda "Commit & PR" |
+| B3 (S4) | Bayat atıflar, eski değişkeni öneren hata metinleri | `wallet-backup.sh` §L.5→§L.6, §L.6→§L.8; `secrets/README.md` §L.5→§L.6; `src/index.ts` `signingMaterial.ts`→`signingSecrets.ts`; `TransferService` (2) ve `EnergyDelegationService` hata metinleri artık `tron_hot_wallet_private_key` secret dosyasını söylüyor |
+| B4 (S4 ⚠ GÜVENLİK) | `NODE_ENV` trim'leniyordu | `envSecretsAllowed` trim etmez: `' development'`, `'development\n'`, `' test '`, `'\ttest'` → kapalı; iki yeni test (birim + `loadSigningMaterial` → `SIGNING_SECRET_IN_ENV`). Önce kontrol: compose / override / trial / e2e / CI'da NODE_ENV hep boşluksuz değer. Trim'i geri koyma bozması → 2 test kırıldı |
+| B5 (S4) | Şifreleme parametreleri testle sabit değildi | Yeni test `gpg --list-packets`: cipher 9 (AES-256), s2k 3, hash 10 (SHA-512), count 65011712, MDC (ya da yeni GnuPG'de AEAD), sıkıştırma yok. `AES256` → `CAST5` bozması → test kırıldı |
+| B6 (S4) | Süreç testleri lokal yük altında aralıklı kırılıyor | Neden: her test servisi `tsx` ile soğuk başlatıyor (tüm modül grafiği o an derleniyor); tam koşuda diğer süreç testleriyle yan yana 25 sn'yi aşabiliyor (kapanışta bir kez daha görüldü: 1/654). `signingSecretsStartup.test.ts` beklemesi 60 sn'ye çıkarıldı (yalnız satır hiç gelmezse beklenir; ret durumları süreç çıkınca erken biter) → sonraki tam koşu 654/654. T163 dışındaki `startupWiring.test.ts` (30 sn) dokunulmadı — aynı neden; derlenmiş `dist/` ile başlatmak kalıcı çözüm olur (not) |
+| B7 (S4) | `SharedSecretsInPlainEnv` plan T171'de yoktu | `plan/11_F9.md` v1.22 T171 kabul kriterine eklendi (ortak sırlar secret dosyasından + satır kapanır; mainnet cüzdanları aynı gün çevrimdışı yedeklenir); DOC_CHANGELOG |
 
 ## Altyapı Değişiklikleri
 
@@ -99,7 +113,7 @@ Ek: betiğin türettiği adresler T143 bilinen-cevap vektörleriyle (TRON `TUEZS
 - **K6 — yedek kapsamı beş imza dosyası.** Soğuk cüzdan / kilit hesabı anahtarları bu makineye girmez (kendi donanım yedekleri, T171); Cloudflare token'ı panelden yeniden alınır; DB yedeği T164.
 - **K7 — parola alt sınırı 16 karakter** (betik reddeder; öneri 6 diceware kelimesi).
 
-## Proje sahibine açık sorular (geri dönüşü zor — TAHMİN EDİLMEDİ, öneri işaretli)
+## Proje sahibine açık sorular (geri dönüşü zor — TAHMİN EDİLMEDİ, öneri işaretli; T171 kurulum gününde seçilecek, DEPLOY_RUNBOOK §L'de de "öneri" olarak duruyor)
 
 1. **Yedek aracı:** GnuPG (öneri — kurulu, betikli, test edildi) mı, 7-Zip AES-256 mı, age mi?
 2. **Arşiv parolasının yeri:** öneri parola yöneticisi + USB'lerden ayrı bir yerde kapalı zarfta kağıt. Başka bir düzen mi?

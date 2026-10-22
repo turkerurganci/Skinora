@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.17** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T166 — ToS+18+ sunucuda zorunlu (403 TOS_NOT_ACCEPTED), yeni ilan yalnız USDT, P1 platformUptimePercent kalktı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.20** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-21 — T160c — §9.33 AD38 `refundFees` (gerçek zincir harcaması); T167 — P3 herkese açık listesi, S07/S08, rate limit. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -100,7 +100,7 @@ PATCH kullanılmaz — MVP için PUT yeterli.
 | Token yenileme | `POST /api/v1/auth/refresh` — cookie'den refresh token okunur |
 | Access token storage | JavaScript belleğinde (memory), cookie'ye yazılmaz |
 
-**Public endpoint'ler (auth gerektirmeyen):** P1, P2, A1, A2, T5 (public varyant), U5.
+**Public endpoint'ler (auth gerektirmeyen):** P1, P2, P3, A1, A2, T5 (public varyant), U5.
 
 ### 2.4 Response Envelope (K4)
 
@@ -252,8 +252,8 @@ X-RateLimit-Reset: 1710600000
 | S03 | — | U17 (A7 otomatik tetiklenir) |
 | S05 | T1, U2, N2 | — |
 | S06 | S1, T3, T4 | T2 |
-| S07 | T5, T5a | T6, T6a, T6b, T7, T8, T9, T10, T11 |
-| S08 | U1 | U3, U4, A5, A6 |
+| S07 | T5, T5a, P3 | T6, T6a, T6b, T7, T8, T9, T10, T11 |
+| S08 | U1, P3 | U3, U4, A5, A6 |
 | S09 | U5 | — |
 | S10 | U6 | U7, U8, U9, U10, U10b, U11, U12, U13, U14, U15, U16, U17 |
 | S11 | N1 | N3, N4 |
@@ -2733,7 +2733,8 @@ Permission: `MANAGE_DISPUTES`. Body: `{ outcome: "SELLER_FAVOR" | "BUYER_FAVOR",
 | `wallets[]` | `role` (`HOT`, `COLD`, Ethereum'da `FUEL`), `address` (gösterim biçimi — Ethereum EIP-55; `null` = tanımsız), `configuredAddress`, `addressMismatch` (backend'in `…_HOT_WALLET_ADDRESS` ayarı servisin imzaladığı adresten farklı), `balances` (`[{symbol, amount}]` — yerel varlık + USDT + USDC; `null` = okunamadı), `nativeFloor` ve `belowNativeFloor` (sıcak ve yakıt cüzdanının ETH/TRX alarm tabanı) |
 | `outbound` | `pendingCount`, `oldestPendingAt`, `inFlightCount` — o ağın giden satırları |
 | `recentColdTransfers[]` | Son 10 sıcak→soğuk aktarım (`ColdWalletTransfer`) |
-| `recentOutbound[]` | Son 20 giden satır (ödeme, iade, sweep) |
+| `recentOutbound[]` | Son 20 giden satır (ödeme, iade, sweep, T160c'den beri iade kesintisi toplaması `REFUND_FEE_SWEEP`) |
+| `refundFees` | **T160c** — iadelerde alıcıdan kesilen ağ ücretinin defteri (02 §4.7, 05 §3.3, 06 §3.8 `RefundFeeRecovered`); ondalık metin. `withheld` (onaylanmış iadelerin `GasFee` toplamı — gelir), `collected` (sıcak cüzdanda: sıcak cüzdandan çıkan iadelerin kesintisi + onaylanmış sweep / toplamaların taşıdığı), `inTransit` (yoldaki sweep / toplamaların taşıdığı), `onDeposits` (hâlâ depozitlerde: kesilen − sıcak cüzdanda − yolda), USDT cinsinden (yanlış token kesintisi USDC, 1:1); `refundChainCost` ve `collectionChainCost` (gider — **T160c düzeltme turu, ⚠ PARA:** platformun gerçek zincir harcaması (`BlockchainTransaction.PlatformNetworkCost`, yalnız transferin kendi makbuz ücreti değil): TRON'da sıcak cüzdanın depozite gönderdiği TRX (hesap açma 1 SUN, yakma / Bandwidth takviyesi, sabit yedek) + bu gönderimlerin yaktığı ücret (hesap açmada hesap oluşturma ücreti); Ethereum'da depozite gönderilen yakıt ETH'si + yakıt işleminin kendi ücreti (sıcak cüzdandan iade: kendi makbuz ücreti). Depozit transferinin kendi ücreti bu yakıttan / TRX'ten ödendiği için üstüne eklenmez; yakılmayan kısım depozitte kalır ve toplanmaz (T153), yani giderdir; satışın kendi sweep'i sayılmaz) ağın yerel varlığında (`nativeAsset`) — harcaması ölçülmemiş satır makbuz ücretiyle (alt sınır) girer; `refundChainCostUsdt` ve `collectionChainCostUsdt` aynı giderin USDT karşılığı: her satırın harcaması, **satır CONFIRMED olurken** servisin o kesin durum okumasıyla bildirdiği yerel varlık fiyatıyla (`PlatformNetworkCostUsdt`; ücret tahminiyle aynı fiyat kaynağı — Binance, yedek CoinGecko) bir kez değerlenir ve toplanır, sonradan bugünkü fiyatla yeniden değerlenmez; `netUsdt` = `withheld` − iki USDT gideri (negatif = zarar); `costUnmeasured` (sayı) harcaması ya da fiyatı kaydedilmemiş iade / toplama satırı sayısı — bu satırlar USDT toplamlarına girmez, `netUsdt` o durumda üst sınırdır |
 
 Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity) okunur; bir ağın cevabı ötekini etkilemez. **Yakıt cüzdanının adresi yapılandırmada yoktur** (anahtardan türer): backend onu yalnız Ethereum servisinden alır (`POST /api/wallet/platform`, 08 §3.7.5); servis cevap vermezse `FUEL` satırı `address: null` ile listelenir, tahmin edilmez.
 
@@ -2815,6 +2816,30 @@ Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity)
 > **Semantik:** `active: true` "frontend'in kullanıcıya göstermesi gereken bir durum var" anlamına gelir. `type` değeri durumun ciddiyetini ve etkisini belirler. `PLANNED_MAINTENANCE`'te platform tam işlevseldir, yalnızca bilgilendirme amaçlı banner gösterilir.
 
 Frontend sayfa yüklemesinde P2'yi çağırır. Anlık değişiklikler RT2 ile push edilir.
+
+### 10.3 P3 — `GET /platform/payout-sources`
+
+**Amaç (T167 — MASAK):** Satıcıya ödemenin hangi adresten çıkacağını önceden göstermek. Türk borsası, hiçbir kripto varlık hizmet sağlayıcısında kayıtlı olmayan bir cüzdandan gelen transferde müşterisinden göndericiyi beyan etmesini ister (Tedbirler Yönetmeliği m. 24/A-6). Skinora'nın her payout'u bir ağda hep o ağın **sıcak cüzdanından** çıkar (05 §3.3; T167'de kodda ölçüldü — payout ucu depozit indeksi almaz, yalnız sıcak anahtarla imzalar), dolayısıyla satıcı tek bir adresi bir kez beyan edebilir. Kullanım: S07 satıcı görünümü (ITEM_DELIVERED, COMPLETED ödeme özeti), S08 "Satıcı Ödeme Adresi" bölümü, destek sayfası `#masak` bölümü (04 §7.3).
+
+| Konu | Değer |
+|------|-------|
+| Auth | Public |
+| Rate limit | Public grubu (§2.9: 1 dk'da 30; kodda `[RateLimit("public")]`) |
+| Cache | Yok — adresler dağıtım yapılandırmasıdır (ortam değişkeni, `IPlatformWalletAddressProvider`); istemci 1 sa bayat tutar |
+
+**Response (200) `data`:**
+```json
+{
+  "sources": [
+    { "network": "TRON", "address": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8" },
+    { "network": "ETHEREUM", "address": "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed" }
+  ]
+}
+```
+
+- Yalnız sıcak cüzdan adresi yapılandırılmış ağlar listelenir (enum sırası); yapılandırılmamış ağ `null` değerle değil, **hiç** gönderilmez. Hiçbiri yoksa `sources: []`.
+- `address` gösterim biçimindedir (Ethereum EIP-55, 06 §1.4). Soğuk cüzdan ve yakıt cüzdanı **gösterilmez** — payout onlardan çıkmaz.
+- **Herkese açık olmasının gerekçesi** (öneriyle kaydedildi — ⚠ GÜVENLİK): adres, payout alan her satıcının zincirde gördüğü adrestir; gizli değildir. Sayfa yardım metninde oturumsuz da okunur. Bedeli: sıcak cüzdan bakiyesinin herkesçe izlenebilmesi (zaten zincirde açık).
 
 ---
 

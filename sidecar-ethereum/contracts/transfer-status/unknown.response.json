@@ -4,5 +4,7 @@
   "contractRet": "UNKNOWN",
   "confirmations": 13,
   "finalized": true,
-  "realizedFeeWei": "9007282507774707"
+  "realizedFeeWei": "9007282507774707",
+  "platformSpendWei": null,
+  "nativePriceUsdt": "2364.480000"
 }
