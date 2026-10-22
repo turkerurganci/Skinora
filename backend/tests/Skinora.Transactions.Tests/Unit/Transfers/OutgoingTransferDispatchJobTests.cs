@@ -1401,8 +1401,8 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
 
         public Task<BlockchainNetworkSettings> GetAsync(BlockchainNetwork network, CancellationToken cancellationToken)
         {
-            var defaults = BlockchainNetworkSettingsProvider.DefaultsFor(network)
-                with { DepositRefundDailyLimitUsdt = DepositRefundDailyLimit };
+            var defaults = BlockchainNetworkSettingsProvider.DefaultsFor(network);
+            defaults = defaults with { DepositRefundDailyLimitUsdt = DepositRefundDailyLimit };
             return Task.FromResult(network == BlockchainNetwork.ETHEREUM
                 ? defaults with { FeeCapUsdPerTransfer = EthereumFeeCap }
                 : defaults);

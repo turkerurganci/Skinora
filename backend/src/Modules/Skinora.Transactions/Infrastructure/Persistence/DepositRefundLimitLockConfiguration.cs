@@ -5,7 +5,7 @@ using Skinora.Transactions.Domain.Entities;
 
 namespace Skinora.Transactions.Infrastructure.Persistence;
 
-/// <summary>T169a — the per-network lock rows of the deposit refund daily limit (06 §3.25).</summary>
+/// <summary>T169a — the per-network lock rows of the deposit refund daily limit (06 §3.26).</summary>
 public class DepositRefundLimitLockConfiguration : IEntityTypeConfiguration<DepositRefundLimitLock>
 {
     public void Configure(EntityTypeBuilder<DepositRefundLimitLock> builder)

@@ -258,13 +258,22 @@ public class DepositRefundDailyLimitTests : IntegrationTestBase
         // broadcast would let both go out: 130.
         var a = await SeedRefundAsync(70m);
         var b = await SeedRefundAsync(60m);
+        decimal? usedWhileBroadcasting = null;
         _tron.DuringFirstBroadcast = async () =>
         {
+            // What any other session reads while the 70 is being signed.
+            await using (var reader = CreateContext())
+            {
+                usedWhileBroadcasting = await DepositRefundDailyLimit.UsedAsync(
+                    reader, BlockchainNetwork.TRON, _clock.GetUtcNow().UtcDateTime, null, CancellationToken.None);
+            }
             await using var other = CreateContext();
             await Dispatcher(other).ExecuteAsync();
         };
 
         await DispatchAsync();
+
+        Assert.Equal(70m, usedWhileBroadcasting);
 
         Assert.DoesNotContain(_tron.Broadcasts, c => c.BlockchainTransactionId == b.Id);
         Assert.All(_tron.Broadcasts, c => Assert.Equal(a.Id, c.BlockchainTransactionId));
