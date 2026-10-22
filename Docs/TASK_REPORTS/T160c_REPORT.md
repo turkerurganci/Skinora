@@ -1,7 +1,9 @@
 # T160c — İade kesinti kalıntısının toplanması (⚠ PARA)
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor — düzeltme turu, yeniden doğrulama bekliyor | **Tarih:** 2026-10-21
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — yeniden doğrulama PASS (HEAD `995070a9`, 3/3, 6 × S4; kapanış bu raporun sonunda) | **Tarih:** 2026-10-21
 
+> **Doğrulama:** ilk doğrulama ✗ FAIL (HEAD `c5dab67c`, F1 bloke edici) → düzeltme turu → yeniden doğrulama ✓ PASS (HEAD `995070a9`, 6 × S4) → kapanış (S4-1/2/4/5/6 kapandı, S4-3 backlog ⚪). Tablo: sondaki **"Doğrulama"** bölümü.
+>
 > **Düzeltme turu (doğrulama ✗ FAIL, HEAD `c5dab67c`):** bulgular F1–F7 ve ne yapıldığı raporun sonundaki **"Düzeltme turu"** bölümünde. Kısaca: AD38'deki gider artık platformun gerçek zincir harcaması (F1, bloke edici); "zararına toplama yok" sahip kararı olarak kaydedildi (F2); sweep `CONFIRMED` şartı ve USDC imza bayrağı testle korunuyor (F3, F7); `origin/main` dala merge edildi (F4). Aşağıdaki ilk yapım bölümleri yapım anını anlatır; değişen yerler düzeltme turu bölümünde.
 
 ---
@@ -368,3 +370,67 @@ Blob ilk commit'te LF'ye normalize edilmişti. Bu turdaki diff yalnız "T160c ka
 | **İlk dal CI'ı (`6063f781`, run 39604924156)** | ✗ → düzeltildi | Tek kırmızı: `sidecar-fake` sözleşme testi (`contracts.test.ts`). Bu test Ethereum durum örneğinin biçimini sahte servisle karşılaştırıyor. Örneğe iki alan eklenmişti, sahte serviste yoktu. `sidecar-fake/src/networks.ts` aynı alanları döndürüyor; sidecar-fake 120/120 |
 | **T166 merge'ünden sonra (`e7e8acf1`)** | ✓ | Build 0 hata. Unit 2345/2345 (Auth 96, API 138 — T166 testleri dahil). `AdminWalletOverviewTests` (LocalDB) 8/8. `dotnet format` çıkış 0. Frontend tsc / eslint ✓, i18n 1591 anahtar eşit (T166 iki anahtar kaldırdı), vitest 401/401. Tam integration suite'i T166 sonrası CI'da koşar |
 | Bozma (bu tur) | 6 / 6 öldü | F1-M1…M4, M8, S3 (yukarıda) |
+
+---
+
+## Kapanış (yeniden doğrulama PASS sonrası, 2026-10-21/22)
+
+Yeniden doğrulama ✓ PASS verdi (HEAD `995070a9`, 3/3 kriter, 6 × S4, bloke eden yok). Kapanışta S4-1, S4-2, S4-4, S4-5, S4-6 kapandı; S4-3 bilinen sınırlama olarak backlog'a ⚪ satır oldu.
+
+### Sahip kararı
+
+- **"Zararına toplama yok"** — proje sahibi kararı, 2026-10-21 (modal). Ayrı toplama yalnız canlı tahmin < tutar olduğunda yapılır; değilse kalıntı depozitte kalır, AD38'de "hâlâ depozitlerde" (`onDeposits`) görünür, 24 sa sonra yeniden fiyatlanır. Kabul kriteri 1 bu kararla okunur (11_F9 (xi), 02 §4.7, 05 §3.3, 08 §3.4).
+
+### F1 yeniden hesap (T159b ölçülmüş sayıları; ETH 2.444,861904, TRX 0,3313)
+
+Doğrulayıcının elle hesabı servis değerleriyle birebir aynı çıktı (`AdminWalletOverviewTests.T160c_RefundFeeBooks_Expense_Is_What_Left_The_Platform_At_The_Confirmation_Price`).
+
+| Senaryo | Kesilen | Gider (platform harcaması) | Net | Eski ekran gideri |
+|---|---|---|---|---|
+| Sepolia 2 `BUYER_REFUND` | 0,50 | 373.566.002.534.490 wei = **0,913317 USDT** | −0,413317 | ≈ 0,3726 |
+| Sepolia 4c `LATE_PAYMENT_REFUND` | 0,92 | 373.540.002.534.100 wei = **0,913254 USDT** | +0,006746 | ≈ 0,3726 |
+| Ethereum bloğu toplamı | 1,42 | 0,00074710600506859 ETH = **1,826571 USDT** | **−0,406571** | 0,745218 (gerçeğin %40,8'i) |
+| Nile 6 `INCORRECT_AMOUNT_REFUND` | 0,37 | 2.711.500 SUN = 2,7115 TRX = **0,898320 USDT** | **−0,52832** | 0 TRX |
+
+### Kapanışta kapananlar (bozma kanıtıyla)
+
+Her bozma uygulandı, ilgili test koşuldu, dosya `git checkout` ile geri alındı (sonda `git status` temiz).
+
+| # | Bulgu | Commit | Test | Bozma → sonuç |
+|---|---|---|---|---|
+| S4-1 ⚠ PARA | TRON `platformSpendSun` sözleşme örneğine bağlı değildi (T6/T7 yaşıyordu) | `a9377f98`, `5c957c02` (prettier) | Örnekler `sidecar-blockchain/contracts/transfer-{sweep,refund}/response.json`. Sidecar `transferHandlers.test.ts` "the sweep/refund handler answers exactly contracts/…" (handler aynı dosyayı üretiyor); backend `BlockchainSidecarTransferResponseContractTests.Tron_Deposit_Send_Example_Delivers_The_Platform_Spend_Exactly` (3 satır: SWEEP, BUYER_REFUND, REFUND_FEE_SWEEP; `HttpBlockchainTransferClient` aynı dosyayı okuyor) | Sweep handler'ından alan silindi → sweep testi kırmızı; refund handler'ından silindi → refund testi kırmızı (T6/T7 artık ölüyor). Backend `ReadPlatformSpendSun` yerine `null` → 3/3 kırmızı |
+| S4-2 | `netUsdt`'nin toplama gideri terimi testsizdi (A3 yaşıyordu) | `8f509831` | `AdminWalletOverviewTests.T160c_RefundFeeBooks_Net_Subtracts_The_Measured_Collection_Spend_Too` (LocalDB): 1,37 kesinti, iade gideri 0,898320, onaylı toplama 0,662601, satış sweep'i gider sayılmıyor → net −0,190921 | `net = withheld − refundCostUsdt` (toplama terimi yok) → kırmızı: beklenen "-0.190921", gelen "0.47168" |
+| S4-4 | USDT değerlemesinde kolon taşması onay turunu düşürebilirdi | `300b4ec4` | `OutgoingTransferConfirmationJobTests.T160c_An_Unrealistic_Price_Leaves_The_Spend_Unvalued_And_Still_Confirms` (satır `CONFIRMED`, harcama yazılı, USDT NULL + uyarı logu) ve `T160c_PlatformCostUsdt_Is_Null_Where_The_Column_Cannot_Hold_It` (decimal taşması; 10¹² = kolonun bir üstü; kolonun kendi tavanı hâlâ değer) | Tavan kontrolü kaldırıldı (`return value;`) → 2 kırmızı. `OverflowException` yakalaması kaldırıldı → decimal taşması satırı kırmızı |
+| S4-5 | Doğrulama sırasında main `daf0e301`'e (T167 #368) ilerlemişti, 5 belge çakışıyordu | `4931bd2c` (merge commit, rebase değil) | — | Kod çakışması yok; i18n ve T167 kodu otomatik birleşti. Belgelerde iki tarafın satırları korundu (IMPLEMENTATION_STATUS: T167 main'den, T160c bu daldan; STATUS_CHANGELOG/DOC_CHANGELOG/DEFERRED_BACKLOG: main'in girişleri altta, T160c üstte; 07 başlığı yeniden sürümlendi). Kapanışta `git fetch origin`: main hâlâ `daf0e301`, yeniden birleştirme gerekmedi |
+| S4-6 | `STATUS_CHANGELOG.md` ve `plan/11_F9.md` blob'ları main'den farklı satır sonuyla, büyük diff (646 / 274 satır) | `4931bd2c` | — | Main biçimine döndü; `git diff origin/main HEAD --numstat` artık 7+/1− ve 3+/1− (yalnız gerçek satırlar) |
+| S4-3 ⚠ PARA (muhasebe) | Başarısız / yarıda kalan denemelerin harcaması deftere girmiyor | — | — | Kapanmadı, bilinen sınırlama: backlog ⚪ `RefundFeeSpendOnFailedAttemptsNotBooked` (§4). Yukarıdaki "Kalan sınırlamalar (yeni)" ile aynı |
+
+**Backlog sayımı** (dosyanın kendi `awk`'iyle, "Öne Çıkanlar" dışı bölümler): **53 aktif / 159 çözülmüş**. Main `daf0e301` 53/158 → `RefundGasDeductionDustStaysOnDeposit` ✅ (+1 çözülmüş, −1 aktif) + yeni ⚪ `RefundFeeSpendOnFailedAttemptsNotBooked` (+1 aktif). Doğrulayıcının beklediği 52/159'un üstüne S4-3 satırı.
+
+**Devir kaydı:** `STATUS_CHANGELOG`'a T167 (#368) merge teyidi işlendi: main `daf0e301` → CI `39615975640` ✓, Docker Publish `39615975624` ✓ (`gh run list --branch main` ile teyit edildi).
+
+### Kapanış test sonuçları (HEAD `5c957c02` + kayıt commit'i; Docker kullanılmadı)
+
+| Tür | Sonuç |
+|---|---|
+| Backend build (Debug) | ✓ 0 hata |
+| Backend Unit (CI filtresi) | ✓ **2348/2348** (Shared 572 · Platform 161 · Fraud 19 · Users 49 · Auth 96 · Steam 59 · Disputes 25 · Realtime 44 · Notifications 150 (16'sı LocalDB) · API 138 · Transactions 1035) |
+| Backend Contract | ✓ **101/101** (Transactions 72 · Shared 5 · API 24) |
+| Integration Transactions (LocalDB) | ✓ **736/736** |
+| Integration API (LocalDB) | ✓ **773/773** (769 + 4: T167 testleri ve kapanışın S4-2 testi) |
+| `dotnet format --verify-no-changes --severity error` | ✓ çıkış 0 |
+| sidecar-blockchain | ✓ 617/617 (ilk koşu backend suite'iyle eşzamanlı yük altında 1 kırmızı verdi; ardışık iki tam koşu 617/617); tsc ✓, `npm run lint` ✓, prettier (`--end-of-line auto`) ✓ — `transferHandlers.test.ts` biçimi bu kapanışta düzeltildi (`5c957c02`), yoksa CI `format:check` kırılırdı |
+| sidecar-ethereum | ✓ 882/882; tsc, lint, prettier ✓ |
+| sidecar-fake | ✓ 120/120; tsc, lint, prettier ✓ |
+| Frontend | ✓ vitest 412/412 (T167 testleri dahil); `tsc --noEmit` ✓, lint ✓ |
+
+## Doğrulama
+
+| Alan | Sonuç |
+|---|---|
+| İlk doğrulama | ✗ FAIL — bağımsız doğrulama (yönetici düzeni, alt ajan Opus high), HEAD `c5dab67c`, 2026-10-21; F1 (S1 ⚠ PARA, bloke edici: AD38 gideri yalnız makbuz ücreti) + F2–F7 |
+| Düzeltme turu | F1–F7 (yukarıda "Düzeltme turu") |
+| Yeniden doğrulama | ✓ PASS — bağımsız doğrulama (Opus high), HEAD `995070a9`, 2026-10-21; kabul kriterleri 3/3; 6 × S4 (S4-1 ⚠ PARA, S4-2, S4-3 ⚠ PARA, S4-4, S4-5 süreç, S4-6 bilgi); bozma 34: 30 öldü, 4 yaşadı (B2 eşdeğer, A3 → S4-2, T6/T7 → S4-1) |
+| Kapanışta kapananlar | S4-1, S4-2, S4-4 (testler + bozma kanıtı), S4-5 (main `daf0e301` merge commit), S4-6 (satır sonları); S4-3 → backlog ⚪ `RefundFeeSpendOnFailedAttemptsNotBooked` |
+| Sahip kararı | "Zararına toplama yok" (2026-10-21, modal) |
+| Merge | Yöneticide (PR #365); dal CI run ID'si ve sonucu yöneticiye son mesajda |
