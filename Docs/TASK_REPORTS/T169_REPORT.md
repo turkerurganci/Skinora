@@ -1,6 +1,6 @@
 # T169 — Kalan sahip kararları
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-22
+**Faz:** F9 | **Durum:** ✓ Tamamlandı | **Tarih:** 2026-10-22
 
 ---
 
@@ -51,10 +51,10 @@
 
 - Backend yeni: `Skinora.Transactions/Application/Networks/NetworkMinimumPrice.cs`, `…/Transfers/OutboundApprovalGate.cs`, `Skinora.API/Controllers/AdminOutboundApprovalsController.cs`, `Skinora.API/Services/OutboundApprovals/OutboundApprovalService.cs`, migration `20261021145849_T169_OwnerDecisions(.Designer).cs`.
 - Backend değişen: `SystemSettingSeed.cs`, `SystemSettingsCatalog.cs`, `AuditLogCategoryMap.cs`, `AuditAction.cs`, `BlockchainNetworkSettingKeys.cs`, `BlockchainNetworkSettingsProvider.cs`, `GasFeeSettingsProvider.cs`, `TransactionCreationService.cs`, `TransactionAcceptanceService.cs`, `TransactionDetailService.cs` + `TransactionDetailDto.cs`, `TransactionParamsService.cs`, `TransactionLimitsProvider.cs` + `ITransactionLimitsProvider.cs`, `TransactionLifecycleDtos.cs`, `TransactionErrorCodes.cs`, `TransactionsController.cs`, `OutgoingTransferDispatchJob.cs`, `BlockchainTransaction.cs` + `BlockchainTransactionConfiguration.cs`, `TransactionsModule.cs`, `AppDbContextModelSnapshot.cs`.
-- Backend test: yeni `Skinora.API.Tests/Integration/NetworkDimension/OutboundApprovalTests.cs`; değişen `OutgoingTransferDispatchJobTests`, `TransactionCreationServiceTests`, `TransactionAcceptanceServiceTests`, `TransactionDetailServiceTests`, `TransactionParamsServiceTests`, `HotWalletMonitorServiceTests`, `AuditLogCategoryMapTests`, `EnumTests`, `SeedDataTests`, `SettingsBootstrapTests`, `NetworkContractTests`, `NetworkFeePolicyMigrationRehearsalTests`, `NetworkQueueIsolationTests`, `AdminWalletOverviewTests`, `BlockchainWebhookEndpointTests`, `TransactionLifecycleEndpointTests`.
+- Backend test: yeni `Skinora.API.Tests/Integration/NetworkDimension/OutboundApprovalTests.cs`, kapanışta `Skinora.API.Tests/Integration/AdminOutboundApprovalsEndpointTests.cs` (+ `AdminWalletsEndpointTests.Factory`'ye `FakeApprovalService`); değişen `OutgoingTransferDispatchJobTests`, `TransactionCreationServiceTests`, `TransactionAcceptanceServiceTests`, `TransactionDetailServiceTests`, `TransactionParamsServiceTests`, `HotWalletMonitorServiceTests`, `AuditLogCategoryMapTests`, `EnumTests`, `SeedDataTests`, `SettingsBootstrapTests`, `NetworkContractTests`, `NetworkFeePolicyMigrationRehearsalTests`, `NetworkQueueIsolationTests`, `AdminWalletOverviewTests`, `BlockchainWebhookEndpointTests`, `TransactionLifecycleEndpointTests`.
 - Frontend yeni: `components/admin/OutboundApprovalPanel.tsx` (+ test), `lib/hooks/useOutboundApprovals.ts`; değişen `WalletsOverview.tsx` (+ test), `AcceptForm.tsx` (+ test), `NewTransactionForm.tsx` (+ networks test), `Step2Details.tsx`, `lib/api/admin.ts`, `lib/api/transactions.ts`, `lib/transactions/networkChoice.ts` (+ test), `types/enums.ts`, `i18n/messages/{en,tr,es,zh}.json`, `i18n/catalog-parity.test.ts`.
 - Yapılandırma: `.env.example`, `docker-compose.trial.yml`, `e2e/src/db.ts`.
-- Doküman: `02_PRODUCT_REQUIREMENTS.md` v4.19, `06_DATA_MODEL.md` v6.37, `07_API_DESIGN.md` v4.21, `DEPLOY_RUNBOOK.md` (§A, §C, §C.3, yeni §L, §M), `plan/11_F9.md` v1.22, `DEFERRED_BACKLOG.md`, `DOC_CHANGELOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`, bu rapor.
+- Doküman: `02_PRODUCT_REQUIREMENTS.md` v4.19, `04_UI_SPECS.md` v4.14 (kapanış), `05_TECHNICAL_ARCHITECTURE.md` v3.32 (kapanış), `06_DATA_MODEL.md` v6.37, `07_API_DESIGN.md` v4.22, `08_INTEGRATION_SPEC.md` v3.45 (kapanış), `DEPLOY_RUNBOOK.md` (§A, §C, §C.3, yeni §L, §M; kapanışta §L.3), `plan/11_F9.md` v1.23, `DEFERRED_BACKLOG.md`, `DOC_CHANGELOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`, bu rapor.
 
 ## Kabul Kriterleri Kontrolü
 
@@ -80,13 +80,20 @@
 | Frontend | ✓ | Birleştirmeden sonra: `tsc --noEmit` temiz; `eslint` hata yok; prettier (değişen dosyalar, LF) temiz; `i18n:check` parity OK (4 dil × 1641 anahtar); `vitest` 44 dosya / 426 test geçti; `next build` başarılı |
 | e2e harness | ✓ | `tsc --noEmit`, prettier, eslint (`e2e/src/db.ts`) temiz; Docker kullanılmadığı için e2e süitleri yerelde koşulmadı (CI advisory leg'leri) |
 | Compose | ✓ | `node --test scripts/compose-exposure.test.mjs` 10/10 (trial overlay render) |
+| **Kapanış (main `4b48c82d` birleştirmesi + S4 düzeltmeleri sonrası)** | ✓ | Backend build 0 hata; unit **2379/2379** (Transactions 1066 = +3 yeni T169 testi; Shared 572, Steam 59, Disputes 25, Auth 96, Users 49, Platform 161, Fraud 19, Realtime 44, API 138, Notifications 150); contract **101/101**; integration LocalDB **1624/1624** (Shared 16, Platform 74, Transactions 744, API 790 = +12 `AdminOutboundApprovalsEndpointTests`); frontend `npm ci` (next 16.4.2), `eslint` 0, `tsc --noEmit` temiz, `i18n:check` parity OK (4 × 1641), `vitest` 44 dosya / 426, `next build` ✓; compose-exposure 10/10. `dotnet format --verify-no-changes --severity error`: değişen dosyalarda 0; kalan 143 WHITESPACE uyarısı yalnız satır sonu (`
+`) — çalışma kopyası LF olan, bu turda dokunulmamış ve CI'da (`03803186`, Linux) format'ı yeşil geçen dosyalar (yerel CRLF artifaktı). Bozma: S4-1 düzeltmesi geri alınınca tur ortası testi 3/3 gönderimle kırıldı; aday sorgusundaki kapı koşulu silinince parti yeri testi kırıldı; AD41 `[AllowAnonymous]` yapılınca 403 testi kırıldı |
 
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici, ayrı alt ajan) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız doğrulama (Opus high), HEAD `5027d0d1`, 2026-10-22 |
+| Kabul kriterleri / kararlar | 17 satır ✓ (17. satır "belgeler" ~ → S4-3 kapanışta kapandı); kapıyı atlayan para yolu yok (S1 yok) |
+| Bulgu sayısı | 4 × S4 (bloke etmez) — hepsi kapanışta kapandı |
+| S4-1 ⚠ PARA — tur ortası kapatma | Kapandı: `OutgoingTransferDispatchJob.DispatchOneAsync` onaysız her ödeme/iade satırını açarken (göndermeden önce, satıra dokunmadan) ayarı `OutboundApprovalGate.IsAutoSendEnabledAsync` ile veritabanından yeniden okur (önbellek yok; yalnız tur başında açıksa — açık → kapalı hemen, kapalı → açık sonraki tur). Test `T169_Gate_Closed_Mid_Tick_Stops_Every_Unapproved_Row_Left_In_The_Batch`: kapı açık başlar, onaylı payout + 3 onaysız payout + sweep; ilk gönderim sırasında kapı başka bir oturumdan kapatılır → onaysız 3 satırın **0/3**'ü gider (onaylı satır ve sweep gider). Düzeltme geri alınınca aynı test kırıldı: 3/3 gönderildi (probe P5 yeniden üretildi). Ek test `T169_Gate_Opened_Mid_Tick_Opens_On_The_Next_Tick`. Runbook §L.3 adım 5 düzeltildi |
+| S4-2 — aday sorgusu testi | Kapandı: `T169_Held_Rows_Do_Not_Take_Batch_Slots_From_An_Approved_Row` (BatchSize + 5 eski onaysız + 1 yeni onaylı; onaylı satır gider). Aday sorgusundaki kapı koşulu silinince test kırıldı (`Assert.Single` → boş) |
+| S4-3 — belge yayılımı | Kapandı: `04_UI_SPECS` v4.14 (S06 2. adım + 4. adım ret listesi, S07 "Ödeme ağı", S22 "Onay bekleyen ödemeler paneli"), `08_INTEGRATION_SPEC` v3.45 yeni §3.3b (admin onay kapısı), `07_API_DESIGN` v4.22 §9.35 atıfı + tur ortası kuralı |
+| S4-4 ⚠ GÜVENLİK — HTTP yetki testi | Kapandı: yeni `AdminOutboundApprovalsEndpointTests` (T157 deseni, `AdminWalletsEndpointTests.Factory` + `FakeApprovalService`): girişsiz 401 ve `MANAGE_SETTINGS`'siz 403 (iki uç; servis hiç çağrılmaz), `MANAGE_SETTINGS` ile GET 200 / POST 200, onaylayan JWT claim'inden (gövdedeki `approvedByAdminId`/`amount`/`toAddress` yok sayılır), 4 ret kodu eşlemesi + her `ApprovalError` için satır, guid olmayan kimlik yönlenmez. AD41'in `[Authorize]`'ı `[AllowAnonymous]` yapılınca 403 testi kırıldı |
+| Düzeltme gerekli mi | Hayır (kapanışta yapıldı) |
 
 ## Altyapı Değişiklikleri
 - Migration: **Var** — `20261021145849_T169_OwnerDecisions`: `BlockchainTransactions.ApprovedAt`, `ApprovedByAdminId` (nullable); iki yeni `SystemSettings` satırı (seed 79–80); üç açıklama `UpdateData`; değer taşımaları yalnız satır hâlâ eski varsayılanı taşıyorsa (`UPDATE … WHERE [Value] IN (eski değerler) AND IsConfigured = 1`), Down tersini aynı koşulla yapar.
@@ -106,7 +113,17 @@
 - **Onay:** AD41 yalnız `ApprovedAt`/`ApprovedByAdminId` yazar + audit; hiçbir şey göndermez, tutar/alıcı değişmez. Onaylayan oturumdaki admin. Sweep 422, açık olmayan satır 409, ikinci onay 409, bilinmeyen 404.
 - **Fail-closed:** ayar yok / yapılandırılmamış / bozuk ⇒ kapı kapalı. Env'den açılamaz; yalnız admin AD9 ile açar (audit'li).
 - **Alarm etkileşimi:** Ethereum ücret "bekle" alarmının yaşı onay bekleyen satırı saymaz; onaylanan satır onay anından sayılır.
+- **Tur ortası kapatma (kapanış, doğrulama S4-1):** `DispatchOneAsync` onaysız ödeme/iade satırını açarken ayarı veritabanından yeniden okur (tur başında açık okunduysa); kapanma hemen etkili, imzalanmakta olan en çok bir satır geri alınamaz; kapalı → açık sonraki turda. Sorgu yalnız onaysız + onay gerektiren satır için koşar (onaylı satır ve sweep için ek sorgu yok).
 - **Mevcut akış:** kapı açıkken davranış T169 öncesiyle aynı (`Gate_Open_Rows_Leave_Without_Approval…`, mevcut dispatch testleri kapıyı açarak aynen geçiyor).
+
+## Kapanış (2026-10-22)
+
+- **Doğrulama bulguları:** S4-1…S4-4 kapandı (ayrıntı "Doğrulama" tablosu).
+- **Proje sahibi kararları (2026-10-22, modal) — plana işlendi:**
+  - (a) Yedekten geri yükleme sonrası para araçları **gerçek para pilotundan (T173) önce**: `plan/11_F9.md` v1.23 yeni **Task T172a** (TRON'da zincirde gönderilmiş ama veritabanında PENDING kalan giden satırı zincir kanıtıyla kapatan admin aracı — verify + AuditLog; depozit adres indeksine yapılandırılabilir taban; runbook geri yükleme bölümüne bağlı; testler) + `IMPLEMENTATION_STATUS.md` satırı `⬚ Bekliyor`. Kaynak backlog satırı `PostRestoreChainReconciliationTooling` T164 dalında açıldı, main'de yok → bu dala eklenmedi (talimat).
+  - (b) `05_TECHNICAL_ARCHITECTURE` v3.32 §8.6 "Encryption at rest": şimdilik BitLocker + şifreli makine dışı yedek; ücretli SQL Server sürümüne geçilince TDE.
+- **main birleştirmesi:** `origin/main` `4b48c82d` (chore #373, next 16.4.2) merge commit `65304a91` ile alındı. Çakışma yalnız `DEFERRED_BACKLOG.md` ve `STATUS_CHANGELOG.md` başlık/geçmiş satırlarında; iki tarafın satırları korundu (changelog'da chore satırı en üstte, T160c altında). Kodda çakışma yok; runbook bölüm harfi çakışması yok (T163/T164 henüz main'de değil). Backlog sayımı dosyanın `awk`'iyle (§1'den itibaren): **54 aktif / 160 çözülmüş** (main 53/160 → +1).
+- **Devir kaydı:** STATUS_CHANGELOG'a merge teyitleri: T160c (#365) `403fe257` → CI `39813399071` ✓, Docker Publish `39813399137` ✓; chore (#373) `4b48c82d` → CI `39831472907` ✓, Docker Publish `39831472834` ✓.
 
 ## Known Limitations / Follow-up
 - Onay bekleyen satır için admin'e anlık bildirim (SignalR/Telegram) yok; her dispatch turunda ağ başına bir uyarı log satırı yazılır ve S22 paneli listeyi gösterir. Bildirim kanalı T165'te bağlanabilir.

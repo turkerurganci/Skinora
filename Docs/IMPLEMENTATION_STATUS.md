@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-22 — T169 ⏳ yapım bitti, doğrulama bekliyor (işlem 10–2.900 $, 50 $ altında TRON yok, ödemeler admin onaylı, yasaklı ülkeler, teslimat 720 dk; T169a açıldı; T169_REPORT.md, PR #371) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-22 — T169 ✓ Tamamlandı, doğrulama PASS (işlem 10–2.900 $, 50 $ altında TRON yok, ödemeler admin onaylı — tur ortası kapatma hemen etkili, yasaklı ülkeler; T169a + T172a açıldı; T169_REPORT.md, PR #371) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -371,11 +371,12 @@
 | T166 | Küçük düzeltmeler (tek PR) | ✓ Tamamlandı — doğrulama PASS (6/6, 4 × S4; B2 kapanışta düzeltildi): `_diag` üretimde 404, ToS + 18+ sunucuda zorunlu (403 `TOS_NOT_ACCEPTED`), ülke başlığı yalnız güvenilir proxy zincirinden, sabit %99,9 kalktı, USDC ürün yüzeyinden kalktı, yaş eşiği 30 + açılış teşhisi ([rapor](TASK_REPORTS/T166_REPORT.md), PR [#366](https://github.com/turkerurganci/Skinora/pull/366)) |
 | T167 | MASAK akışı | ✓ Tamamlandı — doğrulama PASS (5/5, 6 × S4; bağımsız doğrulama Opus high, HEAD `422e5570`; S4-1/2/3/5/6 kapanışta kapandı, S4-4 T168'e): Tebliğ 29 notları ödeme ekranlarında ve yardımda, P3 payout gönderim adresi, payout tek adres + depozit işlem başına kodda ölçüldü ([rapor](TASK_REPORTS/T167_REPORT.md), PR [#368](https://github.com/turkerurganci/Skinora/pull/368)) |
 | T168 | Hukuk metinleri | ⬚ Bekliyor |
-| T169 | Kalan sahip kararları | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor: işlem 10–2.900 $, 50 $ altında TRON yok (sunucu + arayüz), test boyunca ödeme/iade admin onaylı (`outbound.auto_send_enabled`, AD40/AD41), yasaklı ülkeler IR,KP,CU,MM, teslimat 720 dk + ⚠ değerler ([rapor](TASK_REPORTS/T169_REPORT.md), PR [#371](https://github.com/turkerurganci/Skinora/pull/371)) |
+| T169 | Kalan sahip kararları | ✓ Tamamlandı — doğrulama PASS (17 kriter, 4 × S4; bağımsız doğrulama Opus high, HEAD `5027d0d1`; S4-1/2/3/4 kapanışta kapandı — kapı tur ortasında kapatılınca hemen etkili, parti yeri testi, 04/08 belgeleri, AD40/AD41 HTTP yetki testleri): işlem 10–2.900 $, 50 $ altında TRON yok (sunucu + arayüz), test boyunca ödeme/iade admin onaylı (`outbound.auto_send_enabled`, AD40/AD41), yasaklı ülkeler IR,KP,CU,MM, teslimat 720 dk + ⚠ değerler ([rapor](TASK_REPORTS/T169_REPORT.md), PR [#371](https://github.com/turkerurganci/Skinora/pull/371)) |
 | T169a | İade tam maliyet kesintisi + depozitten iade günlük tavanı (⚠ PARA) | ⬚ Bekliyor |
 | T170 | İzleme | ⬚ Bekliyor |
 | T171 | Kurulum günü | ⬚ Bekliyor |
 | T172 | Sunucuda prova (Nile + Sepolia) | ⬚ Bekliyor |
+| T172a | Yedekten geri yükleme sonrası para araçları (⚠ PARA; T173'ten önce — sahip kararı 2026-10-22) | ⬚ Bekliyor |
 | T173 | Mainnet pilotu | ⬚ Bekliyor |
 | T174 | DEFERRED_BACKLOG §4 triyajı | ⬚ Bekliyor |
 | T175 | Çıkış kapısı (12 §6.3) + açılış | ⬚ Bekliyor |
