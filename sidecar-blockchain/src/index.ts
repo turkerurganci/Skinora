@@ -1,13 +1,19 @@
 import TronWeb from 'tronweb';
 import express from 'express';
 import { config } from './config/index.js';
-import { InternalKeyError, requireInternalKey } from './config/internalKey.js';
+import { InternalKeyError } from './config/internalKey.js';
+import {
+  SharedSecretError,
+  loadSharedSecrets,
+  type SharedSecrets,
+} from './config/sharedSecrets.js';
 import {
   SigningSecretError,
   loadSigningMaterial,
   type SigningMaterial,
 } from './config/signingSecrets.js';
 import { logger } from './logger.js';
+import { configureWebhookSecret } from './webhook/WebhookClient.js';
 import { publishTronGridDailyRequestBudget } from './metrics.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { createRouter } from './api/routes.js';
@@ -31,16 +37,25 @@ import { TrxPriceService } from './fee/TrxPriceService.js';
 import { FeeEstimationService } from './fee/FeeEstimationService.js';
 import { SolidBlockTracker } from './chain/SolidBlockTracker.js';
 
-// T161 — fail closed before anything is built or listens: without its internal
-// key (05 §3.4) the service does not start (config/internalKey.ts). The error
+// T161 / T171a — fail closed before anything is built or listens: without its
+// internal key (05 §3.4) and its webhook secret (05 §3.3a) the service does not
+// start. T171a — both come from their Docker secret files, the same files the
+// backend reads (config/sharedSecrets.ts); outside NODE_ENV=development|test a
+// plain INTERNAL_KEY / WEBHOOK_SECRET variable stops the service. The error
 // carries the code; the stack trace on stderr is the container's last word.
-const internalKey = startupInternalKey();
+const sharedSecrets = startupSharedSecrets();
+const internalKey = sharedSecrets.internalKey;
+// WebhookClient signs with this secret; it is handed over here, never read from env.
+configureWebhookSecret(sharedSecrets.webhookSecret);
 
-function startupInternalKey(): string {
+function startupSharedSecrets(): SharedSecrets {
   try {
-    return requireInternalKey(config.internalKey);
+    return loadSharedSecrets(process.env);
   } catch (err) {
-    const code = err instanceof InternalKeyError ? err.code : 'STARTUP_FAILED';
+    const code =
+      err instanceof InternalKeyError || err instanceof SharedSecretError
+        ? err.code
+        : 'STARTUP_FAILED';
     logger.fatal({ code }, `Blockchain sidecar refused to start: ${code}`);
     throw err;
   }
@@ -69,6 +84,8 @@ logger.info(
     hdMnemonicSource: signingMaterial.sources.hdMnemonic,
     hotWalletKeySource: signingMaterial.sources.hotWalletKey,
     hotWalletAddressFromKey: signingMaterial.hotWalletAddressFromKey,
+    internalKeySource: sharedSecrets.sources.internalKey,
+    webhookSecretSource: sharedSecrets.sources.webhookSecret,
   },
   'Signing secrets: loaded (sources only — values are never logged)',
 );

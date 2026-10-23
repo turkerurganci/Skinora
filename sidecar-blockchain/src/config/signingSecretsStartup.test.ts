@@ -28,6 +28,8 @@ const TSX_CLI = resolve(SIDECAR_ROOT, 'node_modules/tsx/dist/cli.mjs');
 const WAIT = 60_000;
 const TEST_TIMEOUT = WAIT + 30_000;
 const INTERNAL_KEY = 'test-internal-key-'.padEnd(64, 'k');
+/** T171a — the shared secrets come from files too (config/sharedSecrets.ts). */
+const WEBHOOK_SECRET = 'test-webhook-secret-'.padEnd(64, 'w');
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
 /** Valid words, failing BIP-39 checksum. */
 const BAD_MNEMONIC = `${'abandon '.repeat(11)}abandon`;
@@ -45,27 +47,45 @@ const files = {
   // What Docker Desktop leaves at the mount point when the source file is missing.
   directory: join(dir, 'made-by-docker'),
   none: join(dir, 'none'),
+  internalKey: join(dir, 'blockchain_sidecar_internal_key'),
+  webhookSecret: join(dir, 'blockchain_webhook_secret'),
+  shortWebhookSecret: join(dir, 'short_webhook_secret'),
+  blank: join(dir, 'blank'),
 };
 writeFileSync(files.seed, MNEMONIC + '\n');
 writeFileSync(files.hot, HOT.privateKey + '\n');
 writeFileSync(files.badSeed, BAD_MNEMONIC + '\n');
+writeFileSync(files.internalKey, INTERNAL_KEY + '\n');
+writeFileSync(files.webhookSecret, WEBHOOK_SECRET + '\n');
+writeFileSync(files.shortWebhookSecret, 'test-short-'.padEnd(31, 'w') + '\n');
+writeFileSync(files.blank, '\n');
 mkdirSync(files.directory);
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 /** Everything a secret could look like in the output. */
-const FORBIDDEN_IN_OUTPUT = [MNEMONIC, BAD_MNEMONIC, 'abandon abandon', HOT.privateKey];
+const FORBIDDEN_IN_OUTPUT = [
+  MNEMONIC,
+  BAD_MNEMONIC,
+  'abandon abandon',
+  HOT.privateKey,
+  INTERNAL_KEY,
+  WEBHOOK_SECRET,
+  'test-short-',
+];
 
 function expectNoSecret(text: string): void {
   for (const fragment of FORBIDDEN_IN_OUTPUT) expect(text).not.toContain(fragment);
 }
 
-/** Production-shaped environment; secrets only through the *_FILE paths unless a test says otherwise. */
+/** Production-shaped environment; every secret only through its *_FILE path unless a test says otherwise. */
 function productionEnv(env: Record<string, string>): NodeJS.ProcessEnv {
   const inherited = Object.fromEntries(
     Object.entries(process.env).filter(
       ([name]) =>
-        !/^(HD_WALLET_|HOT_WALLET_|COLD_WALLET_|STAKE_ACCOUNT_|PORT$|NODE_ENV$)/.test(name),
+        !/^(HD_WALLET_|HOT_WALLET_|COLD_WALLET_|STAKE_ACCOUNT_|INTERNAL_KEY|WEBHOOK_SECRET|PORT$|NODE_ENV$)/.test(
+          name,
+        ),
     ),
   );
   return {
@@ -76,7 +96,8 @@ function productionEnv(env: Record<string, string>): NodeJS.ProcessEnv {
     // /health probes the node; point it at a closed port so it answers fast.
     TRON_FULL_NODE_URL: 'http://127.0.0.1:9',
     TRON_SOLIDITY_URL: 'http://127.0.0.1:9',
-    INTERNAL_KEY,
+    INTERNAL_KEY_FILE: files.internalKey,
+    WEBHOOK_SECRET_FILE: files.webhookSecret,
     HD_WALLET_MNEMONIC_FILE: files.seed,
     HOT_WALLET_PRIVATE_KEY_FILE: files.hot,
     HOT_WALLET_ADDRESS: HOT_ADDRESS,
@@ -161,6 +182,8 @@ describe('TRON service startup — signing secrets from Docker secret files (T16
         hdMnemonicSource: 'file',
         hotWalletKeySource: 'file',
         hotWalletAddressFromKey: HOT_ADDRESS,
+        internalKeySource: 'file',
+        webhookSecretSource: 'file',
       });
       expectNoSecret(output);
     },
@@ -279,6 +302,62 @@ describe('TRON service startup — refuses unsafe signing secrets, without echoi
       expect(code ?? 0, run.output()).toBeGreaterThan(0);
       expect(run.output()).toContain('HD wallet initialization failed');
       expectNoSecret(run.output());
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+/**
+ * T171a — the internal key and the webhook secret (DEFERRED_BACKLOG
+ * `SharedSecretsInPlainEnv`): in production only their Docker secret files;
+ * missing, blank, short or unreadable stops the service; never echoed.
+ * sharedSecrets.test.ts covers the rules without a process.
+ */
+describe('TRON service startup — refuses unsafe shared secrets, without echoing them (T171a)', () => {
+  it.each<{ label: string; code: string; env: Record<string, string> }>([
+    {
+      label: 'the internal key as a plain variable',
+      code: 'SHARED_SECRET_IN_ENV',
+      env: { INTERNAL_KEY_FILE: files.none, INTERNAL_KEY },
+    },
+    {
+      label: 'the webhook secret as a plain variable',
+      code: 'SHARED_SECRET_IN_ENV',
+      env: { WEBHOOK_SECRET_FILE: files.none, WEBHOOK_SECRET },
+    },
+    {
+      label: 'no internal key file',
+      code: 'INTERNAL_KEY_MISSING',
+      env: { INTERNAL_KEY_FILE: files.none },
+    },
+    {
+      label: 'a blank internal key file',
+      code: 'INTERNAL_KEY_MISSING',
+      env: { INTERNAL_KEY_FILE: files.blank },
+    },
+    {
+      label: 'a directory where the internal key file should be',
+      code: 'SHARED_SECRET_UNREADABLE',
+      env: { INTERNAL_KEY_FILE: files.directory },
+    },
+    {
+      label: 'no webhook secret file',
+      code: 'WEBHOOK_SECRET_MISSING',
+      env: { WEBHOOK_SECRET_FILE: files.none },
+    },
+    {
+      label: 'a webhook secret shorter than 32 characters',
+      code: 'WEBHOOK_SECRET_TOO_SHORT',
+      env: { WEBHOOK_SECRET_FILE: files.shortWebhookSecret },
+    },
+  ])(
+    '$label → exits non-zero with $code',
+    async ({ env, code }) => {
+      const refused = await refusedWith(env);
+      expect(refused.code ?? 0, refused.output).toBeGreaterThan(0);
+      expect(refused.output).toContain(code);
+      expect(refused.output).not.toContain('Signing secrets:');
+      expectNoSecret(refused.output);
     },
     TEST_TIMEOUT,
   );
