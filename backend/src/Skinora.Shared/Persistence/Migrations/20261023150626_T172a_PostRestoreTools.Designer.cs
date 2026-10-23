@@ -1549,12 +1549,12 @@ namespace Skinora.Shared.Persistence.Migrations
                             Category = "Monitoring",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "decimal",
-                            Description = "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi zincir tahmininden gelir (Prova-GasFeeChargedIsFixedGuess, 2026-09-02); tahmin alınamazsa RefundDecisionService bu değeri kullanır ve iade tutarının `gasFee × min_refund_threshold_ratio` eşiğini geçip geçmediğine bu değerle karar verilir.",
+                            Description = "İade gas fee FALLBACK değeri (USDT). Normalde kesinti sidecar'ın gönderim öncesi tahmininden gelir: T169a'dan beri platformun iade için gönderdiği TRX'in tamamı (hesap açma + %10 paylı yakma takviyesi + takviyenin bandı; 02 §4.7). Tahmin alınamazsa son ölçülen tahminle bu değerin küçüğü kesilir (T160b) ve en düşük iade eşiği bu tutarla hesaplanır. 2,80 = yeni depozitten, USDT tutan alıcıya iadenin ana ağ maliyeti (8,44 TRX × 0,3313; T169a, öneriyle kaydedildi — ⚠ PARA).",
                             IsConfigured = true,
                             Key = "blockchain.refund_gas_fee_estimate_usdt",
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Value = "2.60"
+                            Value = "2.80"
                         },
                         new
                         {
@@ -1910,6 +1910,32 @@ namespace Skinora.Shared.Persistence.Migrations
                         new
                         {
                             Id = new Guid("0aa51010-0000-0000-0000-000000000051"),
+                            Category = "Limit",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "decimal",
+                            Description = "TRON'da depozit adreslerinden yapılan iadelerin herhangi bir 24 saatte gönderebileceği en çok tutar (USDT). Aşacak iade beklemede kalır (FAILED olmaz, deneme hakkı harcanmaz), admin'e alarm gider; pencerede yer açılınca ya da admin AD42 ile serbest bırakınca gider. Sıcak cüzdandan çıkan iadeler sayılmaz. 100 = proje sahibi kararı 2026-10-21 (T169a).",
+                            IsConfigured = true,
+                            Key = "blockchain.tron.deposit_refund_daily_limit_usdt",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "100"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-000000000052"),
+                            Category = "Limit",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "decimal",
+                            Description = "Ethereum'da depozit adreslerinden (sweep'ten önce) yapılan iadelerin herhangi bir 24 saatte gönderebileceği en çok tutar (USDT). Aşacak iade beklemede kalır (FAILED olmaz, deneme hakkı harcanmaz), admin'e alarm gider; pencerede yer açılınca ya da admin AD42 ile serbest bırakınca gider. Sweep sonrası sıcak cüzdandan çıkan iadeler sayılmaz. 100 = proje sahibi kararı 2026-10-21 (T169a).",
+                            IsConfigured = true,
+                            Key = "blockchain.ethereum.deposit_refund_daily_limit_usdt",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "100"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-000000000053"),
                             Category = "Settlement",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DataType = "bool",
@@ -2116,6 +2142,18 @@ namespace Skinora.Shared.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DepositRefundCountedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DepositRefundLimitHeldAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DepositRefundLimitReleasedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DepositRefundLimitReleasedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<long?>("EnergyUsageTotal")
                         .HasColumnType("bigint");
 
@@ -2307,6 +2345,30 @@ namespace Skinora.Shared.Persistence.Migrations
                         .HasDatabaseName("IX_DeliveryEvidenceCaptures_TransactionId");
 
                     b.ToTable("DeliveryEvidenceCaptures", (string)null);
+                });
+
+            modelBuilder.Entity("Skinora.Transactions.Domain.Entities.DepositRefundLimitLock", b =>
+                {
+                    b.Property<string>("Network")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("LockedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Network");
+
+                    b.ToTable("DepositRefundLimitLocks", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Network = "TRON"
+                        },
+                        new
+                        {
+                            Network = "ETHEREUM"
+                        });
                 });
 
             modelBuilder.Entity("Skinora.Transactions.Domain.Entities.OutboundRowClosure", b =>

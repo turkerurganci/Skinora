@@ -258,6 +258,8 @@ export enum AuditAction {
   OUTBOUND_ROW_CLOSURE_REFUSED = "OUTBOUND_ROW_CLOSURE_REFUSED",
   // T169 — admin approval of a payout/refund while outbound.auto_send_enabled is false
   OUTBOUND_TRANSFER_APPROVED = "OUTBOUND_TRANSFER_APPROVED",
+  // T169a — admin let a refund held by the deposit refund daily limit go (AD42)
+  DEPOSIT_REFUND_LIMIT_RELEASED = "DEPOSIT_REFUND_LIMIT_RELEASED",
 }
 
 // §2.20 — 4 values

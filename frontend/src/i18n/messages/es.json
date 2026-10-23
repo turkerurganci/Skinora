@@ -503,7 +503,8 @@
       "OUTBOUND_ROW_CLOSURE_APPROVED": "Cierre de fila saliente aprobado",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "Cierre de fila saliente rechazado",
       "OUTBOUND_ROW_CLOSURE_REFUSED": "Cierre de fila saliente denegado",
-      "OUTBOUND_TRANSFER_APPROVED": "Pago saliente aprobado"
+      "OUTBOUND_TRANSFER_APPROVED": "Pago saliente aprobado",
+      "DEPOSIT_REFUND_LIMIT_RELEASED": "Límite de reembolsos desde depósitos liberado"
     }
   },
   "adminTransactions": {
@@ -573,7 +574,7 @@
       "payoutSentAt": "Enviado",
       "refund": "Detalles del reembolso",
       "refundOriginal": "Importe original",
-      "refundGasFee": "Tarifa de gas",
+      "refundGasFee": "Comisión de red",
       "refundNet": "Reembolso neto",
       "refundAddress": "Dirección de reembolso",
       "refundedAt": "Reembolsado",
@@ -945,7 +946,7 @@
         },
         "refunds": {
           "heading": "Reembolsos",
-          "body": "- Los reembolsos son solo de dinero; no hay reembolso del artículo, porque el artículo nunca está en poder de Skinora.\n- Un reembolso va a la dirección de reembolso que el comprador indicó al aceptar para la red elegida. Los reembolsos de pagos rechazados (un importe insuficiente, el exceso de un pago de más, las transferencias posteriores en un pago fraccionado, un token incorrecto, un pago que llega después de vencido el plazo) van a la misma dirección.\n- Cuando se reembolsa un pago aceptado, el comprador recupera el precio y la comisión. La tarifa de red de TRON se reembolsa íntegramente si el reembolso ocurre antes de que el pago se traslade a la billetera de Skinora; si ocurre después del traslado, no se reembolsa porque ya se ha gastado.\n- La tarifa de red de cada reembolso se deduce del importe del reembolso; el comprador recibe \"importe reembolsado − tarifa de red del reembolso\". La tarifa se calcula desde la blockchain justo antes del envío; si no puede calcularse, se usa la menor entre la tarifa de reserva de la red y la última tarifa medida. La tarifa deducida se muestra en la página de la transacción y, en los reembolsos de pagos rechazados, también en la notificación.\n- Si la tarifa de red se llevara la mayor parte del reembolso (el reembolso neto es menos del doble de la tarifa de red del reembolso), el reembolso no se envía automáticamente; el dinero permanece en la dirección de pago de la transacción y un administrador decide manualmente.\n- En algunos períodos los reembolsos también esperan la aprobación de un administrador antes de enviarse (\"Período de liquidación y pago al vendedor\").\n- El comprador es responsable de que la dirección de reembolso sea correcta. Un reembolso enviado a una dirección equivocada, o que no es tuya, no puede recuperarse."
+          "body": "- Los reembolsos son solo de dinero; no hay reembolso del artículo, porque el artículo nunca está en poder de Skinora.\n- Un reembolso va a la dirección de reembolso que el comprador indicó al aceptar para la red elegida. Los reembolsos de pagos rechazados (un importe insuficiente, el exceso de un pago de más, las transferencias posteriores en un pago fraccionado, un token incorrecto, un pago que llega después de vencido el plazo) van a la misma dirección.\n- Cuando se reembolsa un pago aceptado, el comprador recupera el precio y la comisión. La tarifa de red de TRON se reembolsa íntegramente si el reembolso ocurre antes de que el pago se traslade a la billetera de Skinora; si ocurre después del traslado, no se reembolsa porque ya se ha gastado.\n- La tarifa de red de cada reembolso se deduce del importe del reembolso; el comprador recibe \"importe reembolsado − tarifa de red del reembolso\". La tarifa de red del reembolso es todo lo que Skinora gasta en la blockchain para enviar ese reembolso: en TRON, la activación de la dirección de pago y el TRX enviado a ella para la energía y el ancho de banda del reembolso, más las tarifas de esos envíos; en Ethereum, el ETH enviado a la dirección de pago y la tarifa de ese envío. Nunca puede superar el importe del reembolso. La tarifa se calcula desde la blockchain cuando el reembolso se pone en cola de envío y queda registrada con él; si no puede calcularse, se usa la menor entre la tarifa de reserva de la red y la última tarifa medida. Si el reembolso se envía más tarde (mientras espera la aprobación de un administrador o margen bajo el límite diario), la tarifa no se recalcula: se deduce el importe registrado, y cualquier diferencia con lo que realmente cueste el envío, en uno u otro sentido, corresponde a Skinora. La tarifa deducida se muestra en la página de la transacción y, en los reembolsos de pagos rechazados, también en la notificación.\n- Si la tarifa de red se llevara la mayor parte del reembolso (el reembolso neto es menos del doble de la tarifa de red del reembolso), el reembolso no se envía automáticamente; el dinero permanece en la dirección de pago de la transacción y un administrador decide manualmente.\n- Los reembolsos enviados desde direcciones de pago no pueden superar un límite en cada red en ningún periodo de 24 horas (actualmente 100 USDT por red). Un reembolso que lo superaría queda retenido y se envía cuando el límite vuelve a tener margen o cuando un administrador lo ha revisado y liberado. La retención no cambia el importe del reembolso.\n- En algunos períodos los reembolsos también esperan la aprobación de un administrador antes de enviarse (\"Período de liquidación y pago al vendedor\").\n- El comprador es responsable de que la dirección de reembolso sea correcta. Un reembolso enviado a una dirección equivocada, o que no es tuya, no puede recuperarse."
         },
         "disputes": {
           "heading": "Disputas",
@@ -1532,7 +1533,7 @@
       "refund": {
         "title": "Resumen del reembolso",
         "originalAmount": "Importe original",
-        "gasFee": "Gas",
+        "gasFee": "Comisión de red (coste on-chain del reembolso)",
         "netRefundAmount": "Reembolso neto",
         "refundAddress": "Dirección de reembolso",
         "txHash": "Hash de TX",
@@ -2382,6 +2383,33 @@
         "transaction": "Id de la transacción",
         "cancel": "Cancelar",
         "submit": "Aprobar y liberar para el envío"
+      },
+      "limit": {
+        "heading": "Límite diario de reembolsos (desde depósitos)",
+        "usage": "{network}: {used} / {limit} USDT reembolsados desde depósitos en las últimas 24 horas",
+        "intro": "Los reembolsos que salen de direcciones de depósito no pueden superar este límite por red en ningún periodo de 24 horas. Un reembolso que lo superaría espera (no falla, no gasta reintentos) y sale solo cuando los reembolsos de hace 24 horas salen de la ventana; un reembolso mayor que el límite nunca sale solo. Los reembolsos desde la billetera caliente no cuentan. El límite es el ajuste blockchain.*.deposit_refund_daily_limit_usdt de la pantalla de Ajustes.",
+        "empty": "Ningún reembolso está retenido por el límite.",
+        "ariaLabel": "Reembolsos retenidos por el límite diario de reembolsos",
+        "columns": {
+          "network": "Red",
+          "type": "Tipo",
+          "amount": "Importe",
+          "to": "Dirección de destino",
+          "held": "Retenido desde",
+          "action": "Acción"
+        },
+        "release": "Enviar superando el límite",
+        "confirm": {
+          "title": "Enviar el reembolso por encima del límite",
+          "warning": "Este reembolso superará el límite de reembolsos desde depósitos de hoy. Una vez liberado, el importe se envía realmente en la cadena y no se puede deshacer; sigue contando en el total diario. Comprueba que el reembolso es legítimo, la red, el importe y la dirección de destino.",
+          "network": "Red",
+          "type": "Tipo",
+          "amount": "Importe",
+          "to": "Dirección de destino",
+          "transaction": "ID de transacción",
+          "cancel": "Cancelar",
+          "submit": "Liberar y poner en cola de envío"
+        }
       }
     },
     "errors": {
@@ -2393,6 +2421,8 @@
       "ROW_NOT_FOUND": "No se encontró la fila saliente.",
       "ROW_NOT_APPROVABLE": "Esta fila no es un pago al vendedor ni un reembolso; nunca espera aprobación.",
       "ALREADY_APPROVED": "Esta fila ya está aprobada.",
+      "ROW_NOT_HELD": "Este reembolso no está retenido por el límite diario de reembolsos; no hay nada que liberar.",
+      "ALREADY_RELEASED": "Este reembolso ya está liberado.",
       "CLOSURE_NOT_FOUND": "No se encontró el cierre.",
       "ROW_NOT_ETHEREUM": "La fila no está en Ethereum.",
       "ROW_NOT_OUTBOUND": "La fila no es una transferencia saliente.",

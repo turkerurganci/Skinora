@@ -44,6 +44,7 @@ const rpc: FeeRpc = {
     return gas;
   },
   feeHistory: async () => ({ baseFeePerGas: [167_000_000n], reward: [[50_000_000n]] }),
+  getBalance: async () => 0n,
 };
 
 let server: Server;
@@ -138,7 +139,11 @@ describe('POST /api/transfer/estimate-fee — the backend bodies (contracts/esti
     const expected = n('baseFeePerGasWei') + n('maxPriorityFeePerGasWei');
     expect(n('maxFeePerGasWei')).toBe(2n * n('baseFeePerGasWei') + n('maxPriorityFeePerGasWei'));
     expect(n('fuelGasLimit')).toBe(21_000n);
-    expect(n('feeWei')).toBe(n('gasLimit') * n('maxFeePerGasWei') + n('fuelGasLimit') * expected);
+    // T169a — the fuel is what the deposit lacks of the budget (the example's deposit holds 0).
+    expect(n('depositBalanceWei')).toBe(0n);
+    expect(n('feeWei')).toBe(
+      n('gasLimit') * n('maxFeePerGasWei') - n('depositBalanceWei') + n('fuelGasLimit') * expected,
+    );
   });
 
   it("transfer-status example: realizedFeeWei is this service's receipt arithmetic, as a string (T152 serves it)", () => {

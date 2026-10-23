@@ -24,13 +24,74 @@ public interface IOutboundApprovalService
     /// <summary>AD41 — approve one row for sending.</summary>
     Task<ApprovalResult> ApproveAsync(
         Guid adminId, Guid blockchainTransactionId, string? ipAddress, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// T169a AD42 — let one refund held by its network's deposit refund daily
+    /// limit go past the limit (08 §3.3c).
+    /// </summary>
+    Task<LimitReleaseResult> ReleaseDailyLimitAsync(
+        Guid adminId, Guid blockchainTransactionId, string? ipAddress, CancellationToken cancellationToken);
 }
 
 /// <summary>AD40 response.</summary>
 /// <param name="AutoSendEnabled">The gate's state: true = rows are sent without approval.</param>
+/// <param name="Rows">Rows waiting for an approval (oldest first).</param>
+/// <param name="DepositRefundLimits">T169a — every network's deposit refund daily limit: the limit, the last 24 hours' total.</param>
+/// <param name="LimitHeldRows">T169a — refunds the deposit refund daily limit holds right now (oldest hold first); AD42 releases one.</param>
 public sealed record OutboundApprovalQueueDto(
     bool AutoSendEnabled,
-    IReadOnlyList<OutboundApprovalRowDto> Rows);
+    IReadOnlyList<OutboundApprovalRowDto> Rows,
+    IReadOnlyList<DepositRefundLimitDto> DepositRefundLimits,
+    IReadOnlyList<DepositRefundHeldRowDto> LimitHeldRows);
+
+/// <summary>T169a — one network's deposit refund daily limit (08 §3.3c).</summary>
+/// <param name="LimitUsdt"><c>blockchain.*.deposit_refund_daily_limit_usdt</c>.</param>
+/// <param name="UsedLast24hUsdt">What the network's refunds sent from deposits in the last 24 hours.</param>
+public sealed record DepositRefundLimitDto(
+    BlockchainNetwork Network,
+    decimal LimitUsdt,
+    decimal UsedLast24hUsdt);
+
+/// <summary>T169a — a refund the deposit refund daily limit holds.</summary>
+/// <param name="HeldAt">The first time the limit held it.</param>
+/// <param name="ApprovedAt">The T169 approval, when it was given (the limit is weighed only after it).</param>
+public sealed record DepositRefundHeldRowDto(
+    Guid BlockchainTransactionId,
+    Guid TransactionId,
+    BlockchainNetwork Network,
+    BlockchainTransactionType Type,
+    StablecoinType? ChainToken,
+    decimal Amount,
+    decimal? GasFee,
+    string ToAddress,
+    DateTime HeldAt,
+    DateTime? ApprovedAt,
+    DateTime CreatedAt);
+
+/// <summary>T169a AD42 response.</summary>
+public sealed record DepositRefundLimitReleaseDto(
+    Guid BlockchainTransactionId,
+    BlockchainNetwork Network,
+    BlockchainTransactionType Type,
+    decimal Amount,
+    string ToAddress,
+    decimal LimitUsdt,
+    decimal UsedLast24hUsdt,
+    DateTime ReleasedAt,
+    Guid ReleasedByAdminId);
+
+public enum LimitReleaseError
+{
+    RowNotFound,
+    RowNotHeld,
+    AlreadyReleased,
+}
+
+public sealed record LimitReleaseResult(DepositRefundLimitReleaseDto? Value, LimitReleaseError? Error, string? Message)
+{
+    public static LimitReleaseResult Ok(DepositRefundLimitReleaseDto value) => new(value, null, null);
+    public static LimitReleaseResult Fail(LimitReleaseError error, string message) => new(null, error, message);
+}
 
 /// <summary>One outbound row waiting for an approval.</summary>
 /// <param name="Token">The stablecoin the transaction expected (06 §3.8 <c>Token</c>).</param>
@@ -100,17 +161,20 @@ public sealed class OutboundApprovalService : IOutboundApprovalService
 {
     private readonly AppDbContext _db;
     private readonly IStablecoinContractRegistry _contracts;
+    private readonly IBlockchainNetworkSettingsProvider _networkSettings;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutboundApprovalService> _logger;
 
     public OutboundApprovalService(
         AppDbContext db,
         IStablecoinContractRegistry contracts,
+        IBlockchainNetworkSettingsProvider networkSettings,
         TimeProvider clock,
         ILogger<OutboundApprovalService> logger)
     {
         _db = db;
         _contracts = contracts;
+        _networkSettings = networkSettings;
         _clock = clock;
         _logger = logger;
     }
@@ -144,13 +208,123 @@ public sealed class OutboundApprovalService : IOutboundApprovalService
             })
             .ToListAsync(cancellationToken);
 
+        // T169a — the deposit refund daily limit: every network's numbers and
+        // the refunds it holds (AD42 releases one).
+        var now = _clock.GetUtcNow().UtcDateTime;
+        var limits = new List<DepositRefundLimitDto>();
+        foreach (var network in Enum.GetValues<BlockchainNetwork>())
+        {
+            var settings = await _networkSettings.GetAsync(network, cancellationToken);
+            var used = await DepositRefundDailyLimit.UsedAsync(_db, network, now, excludingId: null, cancellationToken);
+            limits.Add(new DepositRefundLimitDto(network, settings.DepositRefundDailyLimitUsdt, used));
+        }
+
+        var held = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(DepositRefundDailyLimit.IsHeld)
+            .OrderBy(b => b.DepositRefundLimitHeldAt)
+            .Take(200)
+            .Select(b => new
+            {
+                b.Id,
+                b.TransactionId,
+                b.Network,
+                b.Type,
+                b.Token,
+                b.ActualTokenAddress,
+                b.Amount,
+                b.GasFee,
+                b.ToAddress,
+                HeldAt = b.DepositRefundLimitHeldAt!.Value,
+                b.ApprovedAt,
+                b.CreatedAt,
+            })
+            .ToListAsync(cancellationToken);
+
         return new OutboundApprovalQueueDto(
             autoSend,
             rows.Select(r => new OutboundApprovalRowDto(
                     r.Id, r.TransactionId, r.Network, r.Type, r.Token,
                     OutboundTransferExpectation.ChainToken(r.Network, r.Type, r.Token, r.ActualTokenAddress, _contracts),
                     r.Amount, r.GasFee, r.ToAddress, r.RetryCount, r.CreatedAt))
+                .ToList(),
+            limits,
+            held.Select(r => new DepositRefundHeldRowDto(
+                    r.Id, r.TransactionId, r.Network, r.Type,
+                    OutboundTransferExpectation.ChainToken(r.Network, r.Type, r.Token, r.ActualTokenAddress, _contracts),
+                    r.Amount, r.GasFee, r.ToAddress, r.HeldAt, r.ApprovedAt, r.CreatedAt))
                 .ToList());
+    }
+
+    /// <summary>
+    /// T169a AD42 — the admin decision the owner's rule allows ("ertesi gün ya
+    /// da admin kararıyla devam eder"): one held refund may go past its
+    /// network's deposit refund daily limit. Stamps the release and an audited
+    /// <c>DEPOSIT_REFUND_LIMIT_RELEASED</c> row in one save and makes the row
+    /// due now; nothing is sent here — the dispatcher's next tick sends it (the
+    /// approval gate still applies) and counts it toward the window.
+    /// </summary>
+    public async Task<LimitReleaseResult> ReleaseDailyLimitAsync(
+        Guid adminId, Guid blockchainTransactionId, string? ipAddress, CancellationToken cancellationToken)
+    {
+        var row = await _db.Set<BlockchainTransaction>()
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(b => b.Id == blockchainTransactionId, cancellationToken);
+        if (row is null)
+            return LimitReleaseResult.Fail(LimitReleaseError.RowNotFound, "No such blockchain transaction row.");
+        if (row.DepositRefundLimitReleasedAt is not null)
+            return LimitReleaseResult.Fail(LimitReleaseError.AlreadyReleased, "The row is already released.");
+        var heldNow = row.Status == BlockchainTransactionStatus.PENDING
+            && row.TxHash is null
+            && row.DepositRefundLimitHeldAt is not null
+            && row.DepositRefundCountedAt is null;
+        if (!heldNow)
+            return LimitReleaseResult.Fail(LimitReleaseError.RowNotHeld,
+                $"The row is {row.Status} and not held by the deposit refund daily limit — only a held PENDING refund can be released.");
+
+        var now = _clock.GetUtcNow().UtcDateTime;
+        var limit = (await _networkSettings.GetAsync(row.Network, cancellationToken)).DepositRefundDailyLimitUsdt;
+        var used = await DepositRefundDailyLimit.UsedAsync(_db, row.Network, now, excludingId: row.Id, cancellationToken);
+
+        row.DepositRefundLimitReleasedAt = now;
+        row.DepositRefundLimitReleasedByAdminId = adminId;
+        row.NextAttemptAt = null;
+
+        _db.Set<AuditLog>().Add(new AuditLog
+        {
+            UserId = null,
+            ActorId = adminId,
+            ActorType = ActorType.ADMIN,
+            Action = AuditAction.DEPOSIT_REFUND_LIMIT_RELEASED,
+            EntityType = nameof(BlockchainTransaction),
+            EntityId = row.Id.ToString("D"),
+            OldValue = null,
+            NewValue = JsonSerializer.Serialize(new
+            {
+                blockchainTransactionId = row.Id,
+                transactionId = row.TransactionId,
+                network = row.Network.ToString(),
+                type = row.Type.ToString(),
+                token = row.Token.ToString(),
+                amount = row.Amount.ToString("0.######", CultureInfo.InvariantCulture),
+                toAddress = row.ToAddress,
+                limitUsdt = limit.ToString("0.######", CultureInfo.InvariantCulture),
+                usedLast24hUsdt = used.ToString("0.######", CultureInfo.InvariantCulture),
+                heldAt = row.DepositRefundLimitHeldAt,
+            }),
+            IpAddress = ipAddress,
+            CreatedAt = now,
+        });
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogWarning(
+            "DEPOSIT REFUND LIMIT RELEASED — row {Row} ({Type}, {Network}) {Amount} → {To} by admin {Admin} ({Used} of {Limit} USDT already sent from deposits in the last 24 h); the dispatcher sends it on its next tick.",
+            row.Id, row.Type, row.Network, row.Amount, row.ToAddress, adminId, used, limit);
+
+        return LimitReleaseResult.Ok(new DepositRefundLimitReleaseDto(
+            row.Id, row.Network, row.Type, row.Amount, row.ToAddress, limit, used, now, adminId));
     }
 
     public async Task<ApprovalResult> ApproveAsync(

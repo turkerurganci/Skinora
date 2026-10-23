@@ -22,11 +22,12 @@ public sealed class GasFeeSettingsProvider : IGasFeeSettingsProvider
 
     /// <summary>
     /// Code-side fallback for <see cref="RefundGasFeeEstimateKey"/> — mirrors
-    /// the seeded default of <c>2.60</c> USDT (T169: the measured TRON
-    /// deposit-refund low leg, 2.62 $). Provider falls back to this when the
-    /// row is missing, unconfigured, or malformed.
+    /// the seeded default of <c>2.80</c> USDT (T169a: the platform's whole
+    /// outlay for a refund from a new deposit to a buyer holding USDT, as
+    /// <c>BlockchainNetworkSettingsProvider.TronDefaults</c>). Provider falls
+    /// back to this when the row is missing, unconfigured, or malformed.
     /// </summary>
-    public const decimal DefaultRefundGasFeeEstimateUsdt = 2.60m;
+    public const decimal DefaultRefundGasFeeEstimateUsdt = 2.80m;
 
     /// <summary>
     /// Code-side fallback for <see cref="PayoutGasFeeEstimateKey"/> — mirrors

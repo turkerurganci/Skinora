@@ -103,8 +103,9 @@ public class NetworkFeePolicyMigrationRehearsalTests : IntegrationTestBase
         Assert.Contains("blockchain.tron.network_fee_fallback_usdt=3.00=1", settings);
         Assert.Contains("blockchain.ethereum.min_refund_threshold_ratio=2.0=1", settings);
         // 75 after T149 + 2 T169 rows (TRON minimum price, outbound launch gate)
+        // + 2 T169a rows (deposit refund daily limit per network)
         // + 1 T172a row (outbound.dispatch_paused).
-        Assert.Equal("78", Assert.Single(await QueryAsync(
+        Assert.Equal("80", Assert.Single(await QueryAsync(
             "SELECT CAST(COUNT(*) AS nvarchar(10)) AS Value FROM SystemSettings")));
     }
 

@@ -98,7 +98,7 @@ public class OutboundApprovalTests : IntegrationTestBase
     }
 
     private OutboundApprovalService Service(AppDbContext ctx) =>
-        new(ctx, Contracts, _clock, NullLogger<OutboundApprovalService>.Instance);
+        new(ctx, Contracts, new BlockchainNetworkSettingsProvider(ctx), _clock, NullLogger<OutboundApprovalService>.Instance);
 
     private async Task DispatchAsync()
     {
@@ -108,7 +108,8 @@ public class OutboundApprovalTests : IntegrationTestBase
             ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new OneMinuteRetryPolicy(),
             new OutboxService(ctx), Contracts,
             new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
-            new StubPlatformWalletAddressProvider(), _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
+            new StubPlatformWalletAddressProvider(), NullDepositRefundLimitObserver.Instance,
+            _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
         await dispatch.ExecuteAsync();
     }
 

@@ -333,8 +333,12 @@ public class NetworkContractTests : IntegrationTestBase
 
         // TRON — the values the platform ran with before T148, moved by T169
         // (refund 2.0 → 2.60, payout 0.50 → 2.25, TRX floor 100 → 1500) and
-        // its own minimum price (50).
-        Assert.Equal(2.60m, tron.RefundGasFeeFallbackUsdt);
+        // its own minimum price (50); T169a moved the refund 2.60 → 2.80 (the
+        // refund fee is now the platform's whole outlay) and added the deposit
+        // refund daily limit (100 per network).
+        Assert.Equal(2.80m, tron.RefundGasFeeFallbackUsdt);
+        Assert.Equal(100m, tron.DepositRefundDailyLimitUsdt);
+        Assert.Equal(100m, ethereum.DepositRefundDailyLimitUsdt);
         Assert.Equal(2.25m, tron.PayoutGasFeeFallbackUsdt);
         Assert.Equal(10.0m, tron.MaxChargedGasFeeUsdt);
         Assert.Equal(1500m, tron.HotWalletNativeBalanceMinimum);
@@ -354,6 +358,31 @@ public class NetworkContractTests : IntegrationTestBase
         Assert.Null(ethereum.MinTransactionAmountUsdt);
     }
 
+    [Theory]
+    [InlineData(false)] // row deleted
+    [InlineData(true)]  // row present but unconfigured
+    public async Task Without_A_Usable_Row_The_Tron_Refund_Fallback_Is_2_80(bool keepUnconfigured)
+    {
+        // T169a doğrulama S4-3 — the seeded row is tested elsewhere; this pins
+        // the code-side value both readers use when the row is gone (the
+        // T169a owner-recorded 2.80, ⚠ PARA), not the old 2.60.
+        await using (var ctx = CreateContext())
+        {
+            var rows = ctx.Set<SystemSetting>()
+                .Where(s => s.Key == BlockchainNetworkSettingKeys.Tron.RefundGasFeeFallbackUsdt);
+            if (keepUnconfigured)
+                await rows.ExecuteUpdateAsync(u => u.SetProperty(s => s.IsConfigured, false));
+            else
+                await rows.ExecuteDeleteAsync();
+        }
+
+        await using var read = CreateContext();
+        Assert.Equal(2.80m,
+            (await new BlockchainNetworkSettingsProvider(read).GetAsync(BlockchainNetwork.TRON, default)).RefundGasFeeFallbackUsdt);
+        Assert.Equal(2.80m,
+            (await new Skinora.Transactions.Application.GasFee.GasFeeSettingsProvider(read).GetAsync(default)).RefundGasFeeEstimateUsdt);
+    }
+
     [Fact]
     public async Task An_Admin_Change_To_One_Network_Does_Not_Move_The_Other()
     {
@@ -368,7 +397,7 @@ public class NetworkContractTests : IntegrationTestBase
         await using var read = CreateContext();
         var provider = new BlockchainNetworkSettingsProvider(read);
         Assert.Equal(0.80m, (await provider.GetAsync(BlockchainNetwork.ETHEREUM, default)).RefundGasFeeFallbackUsdt);
-        Assert.Equal(2.60m, (await provider.GetAsync(BlockchainNetwork.TRON, default)).RefundGasFeeFallbackUsdt);
+        Assert.Equal(2.80m, (await provider.GetAsync(BlockchainNetwork.TRON, default)).RefundGasFeeFallbackUsdt);
     }
 }
 
@@ -422,7 +451,9 @@ public class NetworkSettingsMigrationRehearsalTests : IntegrationTestBase
         Assert.Equal("0.50", settings["blockchain.ethereum.fee_cap_usd_per_transfer"]);
         Assert.Equal("180", settings["blockchain.ethereum.fee_cap_wait_alarm_minutes"]);
         Assert.Equal("0.06", settings["blockchain.ethereum.fuel_wallet_eth_balance_minimum"]);
-        Assert.Equal("2.60", settings["blockchain.refund_gas_fee_estimate_usdt"]); // T169
+        Assert.Equal("2.80", settings["blockchain.refund_gas_fee_estimate_usdt"]); // T169 2.60 → T169a 2.80
+        Assert.Equal("100", settings["blockchain.tron.deposit_refund_daily_limit_usdt"]); // T169a
+        Assert.Equal("100", settings["blockchain.ethereum.deposit_refund_daily_limit_usdt"]); // T169a
     }
 
     [Fact]
@@ -449,9 +480,10 @@ public class NetworkSettingsMigrationRehearsalTests : IntegrationTestBase
         Assert.Equal("3.25", after["blockchain.refund_gas_fee_estimate_usdt"]);
         Assert.Equal("250", after["hot_wallet.trx_balance_minimum"]);
         var ethereumKeys = BlockchainNetworkSettingKeys.Ethereum.AllKeys();
-        // T148's eight rows + T149's minimum-refund multiplier; migrating to
-        // the latest applies both, and rolling back to before T148 removes both.
-        Assert.Equal(9, ethereumKeys.Count);
+        // T148's eight rows + T149's minimum-refund multiplier + T169a's deposit
+        // refund daily limit; migrating to the latest applies them all, and
+        // rolling back to before T148 removes them all.
+        Assert.Equal(10, ethereumKeys.Count);
         foreach (var key in ethereumKeys)
             Assert.Equal(SystemSettingSeed.All.Single(s => s.Key == key).Value, after[key]);
 

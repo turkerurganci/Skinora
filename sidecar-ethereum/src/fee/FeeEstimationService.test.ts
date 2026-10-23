@@ -25,6 +25,7 @@ interface Seen {
     block: bigint;
   }>;
   feeHistory: Array<{ count: number; newest: bigint; percentiles: readonly number[] }>;
+  balances: Array<{ address: string; block: bigint }>;
 }
 
 function rpc(
@@ -33,13 +34,21 @@ function rpc(
     /** T159a — the fuel probe's answer (a plain ETH send); mainnet: 21,000. */
     fuelGas?: bigint | Error;
     history?: FeeHistory | Error;
+    /** T169a — the deposit's own ETH (an earlier fuel's remainder); default 0. */
+    depositBalance?: bigint | Error;
   } = {},
 ): FeeRpc & { seen: Seen } {
-  const seen: Seen = { estimateGas: [], feeHistory: [] };
+  const seen: Seen = { estimateGas: [], feeHistory: [], balances: [] };
   return {
     seen,
     async getBlockHeader() {
       return { number: LATEST, hash: '0xabc', timestamp: 0, provider: 'alchemy' };
+    },
+    async getBalance(address, block) {
+      seen.balances.push({ address, block });
+      const balance = opts.depositBalance ?? 0n;
+      if (balance instanceof Error) throw balance;
+      return balance;
     },
     async estimateGas(tx, block) {
       seen.estimateGas.push({ tx, block });
@@ -267,6 +276,110 @@ describe('EthFeeEstimationService — cost model (08 §3.7.5, §3.7.7)', () => {
     ] as const) {
       expect(typeof result[key]).toBe('string');
     }
+  });
+});
+
+/**
+ * T169a (proje sahibi kararı 2026-10-21 — ⚠ PARA) — a refund from a deposit is
+ * charged what the platform sends for it: the fuel the signer sends (send needs
+ * − the deposit's own ETH, `TransferService.sendFuel`) plus that fuel's own fee;
+ * no fuel, no charge (`platformSpendWei` "0" — T160c F1). Literals by hand.
+ */
+describe('EthFeeEstimationService — T169a the fuel actually sent', () => {
+  /** T159b's ETH price (T160c F1 table) — not the PRICE fixture above. */
+  const T159B_ETH: EthPriceQuote = {
+    priceMicroUsdt: 2_444_861_904n,
+    priceUsdt: '2444.861904',
+    source: 'binance',
+    ageSeconds: 0,
+  };
+  /** Sepolia-like block: base 0.5 gwei, tips below the 0.01 gwei floor. */
+  const SEPOLIA_HISTORY: FeeHistory = { baseFeePerGas: [500_000_000n], reward: [[1_000_000n]] };
+  const refund = { fromAddress: DEPOSIT, toAddress: BUYER, amount: '10.2', token: 'USDT' as const };
+
+  it("subtracts the deposit's own ETH from the fuel and keeps the fuel's own fee", async () => {
+    // Budget 50,822 × 0.384 gwei = 19,515,648,000,000; the deposit holds
+    // 10,000,000,000,000 → fuel 9,515,648,000,000 + 21,000 × 0.217 gwei
+    // (4,557,000,000,000) = 14,072,648,000,000 wei × 2,364.48 = 0.03327… → 0.04
+    // (with an empty deposit: 24,072,648,000,000 → 0.06).
+    const r = rpc({ depositBalance: 10_000_000_000_000n });
+
+    const result = await service(r).estimate(refund);
+
+    expect(r.seen.balances).toEqual([{ address: DEPOSIT, block: LATEST }]);
+    expect(result.depositBalanceWei).toBe('10000000000000');
+    expect(result.feeWei).toBe('14072648000000');
+    expect(result.feeUsdt).toBe('0.04');
+  });
+
+  it('charges nothing when the deposit already holds the whole budget — the signer sends no fuel', async () => {
+    const r = rpc({ depositBalance: 19_515_648_000_000n });
+
+    const result = await service(r).estimate(refund);
+
+    expect(result.feeWei).toBe('0');
+    expect(result.feeUsdt).toBe('0.00');
+  });
+
+  it('one wei short of the budget: a one-wei fuel and its whole fee', async () => {
+    const r = rpc({ depositBalance: 19_515_647_999_999n });
+
+    const result = await service(r).estimate(refund);
+
+    expect(result.feeWei).toBe((1n + 4_557_000_000_000n).toString());
+  });
+
+  it("T159b pair — the second refund from one Sepolia deposit rides on the first fuel's remainder: 0.00, was 0.25", async () => {
+    // First refund's fuel: 168,300 (153,000 + 10 %) × 1.01 gwei = 169,983,000,000,000
+    // wei; it used 152,417 gas at 0.51 gwei = 77,732,670,000,000 → the deposit keeps
+    // 92,250,330,000,000. The second refund (recipient now holds the token,
+    // 80,000 gas → limit 88,000, budget 88,880,000,000,000) needs no fuel.
+    // Before T169a: 88,880,000,000,000 + 21,000 × 0.51 gwei = 99,590,000,000,000
+    // wei × 2,444.861904 = 0.24348… → 0.25 for ETH nobody sent.
+    const r = rpc({
+      gas: 80_000n,
+      fuelGas: 21_000n,
+      history: SEPOLIA_HISTORY,
+      depositBalance: 92_250_330_000_000n,
+    });
+
+    const result = await service(r, T159B_ETH).estimate(refund);
+
+    expect(result.gasLimit).toBe('88000');
+    expect(result.maxFeePerGasWei).toBe('1010000000');
+    expect(result.feeWei).toBe('0');
+    expect(result.feeUsdt).toBe('0.00');
+  });
+
+  it('Sepolia first refund from an empty deposit: fuel + its fee, exactly as before T169a', async () => {
+    // 168,300 × 1.01 gwei + 207,391 × 0.51 gwei = 169,983,000,000,000 +
+    // 105,769,410,000,000 = 275,752,410,000,000 wei × 2,444.861904 = 0.67416… → 0.68.
+    const r = rpc({ gas: 153_000n, fuelGas: 207_391n, history: SEPOLIA_HISTORY });
+
+    const result = await service(r, T159B_ETH).estimate(refund);
+
+    expect(result.depositBalanceWei).toBe('0');
+    expect(result.feeWei).toBe('275752410000000');
+    expect(result.feeUsdt).toBe('0.68');
+  });
+
+  it('the hot wallet path reads no balance and is unchanged', async () => {
+    const r = rpc({ gas: 64_031n, depositBalance: 10n ** 18n });
+
+    const result = await service(r).estimate({ toAddress: BUYER, amount: '20', token: 'USDT' });
+
+    expect(r.seen.balances).toEqual([]);
+    expect(result.depositBalanceWei).toBe('0');
+    expect(result.feeWei).toBe((64_031n * 217_000_000n).toString());
+  });
+
+  it('an unreadable deposit balance fails the estimate — never a guessed (or zero) fuel', async () => {
+    const r = rpc({ depositBalance: new AllProvidersFailedError('eth_getBalance', []) });
+
+    await expect(service(r).estimate(refund)).rejects.toSatisfy(
+      (e: unknown) =>
+        e instanceof SidecarError && e.code === 'RPC_ALL_PROVIDERS_FAILED' && e.retryable,
+    );
   });
 });
 

@@ -142,5 +142,14 @@ public enum AuditAction
     // NewValue = {blockchainTransactionId, transactionId, network, type, token,
     // amount, gasFee, toAddress, retryCount}. ActorType = ADMIN.
     // FUND_MOVEMENT category: the approval lets the money leave.
-    OUTBOUND_TRANSFER_APPROVED
+    OUTBOUND_TRANSFER_APPROVED,
+
+    // T169a — an admin let a refund held by its network's deposit refund
+    // daily limit (blockchain.*.deposit_refund_daily_limit_usdt, 08 §3.3c)
+    // past the limit (07 §9.35 AD42). ⚠ PARA. EntityType =
+    // "BlockchainTransaction"; EntityId = its Id; NewValue = {blockchainTransactionId,
+    // transactionId, network, type, token, amount, toAddress, limitUsdt,
+    // usedLast24hUsdt, heldAt}. ActorType = ADMIN. FUND_MOVEMENT category:
+    // the release lets the money leave.
+    DEPOSIT_REFUND_LIMIT_RELEASED
 }

@@ -1328,6 +1328,44 @@ export interface OutboundApprovalQueue {
   /** The gate's state: true = rows leave without approval. */
   autoSendEnabled: boolean;
   rows: OutboundApprovalRow[];
+  /** T169a — every network's deposit refund daily limit and its last 24 hours. */
+  depositRefundLimits?: DepositRefundLimit[];
+  /** T169a — refunds the deposit refund daily limit holds right now (AD42 releases one). */
+  limitHeldRows?: DepositRefundHeldRow[];
+}
+
+/** T169a — one network's deposit refund daily limit (08 §3.3c). */
+export interface DepositRefundLimit {
+  network: string;
+  limitUsdt: number;
+  usedLast24hUsdt: number;
+}
+
+/** T169a — a refund waiting because deposit refunds reached the network's 24-hour limit. */
+export interface DepositRefundHeldRow {
+  blockchainTransactionId: string;
+  transactionId: string;
+  network: string;
+  type: string;
+  chainToken: string | null;
+  amount: number;
+  gasFee: number | null;
+  toAddress: string;
+  heldAt: string;
+  approvedAt: string | null;
+  createdAt: string;
+}
+
+export interface DepositRefundLimitRelease {
+  blockchainTransactionId: string;
+  network: string;
+  type: string;
+  amount: number;
+  toAddress: string;
+  limitUsdt: number;
+  usedLast24hUsdt: number;
+  releasedAt: string;
+  releasedByAdminId: string;
 }
 
 export interface OutboundApproval {
@@ -1349,6 +1387,16 @@ export function approveOutboundTransfer(
 ): Promise<OutboundApproval> {
   return apiClient<OutboundApproval>(
     `/admin/wallets/outbound-approvals/${encodeURIComponent(blockchainTransactionId)}/approve`,
+    { method: "POST" },
+  );
+}
+
+/** T169a AD42 — let one held refund go past its network's deposit refund daily limit. */
+export function releaseDepositRefundLimit(
+  blockchainTransactionId: string,
+): Promise<DepositRefundLimitRelease> {
+  return apiClient<DepositRefundLimitRelease>(
+    `/admin/wallets/outbound-approvals/${encodeURIComponent(blockchainTransactionId)}/release-daily-limit`,
     { method: "POST" },
   );
 }

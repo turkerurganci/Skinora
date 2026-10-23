@@ -296,7 +296,7 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         public Task<OutboundApprovalQueueDto> ListPendingAsync(CancellationToken cancellationToken)
         {
             Calls.Add(("list", Guid.Empty, Guid.Empty));
-            return Task.FromResult(new OutboundApprovalQueueDto(false, []));
+            return Task.FromResult(new OutboundApprovalQueueDto(false, [], [], []));
         }
 
         public Task<ApprovalResult> ApproveAsync(
@@ -304,6 +304,17 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         {
             Calls.Add(("approve", adminId, blockchainTransactionId));
             return Task.FromResult(Result);
+        }
+
+        /// <summary>T169a — AD42 stubbed at the HTTP boundary.</summary>
+        public LimitReleaseResult ReleaseResult { get; set; } =
+            LimitReleaseResult.Fail(LimitReleaseError.RowNotFound, "unset");
+
+        public Task<LimitReleaseResult> ReleaseDailyLimitAsync(
+            Guid adminId, Guid blockchainTransactionId, string? ipAddress, CancellationToken cancellationToken)
+        {
+            Calls.Add(("release", adminId, blockchainTransactionId));
+            return Task.FromResult(ReleaseResult);
         }
     }
 

@@ -78,7 +78,7 @@ export const SUPPORT_EMAIL = "support@skinora.com";
 export const SUPPORT_HREF = process.env.NEXT_PUBLIC_SUPPORT_URL ?? `mailto:${SUPPORT_EMAIL}`;
 
 /** Date shown as "last updated" on the legal pages (ISO, yyyy-mm-dd). */
-export const LEGAL_TEXT_DATE = "2026-10-21";
+export const LEGAL_TEXT_DATE = "2026-10-23";
 
 export function isOperatorInfoComplete(info: OperatorInfo = OPERATOR_INFO): boolean {
   return REQUIRED_OPERATOR_FIELDS.every((field) => info[field].trim() !== "");
