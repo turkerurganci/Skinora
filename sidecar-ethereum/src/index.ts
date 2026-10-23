@@ -124,19 +124,23 @@ function main(): void {
 
   // T152 sends (08 §3.7.6, §3.7.7) and T154's fee estimate, over ONE ETH
   // price service: the fee cap and the estimate use the same price.
-  const { feeEstimator, feeWaits, transfers, walletBalances, fuelLedgerSeeded } = buildOutbound(
-    config,
-    {
-      rpc,
-      journal,
-      wallet,
-      finalizedHead: () => finality.status().snapshot?.number ?? null,
-      // The configured address prices a payout even before the key is mounted.
-      feeHotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
-      // T153 — fuel the journal holds in a block is not foreign ETH.
-      fuelLedger: services.fuel,
-    },
-  );
+  const {
+    feeEstimator,
+    feeWaits,
+    transfers,
+    walletBalances,
+    fuelLedgerSeeded,
+    depositRefundPermits,
+  } = buildOutbound(config, {
+    rpc,
+    journal,
+    wallet,
+    finalizedHead: () => finality.status().snapshot?.number ?? null,
+    // The configured address prices a payout even before the key is mounted.
+    feeHotWalletAddress: keys.hotWalletAddress ?? config.hotWalletAddress,
+    // T153 — fuel the journal holds in a block is not foreign ETH.
+    fuelLedger: services.fuel,
+  });
   logger.info(
     {
       fuelWalletAddress: keys.fuelWalletAddress,
@@ -172,6 +176,9 @@ function main(): void {
     });
   }, config.transfers.keeperIntervalMs);
   keeper.unref();
+  // T172b — permits that expired unused are reported (log + metric).
+  depositRefundPermits.reportExpiredAll();
+  setInterval(() => depositRefundPermits.reportExpiredAll(), 5 * 60 * 1000).unref();
 
   const app = createApp({
     internalKey: config.internalKey,

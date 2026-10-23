@@ -1017,9 +1017,14 @@ export class TransferService {
     // path, but a deposit path always signs with the derived deposit key and
     // always lands here); a HOT_WALLET refund is hot-wallet outflow and is
     // weighed by the hot wallet's daily cap below instead.
+    let depositRefundPermitId: string | null = null;
     if (TransferService.isDepositRefund(plan)) {
       try {
-        this.deps.guard.assertDepositRefundDailyLimit(plan.amountUnits, this.deps.journal.all());
+        depositRefundPermitId = this.deps.guard.assertDepositRefundDailyLimit(
+          plan.amountUnits,
+          this.deps.journal.all(),
+          { blockchainTransactionId: plan.id.slice('transfer:'.length), recipient: plan.recipient },
+        );
       } catch (err) {
         throw this.deferral(plan, err);
       }
@@ -1134,9 +1139,22 @@ export class TransferService {
       mined: null,
       conflictSuspectedAt: null,
       conflict: null,
+      ...(depositRefundPermitId !== null ? { depositRefundPermitId } : {}),
     };
+    // T172b — the operator permit is spent by this signature (sahip kararı
+    // 2026-10-23): durably used before the record that makes it count.
+    if (depositRefundPermitId !== null) {
+      this.deps.guard.consumeDepositRefundPermit(depositRefundPermitId, plan.id);
+    }
     // Durable BEFORE broadcast (08 §3.7.6): from here on the id owns this nonce.
-    this.deps.journal.put(record);
+    try {
+      this.deps.journal.put(record);
+    } catch (err) {
+      if (depositRefundPermitId !== null) {
+        this.deps.guard.restoreDepositRefundPermit(depositRefundPermitId);
+      }
+      throw err;
+    }
     this.deps.feeWaits.cleared(plan.id);
     logger.info(
       {

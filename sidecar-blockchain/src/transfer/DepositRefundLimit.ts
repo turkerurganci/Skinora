@@ -18,6 +18,7 @@ import {
   depositRefundLimitRefusalsTotal,
   depositRefundWindowUsdt,
 } from '../metrics.js';
+import type { DepositRefundPermitStore } from './DepositRefundPermits.js';
 
 /**
  * T172b — the signer's own 24-hour cap on refunds that leave a DEPOSIT
@@ -91,6 +92,8 @@ export interface DepositRefundEntry {
   readonly at: number;
   /** Set once the broadcast returned a hash; null while in flight or when unknown. */
   readonly txHash: string | null;
+  /** The operator permit that let this refund past the cap (T172b, sahip kararı); absent/null otherwise. */
+  readonly permitId?: string | null;
 }
 
 /** Writes a file so that a crash leaves either the previous or the new content. */
@@ -128,7 +131,8 @@ function isEntry(value: unknown): value is DepositRefundEntry {
     /^\d+$/.test(e.units) &&
     typeof e.at === 'number' &&
     Number.isFinite(e.at) &&
-    (e.txHash === null || typeof e.txHash === 'string')
+    (e.txHash === null || typeof e.txHash === 'string') &&
+    (e.permitId === undefined || e.permitId === null || typeof e.permitId === 'string')
   );
 }
 
@@ -197,6 +201,11 @@ export interface DepositRefundLimitDeps {
   ledgerError?: string | null;
   /** 10^decimals of the tokens (6 for USDT and USDC) — for the USDT gauges. */
   decimalsPower: bigint;
+  /**
+   * One-time operator permits past the cap (sahip kararı 2026-10-23, modal);
+   * null/absent = no refund ever passes over the cap.
+   */
+  permits?: DepositRefundPermitStore | null;
   now?: () => number;
 }
 
@@ -205,6 +214,7 @@ export class DepositRefundLimit {
   private readonly ledger: DepositRefundLedger | null;
   private readonly ledgerError: string;
   private readonly decimalsPower: bigint;
+  private readonly permits: DepositRefundPermitStore | null;
   private readonly now: () => number;
 
   constructor(deps: DepositRefundLimitDeps) {
@@ -212,6 +222,7 @@ export class DepositRefundLimit {
     this.ledger = deps.ledger;
     this.ledgerError = deps.ledgerError ?? 'not opened';
     this.decimalsPower = deps.decimalsPower;
+    this.permits = deps.permits ?? null;
     this.now = deps.now ?? (() => Date.now());
     if (this.maxDailyUnits !== null) {
       depositRefundDailyLimitUsdt.set(this.toUsdt(this.maxDailyUnits));
@@ -237,7 +248,7 @@ export class DepositRefundLimit {
    * request can interleave. Returns the entry's key for
    * {@link settle} / {@link release}.
    */
-  reserve(blockchainTransactionId: string, units: bigint): string {
+  reserve(blockchainTransactionId: string, units: bigint, recipient: string): string {
     if (this.maxDailyUnits === null) {
       throw this.refuse(
         'DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED',
@@ -261,7 +272,25 @@ export class DepositRefundLimit {
     for (const entry of live) used += BigInt(entry.units);
     const projected = used + units;
     depositRefundWindowUsdt.set(this.toUsdt(used));
+    const key = randomUUID();
+    let permitId: string | null = null;
     if (projected > this.maxDailyUnits) {
+      // Sahip kararı 2026-10-23 — an operator's one-time permit for exactly
+      // this refund lets it past the cap; it still counts toward the window.
+      const permit = this.findPermit(blockchainTransactionId, recipient, units);
+      if (permit !== null) {
+        try {
+          this.permits!.consume(permit, key);
+          permitId = permit;
+        } catch (err) {
+          logger.error(
+            { permitId: permit, reason: (err as Error).message },
+            'Deposit refund permit could not be consumed — the refund waits',
+          );
+        }
+      }
+    }
+    if (projected > this.maxDailyUnits && permitId === null) {
       throw this.refuse(
         'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
         `Deposit refunds in 24 h would reach ${projected} (counted ${used} + ${units}), above the configured limit ${this.maxDailyUnits} — the refund waits, nothing signed.`,
@@ -270,16 +299,18 @@ export class DepositRefundLimit {
       );
     }
     const entry: DepositRefundEntry = {
-      key: randomUUID(),
+      key,
       blockchainTransactionId,
       units: units.toString(),
       at: now,
       txHash: null,
+      permitId,
     };
     try {
       // Entries that left the window are dropped on the same write.
       this.ledger.replace([...live, entry]);
     } catch (err) {
+      if (permitId !== null) this.restorePermit(permitId);
       throw this.refuse(
         'DEPOSIT_REFUND_LEDGER_UNAVAILABLE',
         `Deposit refund ledger could not be written (${(err as Error).message}) — the refund waits, nothing signed.`,
@@ -314,12 +345,46 @@ export class DepositRefundLimit {
   release(key: string): void {
     if (!this.ledger) return;
     try {
+      const released = this.ledger.list().find((entry) => entry.key === key);
       this.ledger.replace(this.ledger.list().filter((entry) => entry.key !== key));
+      // Its permit is usable again: the transfer it allowed never left.
+      if (released?.permitId) this.restorePermit(released.permitId);
       depositRefundWindowUsdt.set(this.toUsdt(this.usedUnits()));
     } catch (err) {
       logger.warn(
         { key, reason: (err as Error).message },
         'Deposit refund ledger: release not recorded (entry stays counted — fail closed)',
+      );
+    }
+  }
+
+  private findPermit(
+    blockchainTransactionId: string,
+    recipient: string,
+    units: bigint,
+  ): string | null {
+    if (!this.permits) return null;
+    try {
+      return (
+        this.permits.findUsable({ blockchainTransactionId, recipient, amountUnits: units })?.id ??
+        null
+      );
+    } catch (err) {
+      logger.error(
+        { reason: (err as Error).message },
+        'Deposit refund permits unreadable — no permit applies',
+      );
+      return null;
+    }
+  }
+
+  private restorePermit(permitId: string): void {
+    try {
+      this.permits?.restore(permitId);
+    } catch (err) {
+      logger.error(
+        { permitId, reason: (err as Error).message },
+        'Deposit refund permit could not be restored (it stays used — write a new one)',
       );
     }
   }

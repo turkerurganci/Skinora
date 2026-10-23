@@ -16,6 +16,9 @@ import { EthPriceService, type EthPriceServiceOptions } from './price/EthPriceSe
 import { ethUsdFromPriceService } from './transfer/FeePolicy.js';
 import { FeeWaitTracker } from './transfer/FeeWaitTracker.js';
 import { TransferGuard } from './transfer/TransferGuard.js';
+import { DepositRefundPermitStore } from './transfer/DepositRefundPermits.js';
+import { checksummedEvmAddress } from './address/evmAddress.js';
+import { depositRefundPermitsTotal } from './metrics.js';
 import { TransferService } from './transfer/TransferService.js';
 import type { TxJournal } from './transfer/TxJournal.js';
 import type { EthereumHdWallet } from './wallet/HdWalletService.js';
@@ -196,6 +199,15 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
     fuelWalletAddress,
   });
   const feeWaits = new FeeWaitTracker(config.transfers.journalDir);
+  // T172b (sahip kararı 2026-10-23) — one-time operator permits past the
+  // deposit refund cap, written on the server by `node dist/cli/
+  // depositRefundPermit.js` into the journal's volume. No HTTP route.
+  const depositRefundPermits = new DepositRefundPermitStore({
+    baseDir: config.transfers.journalDir,
+    network: 'ETHEREUM',
+    isValidAddress: (address) => checksummedEvmAddress(address) !== null,
+    onEvent: (event) => depositRefundPermitsTotal.inc({ event }),
+  });
   const transfers = new TransferService({
     rpc,
     journal,
@@ -208,6 +220,7 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
       maxSingleTransferUnits: config.transfers.maxSingleTransferUnits,
       maxDailyOutflowUnits: config.transfers.maxDailyOutflowUnits,
       maxDailyDepositRefundUnits: config.transfers.maxDailyDepositRefundUnits,
+      depositRefundPermits,
     }),
     wallet,
     policy: {
@@ -260,5 +273,13 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
     wallets: watched,
     intervalMs: config.walletBalances.intervalMs,
   });
-  return { ethPrice, feeEstimator, feeWaits, transfers, walletBalances, fuelLedgerSeeded };
+  return {
+    ethPrice,
+    feeEstimator,
+    feeWaits,
+    transfers,
+    walletBalances,
+    fuelLedgerSeeded,
+    depositRefundPermits,
+  };
 }

@@ -123,6 +123,7 @@ export class RefundService {
     const reservation = this.depositRefundLimit.reserve(
       request.blockchainTransactionId,
       BigInt(amountUnits),
+      request.toBuyerAddress,
     );
     // Whether the token transfer may have reached the network. Until the
     // action starts, and when the build itself failed, it certainly did not.

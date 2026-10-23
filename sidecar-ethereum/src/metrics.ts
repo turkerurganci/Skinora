@@ -248,6 +248,17 @@ export const depositRefundWindowUsdt = getOrCreateGauge({
   help: 'Deposit refunds signed in the last 24 hours, USDT (USDC counted 1:1)',
 });
 
+/**
+ * T172b — one-time operator permits past the deposit refund cap (sahip kararı
+ * 2026-10-23): seen (the service first read it), used, restored, expired
+ * (unused), revoked; `created` happens in the CLI process, not this registry.
+ */
+export const depositRefundPermitsTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_deposit_refund_permits_total',
+  help: 'Deposit refund cap permits by event (seen | used | restored | expired | revoked)',
+  labelNames: ['event'] as const,
+});
+
 /** T172b — the configured cap; no series while it is unset (every deposit refund then waits). */
 export const depositRefundDailyLimitUsdt = getOrCreateGauge({
   name: 'skinora_ethereum_deposit_refund_daily_limit_usdt',

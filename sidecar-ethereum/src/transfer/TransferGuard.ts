@@ -9,6 +9,7 @@ import {
 import type { EthereumRpcClient } from '../rpc/RpcClient.js';
 import { TRANSFER_TOPIC, addressTopic } from './erc20.js';
 import { TransferDeferredError } from './FeePolicy.js';
+import type { DepositRefundPermitStore } from './DepositRefundPermits.js';
 import type { JournalRecord } from './TxJournal.js';
 
 /**
@@ -58,6 +59,12 @@ export interface TransferGuardDeps {
   maxDailyOutflowUnits: bigint | null;
   /** T172b — raw token units; null when unset → every deposit refund waits (fail closed). */
   maxDailyDepositRefundUnits: bigint | null;
+  /**
+   * T172b — one-time operator permits past the deposit refund cap (proje
+   * sahibi kararı 2026-10-23, modal), written on the server by
+   * `node dist/cli/depositRefundPermit.js`; absent = none ever applies.
+   */
+  depositRefundPermits?: DepositRefundPermitStore | null;
   now?: () => number;
 }
 
@@ -89,7 +96,11 @@ export class TransferGuard {
    * refund lock from this check until the record is on disk, so two refunds
    * from two deposits cannot both read the same total.
    */
-  assertDepositRefundDailyLimit(units: bigint, journal: readonly JournalRecord[]): void {
+  assertDepositRefundDailyLimit(
+    units: bigint,
+    journal: readonly JournalRecord[],
+    refund: { readonly blockchainTransactionId: string; readonly recipient: string },
+  ): string | null {
     const max = this.deps.maxDailyDepositRefundUnits;
     if (max === null) {
       depositRefundLimitRefusalsTotal.inc({ reason: 'DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED' });
@@ -102,11 +113,67 @@ export class TransferGuard {
     depositRefundWindowUsdt.set(Number(used) / TOKEN_UNIT);
     const projected = used + units;
     if (projected > max) {
+      // Sahip kararı 2026-10-23 — an operator's one-time permit for exactly
+      // this refund lets it past the cap (still counted: it is journalled).
+      // Returned, not consumed: the caller consumes it right before the
+      // signature is journalled, so a wait (fuel, fee) does not burn it.
+      const permitId = this.findPermit(units, refund);
+      if (permitId !== null) return permitId;
       depositRefundLimitRefusalsTotal.inc({ reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED' });
       throw new TransferDeferredError(
         `Deposit refunds in 24 h would reach ${projected} (journal ${used} + ${units}), above the configured limit ${max} — the refund waits, nothing signed.`,
         'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
       );
+    }
+    return null;
+  }
+
+  /** Marks a permit used, durably — called right before the signed refund is journalled. */
+  consumeDepositRefundPermit(permitId: string, usedBy: string): void {
+    try {
+      if (!this.deps.depositRefundPermits) throw new Error('no permit store');
+      this.deps.depositRefundPermits.consume(permitId, usedBy);
+    } catch (err) {
+      throw new SidecarError(
+        `Deposit refund permit ${permitId} could not be consumed (${(err as Error).message}) — nothing signed.`,
+        'DEPOSIT_REFUND_PERMIT_UNAVAILABLE',
+        true,
+      );
+    }
+  }
+
+  /** The signature it was consumed for was never journalled: usable again. */
+  restoreDepositRefundPermit(permitId: string): void {
+    try {
+      this.deps.depositRefundPermits?.restore(permitId);
+    } catch (err) {
+      logger.error(
+        { permitId, reason: (err as Error).message },
+        'Deposit refund permit could not be restored (it stays used — write a new one)',
+      );
+    }
+  }
+
+  private findPermit(
+    units: bigint,
+    refund: { readonly blockchainTransactionId: string; readonly recipient: string },
+  ): string | null {
+    const store = this.deps.depositRefundPermits;
+    if (!store) return null;
+    try {
+      return (
+        store.findUsable({
+          blockchainTransactionId: refund.blockchainTransactionId,
+          recipient: refund.recipient,
+          amountUnits: units,
+        })?.id ?? null
+      );
+    } catch (err) {
+      logger.error(
+        { reason: (err as Error).message },
+        'Deposit refund permits unreadable — no permit applies',
+      );
+      return null;
     }
   }
 

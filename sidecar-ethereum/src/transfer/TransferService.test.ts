@@ -15,6 +15,8 @@ import { TransferDeferredError } from './FeePolicy.js';
 import { TransferGuard } from './TransferGuard.js';
 import { TransferService, type PayoutRequest } from './TransferService.js';
 import { TxJournal } from './TxJournal.js';
+import { DepositRefundPermitStore, type PermitEvent } from './DepositRefundPermits.js';
+import { checksummedEvmAddress } from '../address/evmAddress.js';
 
 /**
  * T152 — the Ethereum send path against an in-memory chain. The money rules
@@ -58,6 +60,7 @@ function build(
     maxSingle: bigint | null;
     maxDaily: bigint | null;
     maxDepositRefund: bigint | null;
+    permits: DepositRefundPermitStore | null;
     hotKey: string | null;
     hotAddress: string | null;
     coldAddress: string | null;
@@ -82,6 +85,7 @@ function build(
       maxDailyOutflowUnits: 'maxDaily' in overrides ? overrides.maxDaily! : 20_000_000_000n,
       maxDailyDepositRefundUnits:
         'maxDepositRefund' in overrides ? overrides.maxDepositRefund! : 1_000_000_000_000n,
+      depositRefundPermits: overrides.permits ?? null,
       now,
     }),
     wallet,
@@ -1872,5 +1876,184 @@ describe('T172b — what the deposit refund window counts (TransferGuard)', () =
       record({ conflict: { detectedAt: NOW, chainNonce: 1 } }), // nonce used elsewhere
     ];
     expect(guardAt().depositRefundsLast24h(journal)).toBe(25_000_000n);
+  });
+});
+
+/**
+ * T172b — the operator's one-time permit past the deposit refund cap (proje
+ * sahibi kararı 2026-10-23, modal). Consumed only when the refund is signed
+ * and journalled (a fuel / fee wait does not burn it); still counted.
+ */
+describe('T172b — a one-time permit past the deposit refund cap', () => {
+  const CAP = 100_000_000n;
+  const DEPOSIT_B = wallet.derive(6);
+  let events: PermitEvent[];
+
+  beforeEach(() => {
+    events = [];
+    for (const d of [DEPOSIT.address, DEPOSIT_B.address]) {
+      chain.setToken(USDT, d, 5_000_000_000n);
+      chain.setEth(d, 10n ** 17n);
+    }
+  });
+
+  function permits(network: 'TRON' | 'ETHEREUM' = 'ETHEREUM') {
+    return new DepositRefundPermitStore({
+      baseDir: dir,
+      network,
+      isValidAddress: (a) => checksummedEvmAddress(a) !== null,
+      now: () => clock,
+      onEvent: (e) => events.push(e),
+    });
+  }
+
+  function grant(overrides: Record<string, unknown> = {}) {
+    return permits().create({
+      blockchainTransactionId: ID(1),
+      recipient: BUYER,
+      amount: '500',
+      createdBy: 'operator',
+      reason: 'single refund above the cap',
+      ...overrides,
+    });
+  }
+
+  function refund500(n = 1, overrides: Record<string, unknown> = {}) {
+    return { ...refundRequest(n), amount: '500', ...overrides };
+  }
+
+  it('the matching refund is signed once and counted; other refunds still meet the cap', async () => {
+    const created = grant();
+    const { service, journal } = build({ maxDepositRefund: CAP, permits: permits() });
+    await service.refund(refund500());
+    expect(chain.sent).toHaveLength(1);
+    expect(journal.get(`transfer:${ID(1)}`)?.depositRefundPermitId).toBe(created.id);
+    expect(permits().list()[0].consumedBy).toBe(`transfer:${ID(1)}`);
+    expect(events).toEqual(expect.arrayContaining(['created', 'seen', 'used']));
+    // The window now holds 500: a 1-unit refund from another deposit waits.
+    await expect(
+      service.refund({
+        ...refundRequest(2),
+        depositIndex: 6,
+        depositAddress: DEPOSIT_B.address,
+        amount: '0.000001',
+      }),
+    ).rejects.toMatchObject({ reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED' });
+  });
+
+  it('single use: a second refund id with the same amount and buyer is not covered', async () => {
+    grant();
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    await service.refund(refund500());
+    await expect(
+      service.refund(refund500(2, { depositIndex: 6, depositAddress: DEPOSIT_B.address })),
+    ).rejects.toMatchObject({ reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED' });
+    expect(chain.sent).toHaveLength(1);
+  });
+
+  it.each([
+    ['another recipient', { toBuyerAddress: SELLER }],
+    ['another amount', { amount: '499.999999' }],
+    ['a larger amount', { amount: '500.000001' }],
+  ])('%s is not covered — waits, nothing signed', async (_label, overrides) => {
+    grant();
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    await expect(service.refund(refund500(1, overrides))).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('another refund id (same deposit, buyer and amount) is not covered', async () => {
+    grant();
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    await expect(service.refund(refund500(2))).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+    expect(chain.sent).toHaveLength(0);
+    expect(permits().list()[0].consumedAt).toBeNull();
+  });
+
+  it('a TRON permit is never honoured by the Ethereum signer', async () => {
+    new DepositRefundPermitStore({
+      baseDir: dir,
+      network: 'TRON',
+      isValidAddress: () => true,
+      now: () => clock,
+    }).create({
+      blockchainTransactionId: ID(1),
+      recipient: BUYER,
+      amount: '500',
+      createdBy: 'op',
+      reason: 'wrong service',
+    });
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    await expect(service.refund(refund500())).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+  });
+
+  it('an expired permit is refused and reported', async () => {
+    grant({ validForMs: 60 * 60 * 1000 });
+    clock += 60 * 60 * 1000;
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    await expect(service.refund(refund500())).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+    expect(events).toContain('expired');
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('a wait before the signature (fee above the cap) does not burn the permit', async () => {
+    grant();
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    chain.baseFee = 50_000_000_000n;
+    await expect(service.refund(refund500())).rejects.toMatchObject({ reason: 'FEE_ABOVE_CAP' });
+    expect(permits().list()[0].consumedAt).toBeNull();
+    chain.baseFee = 1_000_000_000n;
+    await service.refund(refund500());
+    expect(permits().list()[0].consumedAt).not.toBeNull();
+  });
+
+  it('the same refund asked twice at once: one signature, replayed for the second', async () => {
+    grant();
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    const [a, b] = await Promise.all([service.refund(refund500()), service.refund(refund500())]);
+    expect(a.txHash).toBe(b.txHash);
+    expect(new Set(chain.sent.map((raw) => Transaction.from(raw).hash)).size).toBe(1);
+  });
+
+  it('two different refunds at once with one permit: only the permitted one passes', async () => {
+    grant();
+    const { service } = build({ maxDepositRefund: CAP, permits: permits() });
+    const results = await Promise.allSettled([
+      service.refund(refund500()),
+      service.refund(refund500(2, { depositIndex: 6, depositAddress: DEPOSIT_B.address })),
+    ]);
+    expect(results[0].status).toBe('fulfilled');
+    expect(results[1].status).toBe('rejected');
+    expect(chain.sent).toHaveLength(1);
+  });
+});
+
+describe('T172b — the permit store and command are one shared file (parity)', () => {
+  const read = (path: string) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+  it.each([['transfer/DepositRefundPermits.ts'], ['cli/permitCli.ts']])(
+    '%s is byte-identical in the TRON and the Ethereum service',
+    (file) => {
+      expect(read(resolve(__dirname, '..', file))).toBe(
+        read(resolve(__dirname, '../../../sidecar-blockchain/src', file)),
+      );
+    },
+  );
+
+  it('no HTTP route can create a permit: the API layer never touches the permit store', () => {
+    const apiDir = resolve(__dirname, '../api');
+    for (const file of readdirSync(apiDir)) {
+      if (!file.endsWith('.ts') || file.endsWith('.test.ts')) continue;
+      expect(readFileSync(join(apiDir, file), 'utf8'), file).not.toMatch(
+        /DepositRefundPermit|permitCli/,
+      );
+    }
   });
 });
