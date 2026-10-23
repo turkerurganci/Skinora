@@ -142,7 +142,10 @@ Tam tablo DEPLOY_RUNBOOK §P.7'de. Özet:
 
 ## Commit & PR
 
-COMMIT_PLACEHOLDER
+- Branch: `task/T170-izleme` (origin/main `44d32f54`'ten)
+- Commit: `68ae42d1` alarmlar + izleyici; `a9f97922` panolar + bekçi + env; `1086c43c` belgeler; `c09ba6e5` realtime testi, rapor taslağı, memory; sonraki commit'ler rapor/CI
+- PR: #379
+- CI: dal run'ı PR'da (son durum PR'ın kontrollerinde)
 
 ## Known Limitations / Follow-up
 
