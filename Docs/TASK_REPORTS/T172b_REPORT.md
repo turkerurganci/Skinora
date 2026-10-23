@@ -118,8 +118,8 @@
 ## Commit & PR
 
 - Dal: `task/T172b-imza-servisi-iade-tavani` (origin/main `792f8ed2`'den)
-- Commit'ler: `f1220cf8` (servisler), `07aadcf2` (compose/env/alarm/backend), belgeler commit'i
-- PR: #PR_NO
+- Commit'ler: `f1220cf8` (servisler), `07aadcf2` (compose/env/alarm/backend), `8ba6cd35` (belgeler), PR numarası commit'i
+- PR: #378
 - CI: aşağıda (PR açıldıktan sonra)
 
 ## T169a ile ilişki
