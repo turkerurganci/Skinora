@@ -1694,7 +1694,7 @@ Elenenler: **Cloudflare Health Checks** ücretsiz planda yok (yalnız Pro ve üs
 | Ethereum finalized durma eşiği | **1800** sn (olağan 13–19 dk) | `ETHEREUM_FINALIZED_STALL_SECONDS` | T142 ölçümü |
 | TronGrid günlük istek bütçesi | **100.000** (ücretsiz plan) | `TRONGRID_DAILY_REQUEST_BUDGET` | T169 karar 18 (⚠) |
 | Ethereum sağlayıcı hata oranı | **> 0,5**, 10 dk pencere, 10 dk sürerse | kural (`ethereum-rpc-provider-failing`) | T170 (öneriyle kaydedildi — ⚠) |
-| Sıcak cüzdan izleyicisi bayat | **7200** sn (varsayılan 15 dk cron'da 8 kaçırılmış tur) | kural (`hot-wallet-monitor-stale`); cron `hot_wallet.monitor_cron` 2 saatten seyrek yapılırsa bu kural da yükseltilmeli | T170 (öneriyle kaydedildi — ⚠) |
+| Sıcak cüzdan izleyicisi bayat | **7200** sn (varsayılan 15 dk cron'da 8 kaçırılmış tur) | kural (`hot-wallet-monitor-stale`); cron `hot_wallet.monitor_cron` 2 saatten seyrek yapılırsa bu kural da yükseltilmeli. Servisi yapılandırılmış ama sıcak adresi boş ağda da ateşler (bilinçli: o ağda ödeme gönderilemez, limit izlenemez) | T170 (öneriyle kaydedildi — ⚠) |
 | Servis sağlıksız sayılması | **3** ardışık başarısız prob (dakikada bir) | `HealthProbe:FailureThreshold` | WP1 |
 | Giden kuyruk satır eşiği | **25** satır / ağ | `OUTBOUND_PENDING_ROWS_ALARM_THRESHOLD` | T158 (⚠) |
 | Ethereum gönderim bekleme alarmı | **10.800** sn | `ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS` | T152 |
