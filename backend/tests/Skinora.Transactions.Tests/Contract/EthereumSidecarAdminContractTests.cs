@@ -264,22 +264,75 @@ public sealed class EthereumSidecarAdminContractTests
         Assert.Equal(TransferVerifyOutcome.Unavailable, result.Outcome);
     }
 
+    /// <summary>
+    /// T172a — the TRON service answers the same verify read now (the closure
+    /// tool after a restore, DEPLOY_RUNBOOK §N.8): the backend sends the body the
+    /// TRON service's handler test replays
+    /// (<c>sidecar-blockchain/contracts/transfer-verify/request.json</c>) and
+    /// reads its answer.
+    /// </summary>
     [Fact]
-    public async Task Verify_TronIsNotAsked()
+    public async Task Verify_Tron_SendsTheBodyTheTronServiceAccepts_AndItsAnswerIsRead()
     {
-        var calls = 0;
-        var client = TransferClient(BlockchainNetwork.TRON, (_, _) =>
+        var expected = Load("transfer-verify", "request.json", "sidecar-blockchain");
+        var answer = Load("transfer-verify", "response.json", "sidecar-blockchain");
+        var sent = new List<(string Path, string Body)>();
+        var client = TransferClient(BlockchainNetwork.TRON, async (request, ct) =>
         {
-            calls++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            sent.Add((request.RequestUri!.AbsolutePath, await request.Content!.ReadAsStringAsync(ct)));
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(answer) };
         });
 
         var result = await client.VerifyTransferAsync(
-            new TransferVerifyRequest("tron-tx", StablecoinType.USDT, null, "TTo", 1m),
+            new TransferVerifyRequest(
+                expected["txHash"]!.GetValue<string>(),
+                Enum.Parse<StablecoinType>(expected["token"]!.GetValue<string>()),
+                expected["from"]!.GetValue<string>(),
+                expected["to"]!.GetValue<string>(),
+                decimal.Parse(expected["amount"]!.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture)),
             CancellationToken.None);
 
-        Assert.Equal(0, calls);
-        Assert.Equal(TransferVerifyOutcome.NotSupported, result.Outcome);
+        Assert.Equal(TransferVerifyOutcome.Match, result.Outcome);
+        Assert.Equal(answer["blockNumber"]!.GetValue<long>(), result.BlockNumber);
+        var (path, body) = Assert.Single(sent);
+        Assert.Equal("/api/transfer/verify", path);
+        Assert.True(
+            JsonNode.DeepEquals(expected, JsonNode.Parse(body)),
+            "The backend no longer sends the body the TRON service's verify handler test accepts."
+            + Environment.NewLine + "  expected: " + expected.ToJsonString()
+            + Environment.NewLine + "  sent:     " + body);
+    }
+
+    [Theory]
+    [InlineData("{\"outcome\":\"MATCH\",\"matches\":false,\"blockNumber\":1}")]   // contradictory
+    [InlineData("{\"outcome\":\"MAYBE\",\"matches\":true,\"blockNumber\":1}")]    // unknown outcome
+    [InlineData("{}")]
+    public async Task Verify_Tron_AnAnswerThatIsNotAnExactMatch_IsNotAMatch(string json)
+    {
+        var client = TransferClient(BlockchainNetwork.TRON, (_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+            }));
+
+        var result = await client.VerifyTransferAsync(
+            new TransferVerifyRequest(new string('a', 64), StablecoinType.USDT, null, "TTo", 1m),
+            CancellationToken.None);
+
+        Assert.NotEqual(TransferVerifyOutcome.Match, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Verify_Tron_A502IsUnavailable_NeverAMatch()
+    {
+        var client = TransferClient(BlockchainNetwork.TRON, (_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadGateway)));
+
+        var result = await client.VerifyTransferAsync(
+            new TransferVerifyRequest(new string('a', 64), StablecoinType.USDT, null, "TTo", 1m),
+            CancellationToken.None);
+
+        Assert.Equal(TransferVerifyOutcome.Unavailable, result.Outcome);
     }
 
     private static HttpBlockchainTransferClient TransferClient(
@@ -308,9 +361,9 @@ public sealed class EthereumSidecarAdminContractTests
             NullLogger<HttpBlockchainSidecarClient>.Instance);
     }
 
-    private static JsonNode Load(string folder, string file)
+    private static JsonNode Load(string folder, string file, string service = "sidecar-ethereum")
     {
-        var path = Path.Combine(FindRepositoryRoot(), "sidecar-ethereum", "contracts", folder, file);
+        var path = Path.Combine(FindRepositoryRoot(), service, "contracts", folder, file);
         return JsonNode.Parse(File.ReadAllText(path))
             ?? throw new InvalidOperationException($"{path} is empty.");
     }

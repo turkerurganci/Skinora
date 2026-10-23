@@ -97,6 +97,7 @@ public class DepositRefundDailyLimitTests : IntegrationTestBase
             NullOutboundQueueObserver.Instance,
             new StubPlatformWalletAddressProvider(),
             NullDepositRefundLimitObserver.Instance,
+            NullOutboundDispatchPauseObserver.Instance,
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
 

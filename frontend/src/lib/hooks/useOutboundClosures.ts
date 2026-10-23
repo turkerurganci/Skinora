@@ -13,19 +13,19 @@ import {
 
 const CLOSURES_ROOT = ["admin", "wallets", "outbound-closures"] as const;
 
-/** Open Ethereum outbound rows a closure can be proposed for. */
-export function useOutboundClosureCandidates() {
+/** One network's open outbound rows a closure can be proposed for (T172a: per network). */
+export function useOutboundClosureCandidates(network: string) {
   return useQuery({
-    queryKey: [...CLOSURES_ROOT, "candidates"],
-    queryFn: listOutboundClosureCandidates,
+    queryKey: [...CLOSURES_ROOT, "candidates", network],
+    queryFn: () => listOutboundClosureCandidates(network),
   });
 }
 
-/** Closures, optionally narrowed to one status. */
-export function useOutboundClosures(status?: OutboundClosureStatus) {
+/** One network's closures, optionally narrowed to one status. */
+export function useOutboundClosures(network: string, status?: OutboundClosureStatus) {
   return useQuery({
-    queryKey: [...CLOSURES_ROOT, "list", status ?? null],
-    queryFn: () => listOutboundClosures(status),
+    queryKey: [...CLOSURES_ROOT, "list", network, status ?? null],
+    queryFn: () => listOutboundClosures(status, network),
   });
 }
 

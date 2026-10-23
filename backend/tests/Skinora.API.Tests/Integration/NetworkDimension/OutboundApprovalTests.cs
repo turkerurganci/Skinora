@@ -52,7 +52,8 @@ public class OutboundApprovalTests : IntegrationTestBase
     private async Task<BlockchainTransaction> SeedRowAsync(
         BlockchainTransactionType type,
         BlockchainTransactionStatus status = BlockchainTransactionStatus.PENDING,
-        string? txHash = null)
+        string? txHash = null,
+        string depositAddress = TronAddress)
     {
         await using var ctx = CreateContext();
         var tx = NewTransaction(_seller.Id, network: BlockchainNetwork.TRON);
@@ -64,7 +65,7 @@ public class OutboundApprovalTests : IntegrationTestBase
         Guid? depositId = null;
         if (type != BlockchainTransactionType.SELLER_PAYOUT)
         {
-            var deposit = NewPaymentAddress(tx.Id, BlockchainNetwork.TRON, TronAddress, ++_seq);
+            var deposit = NewPaymentAddress(tx.Id, BlockchainNetwork.TRON, depositAddress, ++_seq);
             ctx.Set<PaymentAddress>().Add(deposit);
             await ctx.SaveChangesAsync();
             depositId = deposit.Id;
@@ -81,7 +82,7 @@ public class OutboundApprovalTests : IntegrationTestBase
             Type = type,
             PaymentAddressId = type == BlockchainTransactionType.SWEEP ? depositId : null,
             TxHash = txHash,
-            FromAddress = type == BlockchainTransactionType.SELLER_PAYOUT ? string.Empty : TronAddress,
+            FromAddress = type == BlockchainTransactionType.SELLER_PAYOUT ? string.Empty : depositAddress,
             ToAddress = SellerWallet,
             Amount = 40m + (++_seq),
             Token = StablecoinType.USDT,
@@ -107,7 +108,7 @@ public class OutboundApprovalTests : IntegrationTestBase
             ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new OneMinuteRetryPolicy(),
             new OutboxService(ctx), Contracts,
             new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
-            new StubPlatformWalletAddressProvider(), NullDepositRefundLimitObserver.Instance,
+            new StubPlatformWalletAddressProvider(), NullDepositRefundLimitObserver.Instance, NullOutboundDispatchPauseObserver.Instance,
             _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
         await dispatch.ExecuteAsync();
     }
@@ -244,6 +245,101 @@ public class OutboundApprovalTests : IntegrationTestBase
         Assert.Equal(payout.Id, Assert.Single(_tron.Broadcasts).BlockchainTransactionId);
     }
 
+    // =================================================================
+    // T172a — the dispatcher's stop switch (outbound.dispatch_paused, ⚠ PARA)
+    // =================================================================
+
+    private const string SecondDeposit = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8";
+
+    private async Task SetSettingAsync(string key, string value)
+    {
+        await using var ctx = CreateContext();
+        await ctx.Set<SystemSetting>().Where(s => s.Key == key)
+            .ExecuteUpdateAsync(u => u.SetProperty(s => s.Value, value));
+    }
+
+    [Fact]
+    public async Task T172a_The_Migrated_Database_Starts_With_Dispatch_Not_Paused()
+    {
+        await using var ctx = CreateContext();
+        var row = await ctx.Set<SystemSetting>().AsNoTracking()
+            .SingleAsync(s => s.Key == OutboundDispatchPause.PausedKey);
+        Assert.Equal("false", row.Value);
+        Assert.True(row.IsConfigured);
+        Assert.Equal("bool", row.DataType);
+        Assert.False(await OutboundDispatchPause.IsPausedAsync(ctx, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task T172a_Paused_Nothing_Leaves_Approved_Payout_Sweep_Or_Gate_Open_And_No_Retry_Is_Spent()
+    {
+        // After a restore: the gate open (worst case), an approved payout, a
+        // sweep — every kind the dispatcher can send. Paused, none of them goes.
+        await SetSettingAsync(OutboundApprovalGate.AutoSendKey, "true");
+        await SetSettingAsync(OutboundDispatchPause.PausedKey, "true");
+        var payout = await SeedRowAsync(BlockchainTransactionType.SELLER_PAYOUT);
+        var refund = await SeedRowAsync(BlockchainTransactionType.BUYER_REFUND);
+        var sweep = await SeedRowAsync(BlockchainTransactionType.SWEEP, depositAddress: SecondDeposit);
+        await using (var ctx = CreateContext())
+        {
+            Assert.Null((await Service(ctx).ApproveAsync(_admin.Id, payout.Id, null, CancellationToken.None)).Error);
+        }
+
+        await DispatchAsync();
+        await DispatchAsync();
+
+        Assert.Empty(_tron.Broadcasts);
+        await using (var ctx = CreateContext())
+        {
+            var rows = await ctx.Set<BlockchainTransaction>().AsNoTracking()
+                .Where(b => b.Id == payout.Id || b.Id == refund.Id || b.Id == sweep.Id).ToListAsync();
+            Assert.All(rows, r =>
+            {
+                Assert.Equal(BlockchainTransactionStatus.PENDING, r.Status);
+                Assert.Equal(0, r.RetryCount);
+                Assert.Null(r.TxHash);
+                Assert.Null(r.NextAttemptAt);
+            });
+        }
+
+        // Unpaused, they leave on the next run.
+        await SetSettingAsync(OutboundDispatchPause.PausedKey, "false");
+        await DispatchAsync();
+        Assert.Equal(3, _tron.Broadcasts.Count);
+    }
+
+    [Theory]
+    [InlineData("TRUE")]
+    [InlineData("yes")]   // unparsable: an operator tried to set it — honoured as paused
+    [InlineData("")]
+    public async Task T172a_Any_Value_But_False_Reads_As_Paused(string value)
+    {
+        await SetSettingAsync(OutboundDispatchPause.PausedKey, value);
+        await SeedRowAsync(BlockchainTransactionType.SWEEP);
+
+        await DispatchAsync();
+
+        Assert.Empty(_tron.Broadcasts);
+    }
+
+    [Fact]
+    public async Task T172a_Pausing_Mid_Run_Stops_The_Very_Next_Row()
+    {
+        // Two sweeps in one run; the switch is turned on while the first one
+        // is being sent. The second is not sent.
+        var first = await SeedRowAsync(BlockchainTransactionType.SWEEP);
+        var second = await SeedRowAsync(BlockchainTransactionType.SWEEP, depositAddress: SecondDeposit);
+        _tron.OnBroadcast = () => SetSettingAsync(OutboundDispatchPause.PausedKey, "true");
+
+        await DispatchAsync();
+
+        Assert.Equal(first.Id, Assert.Single(_tron.Broadcasts).BlockchainTransactionId);
+        await using var ctx = CreateContext();
+        var held = await ctx.Set<BlockchainTransaction>().AsNoTracking().SingleAsync(b => b.Id == second.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, held.Status);
+        Assert.Equal(0, held.RetryCount);
+    }
+
     private sealed class OneMinuteRetryPolicy : ITransferRetryPolicy
     {
         public Task<int> GetMaxAttemptsAsync(CancellationToken cancellationToken) => Task.FromResult(4);
@@ -256,12 +352,16 @@ public class OutboundApprovalTests : IntegrationTestBase
     {
         public List<TransferBroadcastRequest> Broadcasts { get; } = [];
 
-        public Task<TransferBroadcastResult> BroadcastAsync(
+        /// <summary>T172a — runs while a row is being sent (e.g. an operator flips a setting).</summary>
+        public Func<Task>? OnBroadcast { get; set; }
+
+        public async Task<TransferBroadcastResult> BroadcastAsync(
             TransferBroadcastRequest request, CancellationToken cancellationToken)
         {
             Broadcasts.Add(request);
-            return Task.FromResult(new TransferBroadcastResult(
-                TransferBroadcastStatus.Success, "tron-sent-" + Broadcasts.Count, null, null));
+            if (OnBroadcast is not null) await OnBroadcast();
+            return new TransferBroadcastResult(
+                TransferBroadcastStatus.Success, "tron-sent-" + Broadcasts.Count, null, null);
         }
 
         public Task<TransferStatusResult> GetStatusAsync(string txHash, CancellationToken cancellationToken) =>

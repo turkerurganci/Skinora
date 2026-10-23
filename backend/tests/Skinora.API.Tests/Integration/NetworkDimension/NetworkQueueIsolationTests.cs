@@ -250,7 +250,7 @@ public class NetworkQueueIsolationTests : IntegrationTestBase
                 new OutboxService(ctx), StablecoinContractRegistry.FromOptions(new StablecoinContractOptions()),
                 new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
                 new StubPlatformWalletAddressProvider(),
-                NullDepositRefundLimitObserver.Instance,
+                NullDepositRefundLimitObserver.Instance, NullOutboundDispatchPauseObserver.Instance,
                 _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
             await job.ExecuteAsync();
         }

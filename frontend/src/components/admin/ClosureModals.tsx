@@ -14,11 +14,19 @@ import { explorerTxUrl, networkMeta } from "@/lib/utils/blockchain";
 import { BlockchainNetwork } from "@/types/enums";
 import { AdminDialog } from "./AdminDialog";
 
-// The closure tool is Ethereum-only (the signing service that lost its journal).
-const NETWORK = BlockchainNetwork.ETHEREUM;
-const EXPLORER = networkMeta(NETWORK).explorerName;
-
+// T172a — the tool takes both networks; each row/closure names its own.
 export const TX_HASH_SHAPE = /^0x[0-9a-fA-F]{64}$/;
+/** A TRON transaction id as TronScan shows it: 64 hex digits, no prefix. */
+export const TRON_TX_ID_SHAPE = /^[0-9a-fA-F]{64}$/;
+
+/** The row's network as the enum; an unknown value reads as Ethereum (the pre-T172a tool). */
+export function closureNetwork(network: string | undefined): BlockchainNetwork {
+  return network === BlockchainNetwork.TRON ? BlockchainNetwork.TRON : BlockchainNetwork.ETHEREUM;
+}
+
+export function hashShapeFor(network: BlockchainNetwork): RegExp {
+  return network === BlockchainNetwork.TRON ? TRON_TX_ID_SHAPE : TX_HASH_SHAPE;
+}
 export const MIN_REASON_LENGTH = 20;
 const MAX_REASON_LENGTH = 2000;
 
@@ -28,10 +36,18 @@ const PRIMARY_BUTTON = "rounded-md px-3 py-2 text-sm font-semibold text-white di
 const FIELD =
   "rounded-md border bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2";
 
-function ExplorerLink({ hash, label }: { hash: string; label: string }) {
+function ExplorerLink({
+  hash,
+  label,
+  network,
+}: {
+  hash: string;
+  label: string;
+  network: BlockchainNetwork;
+}) {
   return (
     <a
-      href={explorerTxUrl(NETWORK, hash)}
+      href={explorerTxUrl(network, hash)}
       target="_blank"
       rel="noopener noreferrer"
       className="text-xs text-blue-600 hover:underline"
@@ -90,10 +106,13 @@ function ProposeForm({
   const [reason, setReason] = useState("");
   const [touched, setTouched] = useState(false);
   const propose = useProposeOutboundClosure();
+  const network = closureNetwork(candidate.network);
+  const explorer = networkMeta(network).explorerName;
+  const tron = network === BlockchainNetwork.TRON;
 
   const trimmedHash = hash.trim();
   const trimmedReason = reason.trim();
-  const hashValid = TX_HASH_SHAPE.test(trimmedHash);
+  const hashValid = hashShapeFor(network).test(trimmedHash);
   const reasonValid =
     trimmedReason.length >= MIN_REASON_LENGTH && trimmedReason.length <= MAX_REASON_LENGTH;
 
@@ -128,6 +147,11 @@ function ProposeForm({
         })}
       </p>
       <ChainTokenNote row={candidate} />
+      {candidate.rowStatus === "FAILED" && (
+        <p data-testid="restored-failed-note" className="text-xs font-medium text-amber-800">
+          {tp("restoredFailed")}
+        </p>
+      )}
 
       <div className="flex flex-col gap-1 text-sm">
         <label htmlFor={`${uid}-hash`} className="font-medium text-gray-700">
@@ -143,11 +167,15 @@ function ProposeForm({
           aria-invalid={touched && !hashValid}
           className={`${FIELD} font-mono text-xs ${touched && !hashValid ? "border-red-300 focus:ring-red-200" : "border-gray-300 focus:ring-blue-200"}`}
         />
-        <span className="text-xs text-gray-500">{tp("hashHelp")}</span>
-        {touched && !hashValid && <span className="text-xs text-red-600">{tp("hashInvalid")}</span>}
+        <span className="text-xs text-gray-500">{tron ? tp("hashHelpTron") : tp("hashHelp")}</span>
+        {touched && !hashValid && (
+          <span className="text-xs text-red-600">
+            {tron ? tp("hashInvalidTron") : tp("hashInvalid")}
+          </span>
+        )}
       </div>
       {hashValid && (
-        <ExplorerLink hash={trimmedHash} label={tp("explorer", { explorer: EXPLORER })} />
+        <ExplorerLink hash={trimmedHash} network={network} label={tp("explorer", { explorer })} />
       )}
 
       <div className="flex flex-col gap-1 text-sm">
@@ -214,6 +242,8 @@ function ApproveForm({ closure, onClose }: { closure: OutboundClosure; onClose: 
   const uid = useId();
   const [typed, setTyped] = useState("");
   const approve = useApproveOutboundClosure();
+  const network = closureNetwork(closure.network);
+  const explorer = networkMeta(network).explorerName;
 
   const typedTrimmed = typed.trim();
   // Hex is case-insensitive; the point of retyping is a human comparison.
@@ -237,7 +267,7 @@ function ApproveForm({ closure, onClose }: { closure: OutboundClosure; onClose: 
       <p className="text-xs text-gray-700">{ta("systemCheck")}</p>
 
       <div className="flex flex-col gap-2 rounded-md bg-gray-50 p-3 text-sm">
-        <p className="text-xs font-medium text-gray-700">{ta("compare", { explorer: EXPLORER })}</p>
+        <p className="text-xs font-medium text-gray-700">{ta("compare", { explorer })}</p>
         <dl className="flex flex-col gap-1">
           <div>
             <dt className="text-xs text-gray-500">{tr("recipient")}</dt>
@@ -255,7 +285,11 @@ function ApproveForm({ closure, onClose }: { closure: OutboundClosure; onClose: 
             <dd className="break-all font-mono text-xs text-gray-900">{closure.txHash}</dd>
           </div>
         </dl>
-        <ExplorerLink hash={closure.txHash} label={ta("explorer", { explorer: EXPLORER })} />
+        <ExplorerLink
+          hash={closure.txHash}
+          network={network}
+          label={ta("explorer", { explorer })}
+        />
         <p className="text-xs text-gray-600">
           {ta("proposedBy", { name: closure.proposedByName })}
         </p>

@@ -82,7 +82,9 @@ public class OutboundRowClosureMigrationRehearsalTests : IntegrationTestBase
 
         var checks = await QueryAsync(
             "SELECT name AS Value FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('OutboundRowClosures')");
-        Assert.Contains("CK_OutboundRowClosures_Network_Ethereum", checks);
+        // T172a renamed the network CHECK: TRON and Ethereum (the T157 Ethereum-only one is gone).
+        Assert.Contains("CK_OutboundRowClosures_Network_Known", checks);
+        Assert.DoesNotContain("CK_OutboundRowClosures_Network_Ethereum", checks);
         Assert.Contains("CK_OutboundRowClosures_Approved_DifferentAdmin", checks);
         Assert.Contains("CK_OutboundRowClosures_Decision_Fields", checks);
 

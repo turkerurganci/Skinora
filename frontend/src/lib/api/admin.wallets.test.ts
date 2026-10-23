@@ -3,6 +3,7 @@ import {
   approveOutboundClosure,
   hotToColdTransfer,
   listAdminTransactions,
+  listOutboundClosureCandidates,
   listOutboundClosures,
   proposeOutboundClosure,
   rejectOutboundClosure,
@@ -42,6 +43,21 @@ describe("admin API — T157", () => {
     await listOutboundClosures();
     expect(apiClient.mock.calls[0][0]).toBe("/admin/wallets/outbound-closures?status=PROPOSED");
     expect(apiClient.mock.calls[1][0]).toBe("/admin/wallets/outbound-closures");
+  });
+
+  it("T172a — narrows both closure lists to one network when asked", async () => {
+    await listOutboundClosures("PROPOSED", "TRON");
+    await listOutboundClosures(undefined, "TRON");
+    await listOutboundClosureCandidates("TRON");
+    await listOutboundClosureCandidates();
+    expect(apiClient.mock.calls[0][0]).toBe(
+      "/admin/wallets/outbound-closures?status=PROPOSED&network=TRON",
+    );
+    expect(apiClient.mock.calls[1][0]).toBe("/admin/wallets/outbound-closures?network=TRON");
+    expect(apiClient.mock.calls[2][0]).toBe(
+      "/admin/wallets/outbound-closures/candidates?network=TRON",
+    );
+    expect(apiClient.mock.calls[3][0]).toBe("/admin/wallets/outbound-closures/candidates");
   });
 
   it("posts propose, approve (typed hash) and reject (note) to the right paths", async () => {

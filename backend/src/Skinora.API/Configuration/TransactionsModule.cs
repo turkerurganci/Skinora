@@ -302,6 +302,19 @@ public static class TransactionsModule
         // (Program.cs) — hosts without the probe read every network as healthy.
         services.TryAddSingleton<IBlockchainNetworkHealth>(AlwaysHealthyBlockchainNetworks.Instance);
 
+        // T172a — per-network deposit index floor (DEPLOY_RUNBOOK §N.8 (b)).
+        // Fail fast on an unknown network name or a value that is not plain
+        // digits within int (T172a doğrulama F1: the values are bound as text
+        // and parsed strictly — the binder used to drop "1.000" / "1e4"
+        // silently, leaving no floor): a floor that silently does not apply is
+        // exactly the restore risk it closes. The start-up line logs the
+        // effective floor of every network (runbook §N.8 step 3 checks it).
+        services.AddOptions<PaymentAddressIndexFloorOptions>()
+            .Bind(configuration.GetSection(PaymentAddressIndexFloorOptions.SectionName))
+            .Validate(o => o.Errors().Count == 0,
+                "PaymentAddresses:MinimumNextIndex is invalid — keys must be TRON or ETHEREUM and values plain digits (e.g. 1000, not 1.000) within int (DEPLOY_RUNBOOK §N.8).")
+            .ValidateOnStart();
+        services.AddHostedService<PaymentAddressIndexFloorStartupLog>();
         services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
         services.AddScoped<EnsurePaymentAddressJob>();
         services.AddHostedService<EnsurePaymentAddressJobRegistrar>();
@@ -352,6 +365,8 @@ public static class TransactionsModule
         services.AddSingleton<IOutboundQueueObserver, Skinora.API.Monitoring.PrometheusOutboundQueueObserver>();
         // T169a — deposit refund daily limit gauges (deposit-refund-daily-limit-held).
         services.AddSingleton<IDepositRefundLimitObserver, Skinora.API.Monitoring.PrometheusDepositRefundLimitObserver>();
+        // T172a doğrulama S4-4 — the stop switch's gauge (outbound-dispatch-paused).
+        services.AddSingleton<IOutboundDispatchPauseObserver, Skinora.API.Monitoring.PrometheusOutboundDispatchPauseObserver>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
         services.AddScoped<SellerPayoutQueueJob>();
         // WP3 — deposit → hot wallet sweep producer. Queues the PENDING SWEEP

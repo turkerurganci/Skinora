@@ -248,16 +248,17 @@ public class AdminWalletsEndpointTests : IClassFixture<AdminWalletsEndpointTests
         public ClosureResult Result { get; set; } = ClosureResult.Fail(ClosureError.Validation, "unset");
         public List<(string Call, Guid Admin, object?[] Args)> Calls { get; } = [];
 
-        public Task<IReadOnlyList<ClosureCandidateDto>> ListCandidatesAsync(CancellationToken cancellationToken)
+        public Task<IReadOnlyList<ClosureCandidateDto>> ListCandidatesAsync(
+            BlockchainNetwork? network, CancellationToken cancellationToken)
         {
-            Calls.Add(("candidates", Guid.Empty, []));
+            Calls.Add(("candidates", Guid.Empty, [network]));
             return Task.FromResult<IReadOnlyList<ClosureCandidateDto>>([]);
         }
 
         public Task<IReadOnlyList<ClosureDto>> ListAsync(
-            OutboundRowClosureStatus? status, CancellationToken cancellationToken)
+            OutboundRowClosureStatus? status, BlockchainNetwork? network, CancellationToken cancellationToken)
         {
-            Calls.Add(("list", Guid.Empty, [status]));
+            Calls.Add(("list", Guid.Empty, [status, network]));
             return Task.FromResult<IReadOnlyList<ClosureDto>>([]);
         }
 

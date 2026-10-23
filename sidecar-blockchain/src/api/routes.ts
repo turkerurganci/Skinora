@@ -17,12 +17,14 @@ import {
   transferStatusHandler,
 } from './transferHandlers.js';
 import { estimateFeeHandler, estimateSweepFeeHandler } from './feeHandlers.js';
+import { verifyHandler } from './verifyHandler.js';
 import { WalletManager } from '../wallet/WalletManager.js';
 import type { MonitorRegistry } from '../monitor/MonitorRegistry.js';
 import type { PostCancelMonitorRegistry } from '../monitor/PostCancelMonitor.js';
 import type { TransferService } from '../transfer/TransferService.js';
 import type { RefundService } from '../transfer/RefundService.js';
 import type { FeeEstimationService } from '../fee/FeeEstimationService.js';
+import type { TransferVerifier } from '../transfer/TransferVerifier.js';
 
 export interface RouterDeps {
   /**
@@ -36,6 +38,8 @@ export interface RouterDeps {
   transferService: TransferService;
   refundService: RefundService;
   feeEstimationService: FeeEstimationService;
+  /** T172a — `POST /api/transfer/verify`; absent = the endpoint answers 501. */
+  transferVerifier?: TransferVerifier;
 }
 
 export function createRouter(deps: RouterDeps): Router {
@@ -142,6 +146,24 @@ export function createRouter(deps: RouterDeps): Router {
   //   → 200 { txHash, blockNumber?, contractRet?, confirmations }
   //   → 502 { error: 'TRANSFER_STATUS_HTTP_ERROR' }
   apiRouter.get('/transfer/status/:txHash', transferStatusHandler(deps.transferService));
+
+  // T172a — the closure tool's chain check (same contract as the Ethereum
+  // service's T157 endpoint; read-only, signs nothing)
+  // POST /api/transfer/verify { network, txHash, token, from?, to, amount }
+  //   → 200 { outcome: MATCH|NOT_FOUND|REVERTED|NO_MATCHING_TRANSFER, matches, blockNumber, matchingTransfers }
+  //   → 400 { error: 'INVALID_VERIFY_REQUEST' }
+  //   → 502 { error: 'TRANSFER_VERIFY_*' }  (the backend reads it as "not verified")
+  const verifier = deps.transferVerifier;
+  apiRouter.post(
+    '/transfer/verify',
+    verifier
+      ? verifyHandler(verifier)
+      : (_req, res) => {
+          res
+            .status(501)
+            .json({ error: 'NOT_IMPLEMENTED', message: 'Transfer verification is not wired.' });
+        },
+  );
 
   // Reconciliation snapshot — T76 (05 §3.3)
   // POST /api/wallet/balances { addresses: string[] }

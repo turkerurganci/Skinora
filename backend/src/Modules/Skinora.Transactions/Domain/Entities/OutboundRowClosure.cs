@@ -4,9 +4,10 @@ using Skinora.Shared.Enums;
 namespace Skinora.Transactions.Domain.Entities;
 
 /// <summary>
-/// A two-person request to close one Ethereum outbound row with the hash of the
+/// A two-person request to close one outbound row with the hash of the
 /// transaction that is already on chain (T157 — 06 §3.8b, 07 §9.32,
-/// DEPLOY_RUNBOOK §D adım 7.4). ⚠ PARA.
+/// DEPLOY_RUNBOOK §D adım 7.4; T172a — TRON, and the post-restore FAILED
+/// row, DEPLOY_RUNBOOK §N.8). ⚠ PARA.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,7 +20,9 @@ namespace Skinora.Transactions.Domain.Entities;
 /// </para>
 /// <para>
 /// The tool never sends money. Approval writes <see cref="TxHash"/> to the
-/// row and moves it <c>PENDING → DETECTED</c> — nothing else.
+/// row and moves it <c>PENDING → DETECTED</c> (or, T172a, a <c>FAILED</c> row
+/// noted <c>POST_RESTORE_DUPLICATE</c> → <c>DETECTED</c>); the sender is
+/// written when the row recorded none — nothing else.
 /// </para>
 /// <para>
 /// Two admins: <see cref="ProposedByAdminId"/> proposes, a different admin
@@ -33,10 +36,13 @@ public class OutboundRowClosure : BaseEntity, IAuditableEntity
     /// <summary>The <c>BlockchainTransaction</c> row to be closed.</summary>
     public Guid BlockchainTransactionId { get; set; }
 
-    /// <summary>Always <see cref="BlockchainNetwork.ETHEREUM"/> (CHECK) — TRON has no journal-loss case.</summary>
+    /// <summary>The row's network — TRON or Ethereum (CHECK; T172a added TRON).</summary>
     public BlockchainNetwork Network { get; set; } = BlockchainNetwork.ETHEREUM;
 
-    /// <summary>The on-chain hash the row is closed with — canonical lowercase <c>0x</c> + 64 hex.</summary>
+    /// <summary>
+    /// The on-chain hash the row is closed with, lowercase: Ethereum <c>0x</c> +
+    /// 64 hex, TRON 64 hex without a prefix.
+    /// </summary>
     public string TxHash { get; set; } = string.Empty;
 
     /// <summary>Why this hash belongs to this row (what the proposer found on the chain).</summary>

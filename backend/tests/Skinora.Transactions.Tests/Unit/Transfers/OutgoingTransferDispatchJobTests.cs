@@ -84,6 +84,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             _observer,
             _walletAddresses,
             _limitObserver,
+            _pauseObserver,
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
     }
@@ -113,6 +114,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
     private readonly SeededNetworkSettings _settings = new();
     private readonly CapturingQueueObserver _observer = new();
     private readonly CapturingLimitObserver _limitObserver = new();
+    private readonly CapturingPauseObserver _pauseObserver = new();
     private readonly StubWalletAddresses _walletAddresses = new();
 
     public void Dispose()
@@ -1422,6 +1424,79 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         // The held refund has its own alarm; the stall queue does not see it.
         Assert.Equal(0, _observer.Last[BlockchainNetwork.TRON].Rows);
         Assert.Equal(1, _limitObserver.Last[BlockchainNetwork.TRON].Held);
+    }
+
+    // =================================================================
+    // T172a — the stop switch (outbound.dispatch_paused, ⚠ PARA)
+    // =================================================================
+
+    private void SetPaused(string value)
+    {
+        var row = _db.Set<Skinora.Platform.Domain.Entities.SystemSetting>()
+            .Single(s => s.Key == OutboundDispatchPause.PausedKey);
+        row.Value = value;
+        _db.SaveChanges();
+    }
+
+    [Fact]
+    public async Task T172a_Every_Run_Reports_The_Pause_State()
+    {
+        await _sut.ExecuteAsync();
+        Assert.Equal([false], _pauseObserver.Reports);
+
+        SetPaused("true");
+        await _sut.ExecuteAsync();
+        Assert.Equal([false, true], _pauseObserver.Reports);
+    }
+
+    [Fact]
+    public async Task T172a_Paused_Nothing_Is_Sent_And_The_Limit_Gauges_Stay_Fresh()
+    {
+        SetPaused("true");
+        _settings.DepositRefundDailyLimit = 30m;
+        await SeedPayoutAsync(amount: 100m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+        // The deposit refund limit series are still published while paused.
+        Assert.True(_limitObserver.Last.ContainsKey(BlockchainNetwork.TRON));
+        Assert.Equal(30m, _limitObserver.Last[BlockchainNetwork.TRON].Limit);
+    }
+
+    /// <summary>
+    /// T172a doğrulama S4-2 (öneriyle kaydedildi — ⚠ PARA): a database restored
+    /// from a pre-T172a backup has no pause row, so the runbook's
+    /// <c>UPDATE … = 'true'</c> touches nothing. Missing must read as paused,
+    /// not as "send".
+    /// </summary>
+    [Fact]
+    public async Task T172a_S4_2_A_Missing_Pause_Row_Reads_As_Paused_Nothing_Is_Sent()
+    {
+        var row = _db.Set<Skinora.Platform.Domain.Entities.SystemSetting>()
+            .Single(s => s.Key == OutboundDispatchPause.PausedKey);
+        _db.Remove(row);
+        await _db.SaveChangesAsync();
+        var payout = await SeedPayoutAsync(amount: 100m);
+
+        Assert.Equal(
+            new OutboundDispatchPause.State(Paused: true, RowMissing: true, RawValue: null),
+            await OutboundDispatchPause.ReadAsync(_db, CancellationToken.None));
+
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+        Assert.Equal([true], _pauseObserver.Reports);
+        var reloaded = await ReloadAsync(payout.PayoutRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, reloaded.Status);
+        Assert.Equal(0, reloaded.RetryCount);
+    }
+
+    private sealed class CapturingPauseObserver : IOutboundDispatchPauseObserver
+    {
+        public List<bool> Reports { get; } = [];
+
+        public void Report(bool paused) => Reports.Add(paused);
     }
 
     private sealed class CapturingQueueObserver : IOutboundQueueObserver
