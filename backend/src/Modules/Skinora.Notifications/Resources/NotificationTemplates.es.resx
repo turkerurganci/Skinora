@@ -180,4 +180,10 @@
   <data name="DELIVERY_DETECTED_Body" xml:space="preserve">
     <value>{ItemName} ya aparece en tu inventario de Steam. Compruébalo: si está ahí, confírmalo con "Lo he recibido" en la página de la transacción. Si no está, no hagas nada.</value>
   </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Title" xml:space="preserve">
+    <value>Admin: discrepancia entre libro y cadena</value>
+  </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Body" xml:space="preserve">
+    <value>La conciliación diaria encontró {MismatchCount} discrepancia(s) entre el libro y la cadena en {Network}. Revisa los registros de auditoría RECONCILIATION_MISMATCH antes de aprobar pagos.</value>
+  </data>
 </root>

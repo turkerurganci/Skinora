@@ -36,6 +36,7 @@ function settings(
   overrides: {
     emailAvailable?: boolean;
     telegramAvailable?: boolean;
+    telegramConnected?: boolean;
     discordAvailable?: boolean;
     discordConnected?: boolean;
   } = {},
@@ -50,9 +51,9 @@ function settings(
         available: overrides.emailAvailable ?? true,
       },
       telegram: {
-        enabled: false,
-        connected: false,
-        username: null,
+        enabled: overrides.telegramConnected ?? false,
+        connected: overrides.telegramConnected ?? false,
+        username: overrides.telegramConnected ? "linked" : null,
         available: overrides.telegramAvailable ?? true,
       },
       discord: {
@@ -159,6 +160,31 @@ describe("NotificationPreferencesSection — T165 availability", () => {
     expect(
       screen.queryByRole("button", { name: messages.settings.notifications.verify.sendButton }),
     ).not.toBeInTheDocument();
+  });
+
+  it("disables a connected Telegram toggle with the note while Telegram is unavailable", () => {
+    // T165 düzeltme turu (doğrulama bozması FE2): only the not-connected case
+    // was rendered, so dropping the availability condition went unnoticed.
+    renderWith(
+      <NotificationPreferencesSection
+        settings={settings({ telegramConnected: true, telegramAvailable: false })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("switch", { name: messages.settings.notifications.channels.telegram.label }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(messages.settings.notifications.channels.unavailable),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a connected Telegram toggle usable while Telegram is available (contrast)", () => {
+    renderWith(<NotificationPreferencesSection settings={settings({ telegramConnected: true })} />);
+
+    expect(
+      screen.getByRole("switch", { name: messages.settings.notifications.channels.telegram.label }),
+    ).toBeEnabled();
   });
 
   it("offers e-mail verification when e-mail is available", () => {

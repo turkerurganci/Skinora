@@ -305,10 +305,10 @@ public class EnumTests
         Assert.True(Enum.IsDefined(typeof(ReviewStatus), Enum.Parse<ReviewStatus>(valueName)));
     }
 
-    // ── NotificationType (28) ───────────────────────────────────────
+    // ── NotificationType (29) ───────────────────────────────────────
 
     [Fact]
-    public void NotificationType_ShouldHave28Values()
+    public void NotificationType_ShouldHave29Values()
     {
         // 26 after the v3.0 P2P pivot: ITEM_ESCROWED became PAYMENT_WINDOW_OPEN
         // and TRADE_OFFER_SENT_TO_BUYER became DELIVERY_EXPECTED (which also
@@ -320,8 +320,11 @@ public class EnumTests
         // 28 with DELIVERY_DETECTED (P2P-DeliveryPollingJob): the poll saw the
         // item arrive while the launch gate is closed, and the buyer is asked
         // to confirm — no existing type tells the buyer that.
+        // 29 with ADMIN_RECONCILIATION_MISMATCH (T165): the daily ledger
+        // reconciliation mismatch reaches the admins' inbox and channels, not
+        // only an open admin panel; no admin type fits a per-network event.
         var values = Enum.GetValues<NotificationType>();
-        Assert.Equal(28, values.Length);
+        Assert.Equal(29, values.Length);
     }
 
     [Theory]
@@ -352,6 +355,7 @@ public class EnumTests
     [InlineData(nameof(NotificationType.ACCOUNT_UNSUSPENDED))]
     [InlineData(nameof(NotificationType.ADMIN_PLATFORM_OUTAGE))]
     [InlineData(nameof(NotificationType.PAYOUT_ISSUE_RESOLVED))]
+    [InlineData(nameof(NotificationType.ADMIN_RECONCILIATION_MISMATCH))]
     [InlineData(nameof(NotificationType.DELIVERY_DETECTED))]
     public void NotificationType_ShouldContainExpectedValue(string valueName)
     {

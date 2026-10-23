@@ -67,6 +67,8 @@ public static class EmailCategoryMap
             [NotificationType.ADMIN_PAYMENT_FAILURE] = EmailCategory.Account,
             // WP16 — platform health outage alert is an admin operational tool.
             [NotificationType.ADMIN_PLATFORM_OUTAGE] = EmailCategory.Account,
+            // T165 — reconciliation mismatch, an admin operational alert.
+            [NotificationType.ADMIN_RECONCILIATION_MISMATCH] = EmailCategory.Account,
         };
 
     public static EmailCategory Resolve(NotificationType type)

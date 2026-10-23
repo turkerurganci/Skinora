@@ -215,6 +215,18 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       assert.match(hb.environment.HEARTBEAT_CHECK_URLS, /http:\/\/skinora-reverse-proxy\/api\/health/);
     });
 
+    test("T165: Grafana starts through the first-boot guard (no alert to the default example@email.com receiver)", () => {
+      // T165 düzeltme turu (doğrulama bulgu 2): without the guard an empty
+      // volume ran Grafana's default routing for up to a minute while rules fired.
+      const grafana = model.services["skinora-grafana"];
+      assert.deepEqual(grafana.entrypoint, ["/bin/sh", "/opt/skinora/first-boot.sh"]);
+      const mount = grafana.volumes.find((v) => v.target === "/opt/skinora/first-boot.sh");
+      assert.ok(mount?.read_only, "the guard is mounted read-only");
+      assert.ok(resolve(mount.source).endsWith(join("scripts", "grafana", "first-boot.sh")));
+      const data = grafana.volumes.find((v) => v.target === "/var/lib/grafana");
+      assert.equal(data?.type, "volume", "the guard's marker lives on the persistent data volume");
+    });
+
     test("refuses to render without the .env.trial marker (a forgotten --env-file must not fall back to the development .env)", () => {
       // .env.example is what the development .env is copied from: it must not
       // carry the marker, and the overlay must fail on it.

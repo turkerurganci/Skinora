@@ -117,6 +117,58 @@ groups:
             EthereumHotWalletUsdtLimitUnmonitored, T170); its ETH floor is
             ethereum-wallet-eth-low.
 
+      # T165 düzeltme turu — daily ledger reconciliation (05 §3.3 "admin'e
+      # critical alert"): before this a ledger / chain mismatch was an AuditLog
+      # row + a SignalR banner for whoever had the panel open. The backend
+      # publishes the mismatches its last completed round found per network
+      # and scope; the alarm resolves when a later round of that scope is
+      # balanced. Admins also get ADMIN_RECONCILIATION_MISMATCH in the inbox.
+      - uid: reconciliation-mismatch
+        title: Ledger And Chain Do Not Match
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max by (network, scope) (skinora_backend_reconciliation_mismatches) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: critical
+          category: money
+        annotations:
+          summary: 'Reconciliation: {{ .Labels.network }} {{ .Labels.scope }} does not match the chain ({{ .Values.A.Value }} mismatch(es))'
+          description: >-
+            The backend's daily ledger reconciliation (05 §3.3, tolerance zero) found
+            the platform's books and the on-chain balance apart (scope = DepositAddress,
+            HotWallet or ColdWallet). Money may be missing, or a payout / sweep is not in
+            the ledger. Do not approve payouts on that network until it is explained:
+            the per-token detail (expected, actual, delta, block) is in the
+            RECONCILIATION_MISMATCH audit rows of the admin panel. The alarm resolves
+            when a later round of the same scope is balanced (reconciliation.schedule_cron,
+            daily); a backend restart clears it until the next round (DEPLOY_RUNBOOK §P.4).
+
       # Backend money alarms (IAdminMoneyAlarmObserver): the admin-broadcast
       # consumers for a failed / blocked / deferred money movement publish the
       # time of their latest event. Fires for an hour after each one — also when

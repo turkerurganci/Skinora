@@ -142,6 +142,29 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
         Assert.False(Assert.Single(await _factory.GetPreferencesAsync(user.Id)).IsEnabled);
     }
 
+    [Fact]
+    public async Task UnavailableTelegram_LinkedButOff_CannotBeSwitchedOnAgain()
+    {
+        // T165 düzeltme turu (doğrulama bozması M23): the Telegram branch of the
+        // enabled:true check had no test — removing it went unnoticed.
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        // Seeded directly: the connect + webhook path would spend the shared
+        // anonymous rate-limit bucket the Discord callback tests rely on.
+        await _factory.SeedLinkedTelegramAsync(user.Id, externalId: "520052", enabled: false);
+
+        _factory.Channels.Unavailable.Add(NotificationChannel.TELEGRAM);
+
+        var on = await client.PutAsJsonAsync("/api/v1/users/me/settings/notifications",
+            new { telegram = new { enabled = true } });
+        Assert.Equal(HttpStatusCode.Conflict, on.StatusCode);
+        var body = await on.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("CHANNEL_UNAVAILABLE", body.GetProperty("error").GetProperty("code").GetString());
+        var telegram = Assert.Single(await _factory.GetPreferencesAsync(user.Id),
+            p => p.Channel == NotificationChannel.TELEGRAM);
+        Assert.False(telegram.IsEnabled);
+    }
+
     // ---------- PUT /users/me/settings/language ----------
 
     [Fact]
@@ -862,6 +885,22 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
                 .AsNoTracking()
                 .Where(p => p.UserId == userId)
                 .ToListAsync();
+        }
+
+        public async Task SeedLinkedTelegramAsync(Guid userId, string externalId, bool enabled)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<UserNotificationPreference>().Add(new UserNotificationPreference
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Channel = NotificationChannel.TELEGRAM,
+                IsEnabled = enabled,
+                ExternalId = externalId,
+                VerifiedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
         }
 
         public async Task<string?> PeekEmailCodeAsync(Guid userId)

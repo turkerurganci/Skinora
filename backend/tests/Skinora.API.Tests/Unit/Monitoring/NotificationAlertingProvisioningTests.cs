@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Skinora.API.Monitoring;
 using Skinora.API.Services.HotWallet;
+using Skinora.Transactions.Application.Reconciliation;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Notifications;
 
@@ -26,6 +27,8 @@ public sealed class NotificationAlertingProvisioningTests
         "outbound-awaiting-approval",
         "hot-wallet-threshold-breached",
         "admin-money-alarm-raised",
+        // T165 düzeltme turu — daily ledger reconciliation mismatch (05 §3.3)
+        "reconciliation-mismatch",
         // existing chain / payment / wallet / fee rules
         "blockchain-sidecar-down",
         "ethereum-finalized-stalled",
@@ -156,6 +159,38 @@ public sealed class NotificationAlertingProvisioningTests
         var block = RuleBlock("hot-wallet-threshold-breached");
         Assert.Contains($"max by (network, asset, direction) ({PrometheusHotWalletThresholdObserver.Breached.Name}) or vector(0)", block);
         Assert.Matches(@"type: gt\s+params: \[0\]", block);
+    }
+
+    [Fact]
+    public void ReconciliationMismatchRule_ReadsThePublishedGauge_PerNetworkAndScope()
+    {
+        // T165 düzeltme turu (doğrulama bulgu 1, ⚠ PARA): the mismatch reached
+        // only the panel. The observer publishes the count per network and
+        // scope; the rule fires above 0 (critical, money) and resolves at 0.
+        var observer = new PrometheusReconciliationRunObserver(TimeProvider.System);
+        observer.ReportMismatches(BlockchainNetwork.ETHEREUM, ReconciliationScope.HotWallet, 2);
+        observer.ReportMismatches(BlockchainNetwork.TRON, ReconciliationScope.HotWallet, 0);
+        Assert.Equal(2, PrometheusReconciliationRunObserver.Mismatches.WithLabels("ETHEREUM", "HotWallet").Value);
+        Assert.Equal(0, PrometheusReconciliationRunObserver.Mismatches.WithLabels("TRON", "HotWallet").Value);
+        observer.ReportMismatches(BlockchainNetwork.ETHEREUM, ReconciliationScope.HotWallet, 0);
+        Assert.Equal(0, PrometheusReconciliationRunObserver.Mismatches.WithLabels("ETHEREUM", "HotWallet").Value);
+        Assert.Equal("skinora_backend_reconciliation_mismatches", PrometheusReconciliationRunObserver.Mismatches.Name);
+
+        var block = RuleBlock("reconciliation-mismatch");
+        Assert.Contains($"max by (network, scope) ({PrometheusReconciliationRunObserver.Mismatches.Name}) or vector(0)", block);
+        Assert.Matches(@"type: gt\s+params: \[0\]", block);
+        Assert.Contains("for: 0s", block);
+        Assert.Contains("severity: critical", block);
+    }
+
+    [Fact]
+    public void MoneyEmailSubject_HasNoTrailingNewline()
+    {
+        // T165 düzeltme turu (doğrulama bulgu 3): a literal `|` block kept its
+        // final newline — the subject arrived as "[Skinora] PARA ALARMI (1)=0A".
+        var text = Read("contactpoints.yml");
+        var block = text[text.IndexOf("    name: money-alarm\n", StringComparison.Ordinal)..];
+        Assert.Matches(@"\n          subject: >-\n            \{\{ if \.Alerts\.Firing \}\}[^\n]*\{\{ end \}\}\n        disableResolveMessage", block);
     }
 
     [Fact]

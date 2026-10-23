@@ -404,6 +404,42 @@ public class AdminAlertNotificationConsumerTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task ReconciliationMismatch_FansOutToEveryAdmin_WithNetworkAndCount()
+    {
+        // T165 düzeltme turu (doğrulama bulgu 1, ⚠ PARA): the daily ledger
+        // reconciliation mismatch reached only an open admin panel.
+        var dispatcher = new RecordingDispatcher();
+        var sut = new ReconciliationMismatchAdminNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            NullLogger<ReconciliationMismatchAdminNotificationConsumer>.Instance);
+
+        var domainEvent = new ReconciliationMismatchAdminAlertEvent(
+            EventId: Guid.NewGuid(),
+            Network: "ETHEREUM",
+            MismatchCount: 3,
+            DepositAddressMismatches: 2,
+            HotWalletMismatches: 1,
+            ColdWalletMismatches: 0,
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+        await sut.Handle(domainEvent, CancellationToken.None); // redelivery: idempotent
+
+        Assert.Equal(2, dispatcher.Requests.Count);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == Admin1);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == Admin2);
+        Assert.All(dispatcher.Requests, r =>
+        {
+            Assert.Equal(NotificationType.ADMIN_RECONCILIATION_MISMATCH, r.Type);
+            Assert.Null(r.TransactionId);
+            Assert.Equal("ETHEREUM", r.Parameters["Network"]);
+            Assert.Equal("3", r.Parameters["MismatchCount"]);
+        });
+        Assert.False(sut.IsMoneyAlarm);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void MoneyAlarmCategory_IsExactlyTheMoneyConsumers()
     {
         // Every admin-broadcast consumer is classified on purpose: a new one
@@ -420,6 +456,10 @@ public class AdminAlertNotificationConsumerTests
             typeof(FraudFlagCreatedAdminNotificationConsumer),
             typeof(DisputeEscalatedAdminNotificationConsumer),
             typeof(PlatformOutageAdminNotificationConsumer),
+            // T165 — a money matter, but the operator path is its own metric +
+            // reconciliation-mismatch rule (with "resolved"); the money-alarm
+            // observer here would announce it twice.
+            typeof(ReconciliationMismatchAdminNotificationConsumer),
         };
 
         var all = typeof(AdminBroadcastNotificationConsumerBase<>).Assembly.GetTypes()

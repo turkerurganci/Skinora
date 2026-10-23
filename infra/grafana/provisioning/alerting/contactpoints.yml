@@ -87,6 +87,8 @@ contactPoints:
         settings:
           addresses: '${ALERT_EMAIL_TO}'
           singleEmail: true
-          subject: |
+          # >- (folded, strip): a literal | block kept its final newline, and the
+          # subject arrived as "... (1)=0A" (T165 doğrulaması, bulgu 3).
+          subject: >-
             {{ if .Alerts.Firing }}[Skinora] PARA ALARMI ({{ len .Alerts.Firing }}){{ else }}[Skinora] Para alarmı çözüldü{{ end }}
         disableResolveMessage: false

@@ -619,6 +619,12 @@ services:
   skinora-grafana:
     image: grafana/grafana:11.3.0
     container_name: skinora-grafana
+    # T165 — first-boot guard (scripts/grafana/first-boot.sh): on an empty data
+    # volume Grafana's Alertmanager would run its built-in default routing
+    # (e-mail to example@email.com) for up to a minute while the rules already
+    # fire. The guard provisions the routing with rule execution off first,
+    # then starts Grafana normally (DEPLOY_RUNBOOK §P.4).
+    entrypoint: ["/bin/sh", "/opt/skinora/first-boot.sh"]
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
     environment:
@@ -643,6 +649,7 @@ services:
       # Rendered copy, not ./infra/grafana/provisioning — see the render service.
       - skinora-grafana-provisioning:/etc/grafana/provisioning:ro
       - skinora-grafana-data:/var/lib/grafana
+      - ./scripts/grafana/first-boot.sh:/opt/skinora/first-boot.sh:ro
     depends_on:
       skinora-grafana-provisioning:
         condition: service_completed_successfully

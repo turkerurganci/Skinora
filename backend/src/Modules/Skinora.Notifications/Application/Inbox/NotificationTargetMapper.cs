@@ -20,6 +20,10 @@ public static class NotificationTargetMapper
             // Admin-only — platform health outage is a platform-wide alert (WP16).
             NotificationType.ADMIN_PLATFORM_OUTAGE => (null, null),
 
+            // Admin-only — reconciliation mismatch is per network, not per
+            // transaction (T165).
+            NotificationType.ADMIN_RECONCILIATION_MISMATCH => (null, null),
+
             // Admin-only — flag queue link, keyed by the dedicated FlagId
             // column (WP8 replaced the earlier TransactionId reinterpretation).
             NotificationType.ADMIN_FLAG_ALERT => flagId is null ? (null, null) : ("flag", flagId),

@@ -170,6 +170,9 @@ export enum NotificationType {
   // inventory-evidence launch gate is closed; the buyer is asked to check their
   // Steam inventory and confirm receipt themselves (02 §9.2).
   DELIVERY_DETECTED = "DELIVERY_DETECTED",
+  // T165 — daily ledger reconciliation found the books and the chain apart on
+  // a network (admin-only).
+  ADMIN_RECONCILIATION_MISMATCH = "ADMIN_RECONCILIATION_MISMATCH",
 }
 
 // §2.14 — 3 values
