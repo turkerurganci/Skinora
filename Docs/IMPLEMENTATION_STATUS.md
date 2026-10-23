@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-23 — T172b ✓ Tamamlandı (imza servislerinde depozitten iade 24 sa tavanı, 100 $, aşan iade bekler; sahip kararıyla sunucuda tek seferlik izin; doğrulama PASS 4 × S4, hepsi kapandı — TRON defteri girişleri 7 gün saklar (saat sıçraması sayımı silmez), runbook §D yeni izinden önce zincir kontrolü; backlog 49/169; T172b_REPORT.md, PR #378) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-23 — T172b ✓ Tamamlandı (imza servislerinde depozitten iade 24 sa tavanı, 100 $, aşan iade bekler; sahip kararıyla sunucuda tek seferlik izin; doğrulama PASS 4 × S4, hepsi kapandı — TRON defteri girişleri 7 gün saklar (saat sıçraması sayımı silmez), runbook §D yeni izinden önce zincir kontrolü; backlog 49/169; T172b_REPORT.md, PR #378) **Merge teyidi (T172b kapanışında işlendi):** T165 (#375) main `44d32f54` CI 40005813788 ✓, Docker Publish 40005813725 ✓ · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
