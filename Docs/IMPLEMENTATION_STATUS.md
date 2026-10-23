@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-23 — T172a ⏳ Devam ediyor (geri yükleme sonrası para araçları: kapatma aracı TRON + FAILED POST_RESTORE_DUPLICATE satırı, `outbound.dispatch_paused`, depozit indeks tabanı; T172a_REPORT.md) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-23 — T172a ⏳ Devam ediyor (geri yükleme sonrası para araçları: kapatma aracı TRON + FAILED POST_RESTORE_DUPLICATE satırı, `outbound.dispatch_paused`, depozit indeks tabanı; T172a_REPORT.md, PR #377) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
