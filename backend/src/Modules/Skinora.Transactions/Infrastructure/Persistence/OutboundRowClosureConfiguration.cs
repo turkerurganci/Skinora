@@ -8,9 +8,10 @@ namespace Skinora.Transactions.Infrastructure.Persistence;
 
 /// <summary>
 /// EF Core configuration for <see cref="OutboundRowClosure"/> — 06 §3.8b,
-/// §4.1, §5.1 (T157). The database repeats the rules the money tool must not
-/// break even if a code path forgets them: Ethereum only, a different admin
-/// approves, one live closure per row, one live closure per hash.
+/// §4.1, §5.1 (T157; T172a — TRON too). The database repeats the rules the
+/// money tool must not break even if a code path forgets them: a known
+/// network, a different admin approves, one live closure per row, one live
+/// closure per hash.
 /// </summary>
 public class OutboundRowClosureConfiguration : IEntityTypeConfiguration<OutboundRowClosure>
 {
@@ -18,9 +19,10 @@ public class OutboundRowClosureConfiguration : IEntityTypeConfiguration<Outbound
     {
         builder.ToTable("OutboundRowClosures", t =>
         {
-            // The tool exists for the Ethereum journal-loss case only.
-            t.HasCheckConstraint("CK_OutboundRowClosures_Network_Ethereum",
-                "[Network] = 'ETHEREUM'");
+            // T157: the Ethereum journal-loss case; T172a: TRON after a
+            // database restore (DEPLOY_RUNBOOK §N.8). The two networks only.
+            t.HasCheckConstraint("CK_OutboundRowClosures_Network_Known",
+                "[Network] IN ('TRON', 'ETHEREUM')");
 
             // Two-person rule, at the schema: an APPROVED closure was decided
             // by someone, and that someone is not the proposer.

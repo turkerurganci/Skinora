@@ -16,11 +16,30 @@ using Skinora.Users.Domain.Entities;
 namespace Skinora.API.Services.WalletClosures;
 
 /// <summary>
-/// The two-person tool that closes an Ethereum outbound row with the hash of a
+/// The two-person tool that closes an outbound row with the hash of a
 /// transaction that is already on chain (T157 — 07 §9.32; DEPLOY_RUNBOOK §D
-/// adım 7.4). ⚠ PARA.
+/// adım 7.4; T172a — DEPLOY_RUNBOOK §N.8). ⚠ PARA.
 /// </summary>
 /// <remarks>
+/// <para>
+/// <b>T172a — TRON and the restore case.</b> After a database restore an
+/// outbound row that already went out on chain is <c>PENDING</c> again (TRON
+/// would sign it a second time — its service keeps no journal), or was closed
+/// by hand as <c>FAILED</c> with the <c>POST_RESTORE_DUPLICATE</c> note, which
+/// leaves the books short (reconciliation and the refund-fee ledger count only
+/// <c>CONFIRMED</c> rows). The tool now takes either network and either row: a
+/// <c>PENDING</c> row without a hash, or a <c>FAILED</c> row without a hash
+/// that carries the note. Approval binds the chain's hash to <i>the same row</i>
+/// (<c>→ DETECTED</c>) and the confirmation job finishes it from the chain
+/// (<c>CONFIRMED</c>, block, confirmations, realized fee; a payout announces
+/// itself so the transaction completes). Every check below applies to both.
+/// The TRON service answers the verify read too (<c>POST /api/transfer/verify</c>,
+/// solidified transaction, TRC-20 <c>Transfer</c> log). The sender of a row the
+/// dispatcher never sent is resolved the way the dispatcher would (the deposit
+/// of the transaction's payment, or the hot wallet for a payout / an Ethereum
+/// refund after the sweep) and written to the row on approval, so the
+/// reconciliation and the refund-fee ledger count it where it left from.
+/// </para>
 /// <para>
 /// <b>Why.</b> After the Ethereum service loses its journal it stops signing
 /// (<c>JOURNAL_BEHIND_CHAIN</c>): a row it no longer remembers would be signed
@@ -75,7 +94,21 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
     public const int MaxNoteLength = 2000;
 
     [GeneratedRegex("^0x[0-9a-fA-F]{64}$")]
-    private static partial Regex TxHashPattern();
+    private static partial Regex EthereumTxHashPattern();
+
+    /// <summary>T172a — a TRON transaction id: 64 hex digits, no prefix (TronScan's form).</summary>
+    [GeneratedRegex("^[0-9a-fA-F]{64}$")]
+    private static partial Regex TronTxHashPattern();
+
+    /// <summary>
+    /// T172a — the note a row closed by hand after a restore carries
+    /// (DEPLOY_RUNBOOK §N.8 adım 5). Only a <c>FAILED</c> row that starts with it
+    /// can be brought back with a chain hash: any other failed row is a send
+    /// that did not happen.
+    /// </summary>
+    public const string PostRestoreDuplicateMarker = "POST_RESTORE_DUPLICATE";
+
+    private const int ErrorMessageMaxLength = 500;
 
     private static readonly BlockchainTransactionType[] OutboundTypes =
     [
@@ -115,21 +148,17 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
     // ---------------------------------------------------------------- reads
 
     public async Task<IReadOnlyList<ClosureCandidateDto>> ListCandidatesAsync(
-        CancellationToken cancellationToken)
+        BlockchainNetwork? network, CancellationToken cancellationToken)
     {
-        var rows = await _db.Set<BlockchainTransaction>()
-            .AsNoTracking()
-            .IgnoreQueryFilters()
-            .Where(b => b.Network == BlockchainNetwork.ETHEREUM
-                && b.Status == BlockchainTransactionStatus.PENDING
-                && b.TxHash == null
-                && OutboundTypes.Contains(b.Type))
+        var query = OpenRows(_db.Set<BlockchainTransaction>().AsNoTracking().IgnoreQueryFilters());
+        if (network.HasValue) query = query.Where(b => b.Network == network.Value);
+        var rows = await query
             .OrderBy(b => b.CreatedAt)
             .Take(200)
             .Select(b => new
             {
                 Dto = new ClosureCandidateDto(
-                    b.Id, b.TransactionId, b.Type, b.Token, null, b.Amount,
+                    b.Id, b.TransactionId, b.Network, b.Status, b.Type, b.Token, null, b.Amount,
                     b.FromAddress, b.ToAddress, b.RetryCount, b.CreatedAt,
                     _db.Set<OutboundRowClosure>().Any(c => c.BlockchainTransactionId == b.Id
                         && c.Status != OutboundRowClosureStatus.REJECTED)),
@@ -141,16 +170,17 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
             .Select(r => r.Dto with
             {
                 ChainToken = OutboundTransferExpectation.ChainToken(
-                    BlockchainNetwork.ETHEREUM, r.Dto.Type, r.Dto.Token, r.ActualTokenAddress, _contracts),
+                    r.Dto.Network, r.Dto.Type, r.Dto.Token, r.ActualTokenAddress, _contracts),
             })
             .ToList();
     }
 
     public async Task<IReadOnlyList<ClosureDto>> ListAsync(
-        OutboundRowClosureStatus? status, CancellationToken cancellationToken)
+        OutboundRowClosureStatus? status, BlockchainNetwork? network, CancellationToken cancellationToken)
     {
         var query = _db.Set<OutboundRowClosure>().AsNoTracking();
         if (status.HasValue) query = query.Where(c => c.Status == status.Value);
+        if (network.HasValue) query = query.Where(c => c.Network == network.Value);
 
         return await ProjectAsync(query, cancellationToken);
     }
@@ -170,7 +200,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
             select new
             {
                 Dto = new ClosureDto(
-                    c.Id, c.Status, c.BlockchainTransactionId, b.TransactionId, b.Type, b.Token, null,
+                    c.Id, c.Status, c.Network, c.BlockchainTransactionId, b.TransactionId, b.Type, b.Token, null,
                     b.Amount, b.FromAddress, b.ToAddress, b.Status, c.TxHash, c.Reason,
                     c.ProposedByAdminId, p.SteamDisplayName, c.CreatedAt,
                     c.DecidedByAdminId, d == null ? null : d.SteamDisplayName, c.DecidedAt, c.DecisionNote),
@@ -200,33 +230,26 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
             return ClosureResult.Fail(ClosureError.Validation,
                 $"reason is required ({MinReasonLength}-{MaxReasonLength} characters): say which nonce, which account and what was matched.");
         }
-        if (!TryCanonicalHash(txHash, out var hash))
-        {
-            return ClosureResult.Fail(ClosureError.InvalidHash,
-                "txHash must be 0x followed by 64 hex digits.");
-        }
-
         var row = await LoadRowAsync(blockchainTransactionId, cancellationToken);
         if (row is null)
         {
             return ClosureResult.Fail(ClosureError.RowNotFound, "Outbound row not found.");
         }
-        if (row.Network != BlockchainNetwork.ETHEREUM)
+        if (!TryCanonicalHash(row.Network, txHash, out var hash))
         {
-            return ClosureResult.Fail(ClosureError.RowNotEthereum,
-                "Only an Ethereum row can be closed with this tool.");
+            return ClosureResult.Fail(ClosureError.InvalidHash, HashShapeMessage(row.Network));
         }
         if (!OutboundTypes.Contains(row.Type))
         {
             return ClosureResult.Fail(ClosureError.RowNotOutbound,
                 "Only an outbound row (payout, refund or sweep) can be closed with this tool.");
         }
-        if (row.Status != BlockchainTransactionStatus.PENDING || row.TxHash is not null)
+        if (!IsOpen(row))
         {
             return ClosureResult.Fail(ClosureError.RowNotOpen,
-                "The row is no longer open: only a PENDING row without a hash can be closed.");
+                $"The row is no longer open: only a PENDING row without a hash, or a FAILED row without a hash noted {PostRestoreDuplicateMarker} after a restore, can be closed.");
         }
-        var expected = OutboundTransferExpectation.For(row, _contracts, _walletAddresses);
+        var expected = await ExpectationAsync(row, cancellationToken);
         if (expected is null)
         {
             return ClosureResult.Fail(ClosureError.RowTransferUnresolved, UnresolvedMessage(row));
@@ -235,7 +258,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
         {
             return ClosureResult.Fail(ClosureError.AmbiguousRowMatch, AmbiguousMessage);
         }
-        if (await HashIsBoundAsync(hash, cancellationToken))
+        if (await HashIsBoundAsync(row.Network, hash, cancellationToken))
         {
             return ClosureResult.Fail(ClosureError.HashAlreadyBound,
                 "This hash is already bound to a row or to another closure.");
@@ -253,7 +276,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
         {
             Id = Guid.NewGuid(),
             BlockchainTransactionId = row.Id,
-            Network = BlockchainNetwork.ETHEREUM,
+            Network = row.Network,
             TxHash = hash,
             Reason = cleanReason,
             Status = OutboundRowClosureStatus.PROPOSED,
@@ -318,7 +341,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
 
         // The approver types the hash again: proof the hash on their screen
         // is the one they looked up, not just the one the proposer sent.
-        if (!TryCanonicalHash(confirmTxHash, out var confirmed)
+        if (!TryCanonicalHash(closure.Network, confirmTxHash, out var confirmed)
             || !string.Equals(confirmed, closure.TxHash, StringComparison.Ordinal))
         {
             await RefuseAsync(adminId, closure, "HASH_CONFIRMATION_MISMATCH", closure.TxHash, now,
@@ -329,15 +352,14 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
 
         var row = await LoadRowAsync(closure.BlockchainTransactionId, cancellationToken);
         if (row is null
-            || row.Network != BlockchainNetwork.ETHEREUM
-            || row.Status != BlockchainTransactionStatus.PENDING
-            || row.TxHash is not null)
+            || row.Network != closure.Network
+            || !IsOpen(row))
         {
             return ClosureResult.Fail(ClosureError.RowNotOpen,
                 "The row is no longer open (it was sent, closed or failed since the proposal). Reject the proposal.");
         }
         if (await _db.Set<BlockchainTransaction>().AsNoTracking().IgnoreQueryFilters().AnyAsync(
-                b => b.Network == BlockchainNetwork.ETHEREUM && b.TxHash == closure.TxHash,
+                b => b.Network == closure.Network && b.TxHash == closure.TxHash,
                 cancellationToken))
         {
             return ClosureResult.Fail(ClosureError.HashAlreadyBound,
@@ -346,7 +368,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
 
         // What the row moves on chain — the confirmation job will expect exactly
         // this (T158 (g)), so a row it cannot describe is not closed.
-        var expected = OutboundTransferExpectation.For(row, _contracts, _walletAddresses);
+        var expected = await ExpectationAsync(row, cancellationToken);
         var chainToken = OutboundTransferExpectation.ChainToken(row, _contracts);
         if (expected is null || chainToken is null)
         {
@@ -366,7 +388,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
         // closed: an unanswered question is a refusal, never a pass. The read
         // carries the row's expectation (T158 (g)): for a hash the journal does
         // not hold the service checks the Transfer log against it.
-        var status = await _services.Transfers(BlockchainNetwork.ETHEREUM)
+        var status = await _services.Transfers(row.Network)
             .GetStatusAsync(closure.TxHash, expected, cancellationToken);
         switch (status.Outcome)
         {
@@ -384,7 +406,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
                 await RefuseAsync(adminId, closure, "HASH_NOT_FOUND", closure.TxHash, now,
                     ipAddress, cancellationToken);
                 return ClosureResult.Fail(ClosureError.HashNotFound,
-                    $"The Ethereum service does not know this hash ({status.ErrorMessage}).");
+                    $"The {row.Network} service does not know this hash ({status.ErrorMessage}).");
             case TransferStatusOutcome.Unverified:
                 // T158 (g) UNKNOWN: mined, but its Transfer log is not the row's.
                 await RefuseAsync(adminId, closure, "HASH_DOES_NOT_MATCH_ROW", closure.TxHash, now,
@@ -392,13 +414,13 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
                 return ClosureResult.Fail(ClosureError.HashDoesNotMatchRow, DoesNotMatchMessage);
             default:
                 return ClosureResult.Fail(ClosureError.ChainUnavailable,
-                    "The Ethereum service could not answer; nothing was changed. Try again when it is reachable.");
+                    $"The {row.Network} service could not answer; nothing was changed. Try again when it is reachable.");
         }
 
         // The status above only says "mined, status 1" for a hash the journal does
         // not know. Check that THIS transaction moved THIS row's amount to THIS
         // row's recipient — and only an exact match goes on.
-        var verify = await _services.Transfers(BlockchainNetwork.ETHEREUM).VerifyTransferAsync(
+        var verify = await _services.Transfers(row.Network).VerifyTransferAsync(
             new TransferVerifyRequest(
                 closure.TxHash,
                 chainToken.Value,
@@ -419,30 +441,47 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
                 await RefuseAsync(adminId, closure, "HASH_NOT_FOUND", closure.TxHash, now,
                     ipAddress, cancellationToken);
                 return ClosureResult.Fail(ClosureError.HashNotFound,
-                    "The Ethereum service's node does not know this hash.");
+                    $"The {row.Network} service's node does not know this hash.");
             default:
                 // Unavailable and NotSupported: not verified, so not approved.
                 return ClosureResult.Fail(ClosureError.ChainUnavailable,
-                    "The Ethereum service could not verify the transaction against the row; nothing was changed. Try again when it is reachable.");
+                    $"The {row.Network} service could not verify the transaction against the row; nothing was changed. Try again when it is reachable.");
         }
 
         await using var dbTx = await _db.Database.BeginTransactionAsync(cancellationToken);
 
         // Compare-and-set on the row: the dispatcher or an earlier closure may
-        // have moved it since it was read. Zero rows updated = it moved.
+        // have moved it since it was read. Zero rows updated = it moved. The
+        // row must still be in the state it was read in (PENDING, or the
+        // post-restore FAILED row with its note) and still carry no hash.
+        // T172a — the sender the hash was verified from is written when the
+        // row had none (a row the dispatcher never sent), so the books count
+        // it where it left from.
+        var readStatus = row.Status;
+        var note = readStatus == BlockchainTransactionStatus.FAILED
+            ? $"Reopened with the on-chain hash by closure {closure.Id} (T172a, post-restore). Was: {row.ErrorMessage}"
+            : $"Closed with the on-chain hash by closure {closure.Id} (T157).";
+        if (note.Length > ErrorMessageMaxLength) note = note[..ErrorMessageMaxLength];
+        var fromAddress = string.IsNullOrWhiteSpace(row.FromAddress)
+            ? BlockchainAddress.Canonicalize(expected.FromAddress)
+            : row.FromAddress;
         var updated = await _db.Set<BlockchainTransaction>()
             .IgnoreQueryFilters()
             .Where(b => b.Id == row.Id
-                && b.Network == BlockchainNetwork.ETHEREUM
-                && b.Status == BlockchainTransactionStatus.PENDING
-                && b.TxHash == null)
+                && b.Network == closure.Network
+                && b.Status == readStatus
+                && b.TxHash == null
+                && (b.Status == BlockchainTransactionStatus.PENDING
+                    || (b.Status == BlockchainTransactionStatus.FAILED
+                        && b.ErrorMessage != null
+                        && b.ErrorMessage.StartsWith(PostRestoreDuplicateMarker))))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(b => b.TxHash, closure.TxHash)
                 .SetProperty(b => b.Status, BlockchainTransactionStatus.DETECTED)
                 .SetProperty(b => b.ConfirmationCount, 0)
                 .SetProperty(b => b.NextAttemptAt, (DateTime?)null)
-                .SetProperty(b => b.ErrorMessage,
-                    $"Closed with the on-chain hash by closure {closure.Id} (T157)."),
+                .SetProperty(b => b.FromAddress, fromAddress)
+                .SetProperty(b => b.ErrorMessage, note),
                 cancellationToken);
         if (updated != 1)
         {
@@ -459,6 +498,7 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
             RowEnvelope(row, closure.TxHash, closure.Reason,
                 chainToken: chainToken,
                 fromAddress: expected.FromAddress,
+                rowStatusBefore: readStatus.ToString(),
                 proposedByAdminId: closure.ProposedByAdminId,
                 chainContractRet: status.ContractRet,
                 chainBlock: status.BlockNumber));
@@ -477,8 +517,8 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
         }
 
         _logger.LogWarning(
-            "OUTBOUND ROW CLOSURE APPROVED — closure {Closure} row {Row} now carries {Hash}; proposed by {Proposer}, approved by {Approver}. No money was sent.",
-            closure.Id, row.Id, closure.TxHash, closure.ProposedByAdminId, adminId);
+            "OUTBOUND ROW CLOSURE APPROVED — closure {Closure} {Network} row {Row} ({Before} → DETECTED) now carries {Hash}; proposed by {Proposer}, approved by {Approver}. No money was sent.",
+            closure.Id, closure.Network, row.Id, readStatus, closure.TxHash, closure.ProposedByAdminId, adminId);
         return ClosureResult.Ok(await ReadAsync(closure.Id, cancellationToken));
     }
 
@@ -541,7 +581,97 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
         "This transaction does not move the row's amount of the row's token to the row's recipient from the row's sender. It cannot close this row.";
 
     private const string AmbiguousMessage =
-        "Another open outbound row on this network has the same recipient, token and amount; a chain hash cannot say which one it paid. Follow the manual path (DEPLOY_RUNBOOK §D 7.4).";
+        "Another open outbound row on this network has the same recipient, token and amount; a chain hash cannot say which one it paid. Follow the manual path (DEPLOY_RUNBOOK §D 7.4 / §N.8).";
+
+    private static string HashShapeMessage(BlockchainNetwork network) =>
+        network == BlockchainNetwork.TRON
+            ? "txHash must be the TRON transaction id: 64 hex digits, no 0x prefix."
+            : "txHash must be 0x followed by 64 hex digits.";
+
+    /// <summary>
+    /// The rows the tool may close (T172a): outbound, no hash, and either
+    /// PENDING or FAILED with the post-restore note.
+    /// </summary>
+    private static IQueryable<BlockchainTransaction> OpenRows(IQueryable<BlockchainTransaction> rows) =>
+        rows.Where(b => b.TxHash == null
+            && OutboundTypes.Contains(b.Type)
+            && (b.Status == BlockchainTransactionStatus.PENDING
+                || (b.Status == BlockchainTransactionStatus.FAILED
+                    && b.ErrorMessage != null
+                    && b.ErrorMessage.StartsWith(PostRestoreDuplicateMarker))));
+
+    private static bool IsOpen(BlockchainTransaction row) =>
+        row.TxHash is null
+        && (row.Status == BlockchainTransactionStatus.PENDING
+            || (row.Status == BlockchainTransactionStatus.FAILED
+                && row.ErrorMessage is not null
+                && row.ErrorMessage.StartsWith(PostRestoreDuplicateMarker, StringComparison.Ordinal)));
+
+    /// <summary>
+    /// What the row moves on chain, with the sender resolved the way the
+    /// dispatcher would resolve it when the row does not record one (T172a — a
+    /// row restored or re-created before it was ever sent): the payout's hot
+    /// wallet; a refund's deposit (the transaction's payment address), or the
+    /// hot wallet for an Ethereum buyer refund after a confirmed sweep; a
+    /// refund whose sweep is still in flight is unresolved (fail closed).
+    /// </summary>
+    private async Task<TransferStatusExpectation?> ExpectationAsync(
+        BlockchainTransaction row, CancellationToken cancellationToken)
+    {
+        var direct = OutboundTransferExpectation.For(row, _contracts, _walletAddresses);
+        if (direct is not null || !string.IsNullOrWhiteSpace(row.FromAddress)) return direct;
+
+        var token = OutboundTransferExpectation.ChainToken(row, _contracts);
+        if (token is null || string.IsNullOrWhiteSpace(row.ToAddress)) return null;
+        var contract = _contracts.ResolveContractAddress(row.Network, token.Value);
+        if (string.IsNullOrWhiteSpace(contract)) return null;
+
+        var sender = await ResolveSenderAsync(row, cancellationToken);
+        return sender is null
+            ? null
+            : new TransferStatusExpectation(contract, sender, row.ToAddress, row.Amount);
+    }
+
+    private async Task<string?> ResolveSenderAsync(BlockchainTransaction row, CancellationToken cancellationToken)
+    {
+        if (row.Type == BlockchainTransactionType.SELLER_PAYOUT)
+        {
+            var hot = _walletAddresses.For(row.Network).HotWalletAddress;
+            return string.IsNullOrWhiteSpace(hot) ? null : hot;
+        }
+
+        var source = RefundSource.Deposit;
+        if (row.Type is not (BlockchainTransactionType.SWEEP or BlockchainTransactionType.REFUND_FEE_SWEEP))
+        {
+            source = await RefundSourceResolver.ResolveAsync(
+                _db, row.Network, row.Type, row.TransactionId, cancellationToken);
+        }
+        if (source == RefundSource.WaitForSweep) return null;
+        if (source == RefundSource.HotWallet)
+        {
+            var hot = _walletAddresses.For(row.Network).HotWalletAddress;
+            return string.IsNullOrWhiteSpace(hot) ? null : hot;
+        }
+
+        // The deposit the transaction's payment arrived on — the dispatcher's rule.
+        var paymentAddressId = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(b => b.TransactionId == row.TransactionId
+                && (b.Type == BlockchainTransactionType.BUYER_PAYMENT
+                    || b.Type == BlockchainTransactionType.WRONG_TOKEN_INCOMING)
+                && b.PaymentAddressId != null)
+            .OrderBy(b => b.CreatedAt)
+            .Select(b => b.PaymentAddressId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (paymentAddressId is null) return null;
+        return await _db.Set<PaymentAddress>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(p => p.Id == paymentAddressId.Value && p.Network == row.Network)
+            .Select(p => p.Address)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
 
     private static string UnresolvedMessage(BlockchainTransaction row) =>
         row.Type == BlockchainTransactionType.WRONG_TOKEN_REFUND
@@ -575,12 +705,20 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
                     row.Network, o.Type, o.Token, o.ActualTokenAddress, _contracts) ?? token) == token);
     }
 
-    private static bool TryCanonicalHash(string? raw, out string hash)
+    /// <summary>
+    /// The network's hash shape, in its one stored form: Ethereum <c>0x</c> +
+    /// 64 hex, TRON 64 hex without a prefix — both lowercase. T172a: TRON ids
+    /// come back from the service in lowercase; an id typed in CAPITALS is
+    /// stored the same way, so it hits the same unique index.
+    /// </summary>
+    private static bool TryCanonicalHash(BlockchainNetwork network, string? raw, out string hash)
     {
         hash = string.Empty;
         var trimmed = raw?.Trim();
-        if (string.IsNullOrEmpty(trimmed) || !TxHashPattern().IsMatch(trimmed)) return false;
-        hash = BlockchainAddress.Canonicalize(trimmed);
+        if (string.IsNullOrEmpty(trimmed)) return false;
+        var pattern = network == BlockchainNetwork.TRON ? TronTxHashPattern() : EthereumTxHashPattern();
+        if (!pattern.IsMatch(trimmed)) return false;
+        hash = trimmed.ToLowerInvariant();
         return true;
     }
 
@@ -588,16 +726,17 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
         _db.Set<BlockchainTransaction>().AsNoTracking().IgnoreQueryFilters()
             .FirstOrDefaultAsync(b => b.Id == id, cancellationToken);
 
-    /// <summary>The hash is bound to a row already, or to a live closure.</summary>
-    private async Task<bool> HashIsBoundAsync(string hash, CancellationToken cancellationToken)
+    /// <summary>The hash is bound to a row of the network already, or to a live closure.</summary>
+    private async Task<bool> HashIsBoundAsync(
+        BlockchainNetwork network, string hash, CancellationToken cancellationToken)
     {
         if (await _db.Set<BlockchainTransaction>().AsNoTracking().IgnoreQueryFilters().AnyAsync(
-                b => b.Network == BlockchainNetwork.ETHEREUM && b.TxHash == hash, cancellationToken))
+                b => b.Network == network && b.TxHash == hash, cancellationToken))
         {
             return true;
         }
         return await _db.Set<OutboundRowClosure>().AsNoTracking().AnyAsync(
-            c => c.Network == BlockchainNetwork.ETHEREUM && c.TxHash == hash
+            c => c.Network == network && c.TxHash == hash
                 && c.Status != OutboundRowClosureStatus.REJECTED, cancellationToken);
     }
 
@@ -635,11 +774,15 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
     private static string RowEnvelope(
         BlockchainTransaction row, string txHash, string reason,
         StablecoinType? chainToken = null, string? fromAddress = null,
+        string? rowStatusBefore = null,
         Guid? proposedByAdminId = null, string? chainContractRet = null, long? chainBlock = null) =>
         JsonSerializer.Serialize(new
         {
             blockchainTransactionId = row.Id,
             transactionId = row.TransactionId,
+            network = row.Network.ToString(),
+            rowStatus = rowStatusBefore ?? row.Status.ToString(),
+            rowError = row.ErrorMessage,
             type = row.Type.ToString(),
             toAddress = row.ToAddress,
             amount = row.Amount.ToString("0.######", CultureInfo.InvariantCulture),

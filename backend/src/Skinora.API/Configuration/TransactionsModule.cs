@@ -302,6 +302,14 @@ public static class TransactionsModule
         // (Program.cs) — hosts without the probe read every network as healthy.
         services.TryAddSingleton<IBlockchainNetworkHealth>(AlwaysHealthyBlockchainNetworks.Instance);
 
+        // T172a — per-network deposit index floor (DEPLOY_RUNBOOK §N.8 (b)).
+        // Fail fast on an unknown network name or a negative value: a floor
+        // that silently does not apply is exactly the restore risk it closes.
+        services.AddOptions<PaymentAddressIndexFloorOptions>()
+            .Bind(configuration.GetSection(PaymentAddressIndexFloorOptions.SectionName))
+            .Validate(o => o.Errors().Count == 0,
+                "PaymentAddresses:MinimumNextIndex is invalid — keys must be TRON or ETHEREUM and values 0 or greater (DEPLOY_RUNBOOK §N.8).")
+            .ValidateOnStart();
         services.AddScoped<IPaymentAddressAllocator, PaymentAddressAllocator>();
         services.AddScoped<EnsurePaymentAddressJob>();
         services.AddHostedService<EnsurePaymentAddressJobRegistrar>();

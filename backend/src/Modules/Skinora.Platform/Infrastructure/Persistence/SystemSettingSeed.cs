@@ -246,6 +246,11 @@ public static class SystemSettingSeed
         // row waits for an admin approval (OutgoingTransferDispatchJob skips
         // rows without ApprovedAt); SWEEP is internal and never waits.
         Default     (80, "outbound.auto_send_enabled",                    "bool",    "Settlement",   "false",        "Satıcı ödemeleri ve alıcı iadeleri OTOMATİK gönderilsin mi (T169 / T175 açılış kapısı). false iken her SELLER_PAYOUT ve *_REFUND satırı admin onayı bekler (AD40/AD41 — cüzdan ekranı, AuditLog OUTBOUND_TRANSFER_APPROVED); sweep (depozit → sıcak cüzdan) beklemez. Test boyunca kapalı (proje sahibi kararı 2026-10-21); ilk en az 5 gerçek teslimat elle incelendikten sonra açılır (11 T175)."),
+        // T172a — the dispatcher's stop switch (DEPLOY_RUNBOOK §N.8). Seeded
+        // FALSE (normal operation) and, like the gates above, not
+        // env-bootstrappable: an operator turns it on by SQL before the backend
+        // starts after a restore, or from the admin UI (audited).
+        Default     (81, "outbound.dispatch_paused",                      "bool",    "Settlement",   "false",        "Giden transfer gönderimi DURDURULSUN mu (T172a — DEPLOY_RUNBOOK §N.8). true iken gönderim işi HİÇBİR satırı göndermez (ödeme, iade, sweep, her ağ): satır PENDING kalır, deneme hakkı harcanmaz, FAILED olmaz; onay işi ve izleme sürer. Geri yüklemeden sonra imza servisleri kapatma aracının (AD33–AD37) zincir okuması için açıkken kullanılır. Normalde false."),
     ];
 
     private static SystemSetting Unconfigured(

@@ -190,6 +190,8 @@ public static class SystemSettingsCatalog
         new("settlement.reversal_auto_refund_enabled",    "settlement",           "Geri alma tespitinde otomatik iade",                        null),
         // T169 — payout/refund launch gate (11 T175).
         new("outbound.auto_send_enabled",                 "settlement",           "Satıcı ödemesi ve iadeleri otomatik gönder (kapalı = admin onayı)", null),
+        // T172a — dispatcher stop switch (DEPLOY_RUNBOOK §N.8).
+        new("outbound.dispatch_paused",                   "settlement",           "Giden transfer gönderimini durdur (geri yükleme sonrası)",   null),
     ];
 }
 

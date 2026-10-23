@@ -1903,6 +1903,19 @@ namespace Skinora.Shared.Persistence.Migrations
                             RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Value = "false"
+                        },
+                        new
+                        {
+                            Id = new Guid("0aa51010-0000-0000-0000-000000000051"),
+                            Category = "Settlement",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            DataType = "bool",
+                            Description = "Giden transfer gönderimi DURDURULSUN mu (T172a — DEPLOY_RUNBOOK §N.8). true iken gönderim işi HİÇBİR satırı göndermez (ödeme, iade, sweep, her ağ): satır PENDING kalır, deneme hakkı harcanmaz, FAILED olmaz; onay işi ve izleme sürer. Geri yüklemeden sonra imza servisleri kapatma aracının (AD33–AD37) zincir okuması için açıkken kullanılır. Normalde false.",
+                            IsConfigured = true,
+                            Key = "outbound.dispatch_paused",
+                            RowVersion = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 },
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "false"
                         });
                 });
 
@@ -2372,7 +2385,7 @@ namespace Skinora.Shared.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_OutboundRowClosures_Decision_Fields", "([Status] = 'PROPOSED' AND [DecidedByAdminId] IS NULL AND [DecidedAt] IS NULL) OR ([Status] <> 'PROPOSED' AND [DecidedByAdminId] IS NOT NULL AND [DecidedAt] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_OutboundRowClosures_Network_Ethereum", "[Network] = 'ETHEREUM'");
+                            t.HasCheckConstraint("CK_OutboundRowClosures_Network_Known", "[Network] IN ('TRON', 'ETHEREUM')");
                         });
                 });
 

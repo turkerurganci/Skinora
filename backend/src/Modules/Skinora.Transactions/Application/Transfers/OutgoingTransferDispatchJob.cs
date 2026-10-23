@@ -149,6 +149,18 @@ public sealed class OutgoingTransferDispatchJob
         if (!autoSend) await LogAwaitingApprovalAsync(cancellationToken);
         await ReportQueueAsync(now, autoSend, cancellationToken);
 
+        // T172a — the operator's stop switch (OutboundDispatchPause, ⚠ PARA):
+        // after a database restore the blockchain services run for the closure
+        // tool's chain reads while nothing may be sent. Every type waits, no
+        // retry is spent, nothing is failed.
+        if (await OutboundDispatchPause.IsPausedAsync(_db, cancellationToken))
+        {
+            _logger.LogWarning(
+                "Outgoing transfers are paused ({Key} = true) — nothing sent this run, no retry spent (DEPLOY_RUNBOOK §N.8).",
+                OutboundDispatchPause.PausedKey);
+            return;
+        }
+
         // T150 — a configured network in a detected outage is skipped the same
         // way (its rows keep their retry budget), every reachable network gets
         // its own oldest-first batch, and the batches are worked round-robin
@@ -319,6 +331,16 @@ public sealed class OutgoingTransferDispatchJob
             _logger.LogWarning(
                 "Outbound row {Id} ({Type}) on {Network} has no admin approval and {Key} is false — left PENDING, nothing sent.",
                 row.Id, row.Type, row.Network, OutboundApprovalGate.AutoSendKey);
+            return false;
+        }
+
+        // T172a — the stop switch, read again before every send: turning it on
+        // mid-run stops the very next row (a batch can run for minutes).
+        if (await OutboundDispatchPause.IsPausedAsync(_db, cancellationToken))
+        {
+            _logger.LogWarning(
+                "Outbound row {Id} ({Type}) on {Network} not sent: {Key} was turned on during this run — left PENDING.",
+                row.Id, row.Type, row.Network, OutboundDispatchPause.PausedKey);
             return false;
         }
 

@@ -307,8 +307,10 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
         TransferVerifyRequest request,
         CancellationToken cancellationToken)
     {
-        // Only the Ethereum service has this read (T157); the TRON service is not asked.
-        if (_policy.Network != BlockchainNetwork.ETHEREUM)
+        // T157 — the Ethereum service; T172a — the TRON service answers the
+        // same read (solidified transaction, TRC-20 Transfer log). A network
+        // added later without it is not asked.
+        if (_policy.Network is not (BlockchainNetwork.ETHEREUM or BlockchainNetwork.TRON))
         {
             return new TransferVerifyResult(TransferVerifyOutcome.NotSupported, null, "Not supported by this network's service.");
         }

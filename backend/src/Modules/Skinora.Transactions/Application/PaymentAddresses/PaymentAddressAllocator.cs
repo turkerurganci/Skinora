@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Skinora.Shared.Blockchain;
 using Skinora.Shared.Enums;
 using Skinora.Shared.Persistence;
@@ -41,15 +42,22 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
     private readonly AppDbContext _db;
     private readonly IBlockchainServiceRegistry _services;
     private readonly ILogger<PaymentAddressAllocator> _logger;
+    private readonly PaymentAddressIndexFloorOptions _floor;
 
+    /// <param name="floor">
+    /// T172a — the per-network index floor (deployment configuration, used
+    /// after a database restore — DEPLOY_RUNBOOK §N.8 (b)); none = no floor.
+    /// </param>
     public PaymentAddressAllocator(
         AppDbContext db,
         IBlockchainServiceRegistry services,
-        ILogger<PaymentAddressAllocator> logger)
+        ILogger<PaymentAddressAllocator> logger,
+        IOptions<PaymentAddressIndexFloorOptions>? floor = null)
     {
         _db = db;
         _services = services;
         _logger = logger;
+        _floor = floor?.Value ?? new PaymentAddressIndexFloorOptions();
     }
 
     public async Task<PaymentAddressAllocationResult> AllocateAsync(
@@ -125,7 +133,17 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
                 .IgnoreQueryFilters()
                 .Where(p => p.Network == network)
                 .MaxAsync(p => (int?)p.HdWalletIndex, cancellationToken);
-            var nextIndex = (maxIndex ?? -1) + 1;
+            // T172a (⚠ PARA) — never below the network's configured floor, and
+            // never below MAX + 1: the floor only raises the index, so it can
+            // never hand out an index that was already used.
+            var floor = _floor.FloorFor(network);
+            var nextIndex = PaymentAddressIndexFloorOptions.NextIndex(maxIndex, floor);
+            if (nextIndex > (maxIndex ?? -1) + 1)
+            {
+                _logger.LogWarning(
+                    "Deposit index floor applied on {Network}: next index {Index} instead of {Natural} (PaymentAddresses:MinimumNextIndex — DEPLOY_RUNBOOK §N.8).",
+                    network, nextIndex, (maxIndex ?? -1) + 1);
+            }
 
             // T148 — derive on the network's own service (its own seed, K7).
             var deriveResult = await _services.Sidecar(network).DeriveAddressAsync(

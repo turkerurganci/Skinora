@@ -3,16 +3,22 @@ using Skinora.Shared.Enums;
 namespace Skinora.API.Services.WalletClosures;
 
 /// <summary>
-/// Two-person closure of an Ethereum outbound row with an on-chain hash
-/// (T157 — 07 §9.32). See <see cref="OutboundRowClosureService"/>.
+/// Two-person closure of an outbound row with an on-chain hash (T157 — 07
+/// §9.32; T172a — TRON and the post-restore FAILED row). See
+/// <see cref="OutboundRowClosureService"/>.
 /// </summary>
 public interface IOutboundRowClosureService
 {
-    /// <summary>Ethereum outbound rows a closure could still be proposed for (PENDING, no hash).</summary>
-    Task<IReadOnlyList<ClosureCandidateDto>> ListCandidatesAsync(CancellationToken cancellationToken);
+    /// <summary>
+    /// Outbound rows a closure could still be proposed for: no hash and either
+    /// <c>PENDING</c> or — T172a — <c>FAILED</c> with the
+    /// <c>POST_RESTORE_DUPLICATE</c> note. <paramref name="network"/> null = both networks.
+    /// </summary>
+    Task<IReadOnlyList<ClosureCandidateDto>> ListCandidatesAsync(
+        BlockchainNetwork? network, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ClosureDto>> ListAsync(
-        OutboundRowClosureStatus? status, CancellationToken cancellationToken);
+        OutboundRowClosureStatus? status, BlockchainNetwork? network, CancellationToken cancellationToken);
 
     Task<ClosureResult> ProposeAsync(
         Guid adminId, Guid blockchainTransactionId, string? txHash, string? reason,
@@ -28,7 +34,12 @@ public interface IOutboundRowClosureService
         string? ipAddress, CancellationToken cancellationToken);
 }
 
-/// <summary>An open Ethereum outbound row (07 §9.32 candidates).</summary>
+/// <summary>An open outbound row (07 §9.32 candidates).</summary>
+/// <param name="RowStatus">
+/// <c>PENDING</c>, or <c>FAILED</c> for a row closed by hand after a restore
+/// (<c>POST_RESTORE_DUPLICATE</c>) that the closure brings back to the real
+/// payment (T172a).
+/// </param>
 /// <param name="Token">The stablecoin the transaction expected (06 §3.8 <c>Token</c>).</param>
 /// <param name="ChainToken">
 /// The stablecoin the row moves on chain — differs from <paramref name="Token"/>
@@ -38,6 +49,8 @@ public interface IOutboundRowClosureService
 public sealed record ClosureCandidateDto(
     Guid BlockchainTransactionId,
     Guid TransactionId,
+    BlockchainNetwork Network,
+    BlockchainTransactionStatus RowStatus,
     BlockchainTransactionType Type,
     StablecoinType Token,
     StablecoinType? ChainToken,
@@ -52,6 +65,7 @@ public sealed record ClosureCandidateDto(
 public sealed record ClosureDto(
     Guid Id,
     OutboundRowClosureStatus Status,
+    BlockchainNetwork Network,
     Guid BlockchainTransactionId,
     Guid TransactionId,
     BlockchainTransactionType RowType,
@@ -76,7 +90,6 @@ public enum ClosureError
     Validation,
     InvalidHash,
     RowNotFound,
-    RowNotEthereum,
     RowNotOutbound,
     RowNotOpen,
     ClosureNotFound,
