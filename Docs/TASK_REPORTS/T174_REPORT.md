@@ -1,12 +1,13 @@
 # T174 — DEFERRED_BACKLOG §4 triyajı
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-23
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS (3 × S4, hepsi kapandı) | **Tarih:** 2026-10-23
 
 ---
 
 ## Yapılan İşler
 - 2026-10-17 sayaç düzeltmesinde (`2e70a03f`, PR #334) §4 "Düşük öncelik" tablosunda ⚪ yapılan 16 satır o commit'teki hâlinden çıkarıldı (`git show 2e70a03f:Docs/DEFERRED_BACKLOG.md`, tabloda `| ⚪` ile başlayan satırlar → 16) ve her biri bugünkü kodla (`origin/main` `69c68df6`) ölçüldü.
-- Sonuç: **5 ✅ bayat** (kod zaten çözmüş), **10 ⚪ kalır** (metin güncellendi, kapanan alt kalemler ayrıldı), **1 ⚪ → 🟡** (`sanctions-expansion`, öneriyle kaydedildi — ⚠ GÜVENLİK/uyum).
+- Sonuç: **5 ✅ bayat** (kod zaten çözmüş), **10 ⚪ kalır** (metin güncellendi, kapanan alt kalemler ayrıldı), **1 ⚪ → 🟡** (`sanctions-expansion`, ⚠ GÜVENLİK/uyum) — kapanışta sahip kararıyla yeniden ⚪ (aşağıda "Sahip kararları").
+- **Kapanış (2026-10-23):** main `d7aebce7` (T164 #372) dala birleştirildi (sayım main 55/162 → dal 50/167, yine 5 ✅); doğrulama S4'leri kapandı; iki sahip kararı belgelere işlendi (`DEPLOY_RUNBOOK.md` §O.1 + madde 13, `plan/11_F9.md` v1.26 T171/T175, `DOC_CHANGELOG.md`).
 - ✅ satırlar dosyanın deseniyle yazıldı: `~~ID~~` + "**ÇÖZÜLDÜ → <görev> (PR, tarih) — satır bayattı (T174 ölçümü, 2026-10-23).**" + kanıt. ⚪ satırlara "**T174 ölçümü (2026-10-23)**" notu eklendi; Kaynak hücresine `· T174` eklendi.
 - Sayım yeniden hesaplandı, dosya başına durum satırı eklendi: **53 aktif / 162 çözülmüş → 48 aktif / 167 çözülmüş**.
 - Satır eklenmedi ya da silinmedi; tablo yapısı değişmedi (🟡'ya çıkan satır yerinde, "Düşük öncelik" tablosunda kaldı — öncelik hücresi esastır).
@@ -17,6 +18,7 @@
 - `Docs/STATUS_CHANGELOG.md` — eski "Son güncelleme" satırı taşındı
 - `.claude/memory/MEMORY.md` — T174 satırı
 - `Docs/TASK_REPORTS/T174_REPORT.md` — bu rapor
+- Kapanışta: `Docs/DEPLOY_RUNBOOK.md` (§O.1 API yordamı, kontrol listesi madde 13), `Docs/plan/11_F9.md` (v1.26 — T171, T175), `Docs/DOC_CHANGELOG.md`
 - Kod değişikliği yok.
 
 ## Triyaj tablosu (16 satır)
@@ -25,7 +27,7 @@
 
 | # | Satır | 2026-10-17 durumu | Ölçüm kanıtı | Karar |
 |---|---|---|---|---|
-| 1 | `payout-completed-consumer` | ⚪ — `PayoutCompletedEvent`→COMPLETED geçişi yok | `Transactions/Application/Transfers/PayoutCompletedConsumer.cs` `INotificationHandler<PayoutCompletedEvent>`, `ITEM_DELIVERED`→`Complete`; yayımlayan `OutgoingTransferConfirmationJob.cs:214`; kayıt `TransactionsModule.cs:368`; test `PayoutCompletedConsumerTests`; dosya `07e2f5f9` (WP1) ile eklendi | ✅ WP1 (PR #169, 2026-06-14) |
+| 1 | `payout-completed-consumer` | ⚪ — `PayoutCompletedEvent`→COMPLETED geçişi yok | `Transactions/Application/Transfers/PayoutCompletedConsumer.cs` `INotificationHandler<PayoutCompletedEvent>`, `ITEM_DELIVERED`→`Complete`; yayımlayan `OutgoingTransferConfirmationJob.cs:214`; kayıt `TransactionsModule.cs:372-375`; test `PayoutCompletedConsumerTests`; dosya `07e2f5f9` (WP1) ile eklendi | ✅ WP1 (PR #169, 2026-06-14) |
 | 2 | `payout-retry-consumer` | ⚪ — `RETRY_SCHEDULED` var, retry consumer yok | `PayoutIssueService.cs:235` `RETRY_SCHEDULED` + `RetryCount=1`; `SellerPayoutIssueReportedEvent`'in handler'ı yok (grep: yalnız yayımlayan + event tanımı + bir yorum); `RETRY_SCHEDULED`'ı okuyan iş yok. `BlockchainPayoutVerifier` `StillPending`'i yalnız payout satırı onaylı değilse döner; şikâyet yalnız `COMPLETED`'da açılır | ⚪ kalır — metin güncellendi (yol dar, para hareketi yok; açık kayıt satıcının yeniden bildirmesini engeller) |
 | 3 | `calculator-caller-wiring` | ⚪ — `CalculateRefund`/`SellerPayout`/`IRefundDecisionService` tüketilmiyor; AD7 gas split=0 | `SellerPayoutQueueJob.cs:294` `ResolveSellerPayoutAsync`; `PaymentRefundToBuyerConsumer.cs:193`; `AmountValidationService.cs:183,272,328,397,466`; `RefundDecisionService.cs:78,92` → `FinancialCalculator`; `gas_fee_protection_ratio` `GasFeeSettingsProvider.cs:18`; AD7 `AdminTransactionQueryService.cs:508-518` `GasFeeFromCommission`/`GasFeeFromSeller` (`git log -S` → `07e2f5f9` WP1) | ✅ WP1 (PR #169) + WP2 (PR #170) |
 | 4 | `blockchain-monitor-consumers` | ⚪ — kalan: mempool `PaymentDetected` + DROPPED metrik | `PublishPaymentDetectedAsync` üretimde 0 çağıran (yalnız arayüz + `SignalRTransactionRealtimePublisher.cs:47`); `DROPPED` backend + iki sidecar'da 0 eşleşme; WP16 raporu: "POST_MVP / BY_DESIGN", sahip itiraz etmedi | ⚪ kalır — metin güncellendi |
@@ -60,9 +62,20 @@
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici düzeni — ayrı doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS (yönetici düzeni — bağımsız doğrulama alt ajanı, HEAD `4289552e`, 2026-10-22 21:46 UTC) |
+| Bulgu sayısı | 3 × S4 (S1/S2/S3 yok) |
+| Düzeltme gerekli mi | Hayır (bloke etmeyen S4'ler kapanışta kapatıldı) |
+| Kaynak rapor | `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T174_VALIDATION.md` |
+
+**Bulgular ve kapanışları:**
+- **S4-1** — `payout-completed-consumer` kayıt satırı `TransactionsModule.cs:368` → `:372-375` (backlog satırı + bu raporun tablosu #1). ✓ kapandı.
+- **S4-2** — `misc-user-features` ve `discord-interactions-userinstall` satırlarında yapışık "T174 ölçümü" notu nokta ile ayrıldı. ✓ kapandı.
+- **S4-3** — `sanctions-expansion` kararının plana bağlanmaması: sahip kararıyla T171 kabul kriterine bağlandı, runbook §O.1 düzeltildi (aşağıda). ✓ kapandı.
+- Gözlem G1 (bakım dondur/sürdür için de yalnız API var) bulgu sayılmadı; `maintenance-toggle` ✅ kararı doğru, işlem yapılmadı.
+
+## Sahip kararları (2026-10-23, modal)
+- **Yaptırım listesi — sahip kararı (2026-10-23):** yönetici EKRANI YAPILMAYACAK; OFAC SDN adresleri API ile girilir (`POST /api/v1/admin/sanctions/addresses`, kontrol `GET …?source=OFAC&network=…`, kaldırma `DELETE …/{id}`; yetki `MANAGE_SANCTIONS`). `DEPLOY_RUNBOOK.md` §O.1 `curl` yordamına (admin JWT'si nasıl alınır, örnek istek, hata kodları, kontrol) ve kontrol listesi madde 13 buna çevrildi; `plan/11_F9.md` T171 kabul kriterine "yaptırım listesi API ile girildi ve doğrulandı" eklendi. `sanctions-expansion` 🟡 → ⚪: ekran gereksinimi kalktı, satırda yalnız otomatik besleme (canlı sonrası) kaldı.
+- **VPN/Tor — sahip kararı (2026-10-23):** `vpn-fraud` tespiti canlıda KAPALI başlar (`VpnDetection:Enabled=false`); açılıp açılmayacağına pilot verisiyle karar verilir → `plan/11_F9.md` T175 kabul kriterine karar maddesi eklendi; backlog satırı güncellendi (⚪ kalır).
 
 ## Altyapı Değişiklikleri
 - Migration: Yok
@@ -76,12 +89,12 @@
 - CI: PR CI izlendi — sonuç PR #374 run listesinde (dal HEAD)
 
 ## Known Limitations / Follow-up
-- **⚠ Canlıyı etkileyen kalem — `sanctions-expansion` (🟡):** yaptırım listesi için yönetici ekranı yok; runbook §O.1 ve açılış listesi madde 13 o ekranı varsayıyor. T171'den önce iki yoldan biri seçilmeli: (a) en küçük ekran (liste + ekle + kaldır; ağ ve gerekçe alanı), (b) runbook'u API yoluna (`POST api/v1/admin/sanctions/addresses`, `MANAGE_SANCTIONS` JWT ile) çevirmek. Karar sahibin.
+- **(Kapanışta sahip kararıyla çözüldü — yukarıda "Sahip kararları")** — **⚠ Canlıyı etkileyen kalem — `sanctions-expansion` (🟡):** yaptırım listesi için yönetici ekranı yok; runbook §O.1 ve açılış listesi madde 13 o ekranı varsayıyor. T171'den önce iki yoldan biri seçilmeli: (a) en küçük ekran (liste + ekle + kaldır; ağ ve gerekçe alanı), (b) runbook'u API yoluna (`POST api/v1/admin/sanctions/addresses`, `MANAGE_SANCTIONS` JWT ile) çevirmek. Karar sahibin.
 - 🟡'ya çıkan satır "Düşük öncelik" tablosunda yerinde bırakıldı (taşımak yapısal değişiklik olurdu); "Öne Çıkanlar" bölümüne eklenmedi (kapsam yalnız 16 satır + durum satırı).
-- `vpn-fraud`: canlıda Tor tespitinin açılıp açılmayacağı bir sahip kararı; T175 kapı listesinde sorulması önerilir.
+- `vpn-fraud`: canlıda Tor tespitinin açılıp açılmayacağı bir sahip kararı; T175 kapı listesinde sorulması önerilir. **(Kapanışta: sahip kararı 2026-10-23 — kapalı başlar, T175'e eklendi.)**
 
 ## Ek gözlemler (dokunulmadı)
-- **Runbook drift'i:** `Docs/DEPLOY_RUNBOOK.md` §O.1 (satır 1190) ve kontrol listesi madde 13 (satır 1186) olmayan bir "yaptırım listesi ekranı"ndan söz ediyor — `sanctions-expansion` kararıyla birlikte düzeltilmeli.
+- **Runbook drift'i:** `Docs/DEPLOY_RUNBOOK.md` §O.1 (satır 1190) ve kontrol listesi madde 13 (satır 1186) olmayan bir "yaptırım listesi ekranı"ndan söz ediyor — `sanctions-expansion` kararıyla birlikte düzeltilmeli. **(Kapanışta düzeltildi — API yordamı.)**
 - **Kopya kalem:** DROPPED metrik hem `blockchain-monitor-consumers` hem `misc-monitoring-probes` satırında geçiyordu; ikincisine "→ `blockchain-monitor-consumers` satırında" notu düşüldü, satır birleştirilmedi.
 - **Bayat yorum:** `PaymentReceivedRealtimeConsumer.cs` (Realtime) `PaymentDetected`'ı "blockchain monitor görevine" bırakıyor; o görev yok, karar WP16'da canlı sonrasına alındı.
 - **Bayat yorum:** `PayoutIssueService.cs` / `IPayoutVerifier.cs` `RETRY_SCHEDULED` için "future retry pipeline (T-future)" / "follow-up job (forward devir)" diyor; böyle bir görev planda yok — satır 2 (`payout-retry-consumer`) bunun takibi.
@@ -92,4 +105,5 @@
 - **Main CI (Adım 0):** son 3 tamamlanmış run `success` — `39854740205` (Docker Publish, T168), `39850436226` (CI, T169), `39850436112` (Docker Publish, T169). `39854740137` (CI, T168) `in_progress` idi, sayılmadı.
 - **Dış varsayım:** yok (belge triyajı; dış servis, paket, plan katmanı varsayımı yok).
 - **Ölçüm yöntemi:** her satır için grep / dosya okuma / `git log -S` ile kodun bugünkü hâli; tarihsel kapanışlar `IMPLEMENTATION_STATUS.md` WP satırları ve WP raporlarıyla eşlendi. Canlı prova veya test koşusu yapılmadı (kod değişmedi). Docker kullanılmadı.
-- **Kararlar:** `sanctions-expansion` ⚪ → 🟡 öneriyle kaydedildi — ⚠ (yönetici düzeni: kolay karar, faz sonu listesine).
+- **Kararlar:** `sanctions-expansion` ⚪ → 🟡 öneriyle kaydedildi — ⚠ (yönetici düzeni: kolay karar, faz sonu listesine). Kapanışta iki sahip kararı (2026-10-23, modal) alındı — bkz. "Sahip kararları".
+- **Önceki merge teyidi (kapanış):** main `d7aebce7` (T164 #372) — CI `39883489789` ✓, Docker Publish `39883489767` ✓.

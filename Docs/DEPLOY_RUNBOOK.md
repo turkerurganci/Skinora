@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-23 — T164 (kapanış) — §N veritabanı yedeği (Express, otomatik tam + log), 10 GB alarmı, geri yükleme provası ve geri dönüş planı; §N.8 geri yükleme sonrası açılış sırası onay kapısıyla (§M, T169) ve bekleyen bütün giden satırların listesiyle; kapanışta §N.8 deneme penceresi ve kapatmanın defter açığı, §N.5 alarm zamanlaması. Bölüm sırası: §L T163 · §M T169 onay kapısı · §N T164 · §O T169 kurulum günü listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-23 — T174 — §O.1 yaptırım listesi artık API ile (ekran yok), kontrol listesi madde 13 buna uydu. · T164 (kapanış) — §N veritabanı yedeği (Express, otomatik tam + log), 10 GB alarmı, geri yükleme provası ve geri dönüş planı; §N.8 geri yükleme sonrası açılış sırası onay kapısıyla (§M, T169) ve bekleyen bütün giden satırların listesiyle; kapanışta §N.8 deneme penceresi ve kapatmanın defter açığı, §N.5 alarm zamanlaması. Bölüm sırası: §L T163 · §M T169 onay kapısı · §N T164 · §O T169 kurulum günü listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (77 satır — T169 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -1495,12 +1495,24 @@ Gerçek ağ kurulumunda (T171) ve deneme yayınında (§K) bu liste satır satı
 | 10 | Yedek ücretler (⚠) | TRON iade 2.60 / payout 2.25 / ağ ücreti satırı 3.00; Ethereum iade 0.20, payout 0.50, tavan 0.50 | `blockchain.refund_gas_fee_estimate_usdt`, `blockchain.payout_gas_fee_estimate_usdt`, `blockchain.tron.network_fee_fallback_usdt`, `blockchain.ethereum.*` |
 | 11 | Fiyat sapma kuralı kapalı (⚠) | `price_deviation_threshold` = 1.0, `STEAM_MARKET_PROVIDER=logging` | §C.1; pilottan sonra yeniden bakılır |
 | 12 | Sağlayıcı planları (⚠) | TronGrid ücretsiz (mainnet anahtarı Nile'dan **ayrı hesaptan**); Alchemy Free + Chainstack Developer | %80 kota alarmı gelirse ya da günde 25'ten fazla TRON satışı olursa TronGrid özel plan; Alchemy %80'i geçerse kullandıkça öde |
-| 13 | Yaptırım listesi yüklendi | OFAC SDN "Digital Currency Address – TRX / ETH / USDT" adresleri girildi | §O.1 |
+| 13 | Yaptırım listesi yüklendi | OFAC SDN "Digital Currency Address – TRX / ETH / USDT" adresleri **API ile** girildi (ekran yok — sahip kararı 2026-10-23) | §O.1: `GET /api/v1/admin/sanctions/addresses?source=OFAC` ile hem `TRON` hem `ETHEREUM` satırları görünmeli |
 
 ### O.1 Yaptırım listesi yordamı (öneriyle kaydedildi — ⚠)
 - **Kaynak:** OFAC SDN listesi (resmî, ücretsiz: sanctionslist.ofac.treas.gov) — "Digital Currency Address – TRX", "– ETH", "– USDT" alanları.
-- **Açılışta:** bu adresler admin panelinden elle girilir (yaptırım listesi ekranı, `MANAGE_SANCTIONS`; ağ `TRON` / `ETHEREUM`).
-- **Takvim:** ayda bir ve OFAC her güncelleme duyurduğunda gözden geçirilir; sorumlu kişi admin (bugün proje sahibi). Otomatik besleme açılıştan sonra ayrı görev (`sanctions-expansion`). Ethereum'da USDT kontratının kendi kara liste kontrolü (`isBlackListed`, T152) ek katmandır.
+- **Açılışta:** bu adresler **API çağrısıyla** girilir. Yönetici ekranı **yapılmayacak** (proje sahibi kararı, 2026-10-23); `AdminSanctionsController` uçları (AD22 liste, AD23 ekle, AD24 kaldır) yeterlidir. İzin `MANAGE_SANCTIONS` (`super_admin` bunu taşır).
+- **Admin JWT'si nasıl alınır:** admin hesabıyla sitede Steam ile giriş yapın (hesap önce `scripts/bootstrap/README.md` ile süper admin yapılmış ve çıkış+giriş yapılmış olmalı; yoksa yetki token'a girmez). Tarayıcı geliştirici konsolunda `localStorage.getItem("access_token")` değeri JWT'dir. **Ömrü 15 dakikadır** (`AccessTokenExpiryMinutes`); süresi dolarsa sayfayı yenileyip yeniden okuyun. Token'ı dosyaya, sohbete ya da komut geçmişine kalıcı yazmayın; kabukta `export TOKEN='...'` ile oturumluk tutun.
+- **Adres ekleme (bir adres bir çağrı):**
+  ```bash
+  curl -sS -X POST "https://<ALAN_ADI>/api/v1/admin/sanctions/addresses" \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+    -d '{"address":"<ADRES>","network":"TRON","source":"OFAC","reason":"OFAC SDN <YYYY-MM-DD>, <listedeki kimlik/ad>"}'
+  ```
+  - `network`: `TRON` ya da `ETHEREUM` (boşsa `TRON` sayılır — Ethereum adresinde **mutlaka** `ETHEREUM` yazın; yanlış ağ `INVALID_WALLET_ADDRESS` verir). Ethereum'da karışık harfli adres EIP-55 sağlama toplamına uymalıdır; tamamı küçük harfli adres kabul edilir.
+  - `source`: `OFAC` (açılışta hep bu; `EU`, `UN`, `MANUAL` de geçerli). `reason`: en çok 500 karakter — hangi liste/tarih ve listedeki kayıt; denetimde "neden bu adres" sorusunun cevabı budur.
+  - Cevap: `201` ve eklenen satır. `409` (`SANCTIONS_ADDRESS_ALREADY_LISTED`) aynı ağda aynı aktif adres zaten var demektir, sorun değil. `400` doğrulama ya da adres hatası; `401`/`403` token süresi dolmuş ya da `MANAGE_SANCTIONS` yok.
+  - Yazma uçlarında hız sınırı vardır (`admin-write`); çok adres varsa betikle ve aralıklı gönderin. Her ekleme audit log'a yazılır.
+- **Kontrol:** `curl -sS -H "Authorization: Bearer $TOKEN" "https://<ALAN_ADI>/api/v1/admin/sanctions/addresses?source=OFAC&network=TRON&pageSize=100"` (sonra `ETHEREUM`; sayfa en çok 100 satır, fazlası için `&page=2`…) — sayılar kaynak listedeki adet ile aynı olmalı. Yanlış girileni kaldırmak: `DELETE /api/v1/admin/sanctions/addresses/<id>` (pasife alır, satır silinmez).
+- **Takvim:** ayda bir ve OFAC her güncelleme duyurduğunda gözden geçirilir; sorumlu kişi admin (bugün proje sahibi). Otomatik besleme açılıştan sonra ayrı görev (`sanctions-expansion`, DEFERRED_BACKLOG ⚪). Ethereum'da USDT kontratının kendi kara liste kontrolü (`isBlackListed`, T152) ek katmandır.
 
 ### O.2 KMS/HSM (karar yok)
 Anahtarların donanım güvenlik modülüne taşınma eşiği **kararlaştırılmadı** — pilot (T173) sonrası proje sahibine sorulacak (T169, 2026-10-21). O zamana kadar tohum ve imza anahtarları Docker secret + çevrimdışı yedekte (T163) yazılım anahtarı olarak durur (DEFERRED_BACKLOG `SigningSecretsInPlainEnv`).
