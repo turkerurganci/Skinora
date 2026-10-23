@@ -1,42 +1,12 @@
 {
-  "__inputs": [],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "10.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "gauge",
-      "name": "Gauge",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    }
-  ],
   "annotations": {
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -45,239 +15,41 @@
       }
     ]
   },
-  "description": "Skinora escrow platform — business-level metrics. Panels will be fully populated in F3 when business logic is implemented.",
+  "description": "Para akışı göstergeleri. T170: var olmayan iş metrikleri (aktif işlem, tamamlanma oranı, günlük hacim) kaldırıldı — backend bunları yayımlamıyor (DEFERRED_BACKLOG BusinessMetricsNotPublished).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
   "links": [],
+  "liveNow": false,
   "panels": [
     {
-      "datasource": "Prometheus",
-      "description": "Number of escrow transactions currently in an active (non-terminal) state. Populated in F3.",
+      "type": "timeseries",
+      "title": "Gelen ödemeler (1 sa, ağ başına)",
+      "description": "TRON: BUYER_PAYMENT onayı; Ethereum: izleyicinin ilettiği ödeme olayları.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 200 }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
-      "id": 1,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "text": {}
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "skinora_active_transactions",
-          "instant": true,
-          "legendFormat": "Active Transactions",
-          "refId": "A"
-        }
-      ],
-      "title": "Active Transactions",
-      "type": "gauge"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Ratio of completed transactions to total closed transactions (completed + cancelled + failed). Populated in F3.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [
-            {
-              "options": {
-                "match": "null",
-                "result": { "color": "text", "text": "N/A" }
-              },
-              "type": "special"
-            }
-          ],
-          "max": 1,
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.8 },
-              { "color": "green", "value": 0.95 }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
-      "id": 2,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "text": {},
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "skinora_transactions_completed_total / clamp_min(skinora_transactions_completed_total + skinora_transactions_cancelled_total + skinora_transactions_failed_total, 1)",
-          "instant": true,
-          "legendFormat": "Completion Rate",
-          "refId": "A"
-        }
-      ],
-      "title": "Transaction Completion Rate",
-      "type": "stat"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Number of new transactions created per day over time. Populated in F3.",
-      "fieldConfig": {
-        "defaults": {
+          "unit": "short",
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 15,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
             "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "id": 3,
-      "options": {
-        "legend": {
-          "calcs": ["sum"],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "increase(skinora_transactions_created_total[$__interval])",
-          "legendFormat": "New Transactions",
-          "refId": "A"
-        }
-      ],
-      "title": "Daily Transaction Volume",
-      "type": "timeseries"
-    },
-    {
-      "datasource": "Prometheus",
-      "description": "Cumulative count of blockchain token transfers executed by the blockchain sidecar, broken down by status.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
             "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
+            "showPoints": "never",
+            "spanNulls": true
           },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null }
-            ]
-          },
-          "unit": "short"
+          "min": 0
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "id": 5,
       "options": {
         "legend": {
-          "calcs": ["lastNotNull"],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
@@ -287,78 +59,231 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
-          "datasource": "Prometheus",
-          "expr": "skinora_blockchain_transfers_total",
-          "legendFormat": "{{status}}",
-          "refId": "A"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(skinora_blockchain_transfers_total{type=\"BUYER_PAYMENT\",status=\"CONFIRMED\"}[1h]))",
+          "refId": "A",
+          "legendFormat": "TRON onaylanan"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (event) (increase(skinora_ethereum_payment_events_total[1h]))",
+          "refId": "B",
+          "legendFormat": "ETHEREUM {{event}}"
         }
       ],
-      "title": "Blockchain Transfers",
-      "type": "timeseries"
+      "id": 1,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
     },
     {
-      "datasource": "Prometheus",
-      "description": "Current ETH balance of the hot wallet used by the blockchain sidecar for gas fees and escrow transfers.",
+      "type": "timeseries",
+      "title": "Giden gönderimler (ağ başına bekleyen)",
+      "description": "Ödeme, iade, sweep — PENDING satırlar.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "short",
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.05 },
-              { "color": "green", "value": 0.5 }
-            ]
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
           },
-          "unit": "short"
+          "min": 0
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "id": 6,
       "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "orientation": "auto",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (network) (skinora_backend_outbound_pending_rows)",
+          "refId": "A",
+          "legendFormat": "{{network}}"
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Onay bekleyen ödeme / iade",
+      "description": "T169 onay kapısı (outbound-awaiting-approval).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
-        "text": {},
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
         "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
-          "datasource": "Prometheus",
-          "expr": "skinora_blockchain_hot_wallet_balance",
-          "instant": true,
-          "legendFormat": "Hot Wallet Balance (ETH)",
-          "refId": "A"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (network) (skinora_backend_outbound_awaiting_approval_rows)",
+          "refId": "A",
+          "legendFormat": "{{network}}"
         }
       ],
-      "title": "Hot Wallet Balance",
-      "type": "stat"
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Sıcak cüzdan USDT",
+      "description": "Ağ başına sıcak cüzdan USDT bakiyesi (limit: Networks panosu).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": [],
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (network) (skinora_backend_hot_wallet_balance{asset=\"USDT\"})",
+          "refId": "A",
+          "legendFormat": "{{network}}"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
     }
   ],
-  "refresh": "30s",
-  "schemaVersion": 38,
-  "style": "dark",
-  "tags": ["skinora", "business"],
-  "templating": { "list": [] },
-  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "skinora",
+    "business"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Skinora \u2014 Business Metrics",
+  "title": "Skinora — Business Metrics",
   "uid": "skinora-business",
   "version": 1,
   "weekStart": ""
