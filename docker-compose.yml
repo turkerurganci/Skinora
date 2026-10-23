@@ -465,12 +465,47 @@ services:
       - MSSQL_PID=${MSSQL_PID:-Developer}
     volumes:
       - skinora-db-data:/var/opt/mssql
+      # T164 — backups go to a HOST folder (gitignored), not into the database
+      # volume: they survive `down -v` and a lost volume. Same host folder and
+      # same path in skinora-db-backup (BACKUP ... TO DISK is a server path).
+      - ${DB_BACKUP_HOST_DIR:-./backups/db}:/var/opt/mssql/backup
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1' -C || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
+    networks:
+      - skinora-network
+
+  # --- Database backup (T164, DEPLOY_RUNBOOK §N) ---
+  # SQL Server Express has no SQL Agent: this container is the scheduler. It
+  # runs scripts/db-backup/db-backup.sh (full every 24 h, log every 15 min,
+  # 14 days kept — the T164 proposal) against skinora-db over the compose
+  # network. restart: unless-stopped brings it back with Docker Desktop after
+  # a reboot; its first tick takes whatever backup is overdue. Same image as
+  # the database (sqlcmd, nothing new to pull); sqlservr is NOT started — the
+  # entrypoint is the script. Publishes no port.
+  skinora-db-backup:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: skinora-db-backup
+    entrypoint: ["/bin/bash", "/opt/skinora/db-backup.sh"]
+    command: ["run"]
+    environment:
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - DB_BACKUP_SERVER=skinora-db
+      - DB_BACKUP_DATABASE=${DB_BACKUP_DATABASE:-Skinora}
+      - DB_BACKUP_FULL_INTERVAL_HOURS=${DB_BACKUP_FULL_INTERVAL_HOURS:-24}
+      - DB_BACKUP_LOG_INTERVAL_MINUTES=${DB_BACKUP_LOG_INTERVAL_MINUTES:-15}
+      - DB_BACKUP_RETENTION_DAYS=${DB_BACKUP_RETENTION_DAYS:-14}
+      - DB_BACKUP_TICK_SECONDS=${DB_BACKUP_TICK_SECONDS:-60}
+    volumes:
+      - ./scripts/db-backup/db-backup.sh:/opt/skinora/db-backup.sh:ro
+      - ${DB_BACKUP_HOST_DIR:-./backups/db}:/var/opt/mssql/backup
+    depends_on:
+      skinora-db:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - skinora-network

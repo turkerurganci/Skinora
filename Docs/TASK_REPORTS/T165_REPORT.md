@@ -27,7 +27,7 @@
 - **Backend test:** yeni `Shared.Tests/Unit/Notifications/NotificationChannelAvailabilityTests.cs`, `API.Tests/Integration/PublicHealthEndpointTests.cs`, `API.Tests/Unit/Notifications/TelegramTransportRegistrationTests.cs`, `API.Tests/Unit/Monitoring/NotificationAlertingProvisioningTests.cs`; değişen `ResendEmailClientTests`, `TelegramBotClientTests`, `AdminAlertNotificationConsumerTests`, `NotificationDispatcherTests`, `AccountSettingsEndpointTests`, `HotWalletMonitorServiceTests`, `OutgoingTransferDispatchJobTests`.
 - **Frontend:** `lib/api/settings.ts`, `components/settings/LinkedAccountsSection.tsx`, `NotificationPreferencesSection.tsx`, yeni `NotificationChannelAvailability.test.tsx`, `i18n/messages/{en,tr,es,zh}.json` (+2 anahtar).
 - **Altyapı:** `infra/grafana/provisioning/alerting/{contactpoints,policies,rules}.yml`, `docker-compose.yml`, `docker-compose.trial.yml`, `.env.example`, `nginx/nginx.conf`, yeni `scripts/heartbeat/heartbeat.sh` + `heartbeat.test.mjs`, `scripts/compose-exposure.test.mjs`, `.github/workflows/ci.yml`.
-- **Belgeler:** `DEPLOY_RUNBOOK.md` §P, `INTEGRATION_RUNBOOKS/{RESEND,TELEGRAM,DISCORD}_SETUP.md`, `05` v3.34, `07` v4.24, `DOC_CHANGELOG.md`, `DEFERRED_BACKLOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`.
+- **Belgeler:** `DEPLOY_RUNBOOK.md` §P, `INTEGRATION_RUNBOOKS/{RESEND,TELEGRAM,DISCORD}_SETUP.md`, `05` v3.35, `07` v4.24, `DOC_CHANGELOG.md`, `DEFERRED_BACKLOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`.
 
 ## Kabul Kriterleri Kontrolü
 
