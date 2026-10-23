@@ -33,6 +33,7 @@ public sealed class PrometheusOutboundDispatchPauseObserverTests
         Assert.Matches(@"type: gt\s+params: \[0\]", block);
         Assert.Contains("for: 30m", block);
         Assert.Contains("severity: warning", block);
+        Assert.Contains("category: money", block); // T165: money alarms reach Telegram + e-mail
     }
 
     private static string RuleBlock(string uid)

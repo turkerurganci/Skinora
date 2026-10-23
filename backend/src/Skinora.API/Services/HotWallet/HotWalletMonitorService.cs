@@ -82,6 +82,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
     private readonly INotificationRealtimePublisher _realtime;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly TimeProvider _clock;
+    private readonly IHotWalletThresholdObserver _thresholds;
     private readonly ILogger<HotWalletMonitorService> _logger;
 
     public HotWalletMonitorService(
@@ -90,6 +91,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
         INotificationRealtimePublisher realtime,
         IPlatformWalletAddressProvider walletAddresses,
         TimeProvider clock,
+        IHotWalletThresholdObserver thresholds,
         ILogger<HotWalletMonitorService> logger)
     {
         _db = db;
@@ -97,6 +99,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
         _realtime = realtime;
         _walletAddresses = walletAddresses;
         _clock = clock;
+        _thresholds = thresholds;
         _logger = logger;
     }
 
@@ -134,6 +137,19 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
 
         var detectedAt = _clock.GetUtcNow().UtcDateTime;
         var breaches = 0;
+
+        var stablecoinLimitSet = settings.HotWalletLimit is > 0m;
+        foreach (var token in StablecoinTokens)
+        {
+            // T165 — every threshold reported on every successful run (0 when
+            // within, or when no limit is set), so the alarm also resolves.
+            var over = stablecoinLimitSet && ReadStablecoinAmount(balances.Tokens, token) > settings.HotWalletLimit!.Value;
+            _thresholds.Report(MonitoredNetwork, token.ToString(), DirectionUpper, over);
+        }
+
+        var trxFloorSet = settings.TrxMinimum is > 0m;
+        _thresholds.Report(MonitoredNetwork, TokenTrx, DirectionLower,
+            trxFloorSet && ReadTrxAmount(balances.Tokens) < settings.TrxMinimum!.Value);
 
         if (settings.HotWalletLimit is { } stablecoinLimit && stablecoinLimit > 0m)
         {

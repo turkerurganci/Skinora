@@ -11,6 +11,7 @@ using Skinora.Notifications.Resources;
 using Skinora.Notifications.Tests.TestSupport;
 using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Tests.Integration;
 using Skinora.Users.Domain.Entities;
@@ -48,7 +49,8 @@ public class NotificationDispatcherTests : IntegrationTestBase
 
     private (NotificationDispatcher Dispatcher,
              FakeBackgroundJobScheduler Scheduler,
-             RecordingNotificationRealtimePublisher RealtimePublisher) CreateSut()
+             RecordingNotificationRealtimePublisher RealtimePublisher) CreateSut(
+        INotificationChannelAvailability? channels = null)
     {
         var services = new ServiceCollection();
         services.AddLocalization();
@@ -67,6 +69,7 @@ public class NotificationDispatcherTests : IntegrationTestBase
             resolver,
             scheduler,
             realtimePublisher,
+            channels ?? NotificationChannelAvailability.FromConfiguration(_ => null),
             NullLogger<NotificationDispatcher>.Instance);
 
         return (dispatcher, scheduler, realtimePublisher);
@@ -182,6 +185,47 @@ public class NotificationDispatcherTests : IntegrationTestBase
         Assert.Equal("user@example.com", deliveries[0].TargetExternalId);
         Assert.Equal(DeliveryStatus.PENDING, deliveries[0].Status);
         Assert.Equal(0, deliveries[0].AttemptCount);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task DispatchAsync_UnavailableChannels_GetNoDeliveryRow_AndNoJob()
+    {
+        // T165 — Discord switched off (production) and Telegram selected but
+        // without its secrets (Misconfigured): only e-mail (stub = available)
+        // gets a delivery. The preferences stay untouched.
+        await SetPreferenceAsync(NotificationChannel.EMAIL, enabled: true, externalId: "user@example.com");
+        await SetPreferenceAsync(NotificationChannel.TELEGRAM, enabled: true, externalId: "9876");
+        await SetPreferenceAsync(NotificationChannel.DISCORD, enabled: true, externalId: "112233");
+
+        var channels = NotificationChannelAvailability.FromConfiguration(key => key switch
+        {
+            "Telegram:Provider" => "telegram",
+            "Discord:Provider" => "disabled",
+            _ => null,
+        });
+        Assert.Equal(NotificationChannelState.Misconfigured, channels.Get(NotificationChannel.TELEGRAM).State);
+        Assert.Equal(NotificationChannelState.Disabled, channels.Get(NotificationChannel.DISCORD).State);
+
+        var (dispatcher, scheduler, _) = CreateSut(channels);
+        await dispatcher.DispatchAsync(
+            new NotificationRequest
+            {
+                UserId = _user.Id,
+                Type = NotificationType.PAYMENT_RECEIVED,
+                Parameters = new Dictionary<string, string> { ["Amount"] = "10" },
+            },
+            CancellationToken.None);
+
+        Assert.Single(scheduler.EnqueuedCalls);
+
+        await Context.SaveChangesAsync();
+        await using var verify = CreateContext();
+        var delivery = Assert.Single(await verify.Set<NotificationDelivery>().ToListAsync());
+        Assert.Equal(NotificationChannel.EMAIL, delivery.Channel);
+        Assert.Equal(3, await verify.Set<UserNotificationPreference>().CountAsync(p => p.IsEnabled));
+        // The in-app row is still written — the platform channel is always on.
+        Assert.Single(await verify.Set<Notification>().ToListAsync());
     }
 
     [Fact]

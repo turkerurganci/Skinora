@@ -120,6 +120,27 @@ services:
       # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
       # Default "logging" = fail-open, no outbound call to steamcommunity.com.
       - SteamMarket__Provider=${STEAM_MARKET_PROVIDER:-logging}
+      # T165 — external notification channels (DEPLOY_RUNBOOK §P). Provider per
+      # channel: logging (development stub, the default HERE), resend /
+      # telegram / discord (real), disabled (switched off). The trial overlay
+      # forces the production choice — e-mail + Telegram real, Discord off
+      # (owner decision 2026-10-21) — so the secrets alone open a channel. A
+      # real provider with an empty / placeholder / malformed secret runs as
+      # "misconfigured": switched off + error log + notification-channel-
+      # misconfigured alert; it never falls back to the stub. Secrets are env
+      # like the other shared secrets until T171 (DEFERRED_BACKLOG
+      # SharedSecretsInPlainEnv). TELEGRAM_BOT_TOKEN is the same bot Grafana
+      # alerts through (skinora-grafana-provisioning below).
+      - Resend__Provider=${RESEND_PROVIDER:-logging}
+      - Resend__ApiKey=${RESEND_API_KEY:-}
+      - Resend__WebhookSigningSecret=${RESEND_WEBHOOK_SIGNING_SECRET:-}
+      - Resend__FromAddress=${RESEND_FROM_ADDRESS:-Skinora <noreply@skinora.com>}
+      - Telegram__Provider=${TELEGRAM_PROVIDER:-logging}
+      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN:-}
+      - Telegram__BotUsername=${TELEGRAM_BOT_USERNAME:-SkinoraBot}
+      - Telegram__BotUrl=https://t.me/${TELEGRAM_BOT_USERNAME:-SkinoraBot}
+      - Telegram__WebhookSecretToken=${TELEGRAM_WEBHOOK_SECRET_TOKEN:-}
+      - Discord__Provider=${DISCORD_PROVIDER:-logging}
       # --- 19 mandatory SystemSettings (DEPLOY_RUNBOOK §A) ---
       # SettingsBootstrapService hydrates unconfigured rows from these and
       # FAIL-FASTS (InvalidOperationException → container exit) on any missing or
@@ -603,6 +624,12 @@ services:
   skinora-grafana:
     image: grafana/grafana:11.3.0
     container_name: skinora-grafana
+    # T165 — first-boot guard (scripts/grafana/first-boot.sh): on an empty data
+    # volume Grafana's Alertmanager would run its built-in default routing
+    # (e-mail to example@email.com) for up to a minute while the rules already
+    # fire. The guard provisions the routing with rule execution off first,
+    # then starts Grafana normally (DEPLOY_RUNBOOK §P.4).
+    entrypoint: ["/bin/sh", "/opt/skinora/first-boot.sh"]
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
     environment:
@@ -611,10 +638,23 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      # T165 — e-mail alerts (email-critical, money-alarm) leave through
+      # Grafana's own SMTP client. Resend's SMTP relay: smtp.resend.com:587 with
+      # STARTTLS, user "resend", password = a Resend API key (a SEPARATE
+      # sending-only key from the backend's, DEPLOY_RUNBOOK §P). Off here by
+      # default; the trial overlay turns it on, so only the password is needed.
+      - GF_SMTP_ENABLED=${GRAFANA_SMTP_ENABLED:-false}
+      - GF_SMTP_HOST=${GRAFANA_SMTP_HOST:-smtp.resend.com:587}
+      - GF_SMTP_USER=${GRAFANA_SMTP_USER:-resend}
+      - GF_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD:-}
+      - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM_ADDRESS:-alerts@skinora.com}
+      - GF_SMTP_FROM_NAME=Skinora Alerts
+      - GF_SMTP_STARTTLS_POLICY=MandatoryStartTLS
     volumes:
       # Rendered copy, not ./infra/grafana/provisioning — see the render service.
       - skinora-grafana-provisioning:/etc/grafana/provisioning:ro
       - skinora-grafana-data:/var/lib/grafana
+      - ./scripts/grafana/first-boot.sh:/opt/skinora/first-boot.sh:ro
     depends_on:
       skinora-grafana-provisioning:
         condition: service_completed_successfully

@@ -180,4 +180,10 @@
   <data name="DELIVERY_DETECTED_Body" xml:space="preserve">
     <value>{ItemName} 已出现在您的 Steam 库存中。请检查——如已到达，请在交易页面点击“我已收到”确认。如未到达，无需任何操作。</value>
   </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Title" xml:space="preserve">
+    <value>管理员：账本与链上不一致</value>
+  </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Body" xml:space="preserve">
+    <value>每日对账在 {Network} 上发现 {MismatchCount} 处账本与链上不一致。批准付款前请检查 RECONCILIATION_MISMATCH 审计记录。</value>
+  </data>
 </root>

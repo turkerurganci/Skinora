@@ -1836,7 +1836,8 @@
           "description": "通过 Discord 接收通知。",
           "connected": "已连接:{username}",
           "notConnected": "请先连接您的 Discord 账户以接收通知。"
-        }
+        },
+        "unavailable": "该渠道目前在平台上不可用。"
       },
       "email": {
         "addressLabel": "邮箱地址",
@@ -1898,6 +1899,7 @@
         "connected": "已连接",
         "notConnected": "未连接"
       },
+      "unavailable": "该渠道目前在平台上不可用。",
       "telegram": {
         "label": "Telegram",
         "modal": {

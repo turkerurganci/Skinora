@@ -180,4 +180,10 @@
   <data name="DELIVERY_DETECTED_Body" xml:space="preserve">
     <value>{ItemName} Steam envanterinde görünüyor. Kontrol et; geldiyse işlem sayfasında "Teslim Aldım" ile onayla. Gelmediyse bir şey yapma.</value>
   </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Title" xml:space="preserve">
+    <value>Admin: defter / zincir uyuşmazlığı</value>
+  </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Body" xml:space="preserve">
+    <value>Günlük mutabakat {Network} ağında defter ile zincir arasında {MismatchCount} uyuşmazlık buldu. Ödeme onaylamadan önce RECONCILIATION_MISMATCH denetim kayıtlarını inceleyin.</value>
+  </data>
 </root>

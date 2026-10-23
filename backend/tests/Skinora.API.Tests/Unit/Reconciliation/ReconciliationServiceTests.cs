@@ -12,7 +12,10 @@ using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
+using Skinora.Shared.Domain;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.PaymentAddresses;
 using Skinora.Transactions.Application.Reconciliation;
@@ -38,6 +41,7 @@ public sealed class ReconciliationServiceTests : IDisposable
     private readonly FakeTimeProvider _clock = new();
     private readonly StubPlatformWalletAddressProvider _walletAddresses = new();
     private readonly RecordingRunObserver _runs = new();
+    private readonly RecordingOutbox _outbox = new();
     private readonly ReconciliationService _sut;
     private int _syntheticSweepSeq;
 
@@ -59,6 +63,7 @@ public sealed class ReconciliationServiceTests : IDisposable
             _publisher,
             _walletAddresses,
             _runs,
+            _outbox,
             _clock,
             NullLogger<ReconciliationService>.Instance);
     }
@@ -652,6 +657,173 @@ public sealed class ReconciliationServiceTests : IDisposable
 
     // ─── Stubs ──────────────────────────────────────────────────────────
 
+    // ─── T165 — a mismatch leaves the panel (metric + admin event) ──────
+
+    [Fact]
+    public async Task T165_Mismatch_IsReportedPerScope_AndRaisesOneAdminEvent()
+    {
+        // Doğrulama bulgu 1 (⚠ PARA): the mismatch reached only the panel.
+        await ConfigureHotWalletAsync();
+        await SeedBlockchainTransactionAsync(
+            toAddress: HotWalletAddress, type: BlockchainTransactionType.SWEEP,
+            token: StablecoinType.USDC, amount: 100m,
+            status: BlockchainTransactionStatus.CONFIRMED);
+        var deposit = await SeedDepositAddressAsync("TDepositFixture-T165");
+        await SeedConfirmedDepositInflowAsync(deposit.Id, deposit.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 100m);
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [HotWalletAddress] = SnapshotForUsdc("150000000"), // 50 USDC unexplained
+            [deposit.Address] = SnapshotForUsdt("100000000"),  // balanced
+        });
+
+        var outcome = await _sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal(1, outcome.MismatchCount);
+        Assert.Equal(
+            new[]
+            {
+                (BlockchainNetwork.TRON, ReconciliationScope.DepositAddress, 0),
+                (BlockchainNetwork.TRON, ReconciliationScope.HotWallet, 1),
+            },
+            _runs.Mismatches);
+        var alert = Assert.IsType<ReconciliationMismatchAdminAlertEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal("TRON", alert.Network);
+        Assert.Equal(1, alert.MismatchCount);
+        Assert.Equal(0, alert.DepositAddressMismatches);
+        Assert.Equal(1, alert.HotWalletMismatches);
+        Assert.Equal(0, alert.ColdWalletMismatches);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, alert.OccurredAt);
+        Assert.NotEqual(Guid.Empty, alert.EventId);
+    }
+
+    [Fact]
+    public async Task T165_BalancedRound_ReportsZeroForEveryComparedScope_SoTheAlarmResolves_AndRaisesNoEvent()
+    {
+        await ConfigureHotWalletAsync();
+        await ConfigureColdWalletAsync();
+        // 80 USDT swept in, then moved hot → cold: hot 0, cold 80.
+        await SeedBlockchainTransactionAsync(
+            toAddress: HotWalletAddress, type: BlockchainTransactionType.SWEEP,
+            token: StablecoinType.USDT, amount: 80m,
+            status: BlockchainTransactionStatus.CONFIRMED);
+        await SeedColdWalletInflowAsync(StablecoinType.USDT, 80m);
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [HotWalletAddress] = SnapshotForUsdt("0"),
+            [ColdWalletAddress] = SnapshotForUsdt("80000000"),
+        });
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal(
+            new[]
+            {
+                (BlockchainNetwork.TRON, ReconciliationScope.DepositAddress, 0),
+                (BlockchainNetwork.TRON, ReconciliationScope.HotWallet, 0),
+                (BlockchainNetwork.TRON, ReconciliationScope.ColdWallet, 0),
+            },
+            _runs.Mismatches);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task T165_ScopeNotCompared_ReportsNothing_SoAnUncheckedWalletNeverReadsBalanced()
+    {
+        // Cold wallet only: the hot scope is not compared this round and must
+        // keep its last value (no 0 that would resolve an open alarm).
+        await ConfigureColdWalletAsync();
+        await SeedColdWalletInflowAsync(StablecoinType.USDT, 80m);
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [ColdWalletAddress] = SnapshotForUsdt("70000000"), // 10 USDT short
+        });
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(_runs.Mismatches, m => m.Scope == ReconciliationScope.HotWallet);
+        Assert.Contains((BlockchainNetwork.TRON, ReconciliationScope.ColdWallet, 1), _runs.Mismatches);
+        var alert = Assert.IsType<ReconciliationMismatchAdminAlertEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal(1, alert.ColdWalletMismatches);
+    }
+
+    [Fact]
+    public async Task T165_AbortedRound_ReportsNoMismatchCount_AndNoEvent()
+    {
+        // The books were not checked: the last mismatch value stays (the
+        // reconciliation-network-failed alarm covers the failed round).
+        await ConfigureHotWalletAsync();
+        _sidecar.QueueUnavailable();
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.Empty(_runs.Mismatches);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task T165_DepositAddressMissingFromSnapshot_DepositScopeNotReported_SoAnOpenAlarmIsNotResolved()
+    {
+        // T165 kapanış (yeniden doğrulama Y2, ⚠ PARA): the missing address was
+        // skipped and the scope reported 0 — a mismatch still standing there
+        // read "resolved". The scope was not compared in full: report nothing.
+        var balanced = await SeedDepositAddressAsync("TDepositFixture-Y2-balanced");
+        await SeedConfirmedDepositInflowAsync(balanced.Id, balanced.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 100m);
+        var missing = await SeedDepositAddressAsync("TDepositFixture-Y2-missing");
+        await SeedConfirmedDepositInflowAsync(missing.Id, missing.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 40m);
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [balanced.Address] = SnapshotForUsdt("100000000"),
+        });
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(_runs.Mismatches, m => m.Scope == ReconciliationScope.DepositAddress);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task T165_DepositAddressMissingFromSnapshot_MismatchFoundElsewhere_IsStillReported()
+    {
+        // A positive count can only keep the alarm firing: still reported.
+        var short1 = await SeedDepositAddressAsync("TDepositFixture-Y2-short");
+        await SeedConfirmedDepositInflowAsync(short1.Id, short1.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 100m);
+        var missing = await SeedDepositAddressAsync("TDepositFixture-Y2-missing2");
+        await SeedConfirmedDepositInflowAsync(missing.Id, missing.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 40m);
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [short1.Address] = SnapshotForUsdt("90000000"), // 10 USDT short
+        });
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal((BlockchainNetwork.TRON, ReconciliationScope.DepositAddress, 1), Assert.Single(_runs.Mismatches));
+        var alert = Assert.IsType<ReconciliationMismatchAdminAlertEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal(1, alert.DepositAddressMismatches);
+    }
+
+    [Fact]
+    public async Task T165_EthereumMismatch_CarriesItsNetwork()
+    {
+        var eth = new EchoBalancesSidecar(); // every address answers 0
+        var sut = EthereumSut(eth);
+        await SeedEthereumDepositAsync(EthAddress(1));
+        var deposit = await _db.Set<PaymentAddress>().SingleAsync();
+        await SeedConfirmedDepositInflowAsync(deposit.Id, deposit.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 5m);
+
+        await sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal((BlockchainNetwork.ETHEREUM, ReconciliationScope.DepositAddress, 1), Assert.Single(_runs.Mismatches));
+        var alert = Assert.IsType<ReconciliationMismatchAdminAlertEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal("ETHEREUM", alert.Network);
+        Assert.Equal(1, alert.DepositAddressMismatches);
+    }
+
     // ─── T158 (i) — Ethereum balance chunks + failed-round signal ───────
 
     [Fact]
@@ -707,6 +879,7 @@ public sealed class ReconciliationServiceTests : IDisposable
             _publisher,
             _walletAddresses,
             _runs,
+            _outbox,
             _clock,
             NullLogger<ReconciliationService>.Instance);
 
@@ -726,7 +899,23 @@ public sealed class ReconciliationServiceTests : IDisposable
     {
         public List<(BlockchainNetwork Network, bool Succeeded)> Reports { get; } = new();
 
+        public List<(BlockchainNetwork Network, ReconciliationScope Scope, int Mismatches)> Mismatches { get; } = new();
+
         public void Report(BlockchainNetwork network, bool succeeded) => Reports.Add((network, succeeded));
+
+        public void ReportMismatches(BlockchainNetwork network, ReconciliationScope scope, int mismatches) =>
+            Mismatches.Add((network, scope, mismatches));
+    }
+
+    private sealed class RecordingOutbox : IOutboxService
+    {
+        public List<IDomainEvent> Published { get; } = new();
+
+        public Task PublishAsync(IDomainEvent domainEvent, CancellationToken cancellationToken = default)
+        {
+            Published.Add(domainEvent);
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>Answers every asked address with zero balances; the n-th call (1-based) fails when set.</summary>

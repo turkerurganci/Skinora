@@ -90,6 +90,31 @@ builder.Services.AddAuthModule(builder.Configuration);
 // Steam OpenID authentication services (T29)
 builder.Services.AddSteamAuthenticationModule(builder.Configuration);
 
+// T165 — one decision per external notification channel (e-mail, Telegram,
+// Discord), taken here from Provider + secrets and shared by every composition
+// site below and in the Users / Notifications modules. A real provider whose
+// secrets are missing, placeholders or malformed is Misconfigured: it is wired
+// like the stub (no HttpClient — the real clients throw on an empty key), the
+// dispatcher creates no delivery on it, the connect endpoints answer
+// CHANNEL_UNAVAILABLE, and NotificationChannelStatusReporter logs an error and
+// publishes skinora_backend_notification_channel_state (alert
+// notification-channel-misconfigured). Provider "disabled" switches a channel
+// off on purpose (production Discord, owner decision 2026-10-21).
+var notificationChannels = Skinora.Shared.Notifications.NotificationChannelAvailability
+    .FromConfiguration(key => builder.Configuration[key]);
+builder.Services.AddSingleton<Skinora.Shared.Notifications.INotificationChannelAvailability>(notificationChannels);
+builder.Services.AddHostedService<Skinora.API.Monitoring.NotificationChannelStatusReporter>();
+// T165 — money alarms ("para alarmı"): the admin consumers built with this
+// observer also publish skinora_backend_admin_money_alarm_last_seconds, which
+// Grafana's admin-money-alarm-raised rule (category: money) carries to the
+// operator's Telegram chat and e-mail.
+builder.Services.AddSingleton<Skinora.Shared.Notifications.IAdminMoneyAlarmObserver,
+    Skinora.API.Monitoring.PrometheusAdminMoneyAlarmObserver>();
+// T165 — an external delivery that exhausted its retries is also a metric
+// (notification-delivery-exhausted), not only a warning log line.
+builder.Services.AddScoped<Skinora.Notifications.Application.Channels.INotificationAdminAlertSink,
+    Skinora.API.Monitoring.PrometheusNotificationAdminAlertSink>();
+
 // T79 — Telegram bot transport (08 §5.1–§5.5). TelegramSettings drives
 // both the connection service (Skinora.Users → /start deep-link
 // handler) and the notification channel handler
@@ -103,15 +128,10 @@ builder.Services.Configure<TelegramSettings>(
     builder.Configuration.GetSection(TelegramSettings.SectionName));
 builder.Services.AddSingleton<ITelegramRateLimiter, TelegramRateLimiter>();
 
-var telegramProvider = builder.Configuration[$"{TelegramSettings.SectionName}:{nameof(TelegramSettings.Provider)}"]
-    ?? TelegramSettings.ProviderLogging;
-if (string.Equals(telegramProvider, TelegramSettings.ProviderTelegram, StringComparison.OrdinalIgnoreCase))
+if (notificationChannels.Get(Skinora.Shared.Enums.NotificationChannel.TELEGRAM).IsLive)
 {
-    builder.Services.AddHttpClient<ITelegramBotClient, TelegramBotClient>((sp, client) =>
-    {
-        var settings = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<TelegramSettings>>().Value;
-        client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
-    });
+    // T165 — without the default HttpClient loggers: the token is in the URL.
+    builder.Services.AddTelegramBotTransport();
 }
 
 // T80 — Discord transport (08 §6.1–§6.5). DiscordSettings drives
@@ -127,9 +147,7 @@ builder.Services.Configure<DiscordSettings>(
     builder.Configuration.GetSection(DiscordSettings.SectionName));
 builder.Services.AddSingleton<IDiscordRateLimiter, DiscordRateLimiter>();
 
-var discordProvider = builder.Configuration[$"{DiscordSettings.SectionName}:{nameof(DiscordSettings.Provider)}"]
-    ?? DiscordSettings.ProviderLogging;
-if (string.Equals(discordProvider, DiscordSettings.ProviderDiscord, StringComparison.OrdinalIgnoreCase))
+if (notificationChannels.Get(Skinora.Shared.Enums.NotificationChannel.DISCORD).IsLive)
 {
     builder.Services.AddHttpClient<IDiscordOAuthClient, DiscordOAuthClient>((sp, client) =>
     {
@@ -212,9 +230,7 @@ builder.Services.Configure<ResendSettings>(
     builder.Configuration.GetSection(ResendSettings.SectionName));
 builder.Services.AddSingleton<SvixSignatureVerifier>();
 
-var resendProvider = builder.Configuration[$"{ResendSettings.SectionName}:{nameof(ResendSettings.Provider)}"]
-    ?? ResendSettings.ProviderLogging;
-if (string.Equals(resendProvider, ResendSettings.ProviderResend, StringComparison.OrdinalIgnoreCase))
+if (notificationChannels.Get(Skinora.Shared.Enums.NotificationChannel.EMAIL).IsLive)
 {
     builder.Services.AddHttpClient<IResendEmailClient, ResendEmailClient>((sp, client) =>
     {
@@ -584,6 +600,18 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
 {
     ResponseWriter = Skinora.API.HealthChecks.HealthCheckResponseWriter.WriteResponse
 });
+// T165 — the PUBLIC health endpoint for outside monitors (UptimeRobot through
+// the tunnel, the heartbeat container): the database + Redis checks only, and
+// a body of {"status":"..."} — no check names, no durations, no exception text
+// (the detailed /health above stays for the compose healthcheck and internal
+// callers; nginx answers its public /health with this one). 200 healthy /
+// degraded, 503 unhealthy; never cached.
+app.MapHealthChecks(Skinora.API.HealthChecks.PublicHealthResponseWriter.Path,
+    new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready"),
+        ResponseWriter = Skinora.API.HealthChecks.PublicHealthResponseWriter.WriteResponse,
+    });
 
 app.Run();
 

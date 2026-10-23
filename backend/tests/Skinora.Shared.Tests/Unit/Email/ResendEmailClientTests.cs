@@ -98,6 +98,86 @@ public sealed class ResendEmailClientTests
         Assert.Contains("Skinora", bodyText); // FromAddress contains brand
     }
 
+    // ---- T165 — the documented API contract (resend.com/docs/api-reference) ----
+
+    [Fact]
+    public async Task SendAsync_SendsUserAgent_WithoutWhichResendAnswers403()
+    {
+        // resend.com/docs/knowledge-base/403-error-1010: "All API requests must
+        // include a User-Agent header". HttpClient sends none on its own.
+        HttpRequestMessage? captured = null;
+        var (client, _) = BuildClient(req =>
+        {
+            captured = req;
+            return BuildResponse(HttpStatusCode.OK, "{\"id\":\"abc\"}");
+        });
+
+        await client.SendAsync(Sample, CancellationToken.None);
+
+        var product = Assert.Single(captured!.Headers.UserAgent).Product;
+        Assert.Equal(ResendEmailClient.UserAgentProduct, product!.Name);
+        Assert.Equal(ResendEmailClient.UserAgentVersion, product.Version);
+    }
+
+    [Fact]
+    public async Task SendAsync_Body_MatchesTheDocumentedShape()
+    {
+        // POST /emails: from, to (array), subject, html, text, tags[{name,value}]
+        // — camelCase keys, no null members.
+        string? body = null;
+        var (client, _) = BuildClient(req =>
+        {
+            body = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            Assert.Equal("application/json", req.Content.Headers.ContentType!.MediaType);
+            return BuildResponse(HttpStatusCode.OK, "{\"id\":\"49a3999c-0ce1-4ea6-ab68-afcd6dc2e794\"}");
+        });
+
+        var result = await client.SendAsync(
+            new ResendSendEmailRequest(
+                ToAddress: "user@example.com",
+                Subject: "Ödeme alındı",
+                HtmlBody: "<p>x</p>",
+                TextBody: "x",
+                Tags: new Dictionary<string, string> { ["category"] = "transaction" }),
+            CancellationToken.None);
+
+        Assert.Equal("49a3999c-0ce1-4ea6-ab68-afcd6dc2e794", result.MessageId);
+        using var json = System.Text.Json.JsonDocument.Parse(body!);
+        var root = json.RootElement;
+        Assert.Equal("Skinora <noreply@skinora.com>", root.GetProperty("from").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, root.GetProperty("to").ValueKind);
+        Assert.Equal("Ödeme alındı", root.GetProperty("subject").GetString());
+        Assert.Equal("<p>x</p>", root.GetProperty("html").GetString());
+        Assert.Equal("x", root.GetProperty("text").GetString());
+        var tag = Assert.Single(root.GetProperty("tags").EnumerateArray().ToList());
+        Assert.Equal("category", tag.GetProperty("name").GetString());
+        Assert.Equal("transaction", tag.GetProperty("value").GetString());
+        Assert.Equal(
+            new[] { "from", "to", "subject", "html", "text", "tags" },
+            root.EnumerateObject().Select(p => p.Name).ToArray());
+    }
+
+    [Theory]
+    // Documented error bodies: {"statusCode":…,"message":…,"name":…}.
+    [InlineData(401, "missing_api_key", typeof(ResendPermanentException))]
+    [InlineData(403, "invalid_api_key", typeof(ResendPermanentException))]
+    [InlineData(403, "validation_error", typeof(ResendPermanentException))] // unverified domain
+    [InlineData(422, "invalid_from_address", typeof(ResendPermanentException))]
+    [InlineData(429, "daily_quota_exceeded", typeof(ResendTransientException))]
+    [InlineData(429, "rate_limit_exceeded", typeof(ResendTransientException))]
+    [InlineData(500, "internal_server_error", typeof(ResendTransientException))]
+    public async Task SendAsync_DocumentedErrorBodies_AreClassified(int status, string name, Type expected)
+    {
+        var (client, _) = BuildClient(_ => BuildResponse(
+            (HttpStatusCode)status,
+            $"{{\"statusCode\":{status},\"message\":\"m\",\"name\":\"{name}\"}}"));
+
+        var ex = await Assert.ThrowsAnyAsync<Exception>(() => client.SendAsync(Sample, CancellationToken.None));
+
+        Assert.IsType(expected, ex);
+        Assert.Equal("m", ex.Message);
+    }
+
     [Fact]
     public async Task SendAsync_Success_WithMalformedBody_ThrowsTransient()
     {

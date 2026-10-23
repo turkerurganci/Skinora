@@ -51,6 +51,7 @@ const CATEGORY_BY_TYPE: Record<NotificationType, NotificationIconCategory> = {
   [NotificationType.EMERGENCY_HOLD_APPLIED]: "warning",
   [NotificationType.ACCOUNT_SUSPENDED]: "warning",
   [NotificationType.ADMIN_PLATFORM_OUTAGE]: "warning",
+  [NotificationType.ADMIN_RECONCILIATION_MISMATCH]: "warning",
 
   [NotificationType.TRANSACTION_COMPLETED]: "completion",
 

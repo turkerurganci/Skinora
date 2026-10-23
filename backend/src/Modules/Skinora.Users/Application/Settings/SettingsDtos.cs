@@ -12,9 +12,15 @@ public sealed record NotificationSettingsDto(
     ExternalChannelDto Discord,
     PlatformChannelDto Platform);
 
-public sealed record EmailChannelDto(bool Enabled, string? Address, bool Verified);
+/// <param name="Available">
+/// T165 — false when this deployment cannot send on the channel (switched off with
+/// <c>Provider = disabled</c>, or the real provider is missing a secret). Enabling,
+/// connecting and e-mail verification answer <c>CHANNEL_UNAVAILABLE</c> (409) then.
+/// </param>
+public sealed record EmailChannelDto(bool Enabled, string? Address, bool Verified, bool Available);
 
-public sealed record ExternalChannelDto(bool Enabled, bool Connected, string? Username);
+/// <param name="Available">See <see cref="EmailChannelDto"/>.</param>
+public sealed record ExternalChannelDto(bool Enabled, bool Connected, string? Username, bool Available);
 
 /// <summary>
 /// Platform (in-app) channel — <c>canDisable=false</c> always (04 §7.6).

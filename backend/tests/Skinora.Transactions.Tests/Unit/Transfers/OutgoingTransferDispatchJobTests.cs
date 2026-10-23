@@ -996,6 +996,59 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         Assert.Equal(TimeSpan.FromMinutes(10).TotalSeconds, eth.Oldest);
     }
 
+    // T165 — the approval queue is reported every run for every network, so the
+    // outbound-awaiting-approval money alarm fires while rows wait and resolves
+    // once they are approved (or the gate is opened).
+    [Fact]
+    public async Task T165_Awaiting_Approval_Is_Reported_Per_Network_And_Clears_On_Approval()
+    {
+        SetAutoSend("false");
+        var payout = await SeedPayoutAsync(amount: 100m);
+        await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 40m);
+        await SeedSweepAsync(amount: 100m, hotWallet: "THotWalletDispatch00000000000000000");
+        _clock.Advance(TimeSpan.FromMinutes(7));
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-sweep", null, null);
+
+        await _sut.ExecuteAsync();
+
+        var tron = _observer.Awaiting[BlockchainNetwork.TRON];
+        Assert.Equal(2, tron.Rows);                                   // the sweep never waits
+        Assert.Equal(TimeSpan.FromMinutes(7).TotalSeconds, tron.Oldest);
+        Assert.Equal((0, 0d), _observer.Awaiting[BlockchainNetwork.ETHEREUM]);
+
+        // Approving one leaves one waiting; approving both clears the series.
+        var refundRow = await _db.Set<BlockchainTransaction>()
+            .FirstAsync(b => b.Type == BlockchainTransactionType.BUYER_REFUND);
+        payout.PayoutRow.ApprovedAt = _clock.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync();
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-payout", null, null);
+        await _sut.ExecuteAsync();
+        Assert.Equal(1, _observer.Awaiting[BlockchainNetwork.TRON].Rows);
+
+        refundRow.ApprovedAt = _clock.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync();
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-refund", null, null);
+        await _sut.ExecuteAsync();
+        Assert.Equal((0, 0d), _observer.Awaiting[BlockchainNetwork.TRON]);
+    }
+
+    [Fact]
+    public async Task T165_Gate_Open_Reports_Nothing_Awaiting_Approval()
+    {
+        SetAutoSend("true");
+        await SeedRefundAsync(BlockchainTransactionType.BUYER_REFUND, amount: 40m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.Success, "tx-hash-open", null, null);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal((0, 0d), _observer.Awaiting[BlockchainNetwork.TRON]);
+        Assert.Equal((0, 0d), _observer.Awaiting[BlockchainNetwork.ETHEREUM]);
+    }
+
     [Fact]
     public async Task T169_Gate_Closed_Mid_Tick_Stops_Every_Unapproved_Row_Left_In_The_Batch()
     {
@@ -1452,6 +1505,11 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
 
         public void Report(BlockchainNetwork network, int pendingRows, double oldestPendingSeconds, double? alarmSeconds) =>
             Last[network] = (pendingRows, oldestPendingSeconds, alarmSeconds);
+
+        public Dictionary<BlockchainNetwork, (int Rows, double Oldest)> Awaiting { get; } = new();
+
+        public void ReportAwaitingApproval(BlockchainNetwork network, int awaitingRows, double oldestAwaitingSeconds) =>
+            Awaiting[network] = (awaitingRows, oldestAwaitingSeconds);
     }
 
     private sealed class CapturingLimitObserver : IDepositRefundLimitObserver
