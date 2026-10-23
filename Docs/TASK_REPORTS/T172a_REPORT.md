@@ -82,9 +82,9 @@ Kaynak: DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling` (T164), DEPLOY_
 ## Commit & PR
 
 - Branch: `task/T172a-geri-yukleme-para-araclari` (origin/main `792f8ed2`'den)
-- Commit'ler: `8610a3cb` backend araçları · `ffdca1b7` TRON verify + sözleşme · `ded2398c` frontend · `6ae9ced4` belgeler + compose · rapor/durum commit'i
+- Commit'ler: `8610a3cb` backend araçları · `ffdca1b7` TRON verify + sözleşme · `ded2398c` frontend · `6ae9ced4` belgeler + compose · `af75eadf` rapor/durum · `f8189793` PR numarası · `9eae672c` migration provası testleri
 - PR: #377
-- CI: (izleniyor)
+- CI: ✓ `39986431856` success (HEAD `9eae672c`; kod değişikliğinin son hâli). Bu satırı yazan rapor commit'inin run'ı ayrıca izlendi.
 
 ## Kararlar (öneriyle kaydedildi — ⚠)
 
