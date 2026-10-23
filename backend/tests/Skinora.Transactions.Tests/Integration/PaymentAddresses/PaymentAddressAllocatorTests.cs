@@ -365,7 +365,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         }
         var t1 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
         var t2 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
-        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = 41 } });
+        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = "41" } });
 
         var r1 = await sut.AllocateAsync(t1.Id, CancellationToken.None);
         var r2 = await sut.AllocateAsync(t2.Id, CancellationToken.None);
@@ -389,7 +389,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
             await SeedPaymentAddressAsync(old.Id, index: i, address: StubBlockchainSidecarClient.DeterministicAddress(i));
         }
         var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
-        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = floor } });
+        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = floor.ToString(System.Globalization.CultureInfo.InvariantCulture) } });
 
         var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
 
@@ -417,7 +417,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         }
         var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
 
-        var result = await BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = 5 } })
+        var result = await BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = "5" } })
             .AllocateAsync(target.Id, CancellationToken.None);
 
         Assert.Equal(21, result.HdWalletIndex);
@@ -427,7 +427,7 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
     public async Task T172a_Floor_Applies_Only_To_Its_Own_Network()
     {
         var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
-        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["ETHEREUM"] = 500 } });
+        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["ETHEREUM"] = "500" } });
 
         var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
 

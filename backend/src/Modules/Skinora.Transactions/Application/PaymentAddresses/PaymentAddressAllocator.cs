@@ -60,6 +60,14 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
         _floor = floor?.Value ?? new PaymentAddressIndexFloorOptions();
     }
 
+    /// <summary>
+    /// T172a — the index floor this allocator applies on
+    /// <paramref name="network"/> (0 = none). The allocation below reads it
+    /// through this method; the host test pins that the deployment value
+    /// reaches it (T172a doğrulama F1).
+    /// </summary>
+    public int FloorFor(BlockchainNetwork network) => _floor.FloorFor(network);
+
     public async Task<PaymentAddressAllocationResult> AllocateAsync(
         Guid transactionId,
         CancellationToken cancellationToken)
@@ -136,7 +144,7 @@ public sealed class PaymentAddressAllocator : IPaymentAddressAllocator
             // T172a (⚠ PARA) — never below the network's configured floor, and
             // never below MAX + 1: the floor only raises the index, so it can
             // never hand out an index that was already used.
-            var floor = _floor.FloorFor(network);
+            var floor = FloorFor(network);
             var nextIndex = PaymentAddressIndexFloorOptions.NextIndex(maxIndex, floor);
             if (nextIndex > (maxIndex ?? -1) + 1)
             {

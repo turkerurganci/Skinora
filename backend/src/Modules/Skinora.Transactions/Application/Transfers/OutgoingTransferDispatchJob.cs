@@ -99,6 +99,7 @@ public sealed class OutgoingTransferDispatchJob
     private readonly IOutboundQueueObserver _queueObserver;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly IDepositRefundLimitObserver _depositRefundLimitObserver;
+    private readonly IOutboundDispatchPauseObserver _pauseObserver;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
@@ -113,6 +114,7 @@ public sealed class OutgoingTransferDispatchJob
         IOutboundQueueObserver queueObserver,
         IPlatformWalletAddressProvider walletAddresses,
         IDepositRefundLimitObserver depositRefundLimitObserver,
+        IOutboundDispatchPauseObserver pauseObserver,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
@@ -126,6 +128,7 @@ public sealed class OutgoingTransferDispatchJob
         _queueObserver = queueObserver;
         _walletAddresses = walletAddresses;
         _depositRefundLimitObserver = depositRefundLimitObserver;
+        _pauseObserver = pauseObserver;
         _clock = clock;
         _logger = logger;
     }
@@ -155,12 +158,26 @@ public sealed class OutgoingTransferDispatchJob
         // T172a — the operator's stop switch (OutboundDispatchPause, ⚠ PARA):
         // after a database restore the blockchain services run for the closure
         // tool's chain reads while nothing may be sent. Every type waits, no
-        // retry is spent, nothing is failed.
-        if (await OutboundDispatchPause.IsPausedAsync(_db, cancellationToken))
+        // retry is spent, nothing is failed. The state is published every run
+        // (outbound-dispatch-paused alarm: a pause left on is a stalled payout
+        // queue) and the deposit refund limit gauges stay fresh while paused.
+        var pause = await OutboundDispatchPause.ReadAsync(_db, cancellationToken);
+        _pauseObserver.Report(pause.Paused);
+        if (pause.Paused)
         {
-            _logger.LogWarning(
-                "Outgoing transfers are paused ({Key} = true) — nothing sent this run, no retry spent (DEPLOY_RUNBOOK §N.8).",
-                OutboundDispatchPause.PausedKey);
+            if (pause.RowMissing)
+            {
+                _logger.LogWarning(
+                    "Outgoing transfers are paused: the {Key} row is missing (a database without the T172a migration?) — a missing row reads as paused; apply the migrations, then set it (DEPLOY_RUNBOOK §N.8 step 2). Nothing sent this run, no retry spent.",
+                    OutboundDispatchPause.PausedKey);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Outgoing transfers are paused ({Key} = {Value}) — nothing sent this run, no retry spent (DEPLOY_RUNBOOK §N.8).",
+                    OutboundDispatchPause.PausedKey, pause.RawValue);
+            }
+            await ReportDepositRefundLimitAsync(_clock.GetUtcNow().UtcDateTime, cancellationToken);
             return;
         }
 

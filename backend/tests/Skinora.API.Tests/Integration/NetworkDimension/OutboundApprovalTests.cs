@@ -108,7 +108,7 @@ public class OutboundApprovalTests : IntegrationTestBase
             ctx, registry, AlwaysHealthyBlockchainNetworks.Instance, new OneMinuteRetryPolicy(),
             new OutboxService(ctx), Contracts,
             new BlockchainNetworkSettingsProvider(ctx), NullOutboundQueueObserver.Instance,
-            new StubPlatformWalletAddressProvider(), NullDepositRefundLimitObserver.Instance,
+            new StubPlatformWalletAddressProvider(), NullDepositRefundLimitObserver.Instance, NullOutboundDispatchPauseObserver.Instance,
             _clock, NullLogger<OutgoingTransferDispatchJob>.Instance);
         await dispatch.ExecuteAsync();
     }
