@@ -1,6 +1,6 @@
 # T172b — İmza servislerinde depozitten iade günlük tavanı (⚠ PARA)
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti, doğrulama bekliyor) | **Tarih:** 2026-10-23
+**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti + sahip kararıyla tek seferlik izin eklendi, doğrulama bekliyor) | **Tarih:** 2026-10-23
 
 **Kaynak:** proje sahibi kararı 2026-10-23 (modal) — T169a'nın backend'e koyduğu "depozitten iadeye ağ başına günlük 100 $" tavanı imza servislerinde de olsun; backend ele geçirilse ya da hatalı olsa bile imzalayıcı bu toplamı aşan depozit iadesini imzalamasın. Sıra: mainnet pilotundan (T173) önce. T169a'nın açık bıraktığı sınır (`DepositRefundLimitBackendOnly`, T169a dalında) bununla kapanır.
 
@@ -46,12 +46,23 @@
 | 6 | TRON'da defter açılamazsa servis açılır, iadeler bekler | izleme/sweep'in durması daha büyük kesinti (öneriyle kaydedildi — ⚠) |
 | 7 | Ethereum sıcak cüzdan iadesi depozit tavanına girmez (sıcak cüzdan tavanında) | T169a "Ethereum sweep öncesi" tanımıyla aynı (öneriyle kaydedildi — ⚠) |
 | 8 | Backend bu üç kodu bayraksız da bekleme okur | derinlemesine savunma (öneriyle kaydedildi — ⚠) |
-| 9 | **Tavandan büyük tek iade ve AD42 serbest bırakması imza servisinde de geçmez**; yol: iki kişi kuralıyla env'i geçici yükselt → servisi yeniden oluştur → geri al (runbook §D) | ⚠ SAHİBE SORU (aşağıda) — şimdilik en güvenli seçenek uygulandı |
+| 9 | Tavanın üstü yalnız **sunucuda tek seferlik izinle** (AD42 imza servisinin tavanını kaldırmaz); env yükseltme son çare | **proje sahibi kararı (2026-10-23, modal)** — aşağıda |
+| 10 | İzin tutarı **tam eşleşme** (üst sınır değil) | öneriyle kaydedildi — ⚠ PARA: iade tutarı satırda kesin bellidir; üst sınır, aynı kimlik + alıcı için başka tutarlı bir isteğe yer açardı; yazım hatası iadeyi bekletir (güvenli yön) |
+| 11 | İzin ayrıca iade kimliğine (`BlockchainTransaction.Id`) bağlı; geçerlilik varsayılan ve en çok 24 sa (en az 1 dk) | öneriyle kaydedildi — ⚠ |
+| 12 | İzin yalnız tavan aşılınca okunur (sığan iade izni tüketmez); ayar boş / defter bozuk iken izin işe yaramaz | öneriyle kaydedildi — ⚠ PARA (izin yalnız tavanı aşar, fail-closed kuralları değil) |
+| 13 | TRON: transfer kesin ağa çıkmadıysa izin geri verilir, belirsiz yayında verilmez; Ethereum: izin imza + günlük kaydından hemen önce tüketilir (yakıt/ücret beklemesi izni yakmaz) | öneriyle kaydedildi — ⚠ PARA |
+| 14 | "İki kişi kuralı" teknik olarak zorlanmıyor (komut tek operatörle çalışır; `--by` + `--reason` zorunlu, log Loki'ye gider) | öneriyle kaydedildi — ⚠ |
 
-### ⚠ SAHİBE SORU
+### Sunucuda tek seferlik izin — proje sahibi kararı (2026-10-23, modal)
 
-1. **100 $'dan büyük tek iade / AD42 ile serbest bırakılan iade:** işlem tutarı 10–2.900 $ olduğu için 100 $'ın üstündeki her depozit iadesi (TRON'da bütün iadeler depozitten) imza servisinde **hiçbir pencerede** geçmez; backend'deki AD42 serbest bırakması imza servisinin tavanını kaldırmaz (kaldırsaydı ele geçirilmiş backend/admin de kaldırabilirdi — sahip kararının amacı bu). Şimdiki yol runbook §D: env'i geçici yükseltip servisi yeniden oluşturmak (sunucu erişimi gerekir, uygulamada iz bırakmaz). Alternatif: imza servisinde tek seferlik, süreli, kimliğe bağlı bir istisna (ör. çevrimdışı anahtarla imzalı izin dosyası). Hangisi?
-2. **Değer eşitliği:** imza servisinin değeri backend'inkinden (T169a ayarı, admin panelinden değiştirilebilir) bağımsızdır; runbook ikisinin aynı tutulmasını ister. Backend değeri artırılıp env unutulursa iadeler serviste bekler (alarm çalar) — bu bilinçli: admin paneli imza servisinin tavanını açamamalı.
+İlk turdaki "⚠ SAHİBE SORU" (100 $ üstü tek iade / AD42 imza serviste geçmez; env yükseltme mi, istisna mekanizması mı?) sahip kararıyla cevaplandı: **sunucuda tek seferlik izin.**
+
+- **Komut, HTTP yok:** `docker exec <servis> node dist/cli/depositRefundPermit.js create --tx <BlockchainTransaction.Id> --to <alıcı> --amount <tutar> --by <operatör> --reason <gerekçe> [--hours ≤24]`; ayrıca `list`, `revoke --id`. İzin servisin kendi volume'üne yazılır (TRON `DEPOSIT_REFUND_LEDGER_DIR/deposit-refund-permits/`, Ethereum `ETHEREUM_TX_JOURNAL_DIR/deposit-refund-permits/`; izin başına bir dosya, geçici dosya → fsync → yeniden adlandırma). API katmanında izin koduna hiçbir atıf yok (test bunu iki serviste de denetler) — backend ya da ağ üzerinden izin yaratılamaz.
+- **Bağlar:** ağ (`TRON`/`ETHEREUM` — öbür servisin izni geçmez), iade kimliği, alıcı adresi (kanonik), **tam tutar**, geçerlilik (`expiresAt`).
+- **Tek kullanım:** izin imzadan önce diske "kullanıldı" yazılır; ikinci imza bulamaz. İzinli iade yine 24 saatlik toplama yazılır (TRON defter girişi `permitId`, Ethereum günlük kaydı `depositRefundPermitId`) — tavan yalnız o iade için aşılır, başkalarına açılmaz.
+- **Log + metrik:** `created` (komut, Loki'ye), `seen`, `used`, `restored`, `expired` (5 dk'da bir ve her tavan aşımında taranır; bir kez), `revoked` — `skinora_blockchain_deposit_refund_permits_total{event}` / `skinora_ethereum_deposit_refund_permits_total{event}`.
+- **Ortak kod:** `transfer/DepositRefundPermits.ts` ve `cli/permitCli.ts` iki serviste bayt bayt aynı (parite testi); ağ ve adres doğrulaması parametre.
+- Runbook §D adım 2 artık izin komutu; env yükseltme son çare olarak kaldı.
 
 ## Etkilenen Modüller / Dosyalar
 
@@ -59,7 +70,8 @@
 - `sidecar-ethereum/src/transfer/TransferGuard.ts` (`assertDepositRefundDailyLimit`, `depositRefundsLast24h`), `TransferService.ts` (tek kilit + denetim), `FeePolicy.ts` (iki bekleme sebebi), `config/index.ts`, `wiring.ts`, `metrics.ts`; `contracts/transfer-refund/deferred.response.json` (yeni)
 - `backend/src/Modules/Skinora.Transactions/Application/Transfers/HttpBlockchainTransferClient.cs` — `SignerDepositRefundLimitCodes`
 - `docker-compose.yml` (iki env, `DEPOSIT_REFUND_LEDGER_DIR`, volume `skinora-tron-deposit-refunds`), `.env.example`, `infra/grafana/provisioning/alerting/rules.yml` (iki kural)
-- Testler: `sidecar-blockchain/src/transfer/DepositRefundLimit.test.ts` (yeni, 25), `TransferService.test.ts`, `api/transferHandlers.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`; `sidecar-ethereum/src/transfer/TransferService.test.ts` (+9), `Fuel.test.ts`, `api/transferHandlers.test.ts`, `config/index.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`, `wiring.test.ts`; `backend/tests/Skinora.Transactions.Tests/Contract/DepositRefundLimitDeferredContractTests.cs` (yeni, 6)
+- İzin: `sidecar-{blockchain,ethereum}/src/transfer/DepositRefundPermits.ts`, `src/cli/permitCli.ts`, `src/cli/depositRefundPermit.ts` (yeni); `DepositRefundLimit.ts` / Ethereum `TransferGuard.ts`, `TransferService.ts`, `TxJournal.ts` (izin alanı), `wiring.ts`, iki `index.ts`, iki `metrics.ts`
+- Testler: `sidecar-blockchain/src/transfer/DepositRefundLimit.test.ts` (yeni, 25), `DepositRefundPermits.test.ts` (yeni, 22), `TransferService.test.ts`, `api/transferHandlers.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`; `sidecar-ethereum/src/transfer/TransferService.test.ts` (+9 tavan, +13 izin/parite), `Fuel.test.ts`, `api/transferHandlers.test.ts`, `config/index.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`, `wiring.test.ts`; `backend/tests/Skinora.Transactions.Tests/Contract/DepositRefundLimitDeferredContractTests.cs` (yeni, 6)
 - Belgeler: `Docs/plan/11_F9.md` (v1.28, T172b), `Docs/05_TECHNICAL_ARCHITECTURE.md` (v3.35, §3.3), `Docs/08_INTEGRATION_SPEC.md` (v3.47, §3.3a, §3.7.6), `Docs/DEPLOY_RUNBOOK.md` (§B, §C.3, §D, §O), `Docs/DOC_CHANGELOG.md`, `Docs/IMPLEMENTATION_STATUS.md`, `Docs/STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`
 
 ## Kabul Kriterleri Kontrolü
@@ -74,19 +86,20 @@
 | Reddedilen istekte backend'in anlayacağı kod; iade kaybolmaz, bekler + uyarı | ✓ | handler sözleşme testleri (iki servis) + backend `DepositRefundLimitDeferredContractTests` (aynı JSON dosyaları → `Deferred`); alarm kuralları + `alertRuleWiring` testleri |
 | USDT/USDC 1:1 | ✓ | TRON "USDC counts 1:1", ETH guard birim testi |
 | Kritik satırlar bilerek bozulup yakalandı | ✓ | aşağıda — 16/16 |
+| Tek seferlik izin (sahip kararı 2026-10-23, modal): sunucuda komut, HTTP yok, ağ + kimlik + alıcı + tutar + süre, tek kullanım, izinli iade sayılır, log + metrik | ✓ | TRON `DepositRefundPermits.test.ts`, Ethereum `T172b — a one-time permit …` (yanlış adres/tutar/ağ/kimlik, süresi dolmuş, iptal, ikinci kullanım, eşzamanlı, tavanın başkalarına açılmaması, bekleme izni yakmaz, HTTP katmanı izne dokunmaz) |
 | `.env.example`, deneme env, DEPLOY_RUNBOOK, 05/08 | ✓ | deneme yayını `.env.trial`'ı `.env.example`'dan kopyalar (§K.4); runbook §B'de mevcut `.env.trial`'a ekleme uyarısı |
 
 ## Test Sonuçları
 
 | Kapsam | Komut | Sonuç |
 |---|---|---|
-| TRON servisi (tamamı) | `cd sidecar-blockchain && npx vitest run` | 36 dosya, **684/684** ✓ (önce 654) |
-| Ethereum servisi (tamamı) | `cd sidecar-ethereum && npx vitest run` | 37 dosya, **907/907** ✓ |
+| TRON servisi (tamamı) | `cd sidecar-blockchain && npx vitest run` | 37 dosya, **706/706** ✓ (önce 654) |
+| Ethereum servisi (tamamı) | `cd sidecar-ethereum && npx vitest run` | 37 dosya, **921/921** ✓ |
 | Lint + build | `npm run lint && npm run build` (iki servis) | temiz |
 | Backend Transactions (tamamı) | `dotnet test tests/Skinora.Transactions.Tests` | 1.888 test: 1.885 ✓ + 3 ✗ — üçü mutasyon ölçümünden kalan bayat DLL (`--no-build`); yeniden derleyince ilgili 256 test (`Contract`, `HttpBlockchainTransferClient`, `OutgoingTransferDispatchJob`) **256/256** ✓ |
 | Compose | `docker compose -f docker-compose.yml [-f docker-compose.trial.yml] config`, `node --test scripts/compose-exposure.test.mjs` | geçerli; deneme overlay'inde env + `skinora-trial_skinora-tron-deposit-refunds` volume'ü; 10/10 ✓ |
 
-### Bilerek bozma (mutasyon) — 16/16 yakalandı
+### Bilerek bozma (mutasyon) — tavan 16/16, izin 13/13 yakalandı
 
 | # | Bozulan satır | Yakalayan |
 |---|---|---|
@@ -106,6 +119,19 @@
 | E6 | Ethereum tavan denetimi yok | 6 |
 | E7 | Ethereum geri dönen kaydı da sayar | 1 |
 | B1 | Backend bayraksız kodu bekleme okumuyor | 3 |
+| P1 | İzin: alıcı eşleşmesi yok | 1 |
+| P2 | İzin: tutar üst sınır gibi (`>=`) | 1 |
+| P3 | İzin: süre denetimi yok | 1 |
+| P4 | İzin: ağ denetimi yok | 1 |
+| P5 | İzin: iade kimliği denetimi yok | 1 |
+| P6 | TRON izni tüketmiyor (tek kullanım yok) | 4 |
+| P7 | TRON izinli iadeyi toplama yazmıyor | 2 |
+| P8 | TRON kesin ağa çıkmamışta izni geri vermiyor | 1 |
+| P9 | İptal edilmiş izin geçer | 1 — ilk koşuda **kaçtı** (ikinci katman `consume` reddettiği için iade yine bekledi); test depo düzeyinde güçlendirildi |
+| E8 | Ethereum izni denetimde tüketir (bekleme yakar) | 5 |
+| E9 | Ethereum izni tüketmiyor | 2 |
+| E10 | Ethereum iade kimliğini yanlış iletir | 1 — ilk koşuda **kaçtı** (bütün izin testleri aynı kimlikteydi); "başka iade kimliği" testi eklendi |
+| E11 | Ethereum ortak kilit yok (izinle) | 1 (E2'nin eşzamanlılık testi) |
 
 ## Altyapı Değişiklikleri
 
@@ -117,20 +143,21 @@
 
 ## Commit & PR
 
-- Dal: `task/T172b-imza-servisi-iade-tavani` (origin/main `792f8ed2`'den)
-- Commit'ler: `f1220cf8` (servisler), `07aadcf2` (compose/env/alarm/backend), `8ba6cd35` (belgeler), PR numarası commit'i
+- Dal: `task/T172b-imza-servisi-iade-tavani` (origin/main `792f8ed2`'den; main `fcc94d8d` — T169a #376 — merge commit ile alındı)
+- Commit'ler: `f1220cf8` (servisler), `07aadcf2` (compose/env/alarm/backend), `8ba6cd35` (belgeler), `24c14548` (PR no), `9e6e5f20` (biçim düzeltmesi — kayıtlı bypass ile koordinatör push etti), `bccba273` (BYPASS_LOG), `672c33cf` (tek seferlik izin), `1b7e0fa6` (main birleştirmesi), sonrası belgeler
 - PR: #378
-- CI: aşağıda (PR açıldıktan sonra)
+- CI: run 39990390212 (`24c14548`) ✗ — yalnız Lint (prettier, `sidecar-ethereum/src/wiring.test.ts`); düzeltme `9e6e5f20` kayıtlı bypass ile, run 39993478110 ✓ success. Son HEAD'in run'ı aşağıdaki memory/PR notunda.
 
 ## T169a ile ilişki
 
-- T169a (PR #376) henüz birleşmedi; bu dal onun kodunu içermez. Çakışma beklenen dosyalar: `Docs/plan/11_F9.md`, `Docs/IMPLEMENTATION_STATUS.md`, `Docs/DOC_CHANGELOG.md`, `Docs/08_INTEGRATION_SPEC.md`, `Docs/05_TECHNICAL_ARCHITECTURE.md`, `Docs/DEPLOY_RUNBOOK.md`, `.env.example`, `infra/grafana/provisioning/alerting/rules.yml` (kurallar farklı yere eklendi), `.claude/memory/MEMORY.md`. Kodda çakışma yok (dispatch işine dokunulmadı; `HttpBlockchainTransferClient` T169a'da değişmiyor).
-- İkisi birleşince: DEFERRED_BACKLOG `DepositRefundLimitBackendOnly` (T169a dalında açılıyor) T172b ile ✅ kapatılmalı; 08 §3.3c (T169a) ile §3.3a'daki T172b satırı birbirine atıf vermeli.
-- Davranış birlikte: backend tavanı tutar (satır `DepositRefundLimitHeldAt`, 15 dk'da bir), geçirdiği iade imza servisinde de sayılır. İkisi aynı değerdeyken servis yalnız ayrışmada (AD42, tek büyük iade, backend hatası/ele geçirilmesi) reddeder. Backend'in sayımı `FAILED` satırları düşer, servisinki belirsiz yayınları düşmez → servis biraz daha sıkı olabilir (iade bekler, alarm çalar).
+- T169a (#376) main'e girdi (`fcc94d8d`) ve bu dala merge commit ile alındı. Kodda çakışma olmadı; çakışmalar belgelerde (başlık sürümleri: plan v1.29, 05 v3.37, 08 v3.48 — main'deki T169a sürümlerinin bir üstü), `IMPLEMENTATION_STATUS` / `STATUS_CHANGELOG` / `BYPASS_LOG` / memory'de çözüldü.
+- DEFERRED_BACKLOG `DepositRefundLimitBackendOnly` ✅ (T172b) — backlog 50/168 → 49/169.
+- 05 §3.3 ve 08 §3.3c'deki "ele geçirilmiş backend'e karşı koruma değildir" cümleleri ikinci katmana (T172b) çevrildi; runbook §M.4 adım 4: AD42 imza servisinin tavanını kaldırmaz → tek seferlik izin.
+- Davranış birlikte: backend tavanı tutar; geçirdiği iade imza servisinde de sayılır. Aynı değerdeyken servis yalnız ayrışmada (AD42, tek büyük iade, backend hatası/ele geçirilmesi) reddeder. Backend'in sayımı `FAILED` satırları düşer, servisinki belirsiz yayınları düşmez → servis biraz daha sıkı olabilir.
 
 ## Known Limitations / Follow-up
 
-- **⚠ SAHİBE SORU 1** — tavandan büyük tek iade / AD42 için imza servisinde istisna mekanizması yok (yukarıda).
+- Tavandan büyük tek iade / AD42 için yol artık sunucuda tek seferlik izin (sahip kararı 2026-10-23, modal); izin komutu konteyner içinde çalışır — Docker'la canlı prova yapılmadı (birim testleri + derleme), T172 deneme yayınında bir kez denenmeli.
 - TRON'da belirsiz biten (ağa çıkmış olabilecek) yayın girişimi sayılmaya devam eder; zincirden txid ile doğrulayıp düşmek (TRON işlemi ~60 sn'de süresi dolar) sonraki bir iyileştirme olabilir.
 - TRON defter volume'ü silinirse (`down -v`) son 24 saatin sayımı unutulur — çift ödeme yaratmaz, tavan o gün için iki katına açılabilir (runbook §D madde 4).
 - Saat geri alınırsa girişler pencerede daha uzun kalır (daha sıkı); ileri alınırsa erken düşer — konak erişimi gerektirir.
