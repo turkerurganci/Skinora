@@ -400,6 +400,9 @@ const FUEL_ESTIMATE_PROBE_WEI = 1n;
 const BUMP_NUMERATOR = 1125n;
 const BUMP_DENOMINATOR = 1000n;
 
+/** T172b — the one lock every deposit refund's check-and-journal runs under (not an address). */
+const DEPOSIT_REFUND_CAP_LOCK = 'deposit-refund-cap';
+
 const ALREADY_KNOWN = /already known|known transaction|already imported|alreadyknown/i;
 
 function ceilDiv(a: bigint, b: bigint): bigint {
@@ -988,7 +991,13 @@ export class TransferService {
       const planned = plan(id);
       return this.locks.run(planned.from, async () => {
         try {
-          return await this.signNew(planned);
+          // T172b — deposit refunds share one cap across every deposit, so
+          // they also share one lock: the cap check and the journal record
+          // that makes the refund count are never interleaved with another
+          // deposit's refund (two senders hold two different sender locks).
+          return TransferService.isDepositRefund(planned)
+            ? await this.locks.run(DEPOSIT_REFUND_CAP_LOCK, () => this.signNew(planned))
+            : await this.signNew(planned);
         } catch (err) {
           throw transientUnlessRevert(err);
         }
@@ -996,7 +1005,30 @@ export class TransferService {
     });
   }
 
+  /** T172b — a refund the DEPOSIT key signs: the transfers the deposit refund cap weighs. */
+  private static isDepositRefund(plan: SendPlan): boolean {
+    return plan.purpose === 'REFUND' && plan.signer === 'DEPOSIT';
+  }
+
   private async signNew(plan: SendPlan): Promise<SendResult> {
+    // T172b — the deposit refund cap, before any RPC read, fee or fuel: over
+    // it the refund waits and nothing (no fuel either) is sent. Which key
+    // signs is the service's own decision (the request's source picks the
+    // path, but a deposit path always signs with the derived deposit key and
+    // always lands here); a HOT_WALLET refund is hot-wallet outflow and is
+    // weighed by the hot wallet's daily cap below instead.
+    let depositRefundPermitId: string | null = null;
+    if (TransferService.isDepositRefund(plan)) {
+      try {
+        depositRefundPermitId = this.deps.guard.assertDepositRefundDailyLimit(
+          plan.amountUnits,
+          this.deps.journal.all(),
+          { blockchainTransactionId: plan.id.slice('transfer:'.length), recipient: plan.recipient },
+        );
+      } catch (err) {
+        throw this.deferral(plan, err);
+      }
+    }
     const rpc = this.deps.rpc;
     const head = await rpc.getBlockHeader('latest');
 
@@ -1107,9 +1139,22 @@ export class TransferService {
       mined: null,
       conflictSuspectedAt: null,
       conflict: null,
+      ...(depositRefundPermitId !== null ? { depositRefundPermitId } : {}),
     };
+    // T172b — the operator permit is spent by this signature (sahip kararı
+    // 2026-10-23): durably used before the record that makes it count.
+    if (depositRefundPermitId !== null) {
+      this.deps.guard.consumeDepositRefundPermit(depositRefundPermitId, plan.id);
+    }
     // Durable BEFORE broadcast (08 §3.7.6): from here on the id owns this nonce.
-    this.deps.journal.put(record);
+    try {
+      this.deps.journal.put(record);
+    } catch (err) {
+      if (depositRefundPermitId !== null) {
+        this.deps.guard.restoreDepositRefundPermit(depositRefundPermitId);
+      }
+      throw err;
+    }
     this.deps.feeWaits.cleared(plan.id);
     logger.info(
       {

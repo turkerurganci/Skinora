@@ -1,6 +1,6 @@
 # T170 — İzleme
 
-**Faz:** F9 | **Durum:** ⏳ Yapım bitti, doğrulama bekliyor | **Tarih:** 2026-10-23
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — doğrulama PASS (4 × S4, kapanışta hepsi kapandı) | **Tarih:** 2026-10-23
 
 ---
 
@@ -131,6 +131,8 @@ Tam tablo DEPLOY_RUNBOOK §P.7'de. Özet:
 | Ethereum servisi | ✓ 37 dosya / 904 test | `npx vitest run`; `tsc --noEmit`, eslint, prettier (değişen dosya) temiz |
 | Script testleri | ✓ 120/120 | `node --test "scripts/**/*.test.mjs"` (yeni `dashboard-metrics.test.mjs` 13/13, `compose-exposure` 14/14) |
 | Frontend | ~ | yalnız `events.ts`'e bir alan; prettier temiz; tsc/vitest CI'da (yerelde `node_modules` yok) |
+| **Bozma (kapanış)** | ✓ 7/7 | S4-1: `withFailover`'daki `chain_mismatch` gözlemi kaldırıldı → yanlış zincir testi kırıldı (oran 0). S4-2: `tron-solid-block-stalled` `for: 2m→2h`, `TRON_SOLID_BLOCK_STALL_SECONDS` varsayılanı 300→3000 (config), compose `:-300→:-3000`, `blockchain-service-degraded` `for: 0s→1h` → her biri 1 test kırdı. S4-3: Networks panosunda `asset="USDT"→"usdt"` ve `direction="upper"→"Upper"` → bekçi kırıldı. Hepsi geri alındı |
+| Kapanış testleri | ✓ | Ethereum servisi 906/906 (37 dosya), TRON servisi 691/691 (36 dosya) — birleştirme öncesi; `NotificationAlertingProvisioningTests` 53/53; bekçi 17/17. Birleştirme sonrası sayılar "Kapanış" bölümünde |
 | **Bozma** | ✓ | (1) panolar T16 hâline geri alınınca `dashboard-metrics.test.mjs` 6 testte kırıldı (application/business/security/system adları, veri kaynağı, iş adları); (2) canlı ölçümde sağlayıcı bozulunca iki alarm ateşledi, düzelince söndü |
 
 ## Altyapı Değişiklikleri
@@ -145,7 +147,7 @@ Tam tablo DEPLOY_RUNBOOK §P.7'de. Özet:
 - Branch: `task/T170-izleme` (origin/main `44d32f54`'ten)
 - Commit: `68ae42d1` alarmlar + izleyici; `a9f97922` panolar + bekçi + env; `1086c43c` belgeler; `c09ba6e5` realtime testi, rapor taslağı, memory; sonraki commit'ler rapor/CI
 - PR: #379
-- CI: dal run'ı PR'da (son durum PR'ın kontrollerinde)
+- CI: yapım HEAD `4dfb023b` dal run 40011663728 ✓ success (doğrulamanın 8a kontrolü); kapanış commit'lerinin run'ını yönetici izler (yönetici düzeni)
 
 ## Known Limitations / Follow-up
 
@@ -162,3 +164,28 @@ Tam tablo DEPLOY_RUNBOOK §P.7'de. Özet:
 - Main CI startup: son 3 tamamlanmış main run — `39995711969` success (T169a CI), `39995712182` success (T169a Docker Publish), `39930836478` success (T174). T165 (`44d32f54`) run'ları başlangıçta sürüyordu (sayılmadı).
 - Dış varsayımlar: (1) TronGrid `walletsolidity/getnowblock` cevabında `block_header.raw_data.timestamp` (ms) var — canlı Nile'da ölçüldü (yaş 66 sn); (2) prometheus-net 8 `UseHttpMetrics` etiketi `code` (prometheus-net README); (3) prom-client v15 varsayılan metrik adları — canlı TRON/Ethereum servislerinin `/metrics` çıktısında doğrulandı; (4) Grafana 11.3.0 provisioning'i yeni grubu ve panoları hatasız yükler — canlı ölçüldü ("finished to provision alerting/dashboards", 45 kural).
 - Docker: WSL'de başka bir ajanın test konteyneri (testcontainers) çalışıyordu; `escrow` volume'larına ve başka konteynerlere dokunulmadı, ölçüm `t170mon` projesiyle yapılıp kapatıldı.
+
+## Doğrulama
+| Alan | Sonuç |
+|---|---|
+| Doğrulama durumu | ✓ PASS — bağımsız doğrulama alt ajanı (Opus high), HEAD `4dfb023b`, 2026-10-23 |
+| Bulgu sayısı | 4 × S4 (S1/S2/S3 yok; S4-1 ve S4-2 ⚠ PARA); hepsi kapanışta kapandı — "Kapanış" |
+| Canlı ölçüm (doğrulamanın kendi turu, `t170val`) | 5 para alarmı ateşledi ve money-alarm'a gitti (TRON solid stall, Ethereum servis sağlıksız, Ethereum sıcak limit, Ethereum izleyici bayat, ölü Ethereum sağlayıcısı); yanlış zincirdeki sağlayıcı için alarm örneği oluşmadı (S4-1) |
+| Bozma (doğrulamanın kendi turu) | **16/22** yakalandı; yaşayan 6'sı S4-2 (`for:` ve 300 sn varsayılanı) ve S4-3 (pano etiket değerleri) — kapanışta kapandı |
+| Kaynak rapor | `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T170_VALIDATION.md` |
+| Düzeltme gerekli mi | Hayır (S4'ler kapanışta) |
+
+## Kapanış (2026-10-23)
+
+**Girdi:** bağımsız doğrulama ✓ PASS (HEAD `4dfb023b`), 4 × S4.
+
+| Bulgu | Durum |
+|---|---|
+| S4-1 ⚠ PARA — yanlış zincirdeki Ethereum sağlayıcısı `ethereum-rpc-provider-failing`'i hiç tetiklemiyordu (`ensureChain` reddi önbellekte, istek yok → histogram o sağlayıcıyı yalnız açılıştaki `eth_chainId` `ok` olarak görüyor, oran 0/0) | **Kapandı (kod + test):** `EthereumRpcClient.withFailover` her `chain_mismatch` reddini `skinora_ethereum_rpc_request_duration_seconds{provider, method, outcome="chain_mismatch"}`'e yazar — kuralın okuduğu ad ve etiket; soğuma 30 sn olduğu için 10 dk pencerede ~20 ret, oran ≈ 1. Kendi değerini yazan eski test (`transport`'u kendisi yazıp okuyordu) kaldırıldı; yerine gerçek `EthereumRpcClient` ile iki test: zincir 1'deki birincil 20 çağrıda kuralın kendi `outcome=~` süzgeciyle oran > 0,5; ölü (ECONNREFUSED) birincil aynı şekilde; sağlıklı yedek 0. Bozma: gözlem satırı kaldırıldı → yanlış zincir testi kırıldı ("expected 0 to be greater than 0.5"). Sınır: birincil sağlıklıyken hiç denenmeyen yanlış zincirdeki **yedek** ilk kullanımda görünür (Known Limitations) |
+| S4-2 ⚠ PARA — para kurallarının `for:` süreleri ve TRON durma eşiği varsayılanı 300 sn testle sabit değildi | **Kapandı (test):** TRON `alertRuleWiring.test.ts` — `tron-solid-block-stalled` 2m, `tron-energy-delegation-stranded` 0s, `tron-api-errors-high` 5m (tam eşleşme); `config.tronSolidBlockStallSeconds === 300` (env silinip modül yeniden yüklenerek); compose `:-300` ve `.env.example` `=300`. Ethereum `ethereum-rpc-provider-failing` `for: 10m` tam eşleşmeye çevrildi. Backend `BackendMoneyRules_HoldTheirProductionPendingPeriod`: `blockchain-service-degraded`, `hot-wallet-monitor-stale`, `hot-wallet-threshold-breached` 0s. Bozmalar: `for: 2m→2h`, config 300→3000, compose `:-3000`, `blockchain-service-degraded` `for: 0s→1h` → **4/4 yakalandı** |
+| S4-3 — pano bekçisi etiket değerlerini sınamıyordu | **Kapandı (test):** `dashboard-metrics.test.mjs` "label values the source writes": Networks panosundaki her `label="değer"` / `label=~"a\|b"` kaynaktaki değerle karşılaştırılır — `network` `BlockchainNetwork` enum'undan, `asset` `StablecoinType` + `TokenTrx`'ten, `direction` `DirectionUpper/Lower` küçük harfle (gözlemcinin `ToLowerInvariant()` çağrısı da denetlenir), `outcome` `RpcFailureKind` + `ok`'tan, `type` `transfersTotal.inc` çağrılarından; kaynağı bilinmeyen etiket de kırmızı. `network` değişkeninin seçenekleri enum'la. Bozmalar: `asset="usdt"`, `direction="Upper"` → **2/2 yakalandı** |
+| S4-4 — rapor ve runbook §P.7 "taşıma/zincir hatası" diyordu; backend alarmları yapımda canlı ateşlememişti | **Kapandı (belge):** S4-1 düzeltmesiyle "zincir hatası" artık doğru; rapor madde 5 ve §P.7 kapsam tablosu nasıl sayıldığını ve yedek sınırını yazar. §P.7 doğrulama tablosuna adım 3b (birincil başka zincirde) ve adım 5 (**gerçek backend ile uçtan uca** — Ethereum sıcak limit, servis sağlıksız, izleyici bayat → **T172 provasına devir**) |
+
+**Main birleştirmesi:** `origin/main` `c3b49409` (T172b #378, chore #380) merge commit ile alındı. Çakışmalar: 05 başlığı (main v3.38 T172b → T170 **v3.39**, DOC_CHANGELOG girdisi buna göre), runbook başlığı (T170 + main; bölüm sırasına §P/§P.7) ve para kuralı sayısı (30 + 5 = **35**, §P.4/§P.6 metinleri), DOC_CHANGELOG iki taraf, DEFERRED_BACKLOG satırları iki taraf (`DepositRefundLimitBackendOnly` ✅ main, `EthereumHotWalletUsdtLimitUnmonitored` ✅ + ⚪ `BusinessMetricsNotPublished` T170) ve sayaç dosyadan sayıldı **48 aktif / 171 çözülmüş** (main 49/169), Grafana `rules.yml` otomatik birleşti (main'in T172b iki kuralı + T170 grubu; `category: money` 38 satır, sınıflandırılmış para kuralı 35), `NotificationAlertingProvisioningTests` `MoneyRules` iki tarafın listesi + sayı **35**, TRON `index.ts` (T170 solid blok izleyicisi + T172b tavan logu) ve `alertRuleWiring.test.ts` (iki tarafın testleri), STATUS_CHANGELOG / IMPLEMENTATION_STATUS / MEMORY iki taraf.
+
+**Birleştirme sonrası testler:** TRON servisi 750/750 (38 dosya), Ethereum servisi 934/934 (37 dosya), ikisinde `tsc --noEmit` ve eslint (değişen dosyalar) temiz; script testleri 124/124 (`node --test "scripts/**/*.test.mjs"`); backend `NotificationAlertingProvisioningTests` + `HotWallet` 88/88. Docker gerekmedi.

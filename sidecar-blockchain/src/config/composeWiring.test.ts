@@ -122,3 +122,30 @@ describe('docker-compose — the TRON signing secrets are Docker secrets, for th
     expect(other).not.toMatch(/HD_WALLET_MNEMONIC[=]|HOT_WALLET_PRIVATE_KEY[=]/);
   });
 });
+
+/**
+ * T172b — the deposit refund cap and its ledger. Both fail closed (unset cap
+ * or no ledger → every deposit refund waits), so a value that never reaches
+ * the container would not lose money — it would stop every refund. And a
+ * ledger outside a named volume would be reset by every container rebuild,
+ * forgetting the last 24 hours of refunds: that is what this pins.
+ */
+describe('docker-compose — the blockchain sidecar receives the deposit refund cap and keeps its ledger', () => {
+  const compose = readFileSync(COMPOSE_FILE, 'utf8').replace(/\r\n/g, '\n');
+  const sidecar = serviceBlock(compose, 'skinora-blockchain-sidecar');
+  const LEDGER_DIR = '/var/lib/skinora-tron/deposit-refunds';
+
+  it('passes DEPOSIT_REFUND_DAILY_LIMIT_USDT from .env without a compose default (fail closed)', () => {
+    expect(sidecar).toMatch(
+      /^ +- DEPOSIT_REFUND_DAILY_LIMIT_USDT=\$\{DEPOSIT_REFUND_DAILY_LIMIT_USDT:-\}$/m,
+    );
+  });
+
+  it('points the ledger at a path on a named volume that the image creates', () => {
+    expect(sidecar).toMatch(new RegExp(`^ +- DEPOSIT_REFUND_LEDGER_DIR=${LEDGER_DIR}$`, 'm'));
+    expect(sidecar).toMatch(new RegExp(`^ +- skinora-tron-deposit-refunds:${LEDGER_DIR}$`, 'm'));
+    expect(compose).toMatch(/^ {2}skinora-tron-deposit-refunds:\s*$/m);
+    const dockerfile = readFileSync(resolve(__dirname, '../../Dockerfile'), 'utf8');
+    expect(dockerfile).toContain(`mkdir -p ${LEDGER_DIR}`);
+  });
+});
