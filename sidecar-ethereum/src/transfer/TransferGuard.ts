@@ -1,8 +1,14 @@
 import { canonicalAddress, sameAddress } from '../address/canonicalAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { logger } from '../logger.js';
+import {
+  depositRefundDailyLimitUsdt,
+  depositRefundLimitRefusalsTotal,
+  depositRefundWindowUsdt,
+} from '../metrics.js';
 import type { EthereumRpcClient } from '../rpc/RpcClient.js';
 import { TRANSFER_TOPIC, addressTopic } from './erc20.js';
+import { TransferDeferredError } from './FeePolicy.js';
 import type { JournalRecord } from './TxJournal.js';
 
 /**
@@ -24,6 +30,15 @@ import type { JournalRecord } from './TxJournal.js';
  *     journal has signed that the chain does not show yet — so neither a
  *     restart nor a lost journal resets it. The scan is incremental: only
  *     blocks not read before are asked for.</item>
+ *   <item><b>T172b — 24-hour cap on deposit refunds</b>:
+ *     `ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT` (proje sahibi kararı
+ *     2026-10-23; the backend's twin is T169a). A refund the deposit key signs
+ *     leaves a deposit, so the hot wallet cap never saw it. Counted from the
+ *     journal — every REFUND record the DEPOSIT key signed in the last 24 h
+ *     (by `createdAt`), written to disk before its broadcast, so a restart
+ *     cannot reset it; reverted and nonce-conflicted records moved nothing and
+ *     do not count. Over the cap, or with the cap unset, the refund waits
+ *     (`TransferDeferredError` → 503 deferred) — nothing signed, no fuel.</item>
  * </list>
  * Every cap is fail-closed: unset or malformed refuses the send.
  */
@@ -41,8 +56,13 @@ export interface TransferGuardDeps {
   tokenContracts: readonly string[];
   maxSingleTransferUnits: bigint | null;
   maxDailyOutflowUnits: bigint | null;
+  /** T172b — raw token units; null when unset → every deposit refund waits (fail closed). */
+  maxDailyDepositRefundUnits: bigint | null;
   now?: () => number;
 }
+
+/** USDT and USDC both carry 6 decimals (08 §3.7.3). */
+const TOKEN_UNIT = 1_000_000;
 
 interface OutflowEntry {
   readonly block: bigint;
@@ -57,6 +77,53 @@ export class TransferGuard {
 
   constructor(private readonly deps: TransferGuardDeps) {
     this.now = deps.now ?? (() => Date.now());
+    if (deps.maxDailyDepositRefundUnits !== null) {
+      depositRefundDailyLimitUsdt.set(Number(deps.maxDailyDepositRefundUnits) / TOKEN_UNIT);
+    }
+  }
+
+  /**
+   * T172b — a refund the DEPOSIT key is about to sign: the deposit refunds
+   * the journal holds for the last 24 hours + this amount must stay within
+   * the cap (equal passes). The caller holds the service's single deposit
+   * refund lock from this check until the record is on disk, so two refunds
+   * from two deposits cannot both read the same total.
+   */
+  assertDepositRefundDailyLimit(units: bigint, journal: readonly JournalRecord[]): void {
+    const max = this.deps.maxDailyDepositRefundUnits;
+    if (max === null) {
+      depositRefundLimitRefusalsTotal.inc({ reason: 'DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED' });
+      throw new TransferDeferredError(
+        'Deposit refund daily limit is not configured (ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT) — the refund waits, nothing signed.',
+        'DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED',
+      );
+    }
+    const used = this.depositRefundsLast24h(journal);
+    depositRefundWindowUsdt.set(Number(used) / TOKEN_UNIT);
+    const projected = used + units;
+    if (projected > max) {
+      depositRefundLimitRefusalsTotal.inc({ reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED' });
+      throw new TransferDeferredError(
+        `Deposit refunds in 24 h would reach ${projected} (journal ${used} + ${units}), above the configured limit ${max} — the refund waits, nothing signed.`,
+        'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+      );
+    }
+  }
+
+  /** Raw units of the REFUND records the deposit key signed in the last 24 hours. */
+  depositRefundsLast24h(journal: readonly JournalRecord[]): bigint {
+    const since = this.now() - OUTFLOW_WINDOW_MS;
+    let sum = 0n;
+    for (const record of journal) {
+      if (record.purpose !== 'REFUND' || record.signer !== 'DEPOSIT') continue;
+      if (record.createdAt < since) continue;
+      // Moved nothing: its nonce went to a transaction the journal does not
+      // know, or it reverted on chain.
+      if (record.conflict !== null) continue;
+      if (record.mined?.status === 0) continue;
+      sum += BigInt(record.amountUnits);
+    }
+    return sum;
   }
 
   assertSweepDestination(requested: string): void {

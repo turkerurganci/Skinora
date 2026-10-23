@@ -208,6 +208,7 @@ describe('outbound wiring — sends and the fee estimate share one ETH price ser
         journalDir: dir,
         maxSingleTransferUnits: null,
         maxDailyOutflowUnits: null,
+      maxDailyDepositRefundUnits: null,
         fuelMaxSingleWei: null,
         fuelMaxDailyWei: null,
         waitAlarmSeconds: 10_800,

@@ -286,6 +286,38 @@ describe('T153 — a sweep waiting for its fuel', () => {
   );
 });
 
+/**
+ * T172b — the deposit refund cap's wait. The backend half
+ * (`DepositRefundLimitDeferredContractTests`) replays this same file through
+ * `HttpBlockchainTransferClient` and expects `Deferred` — never FAILED.
+ */
+describe('T172b — a deposit refund refused by the deposit refund cap waits', () => {
+  it('answers 503 with exactly contracts/transfer-refund/deferred.response.json', async () => {
+    const body = example('transfer-refund/deferred.response.json');
+    next = () => {
+      const err = new TransferDeferredError(
+        body.message as string,
+        'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+      );
+      err.waitingSince = Date.parse(body.waitingSince as string);
+      return Promise.reject(err);
+    };
+    const res = await post('/transfer/refund', {
+      network: 'ETHEREUM',
+      blockchainTransactionId: ID,
+      depositIndex: 0,
+      depositAddress: DEPOSIT,
+      toBuyerAddress: SELLER,
+      amount: '50',
+      token: 'USDT',
+      refundType: 'BUYER_REFUND',
+      feeCapUsd: '0.5',
+    });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual(body);
+  });
+});
+
 describe('GET /api/transfer/status/:txHash', () => {
   function get(hash: string) {
     return fetch(`${base}/api/transfer/status/${hash}`, { headers: { 'x-internal-key': KEY } });

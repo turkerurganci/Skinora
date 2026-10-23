@@ -229,6 +229,32 @@ export const gasEstimateAbnormalTotal = getOrCreateCounter({
 });
 
 /**
+ * T172b — deposit refunds refused under the signer's 24-hour deposit refund
+ * cap (`ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT`): nothing signed, no fuel
+ * sent, the refund waits. Every refused attempt counts (the backend asks again
+ * each minute), so `ethereum-deposit-refund-limit-refused` keeps firing while
+ * one waits. `reason`: `DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED` |
+ * `DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED`.
+ */
+export const depositRefundLimitRefusalsTotal = getOrCreateCounter({
+  name: 'skinora_ethereum_deposit_refund_limit_refusals_total',
+  help: 'Deposit refunds the signer refused under the 24-hour deposit refund cap, by reason',
+  labelNames: ['reason'] as const,
+});
+
+/** T172b — deposit refunds the journal holds for the last 24 hours, USDT (USDC 1:1). */
+export const depositRefundWindowUsdt = getOrCreateGauge({
+  name: 'skinora_ethereum_deposit_refund_window_usdt',
+  help: 'Deposit refunds signed in the last 24 hours, USDT (USDC counted 1:1)',
+});
+
+/** T172b — the configured cap; no series while it is unset (every deposit refund then waits). */
+export const depositRefundDailyLimitUsdt = getOrCreateGauge({
+  name: 'skinora_ethereum_deposit_refund_daily_limit_usdt',
+  help: 'Configured 24-hour deposit refund cap, USDT',
+});
+
+/**
  * T158 (j) — webhook deliveries the backend refused, by HTTP status. A 401
  * (signature / secret mismatch) is retried — the range is read again until
  * the secrets agree, the event is never dropped; the scan-failure alarm

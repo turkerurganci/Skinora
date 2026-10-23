@@ -57,6 +57,7 @@ function build(
   overrides: Partial<{
     maxSingle: bigint | null;
     maxDaily: bigint | null;
+    maxDepositRefund: bigint | null;
     hotKey: string | null;
     hotAddress: string | null;
     coldAddress: string | null;
@@ -79,6 +80,8 @@ function build(
       tokenContracts: [USDT, USDC],
       maxSingleTransferUnits: 'maxSingle' in overrides ? overrides.maxSingle! : 5_000_000_000n,
       maxDailyOutflowUnits: 'maxDaily' in overrides ? overrides.maxDaily! : 20_000_000_000n,
+      maxDailyDepositRefundUnits:
+        'maxDepositRefund' in overrides ? overrides.maxDepositRefund! : 1_000_000_000_000n,
       now,
     }),
     wallet,
@@ -1697,5 +1700,177 @@ describe('T158 (f) — a refund after the sweep leaves the hot wallet (08 §3.7.
     chain.mine();
     finalizeAll();
     expect(await service.status(txHash)).toMatchObject({ contractRet: 'SUCCESS', finalized: true });
+  });
+});
+
+/**
+ * T172b — the signer's 24-hour cap on refunds the DEPOSIT key signs (proje
+ * sahibi kararı 2026-10-23; ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT). Counted
+ * from the journal (on disk before the broadcast), one lock across deposits.
+ */
+describe('T172b — deposit refund daily cap', () => {
+  const DEPOSIT_B = wallet.derive(6);
+  const CAP = 100_000_000n; // 100 USDT
+
+  function depositRefund(n: number, amount: string, deposit: 'A' | 'B' = 'A') {
+    return {
+      ...refundRequest(n),
+      depositIndex: deposit === 'A' ? 5 : 6,
+      depositAddress: deposit === 'A' ? DEPOSIT.address : DEPOSIT_B.address,
+      amount,
+    };
+  }
+
+  beforeEach(() => {
+    for (const d of [DEPOSIT.address, DEPOSIT_B.address]) {
+      chain.setToken(USDT, d, 500_000_000n);
+      chain.setEth(d, 10n ** 17n);
+    }
+  });
+
+  it('a refund that brings the 24 h total exactly to the cap is signed; one unit more waits — nothing signed, no fuel', async () => {
+    const { service } = build({ maxDepositRefund: CAP });
+    await service.refund(depositRefund(1, '60'));
+    await service.refund(depositRefund(2, '40', 'B'));
+    expect(chain.sent).toHaveLength(2);
+
+    const err = await service.refund(depositRefund(3, '0.000001')).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(TransferDeferredError);
+    expect(err).toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+      retryable: true,
+    });
+    expect((err as TransferDeferredError).waitingSince).toBe(clock);
+    expect(chain.sent).toHaveLength(2);
+  });
+
+  it('a single deposit refund above the cap never passes on its own', async () => {
+    const { service } = build({ maxDepositRefund: CAP });
+    await expect(service.refund(depositRefund(1, '100.000001'))).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+    expect(chain.sent).toHaveLength(0);
+  });
+
+  it('room comes back only when the earlier refund turns 24 hours old (rolling, by journal time)', async () => {
+    const { service } = build({ maxDepositRefund: CAP });
+    await service.refund(depositRefund(1, '80'));
+    clock += 24 * 60 * 60 * 1000 - 1;
+    await expect(service.refund(depositRefund(2, '30', 'B'))).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+    clock += 2;
+    await service.refund(depositRefund(2, '30', 'B'));
+    expect(chain.sent).toHaveLength(2);
+  });
+
+  it('a restart does not reset it: the journal on disk still counts', async () => {
+    await build({ maxDepositRefund: CAP }).service.refund(depositRefund(1, '90'));
+    const restarted = build({ maxDepositRefund: CAP }).service; // same journal directory
+    await expect(restarted.refund(depositRefund(2, '10.000001', 'B'))).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+    await restarted.refund(depositRefund(3, '10', 'B'));
+  });
+
+  it('two refunds from two deposits at once cannot both pass (60 + 60 against 100)', async () => {
+    const { service, journal } = build({ maxDepositRefund: CAP });
+    const results = await Promise.allSettled([
+      service.refund(depositRefund(1, '60')),
+      service.refund(depositRefund(2, '60', 'B')),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toMatchObject({ reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED' });
+    expect(chain.sent).toHaveLength(1);
+    expect(journal.all().filter((r) => r.purpose === 'REFUND')).toHaveLength(1);
+  });
+
+  it('an id already signed is replayed even when the window is full (it is already counted)', async () => {
+    const { service } = build({ maxDepositRefund: CAP });
+    const first = await service.refund(depositRefund(1, '100'));
+    const again = await service.refund(depositRefund(1, '100'));
+    expect(again).toEqual({ ...first, replayed: true });
+  });
+
+  it('sweeps and hot-wallet refunds are not deposit refunds; the hot-wallet one stays under the hot cap', async () => {
+    const { service, journal } = build({ maxDepositRefund: CAP });
+    await service.sweep({ ...sweepRequest(1), amount: '400' });
+    await service.refund({
+      ...refundRequest(2),
+      source: 'HOT_WALLET' as const,
+      depositIndex: null,
+      depositAddress: null,
+      amount: '400',
+    });
+    expect(journal.all()).toHaveLength(2);
+    // The deposit refund window is still empty.
+    await service.refund(depositRefund(3, '100', 'B'));
+  });
+
+  it('cap unset → every deposit refund waits (DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED), nothing signed; sweeps and payouts unaffected', async () => {
+    const { service } = build({ maxDepositRefund: null });
+    await expect(service.refund(depositRefund(1, '1'))).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED',
+      retryable: true,
+    });
+    expect(chain.sent).toHaveLength(0);
+    await service.sweep(sweepRequest(2));
+    await service.payout(payout(3));
+  });
+});
+
+describe('T172b — what the deposit refund window counts (TransferGuard)', () => {
+  const NOW = 1_800_000_000_000;
+  const guardAt = () =>
+    new TransferGuard({
+      rpc: chain.rpc,
+      hotWalletAddress: canonicalAddress(HOT.address),
+      coldWalletAddress: null,
+      tokenContracts: [USDT, USDC],
+      maxSingleTransferUnits: null,
+      maxDailyOutflowUnits: null,
+      maxDailyDepositRefundUnits: 100_000_000n,
+      now: () => NOW,
+    });
+  const record = (overrides: Record<string, unknown>) =>
+    ({
+      id: `transfer:${ID(1)}`,
+      purpose: 'REFUND',
+      refundType: 'BUYER_REFUND',
+      signer: 'DEPOSIT',
+      from: canonicalAddress(DEPOSIT.address),
+      depositIndex: 5,
+      contract: USDT,
+      token: 'USDT',
+      recipient: BUYER,
+      amountUnits: '10000000',
+      nonce: 0,
+      gasLimit: '60000',
+      attempts: [],
+      createdAt: NOW - 1000,
+      lastBroadcastAt: null,
+      lastBroadcastError: null,
+      mined: null,
+      conflictSuspectedAt: null,
+      conflict: null,
+      ...overrides,
+    }) as never;
+
+  it('counts deposit-key REFUND records of the last 24 h only; reverted / conflicted moved nothing', () => {
+    const journal = [
+      record({}), // 10 — counts
+      record({ token: 'USDC', amountUnits: '5000000' }), // 5 — USDC 1:1
+      record({ mined: { status: 1, final: false } }), // 10 — mined OK, counts
+      record({ signer: 'HOT' }), // hot-wallet refund — the hot cap's
+      record({ purpose: 'SWEEP' }), // pinned to the hot wallet
+      record({ createdAt: NOW - 24 * 60 * 60 * 1000 - 1 }), // left the window
+      record({ mined: { status: 0, final: true } }), // reverted
+      record({ conflict: { detectedAt: NOW, chainNonce: 1 } }), // nonce used elsewhere
+    ];
+    expect(guardAt().depositRefundsLast24h(journal)).toBe(25_000_000n);
   });
 });

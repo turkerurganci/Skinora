@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 import { refundHandler, sweepHandler } from './transferHandlers.js';
 import type { TransferService } from '../transfer/TransferService.js';
 import type { RefundService } from '../transfer/RefundService.js';
+import { SidecarError, TransferDeferredError } from '../errors/SidecarError.js';
 
 interface MockResponse {
   statusCode: number;
@@ -96,5 +97,46 @@ describe('TRON deposit-send answers — the backend response contract', () => {
     expect(captured.statusCode).toBe(200);
     expect(captured.body).toEqual(example);
     expect(refund).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * T172b — the deposit refund cap's "wait" answer. The backend half
+ * (`DepositRefundLimitDeferredContractTests`) replays this same file through
+ * `HttpBlockchainTransferClient` and expects `Deferred`: the row stays PENDING,
+ * no retry spent, never FAILED.
+ */
+describe('T172b — a refund refused by the deposit refund cap waits', () => {
+  function loadDeferred(): Record<string, unknown> {
+    return JSON.parse(
+      readFileSync(resolve(CONTRACT_DIR, 'transfer-refund', 'deferred.response.json'), 'utf8'),
+    ) as Record<string, unknown>;
+  }
+
+  it('answers 503 with exactly contracts/transfer-refund/deferred.response.json', async () => {
+    const example = loadDeferred();
+    const refund = vi.fn(async () => {
+      throw new TransferDeferredError(example.message as string, example.error as string);
+    });
+    const handler = refundHandler({ refund } as unknown as RefundService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest({ ...DEPOSIT_BODY, toBuyerAddress: 'TBuyer' }), res);
+
+    expect(captured.statusCode).toBe(503);
+    expect(captured.body).toEqual(example);
+  });
+
+  it('a plain retryable error is NOT a wait (no deferred flag) — only the deferred type is', async () => {
+    const refund = vi.fn(async () => {
+      throw new SidecarError('boom', 'TRANSFER_BROADCAST_FAILED', true);
+    });
+    const handler = refundHandler({ refund } as unknown as RefundService);
+    const { res, captured } = buildResponse();
+
+    await handler(buildRequest({ ...DEPOSIT_BODY, toBuyerAddress: 'TBuyer' }), res);
+
+    expect(captured.statusCode).toBe(502);
+    expect(captured.body).not.toHaveProperty('deferred');
   });
 });

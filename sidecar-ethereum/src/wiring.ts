@@ -207,6 +207,7 @@ export function buildOutbound(config: OutboundConfig, deps: OutboundDeps) {
       tokenContracts: [tokens.USDT, tokens.USDC].filter((c) => c !== ''),
       maxSingleTransferUnits: config.transfers.maxSingleTransferUnits,
       maxDailyOutflowUnits: config.transfers.maxDailyOutflowUnits,
+      maxDailyDepositRefundUnits: config.transfers.maxDailyDepositRefundUnits,
     }),
     wallet,
     policy: {

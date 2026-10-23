@@ -21,6 +21,7 @@ import { EnergyDelegationService } from './wallet/EnergyDelegationService.js';
 import { TransferService } from './transfer/TransferService.js';
 import { RefundService } from './transfer/RefundService.js';
 import { TransferGuard, parseLimitUnits } from './transfer/TransferGuard.js';
+import { DepositRefundLimit, openDepositRefundLedger } from './transfer/DepositRefundLimit.js';
 import { TronResourceClient } from './tron/TronResourceClient.js';
 import { TrxPriceService } from './fee/TrxPriceService.js';
 import { FeeEstimationService } from './fee/FeeEstimationService.js';
@@ -149,6 +150,16 @@ const transferService = new TransferService({
   guard: transferGuard,
   priceService: trxPriceService,
 });
+// T172b — the signer's 24-hour cap on refunds leaving deposits. A ledger that
+// cannot be opened does not stop the service (monitoring and sweeps go on);
+// every deposit refund then waits until the volume is fixed.
+const depositRefundLedger = openDepositRefundLedger(config.depositRefundLedgerDir);
+const depositRefundLimit = new DepositRefundLimit({
+  maxDailyUnits: parseLimitUnits(config.depositRefundDailyLimitUsdt, decimalsPower),
+  ledger: depositRefundLedger.ledger,
+  ledgerError: depositRefundLedger.error,
+  decimalsPower,
+});
 const refundService = new RefundService({
   walletManager,
   client: tronTransferClient,
@@ -156,6 +167,7 @@ const refundService = new RefundService({
   tokenDecimals: config.tokenDecimals,
   energyDelegation,
   guard: transferGuard,
+  depositRefundLimit,
 });
 const feeEstimationService = new FeeEstimationService({
   resourceClient: tronResourceClient,
@@ -201,6 +213,21 @@ logger.info(
     ),
   },
   'Payment monitoring: cadences and TronGrid daily request budget',
+);
+
+// T172b — the deposit refund cap as the refund path holds it; an operator
+// reads this line after a restart instead of finding out at the first refund.
+logger.info(
+  {
+    depositRefundDailyLimitUsdt: config.depositRefundDailyLimitUsdt || null,
+    depositRefundLedgerDir: config.depositRefundLedgerDir || null,
+    ledgerOpen: depositRefundLedger.ledger !== null,
+    countedLast24hUnits: depositRefundLimit.usedUnits().toString(),
+  },
+  depositRefundLedger.ledger === null ||
+    parseLimitUnits(config.depositRefundDailyLimitUsdt, decimalsPower) === null
+    ? 'Deposit refund daily limit: NOT usable (unset limit or no ledger) — every refund waits'
+    : 'Deposit refund daily limit: active',
 );
 
 // Middleware

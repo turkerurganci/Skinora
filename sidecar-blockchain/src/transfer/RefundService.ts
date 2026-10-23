@@ -5,6 +5,7 @@ import { WalletManager } from '../wallet/WalletManager.js';
 import { TronTransferClient, SendTransferResult } from '../tron/TronTransferClient.js';
 import { TokenContractMap, TokenSymbol, TransferService } from './TransferService.js';
 import { TransferGuard } from './TransferGuard.js';
+import { DepositRefundLimit } from './DepositRefundLimit.js';
 import {
   EnergyDelegationService,
   DelegationMode,
@@ -50,6 +51,10 @@ export interface RefundServiceDeps {
   /** Amount limits (05 §3.3). Required for the same reason as on
    * <c>TransferService</c>: no signer without the ability to refuse. */
   guard: TransferGuard;
+  /** T172b — the signer's 24-hour deposit refund cap. Required for the same
+   * reason as the guard: every refund leaves a deposit, and the signer must be
+   * able to refuse what a compromised backend asks for. */
+  depositRefundLimit: DepositRefundLimit;
   /** Energy delegation orchestrator (T74). Refund originates from a deposit
    * address with no TRX, so delegation is mandatory in production. Tests can
    * omit this only when explicitly exercising the <c>DELEGATION_NOT_WIRED</c>
@@ -76,6 +81,7 @@ export class RefundService {
   private readonly decimalsPower: bigint;
   private readonly energyDelegation?: EnergyDelegationService;
   private readonly guard: TransferGuard;
+  private readonly depositRefundLimit: DepositRefundLimit;
 
   constructor(deps: RefundServiceDeps) {
     this.wallet = deps.walletManager;
@@ -84,6 +90,7 @@ export class RefundService {
     this.decimalsPower = 10n ** BigInt(deps.tokenDecimals ?? 6);
     this.energyDelegation = deps.energyDelegation;
     this.guard = deps.guard;
+    this.depositRefundLimit = deps.depositRefundLimit;
   }
 
   async refund(request: RefundRequest): Promise<RefundResult> {
@@ -110,6 +117,18 @@ export class RefundService {
     // ceiling measures hot-wallet outflow, and this leaves a deposit address.
     this.guard.assertSingleTransferLimit(BigInt(amountUnits));
 
+    // T172b — and the deposit refund cap: counted (durably) BEFORE any TRX is
+    // spent on the deposit or anything is signed; over the cap the refund
+    // waits (TransferDeferredError → 503 deferred), nothing spent.
+    const reservation = this.depositRefundLimit.reserve(
+      request.blockchainTransactionId,
+      BigInt(amountUnits),
+    );
+    // Whether the token transfer may have reached the network. Until the
+    // action starts, and when the build itself failed, it certainly did not.
+    let broadcastAttempted = false;
+    let broadcastOk = false;
+
     logger.info(
       {
         blockchainTransactionId: request.blockchainTransactionId,
@@ -122,27 +141,39 @@ export class RefundService {
       'Broadcasting BUYER_REFUND-family transfer (deposit -> buyer) with Energy delegation',
     );
 
-    const outcome: DelegationOutcome<SendTransferResult> =
-      await this.energyDelegation.withDelegation(
+    let outcome: DelegationOutcome<SendTransferResult>;
+    try {
+      outcome = await this.energyDelegation.withDelegation(
         {
           depositAddress: request.depositAddress,
           contractAddress: contract,
           toAddress: request.toBuyerAddress,
           amountUnits,
         },
-        () =>
-          this.client.sendTransfer({
+        async () => {
+          broadcastAttempted = true;
+          const sent = await this.client.sendTransfer({
             fromAddress: signer.address,
             privateKey: signer.privateKey,
             contractAddress: contract,
             toAddress: request.toBuyerAddress,
             amountUnits,
-          }),
+          });
+          broadcastOk = true;
+          return sent;
+        },
         {
           blockchainTransactionId: request.blockchainTransactionId,
           correlationId: request.correlationId,
         },
       );
+    } catch (err) {
+      if (!broadcastOk && (!broadcastAttempted || RefundService.neverBroadcast(err))) {
+        this.depositRefundLimit.release(reservation);
+      }
+      throw err;
+    }
+    this.depositRefundLimit.settle(reservation, outcome.action.txHash);
 
     return {
       txHash: outcome.action.txHash,
@@ -151,6 +182,19 @@ export class RefundService {
       fallbackAmountSun: outcome.fallbackAmountSun,
       platformSpendSun: outcome.platformSpendSun,
     };
+  }
+
+  /**
+   * T172b — failures that prove the token transfer never left this process:
+   * nothing was signed (no key) or the node would not even build it. A
+   * rejected or failed broadcast may still have reached a node, so it keeps
+   * counting (fail closed).
+   */
+  private static neverBroadcast(err: unknown): boolean {
+    return (
+      err instanceof SidecarError &&
+      (err.code === 'TRANSFER_BUILD_FAILED' || err.code === 'TRANSFER_NO_PRIVATE_KEY')
+    );
   }
 
   private resolveContract(token: TokenSymbol): string {

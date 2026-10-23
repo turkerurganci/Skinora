@@ -3,6 +3,10 @@ import { TransferService } from './TransferService.js';
 import { RefundService } from './RefundService.js';
 import { TransferGuard, OutflowHistoryPage, OutflowHistoryRecord } from './TransferGuard.js';
 import { SidecarError } from '../errors/SidecarError.js';
+import { DepositRefundLedger, DepositRefundLimit } from './DepositRefundLimit.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const SIGNER_HOT_KEY = '01'.padStart(64, '0');
 const TOKEN_USDT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
@@ -47,6 +51,19 @@ function buildGuard(options: GuardOptions = {}): TransferGuard {
       listTrc20: vi.fn(async (): Promise<OutflowHistoryPage> => ({ records, fingerprint: null })),
     },
     now: () => options.now ?? 1_700_000_000_000,
+  });
+}
+
+/**
+ * T172b — a deposit refund cap wide enough (and a ledger-less in-memory
+ * stand-in is not allowed: no ledger = every refund waits) that the
+ * pre-existing refund expectations keep measuring what they measured.
+ */
+function wideDepositRefundLimit(): DepositRefundLimit {
+  return new DepositRefundLimit({
+    maxDailyUnits: 1_000_000n * UNIT,
+    ledger: new DepositRefundLedger(mkdtempSync(join(tmpdir(), 'tron-refund-ledger-'))),
+    decimalsPower: UNIT,
   });
 }
 
@@ -496,6 +513,7 @@ describe('RefundService.refund()', () => {
     });
     const delegation = buildStubDelegation('delegated');
     const service = new RefundService({
+      depositRefundLimit: wideDepositRefundLimit(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       walletManager: wallet as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -554,6 +572,7 @@ describe('RefundService.refund()', () => {
     });
     const delegation = buildStubDelegation('fallback');
     const service = new RefundService({
+      depositRefundLimit: wideDepositRefundLimit(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       walletManager: wallet as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -585,6 +604,7 @@ describe('RefundService.refund()', () => {
       11: { address: 'TDeposit11', privateKey: 'cd'.padStart(64, 'c') },
     });
     const service = new RefundService({
+      depositRefundLimit: wideDepositRefundLimit(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       walletManager: wallet as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -823,6 +843,7 @@ describe('destination pinning and amount limits (05 §3.3)', () => {
     });
     const delegation = buildStubDelegation('delegated');
     const service = new RefundService({
+      depositRefundLimit: wideDepositRefundLimit(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       walletManager: wallet as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
