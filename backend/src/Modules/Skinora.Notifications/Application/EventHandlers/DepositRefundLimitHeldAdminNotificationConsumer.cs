@@ -15,6 +15,14 @@ namespace Skinora.Notifications.Application.EventHandlers;
 /// admin either waits for the 24-hour window or releases it from the wallets
 /// screen (AD42).
 /// </summary>
+/// <remarks>
+/// T165 — built with the plain (non money-alarm) constructor on purpose: the
+/// operator's Telegram chat and e-mail already get the dedicated
+/// <c>deposit-refund-daily-limit-held</c> money alarm (<c>category: money</c>) from
+/// <c>skinora_backend_deposit_refund_limit_held_rows</c>, which also says "resolved"
+/// when the refund leaves. Passing the money-alarm observer here would announce the
+/// same hold a second time as <c>admin-money-alarm-raised</c>.
+/// </remarks>
 public sealed class DepositRefundLimitHeldAdminNotificationConsumer
     : AdminBroadcastNotificationConsumerBase<DepositRefundLimitHeldEvent>
 {

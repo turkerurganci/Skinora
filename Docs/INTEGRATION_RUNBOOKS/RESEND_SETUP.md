@@ -49,6 +49,10 @@ Resend domain ekledikten sonra dashboard'da dört kayıt üretir. Bunları DNS s
 | From address | Sabit konfigürasyon | `Resend__FromAddress` | `Skinora <noreply@skinora.com>` formatı. Verified domain'in mailbox'ı olmalı. |
 | Provider switch | App config | `Resend__Provider` | `logging` (default, test/dev/CI) veya `resend` (staging/production). |
 
+**Compose / `.env` adları (T165):** backend `docker-compose.yml` üzerinden alır — `RESEND_PROVIDER` → `Resend__Provider`, `RESEND_API_KEY` → `Resend__ApiKey`, `RESEND_WEBHOOK_SIGNING_SECRET` → `Resend__WebhookSigningSecret`, `RESEND_FROM_ADDRESS` → `Resend__FromAddress`. Deneme yayını overlay'i `Resend__Provider=resend`'i zorlar; anahtar boş / yer tutucu / biçimi yanlışsa (`re_…`, `whsec_…` önekleri denetlenir) kanal **`misconfigured`** olur: kapalı gibi davranır, açılış logunda eksik anahtarın adı yazar, `notification-channel-misconfigured` alarmı çalar (DEPLOY_RUNBOOK §P.1). Grafana'nın alarm e-postası için **ayrı** bir Sending access anahtarı `GRAFANA_SMTP_PASSWORD` olarak Resend SMTP'ye (`smtp.resend.com:587`, STARTTLS, kullanıcı `resend`) verilir (DEPLOY_RUNBOOK §P.2).
+
+**`User-Agent` zorunlu (T165):** Resend, `User-Agent` başlığı olmayan isteği anahtar geçerli olsa da 403 (hata 1010) ile reddeder (resend.com/docs/knowledge-base/403-error-1010). `ResendEmailClient` `User-Agent: Skinora/1.0` gönderir (`ResendEmailClientTests.SendAsync_SendsUserAgent_…`). §5'teki `curl` duman testi bu başlığı kendisi eklediği için bu hatayı göstermez.
+
 **Rotasyon prosedürü:**
 
 1. Resend dashboard'da yeni API key veya webhook secret oluştur (eski **bırak**; iki anahtarın paralel çalıştığı bir geçiş penceresi olur).

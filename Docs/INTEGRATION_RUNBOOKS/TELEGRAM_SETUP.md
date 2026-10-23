@@ -72,6 +72,24 @@ Production ortamı için env override:
 mesajları log'a basıp success döner. Bu sayede yanlış yapılandırılmış
 bir ortam asla canlı bota mesaj göndermez (fail-closed).
 
+**T165 — compose adları ve "misconfigured" durumu.** Backend değerleri
+`docker-compose.yml` üzerinden alır: `TELEGRAM_PROVIDER` → `Telegram__Provider`,
+`TELEGRAM_BOT_TOKEN` → `Telegram__BotToken` (Grafana alarmları da **aynı
+botla** gider), `TELEGRAM_BOT_USERNAME` → `Telegram__BotUsername` ve
+`Telegram__BotUrl` (`https://t.me/<username>`), `TELEGRAM_WEBHOOK_SECRET_TOKEN` →
+`Telegram__WebhookSecretToken`. Deneme yayını overlay'i `Provider=telegram`'ı
+zorlar. Token BotFather biçiminde değilse (`<rakamlar>:<35 karakter>`), webhook
+sırrı `A–Z a–z 0–9 _ -` dışında karakter içeriyorsa ya da biri boşsa kanal
+`misconfigured` olur: stub'a düşmez, kapalı gibi davranır (bağlama 409
+`CHANNEL_UNAVAILABLE`), açılış logunda eksik anahtarın adı yazar ve
+`notification-channel-misconfigured` alarmı çalar (DEPLOY_RUNBOOK §P.1).
+Grafana için sohbet kimliğinin (`TELEGRAM_CHAT_ID`) alınması: DEPLOY_RUNBOOK §P.3.
+
+**T165 — token loglanmaz (⚠ GÜVENLİK).** Token istek yolunda olduğu için
+`IHttpClientFactory`'nin varsayılan kayıt işleyicileri onu Information
+seviyesinde loga yazardı; Telegram istemcisi bu işleyiciler olmadan kaydedilir
+(`TelegramTransportRegistration`, `TelegramTransportRegistrationTests`).
+
 ## 4. setWebhook Çağrısı
 
 Konfigürasyon ayağa kalktıktan sonra **tek seferlik** `setWebhook`

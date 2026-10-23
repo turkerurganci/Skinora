@@ -80,6 +80,10 @@ export interface NotificationPreferencesSectionProps {
  * Telegram/Discord toggle'ları sadece `connected=true` iken aktif. Bağlama
  * akışı LinkedAccountsSection'da; U7 backend'i `CHANNEL_NOT_CONNECTED`
  * 422 ile koruma katmanını sağlıyor (defense-in-depth).
+ *
+ * T165 — `available=false` olan kanalın anahtarı devre dışı ve "kullanılamıyor"
+ * notu taşır (backend 409 `CHANNEL_UNAVAILABLE`); kapalı Discord satırı hiç
+ * gösterilmez (üretimde Discord kapalı).
  */
 export function NotificationPreferencesSection({ settings }: NotificationPreferencesSectionProps) {
   const t = useTranslations("settings.notifications");
@@ -113,7 +117,10 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
       await updateNotifications({ [channel]: { enabled } });
       await invalidate();
     } catch (err) {
-      if (err instanceof ApiError && err.code === "CHANNEL_NOT_CONNECTED") {
+      if (
+        err instanceof ApiError &&
+        (err.code === "CHANNEL_NOT_CONNECTED" || err.code === "CHANNEL_UNAVAILABLE")
+      ) {
         // Backend rejects toggle if channel not connected — UI hint via
         // disabledReason already covers this, but surface the error if
         // racing connection state.
@@ -213,7 +220,12 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
   }
 
   const emailAddressChanged = emailAddress.trim() !== (email.address ?? "").trim();
-  const canSendVerification = !!email.address && !email.verified && !emailAddressChanged;
+  // T165 — `available === false`: the deployment cannot send on the channel.
+  const emailAvailable = email.available !== false;
+  const telegramAvailable = telegram.available !== false;
+  const discordAvailable = discord.available !== false;
+  const canSendVerification =
+    emailAvailable && !!email.address && !email.verified && !emailAddressChanged;
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-6">
@@ -236,8 +248,14 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
             label={t("channels.email.label")}
             description={t("channels.email.description")}
             checked={email.enabled}
-            disabled={!email.address}
-            disabledReason={!email.address ? t("channels.email.noAddress") : undefined}
+            disabled={!emailAvailable || !email.address}
+            disabledReason={
+              !emailAvailable
+                ? t("channels.unavailable")
+                : !email.address
+                  ? t("channels.email.noAddress")
+                  : undefined
+            }
             onChange={(next) => void toggleChannel("email", next)}
           />
 
@@ -356,23 +374,31 @@ export function NotificationPreferencesSection({ settings }: NotificationPrefere
               : t("channels.telegram.description")
           }
           checked={telegram.enabled}
-          disabled={!telegram.connected}
-          disabledReason={!telegram.connected ? t("channels.telegram.notConnected") : undefined}
+          disabled={!telegramAvailable || !telegram.connected}
+          disabledReason={
+            !telegramAvailable
+              ? t("channels.unavailable")
+              : !telegram.connected
+                ? t("channels.telegram.notConnected")
+                : undefined
+          }
           onChange={(next) => void toggleChannel("telegram", next)}
         />
 
-        <ToggleRow
-          label={t("channels.discord.label")}
-          description={
-            discord.connected && discord.username
-              ? t("channels.discord.connected", { username: discord.username })
-              : t("channels.discord.description")
-          }
-          checked={discord.enabled}
-          disabled={!discord.connected}
-          disabledReason={!discord.connected ? t("channels.discord.notConnected") : undefined}
-          onChange={(next) => void toggleChannel("discord", next)}
-        />
+        {discordAvailable && (
+          <ToggleRow
+            label={t("channels.discord.label")}
+            description={
+              discord.connected && discord.username
+                ? t("channels.discord.connected", { username: discord.username })
+                : t("channels.discord.description")
+            }
+            checked={discord.enabled}
+            disabled={!discord.connected}
+            disabledReason={!discord.connected ? t("channels.discord.notConnected") : undefined}
+            onChange={(next) => void toggleChannel("discord", next)}
+          />
+        )}
       </div>
     </section>
   );

@@ -11,6 +11,8 @@ using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.Blockchain;
 using Skinora.Shared.Domain.Seed;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Events;
+using Skinora.Shared.Interfaces;
 using Skinora.Shared.Persistence;
 using Skinora.Transactions.Application.Networks;
 using Skinora.Transactions.Application.PaymentAddresses;
@@ -140,6 +142,7 @@ public sealed class ReconciliationService : IReconciliationService
     private readonly INotificationRealtimePublisher _realtime;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
     private readonly IReconciliationRunObserver _runObserver;
+    private readonly IOutboxService _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<ReconciliationService> _logger;
 
@@ -149,6 +152,7 @@ public sealed class ReconciliationService : IReconciliationService
         INotificationRealtimePublisher realtime,
         IPlatformWalletAddressProvider walletAddresses,
         IReconciliationRunObserver runObserver,
+        IOutboxService outbox,
         TimeProvider clock,
         ILogger<ReconciliationService> logger)
     {
@@ -157,6 +161,7 @@ public sealed class ReconciliationService : IReconciliationService
         _realtime = realtime;
         _walletAddresses = walletAddresses;
         _runObserver = runObserver;
+        _outbox = outbox;
         _clock = clock;
         _logger = logger;
     }
@@ -272,38 +277,68 @@ public sealed class ReconciliationService : IReconciliationService
             .ToDictionary(g => g.Key, g => g.First().Tokens, BlockchainAddress.Comparer);
 
         var detectedAt = _clock.GetUtcNow().UtcDateTime;
-        var totalMismatches = 0;
 
+        var depositMismatches = 0;
+        var depositMissing = 0;
         foreach (var deposit in depositAddresses)
         {
             if (!snapshotByAddress.TryGetValue(deposit.Address, out var tokens))
             {
                 _logger.LogWarning(
                     "Reconciliation snapshot missing deposit address {Address}.", deposit.Address);
+                depositMissing++;
                 continue;
             }
-            totalMismatches += await ReconcileDepositAddressAsync(
+            depositMismatches += await ReconcileDepositAddressAsync(
                 deposit.Id, deposit.Address, tokens,
                 snapshot.BlockNumber, detectedAt, cancellationToken);
         }
 
+        // T165 kapanış (yeniden doğrulama Y2, ⚠ PARA): a deposit address the
+        // snapshot left out was NOT compared. A balanced count over the rest is
+        // not "the deposit scope is balanced" — reporting 0 would resolve a
+        // mismatch that may still stand at the missing address. Report the scope
+        // only when it was compared in full, or when it found mismatches anyway
+        // (a positive count can only keep the alarm firing).
+        int? depositReported = depositMissing == 0 || depositMismatches > 0
+            ? depositMismatches
+            : null;
+        if (depositMissing > 0)
+        {
+            _logger.LogWarning(
+                "Reconciliation of {Network}: {Missing} deposit address(es) missing from the snapshot — the deposit scope is {Reported} this round.",
+                network, depositMissing,
+                depositReported is null ? "not reported (previous value kept)" : "reported with the mismatches found");
+        }
+
         var hotChecked = false;
+        var hotMismatches = 0;
         if (!string.IsNullOrEmpty(hotWallet)
             && snapshotByAddress.TryGetValue(hotWallet, out var hotTokens))
         {
-            totalMismatches += await ReconcileHotWalletAsync(
+            hotMismatches = await ReconcileHotWalletAsync(
                 hotWallet, hotTokens, snapshot.BlockNumber, detectedAt, cancellationToken);
             hotChecked = true;
         }
 
         var coldChecked = false;
+        var coldMismatches = 0;
         if (!string.IsNullOrEmpty(coldWallet)
             && snapshotByAddress.TryGetValue(coldWallet, out var coldTokens))
         {
-            totalMismatches += await ReconcileColdWalletAsync(
+            coldMismatches = await ReconcileColdWalletAsync(
                 coldWallet, coldTokens, snapshot.BlockNumber, detectedAt, cancellationToken);
             coldChecked = true;
         }
+
+        var totalMismatches = depositMismatches + hotMismatches + coldMismatches;
+        await ReportMismatchesAsync(
+            network,
+            depositReported,
+            hotChecked ? hotMismatches : null,
+            coldChecked ? coldMismatches : null,
+            detectedAt,
+            cancellationToken);
 
         if (totalMismatches == 0)
         {
@@ -372,6 +407,61 @@ public sealed class ReconciliationService : IReconciliationService
             if (part.BlockNumber is { } number && (block is null || number < block)) block = number;
         }
         return new BlockchainSidecarBalancesResult(BlockchainSidecarStatus.Success, block, balances);
+    }
+
+    /// <summary>
+    /// T165 — the round's mismatches leave the panel (05 §3.3 "admin'e critical
+    /// alert"). Until T165 a mismatch was an AuditLog row, a warning log line and
+    /// a SignalR banner for whoever had the admin panel open — nothing reached
+    /// Telegram or e-mail. Two independent paths now:
+    /// <list type="number">
+    ///   <item>the metric (<see cref="IReconciliationRunObserver.ReportMismatches"/>)
+    ///   → the <c>reconciliation-mismatch</c> money alarm to the operator's
+    ///   Telegram chat and e-mail; "resolved" when a later round of the scope
+    ///   is balanced. Reported first: it needs no database.</item>
+    ///   <item>one <see cref="ReconciliationMismatchAdminAlertEvent"/> per network
+    ///   round with mismatches → <c>ADMIN_RECONCILIATION_MISMATCH</c> in every
+    ///   admin's inbox and on each admin's connected channels. Daily while the
+    ///   books stay apart, which doubles as the reminder.</item>
+    /// </list>
+    /// A scope the round did not compare (null) reports nothing; see
+    /// <see cref="IReconciliationRunObserver.ReportMismatches"/>.
+    /// </summary>
+    private async Task ReportMismatchesAsync(
+        BlockchainNetwork network,
+        int? depositMismatches,
+        int? hotMismatches,
+        int? coldMismatches,
+        DateTime detectedAt,
+        CancellationToken cancellationToken)
+    {
+        if (depositMismatches is { } deposit)
+        {
+            _runObserver.ReportMismatches(network, ReconciliationScope.DepositAddress, deposit);
+        }
+        if (hotMismatches is { } hot)
+        {
+            _runObserver.ReportMismatches(network, ReconciliationScope.HotWallet, hot);
+        }
+        if (coldMismatches is { } cold)
+        {
+            _runObserver.ReportMismatches(network, ReconciliationScope.ColdWallet, cold);
+        }
+
+        var total = (depositMismatches ?? 0) + (hotMismatches ?? 0) + (coldMismatches ?? 0);
+        if (total == 0) return;
+
+        await _outbox.PublishAsync(
+            new ReconciliationMismatchAdminAlertEvent(
+                EventId: Guid.NewGuid(),
+                Network: network.ToString(),
+                MismatchCount: total,
+                DepositAddressMismatches: depositMismatches ?? 0,
+                HotWalletMismatches: hotMismatches ?? 0,
+                ColdWalletMismatches: coldMismatches ?? 0,
+                OccurredAt: detectedAt),
+            cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     private static string HotWalletKeyFor(BlockchainNetwork network) =>

@@ -178,6 +178,8 @@ Kaynak rapor: `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-ha
 
 **Kapanış bozma turu:** 6 bozma (TRON pencere 12 sa, 36 sa, `isEntry` atlama, saklama = pencere, ileri tarihli giriş sayılmaz; Ethereum ileri tarihli kayıt sayılmaz) → **6/6 yakalandı**; her birinden sonra dosya geri yüklendi.
 
+**Birleştirme (main `44d32f54`, T165 #375):** kapanış commit'i `0c55cce7` push edildikten sonra main ilerledi; merge commit ile alındı. Çakışmalar yalnız belgelerde: 05 → **v3.38** (T165 v3.37 aldığı için bir üstü), runbook / 05 başlıkları birleşik, DOC_CHANGELOG, BYPASS_LOG (kronolojik), STATUS_CHANGELOG (main'in T165 ✓ başlığı taşındı), IMPLEMENTATION_STATUS, MEMORY. **T165'in para kuralı testi:** `tron-/ethereum-deposit-refund-limit-refused` kurallarına `category: money` eklendi, `NotificationAlertingProvisioningTests.MoneyRules`'a girdi, sayım 28 → **30**; runbook §P.4 tabloya satır, §P.6 sayı. Backlog sayımı değişmedi (49/169).
+
 **Testler (kapanış):** TRON `npx vitest run` **728/728** (37 dosya) · Ethereum **929/929** (37 dosya) · iki serviste `tsc --noEmit` ve `eslint src/` temiz · prettier (değişen dosyalar) temiz. Backend'e dokunulmadı. Docker kullanılmadı.
 
 ## Known Limitations / Follow-up

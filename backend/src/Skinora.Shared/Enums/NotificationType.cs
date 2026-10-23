@@ -77,4 +77,12 @@ public enum NotificationType
     // a passive buyer's transaction closes without waiting for the deadline.
     // Appended last on purpose — Notification.Type is persisted as an int.
     DELIVERY_DETECTED,
+
+    // --- T165: daily ledger reconciliation mismatch (05 §3.3 "admin'e critical alert") ---
+    // The reconciliation round found the books and the chain apart on a network.
+    // Before T165 this reached only an open admin panel (SignalR banner) and the
+    // audit log. Admin-only, fanned out to every admin (WP8 AdminBroadcast); no
+    // existing admin type fits: ADMIN_PAYMENT_FAILURE names one transaction,
+    // a mismatch is per network and scope. Appended last (persisted as an int).
+    ADMIN_RECONCILIATION_MISMATCH,
 }

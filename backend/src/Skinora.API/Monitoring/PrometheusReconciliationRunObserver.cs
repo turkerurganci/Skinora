@@ -1,6 +1,7 @@
 using Prometheus;
 using Skinora.API.Services.Reconciliation;
 using Skinora.Shared.Enums;
+using Skinora.Transactions.Application.Reconciliation;
 
 namespace Skinora.API.Monitoring;
 
@@ -12,6 +13,9 @@ namespace Skinora.API.Monitoring;
 /// on the first; it stays raised until a later round of that network
 /// completes. A network that has not run since the backend started publishes
 /// nothing (the alarm cannot see it — DEPLOY_RUNBOOK §J).
+/// T165 — <c>skinora_backend_reconciliation_mismatches{network,scope}</c>: the
+/// mismatches the last completed round found per scope, read by the
+/// <c>reconciliation-mismatch</c> money alarm (critical, Telegram + e-mail).
 /// </summary>
 public sealed class PrometheusReconciliationRunObserver : IReconciliationRunObserver
 {
@@ -24,6 +28,11 @@ public sealed class PrometheusReconciliationRunObserver : IReconciliationRunObse
         "skinora_backend_reconciliation_last_success_timestamp_seconds",
         "Unix time of the last completed ledger reconciliation round of the network",
         new GaugeConfiguration { LabelNames = ["network"] });
+
+    public static readonly Gauge Mismatches = Metrics.CreateGauge(
+        "skinora_backend_reconciliation_mismatches",
+        "Ledger / chain mismatches found by the last completed reconciliation round of the network, per scope (DepositAddress, HotWallet, ColdWallet)",
+        new GaugeConfiguration { LabelNames = ["network", "scope"] });
 
     private readonly TimeProvider _clock;
 
@@ -41,4 +50,7 @@ public sealed class PrometheusReconciliationRunObserver : IReconciliationRunObse
             LastSuccess.WithLabels(label).Set(_clock.GetUtcNow().ToUnixTimeSeconds());
         }
     }
+
+    public void ReportMismatches(BlockchainNetwork network, ReconciliationScope scope, int mismatches) =>
+        Mismatches.WithLabels(network.ToString(), scope.ToString()).Set(mismatches);
 }

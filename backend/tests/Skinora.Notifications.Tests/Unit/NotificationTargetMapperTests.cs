@@ -83,4 +83,16 @@ public class NotificationTargetMapperTests
         Assert.Null(targetType);
         Assert.Null(targetId);
     }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void Resolve_AdminReconciliationMismatch_AlwaysReturnsNullPair()
+    {
+        // T165 — per network, not per transaction.
+        var (targetType, targetId) = NotificationTargetMapper.Resolve(
+            NotificationType.ADMIN_RECONCILIATION_MISMATCH, Guid.NewGuid());
+
+        Assert.Null(targetType);
+        Assert.Null(targetId);
+    }
 }

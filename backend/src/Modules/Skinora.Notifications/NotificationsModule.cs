@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Skinora.Notifications.Application.Channels;
 using Skinora.Notifications.Application.Inbox;
 using Skinora.Notifications.Application.Notifications;
@@ -9,7 +10,8 @@ using Skinora.Notifications.Infrastructure.Channels;
 using Skinora.Notifications.Infrastructure.DeliveryJobs;
 using Skinora.Shared.Discord;
 using Skinora.Shared.Email;
-using Skinora.Shared.Telegram;
+using Skinora.Shared.Enums;
+using Skinora.Shared.Notifications;
 using StackExchange.Redis;
 
 namespace Skinora.Notifications;
@@ -64,10 +66,14 @@ public static class NotificationsModule
         // T37 logging stub registered for tests / dev so CI never reaches
         // the network. Telegram + Discord stay on stub handlers until
         // T79 / T80 land.
-        var provider = configuration[$"{ResendSettings.SectionName}:{nameof(ResendSettings.Provider)}"]
-            ?? ResendSettings.ProviderLogging;
+        //
+        // T165 — the switch reads the evaluated channel state, not the bare
+        // Provider string: a real provider with missing / placeholder /
+        // malformed secrets (Misconfigured) keeps the stub registered, and the
+        // dispatcher never creates a delivery on it (INotificationChannelAvailability).
+        var channels = NotificationChannelAvailability.FromConfiguration(key => configuration[key]);
 
-        if (string.Equals(provider, ResendSettings.ProviderResend, StringComparison.OrdinalIgnoreCase))
+        if (channels.Get(NotificationChannel.EMAIL).IsLive)
         {
             services.AddScoped<INotificationChannelHandler, ResendEmailNotificationChannelHandler>();
         }
@@ -80,10 +86,7 @@ public static class NotificationsModule
         // provider switch: <c>telegram</c> wires the real Bot API
         // handler, anything else (default <c>logging</c>) keeps the
         // T37 stub so CI never reaches the network.
-        var telegramProvider = configuration[$"{TelegramSettings.SectionName}:{nameof(TelegramSettings.Provider)}"]
-            ?? TelegramSettings.ProviderLogging;
-
-        if (string.Equals(telegramProvider, TelegramSettings.ProviderTelegram, StringComparison.OrdinalIgnoreCase))
+        if (channels.Get(NotificationChannel.TELEGRAM).IsLive)
         {
             services.AddScoped<INotificationChannelHandler, TelegramNotificationChannelHandler>();
         }
@@ -104,10 +107,7 @@ public static class NotificationsModule
             new RedisDiscordDmChannelCache(
                 sp.GetRequiredService<IConnectionMultiplexer>(), keyPrefix: "skinora"));
 
-        var discordProvider = configuration[$"{DiscordSettings.SectionName}:{nameof(DiscordSettings.Provider)}"]
-            ?? DiscordSettings.ProviderLogging;
-
-        if (string.Equals(discordProvider, DiscordSettings.ProviderDiscord, StringComparison.OrdinalIgnoreCase))
+        if (channels.Get(NotificationChannel.DISCORD).IsLive)
         {
             services.AddScoped<INotificationChannelHandler, DiscordNotificationChannelHandler>();
         }
@@ -116,7 +116,11 @@ public static class NotificationsModule
             services.AddScoped<INotificationChannelHandler, LoggingDiscordNotificationChannelHandler>();
         }
 
-        services.AddScoped<INotificationAdminAlertSink, LoggingNotificationAdminAlertSink>();
+        services.TryAddScoped<INotificationAdminAlertSink, LoggingNotificationAdminAlertSink>();
+
+        // T165 — money-alarm observer; the API host registers the Prometheus
+        // implementation first, so this default only serves other hosts/tests.
+        services.TryAddSingleton<IAdminMoneyAlarmObserver>(NullAdminMoneyAlarmObserver.Instance);
 
         // Hangfire resolves the job class per invocation through DI; scoped
         // lifetime keeps it sharing the request-scoped DbContext.

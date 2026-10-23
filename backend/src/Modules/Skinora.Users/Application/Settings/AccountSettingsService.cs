@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
@@ -9,16 +10,24 @@ namespace Skinora.Users.Application.Settings;
 /// Builds the <c>GET /users/me/settings</c> snapshot (07 §5.6) by
 /// joining <c>User</c> (language, email, email-verified) with the
 /// notification preference rows for the three external channels.
+/// T165 — every external channel also carries <c>available</c>: false when the
+/// deployment switched it off (<c>Provider = disabled</c>, production Discord) or
+/// its secrets are incomplete; the UI hides / greys the connect action.
 /// </summary>
 public sealed class AccountSettingsService : IAccountSettingsService
 {
     private readonly AppDbContext _db;
     private readonly INotificationPreferenceStore _preferenceStore;
+    private readonly INotificationChannelAvailability _channels;
 
-    public AccountSettingsService(AppDbContext db, INotificationPreferenceStore preferenceStore)
+    public AccountSettingsService(
+        AppDbContext db,
+        INotificationPreferenceStore preferenceStore,
+        INotificationChannelAvailability channels)
     {
         _db = db;
         _preferenceStore = preferenceStore;
+        _channels = channels;
     }
 
     public async Task<AccountSettingsDto?> GetAsync(Guid userId, CancellationToken cancellationToken)
@@ -44,15 +53,18 @@ public sealed class AccountSettingsService : IAccountSettingsService
                 Email: new EmailChannelDto(
                     Enabled: email?.IsEnabled ?? false,
                     Address: user.Email,
-                    Verified: user.EmailVerifiedAt.HasValue),
+                    Verified: user.EmailVerifiedAt.HasValue,
+                    Available: _channels.IsAvailable(NotificationChannel.EMAIL)),
                 Telegram: new ExternalChannelDto(
                     Enabled: telegram?.IsEnabled ?? false,
                     Connected: telegram is not null,
-                    Username: telegram?.ExternalId),
+                    Username: telegram?.ExternalId,
+                    Available: _channels.IsAvailable(NotificationChannel.TELEGRAM)),
                 Discord: new ExternalChannelDto(
                     Enabled: discord?.IsEnabled ?? false,
                     Connected: discord is not null,
-                    Username: discord?.ExternalId),
+                    Username: discord?.ExternalId,
+                    Available: _channels.IsAvailable(NotificationChannel.DISCORD)),
                 // 04 §7.6 — platform channel is always on and cannot be disabled.
                 Platform: new PlatformChannelDto(Enabled: true, CanDisable: false)));
     }

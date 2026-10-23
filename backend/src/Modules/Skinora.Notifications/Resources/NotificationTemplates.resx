@@ -180,4 +180,10 @@
   <data name="DELIVERY_DETECTED_Body" xml:space="preserve">
     <value>{ItemName} now shows in your Steam inventory. Check it — if it is there, confirm with "I received it" on the transaction page. If it is not, do nothing.</value>
   </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Title" xml:space="preserve">
+    <value>Admin: ledger / chain mismatch</value>
+  </data>
+  <data name="ADMIN_RECONCILIATION_MISMATCH_Body" xml:space="preserve">
+    <value>Daily reconciliation found {MismatchCount} ledger / chain mismatch(es) on {Network}. Check the RECONCILIATION_MISMATCH audit records before approving payouts.</value>
+  </data>
 </root>

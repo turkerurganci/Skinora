@@ -1,5 +1,7 @@
 # Discord Bot Kurulum Runbook (T80 — 08 §6.1–§6.5)
 
+> **Üretimde kapalı (proje sahibi kararı 2026-10-21, T165).** Deneme yayını overlay'i `Discord__Provider=disabled` zorlar: kullanıcı ayarlarında Discord bağlama seçeneği görünmez, bağlama ucu 409 `CHANNEL_UNAVAILABLE` döner, Discord'a bildirim gitmez (DEPLOY_RUNBOOK §P.3). Bu runbook kanal ileride açılırsa geçerlidir; açmak sahibin kararıdır.
+
 Bu runbook Discord bildirim kanalını sıfırdan ayağa kaldırmak için
 gerekli operasyon adımlarını tanımlar. Hem ilk kurulum (production
 deploy) hem de secret rotation senaryolarını kapsar.

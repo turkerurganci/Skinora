@@ -18,4 +18,10 @@ public static class SettingsErrorCodes
     public const string InvalidOAuthState = "INVALID_OAUTH_STATE";
     public const string AlreadyLinked = "ALREADY_LINKED";
     public const string WebhookUnauthorized = "WEBHOOK_UNAUTHORIZED";
+
+    /// <summary>
+    /// T165 — the channel is switched off or not configured in this deployment
+    /// (409). Disabling a channel and disconnecting it stay allowed.
+    /// </summary>
+    public const string ChannelUnavailable = "CHANNEL_UNAVAILABLE";
 }

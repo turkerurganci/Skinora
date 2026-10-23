@@ -22,6 +22,9 @@ interface AccountRowProps {
   label: string;
   username: string | null;
   connected: boolean;
+  /** T165 — false: the deployment cannot send on this channel; connecting is off. */
+  available: boolean;
+  unavailableLabel: string;
   connecting: boolean;
   disconnecting: boolean;
   connectLabel: string;
@@ -38,6 +41,8 @@ function AccountRow({
   label,
   username,
   connected,
+  available,
+  unavailableLabel,
   connecting,
   disconnecting,
   connectLabel,
@@ -63,6 +68,7 @@ function AccountRow({
             <span className="text-gray-500">{notConnectedBadge}</span>
           )}
         </div>
+        {!available && <div className="mt-1 text-xs text-gray-500">{unavailableLabel}</div>}
       </div>
       {connected ? (
         <button
@@ -77,7 +83,7 @@ function AccountRow({
         <button
           type="button"
           onClick={onConnect}
-          disabled={connecting}
+          disabled={connecting || !available}
           className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {connecting ? connectingLabel : connectLabel}
@@ -92,6 +98,11 @@ function AccountRow({
  * Discord bağlama: `window.location.assign(discordAuthUrl)` ile redirect;
  * dönüş `/settings?discord=connected|error&reason=...` page-level handler'da
  * okunur (T93 re-auth pattern'i ile birebir tutarlı).
+ *
+ * T165 — `available=false` (kanal bu kurulumda kapalı ya da yapılandırılmamış):
+ * bağlama düğmesi devre dışı ve not gösterilir. Discord üretimde kapalıdır
+ * (proje sahibi kararı 2026-10-21); bağlı olmayan kullanıcıya satırı hiç
+ * gösterilmez, eskiden bağlamış olan bağlantısını kaldırabilsin diye görür.
  */
 export function LinkedAccountsSection({ settings }: LinkedAccountsSectionProps) {
   const t = useTranslations("settings.linkedAccounts");
@@ -118,8 +129,12 @@ export function LinkedAccountsSection({ settings }: LinkedAccountsSectionProps) 
       const payload = await connectTelegram();
       setTelegramPayload(payload);
       setTelegramModalOpen(true);
-    } catch {
-      setError(t("errors.telegramConnect"));
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.code === "CHANNEL_UNAVAILABLE"
+          ? t("unavailable")
+          : t("errors.telegramConnect"),
+      );
     } finally {
       setTelegramConnecting(false);
     }
@@ -147,7 +162,11 @@ export function LinkedAccountsSection({ settings }: LinkedAccountsSectionProps) 
         window.location.assign(result.discordAuthUrl);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? t("errors.discordConnect") : t("errors.discordConnect"));
+      setError(
+        err instanceof ApiError && err.code === "CHANNEL_UNAVAILABLE"
+          ? t("unavailable")
+          : t("errors.discordConnect"),
+      );
       setDiscordConnecting(false);
     }
   }
@@ -165,6 +184,10 @@ export function LinkedAccountsSection({ settings }: LinkedAccountsSectionProps) 
     }
   }
 
+  const discordAvailable = settings.notifications.discord.available !== false;
+  // T165 — production Discord is off: no row unless the user is still connected.
+  const showDiscord = discordAvailable || settings.notifications.discord.connected;
+
   function handleTelegramModalClose() {
     setTelegramModalOpen(false);
     void invalidate();
@@ -179,6 +202,8 @@ export function LinkedAccountsSection({ settings }: LinkedAccountsSectionProps) 
           label={t("telegram.label")}
           username={settings.notifications.telegram.username}
           connected={settings.notifications.telegram.connected}
+          available={settings.notifications.telegram.available !== false}
+          unavailableLabel={t("unavailable")}
           connecting={telegramConnecting}
           disconnecting={telegramDisconnecting}
           connectLabel={t("connect")}
@@ -190,21 +215,25 @@ export function LinkedAccountsSection({ settings }: LinkedAccountsSectionProps) 
           onConnect={handleTelegramConnect}
           onDisconnect={handleTelegramDisconnect}
         />
-        <AccountRow
-          label={t("discord.label")}
-          username={settings.notifications.discord.username}
-          connected={settings.notifications.discord.connected}
-          connecting={discordConnecting}
-          disconnecting={discordDisconnecting}
-          connectLabel={t("connect")}
-          disconnectLabel={t("disconnect")}
-          connectingLabel={t("connecting")}
-          disconnectingLabel={t("disconnecting")}
-          connectedBadge={t("status.connected")}
-          notConnectedBadge={t("status.notConnected")}
-          onConnect={handleDiscordConnect}
-          onDisconnect={handleDiscordDisconnect}
-        />
+        {showDiscord && (
+          <AccountRow
+            label={t("discord.label")}
+            username={settings.notifications.discord.username}
+            connected={settings.notifications.discord.connected}
+            available={discordAvailable}
+            unavailableLabel={t("unavailable")}
+            connecting={discordConnecting}
+            disconnecting={discordDisconnecting}
+            connectLabel={t("connect")}
+            disconnectLabel={t("disconnect")}
+            connectingLabel={t("connecting")}
+            disconnectingLabel={t("disconnecting")}
+            connectedBadge={t("status.connected")}
+            notConnectedBadge={t("status.notConnected")}
+            onConnect={handleDiscordConnect}
+            onDisconnect={handleDiscordDisconnect}
+          />
+        )}
       </div>
 
       {error && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}

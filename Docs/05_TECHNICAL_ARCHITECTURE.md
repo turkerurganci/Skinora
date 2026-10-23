@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.37** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T172b — §3.3: imza servislerinde depozitten iade 24 sa tavanı, aşan iade bekler; sunucuda tek seferlik izin (⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.38** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T172b — §3.3: imza servislerinde depozitten iade 24 sa tavanı, aşan iade bekler; sunucuda tek seferlik izin (⚠ PARA). · T165 (v3.37): §9.3 para alarmı (Telegram + e-posta, mutabakat uyuşmazlığı dahil), §9.5 dış izleme (Grafana sağlığı dahil) ve açık sağlık ucu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -322,7 +322,7 @@ Bugünkü servis Tron blockchain (TRC-20) ile tüm etkileşimi yönetir. **F8 he
 | Sweep tetikleyicisi | `ITEM_DELIVERED` state gate'i **ve** mutabakat kapısı (`SettlementVerifiedAt NOT NULL ∧ DeliveryReversedAt NULL`) — sweep, alıcı-iade penceresi (sweep öncesi iade deposit adresinden çıkar) kapandıktan sonra başlar. Eager `PaymentReceivedEvent` tetiği depoziti erken boşaltıp yaygın "ödeme-sonrası-iptal" iadesini bozacağı için ertelendi (WP3 owner kararı 2026-06-15; `SweepQueueJob`). Mutabakat kapısı aynı gerekçenin devamıdır: mutabakat süresi boyunca iade hâlâ mümkündür (trade geri alma → REFUNDED) ve o iade de deposit adresinden çıkar, dolayısıyla depozit iadenin çekilebileceği yerde kalmalıdır. `ITEM_DELIVERED` tek başına yeterli olsaydı sweep, geri alma tespitinden günler önce depoziti boşaltırdı (T129, 06 §3.5 — aynı çift COMPLETED guard'ı ve payout kuyruğunda da okunur) |
 | Payout / iade kaynağı | Satıcıya ödeme **sweep sonrası hot wallet'tan** çıkar — ve "sonrası" artık kuyruk düzeyinde zorunludur: `SellerPayoutQueueJob` işlemin kendi SWEEP satırı `CONFIRMED` olana kadar payout satırı üretmez (owner kararı 2026-09-17). Böylece sıcak cüzdan yalnız o işlem için **eline geçmiş** parayı öder; işletme bakiyesi (float) gerekmez ve orada biriken şey komisyondur. Bedeli: sweep kalıcı başarısızsa payout da bekler — mevcut sweep-hatası alarmı bunu zaten operatöre bildirir. Alıcıya iade ise **sweep öncesi (genelde teslim öncesi iptal/timeout) deposit adresinden** çıkar — aşağıdaki "Sweep öncesi refund" satırına bakınız (WP2/WP3) |
 | Hot wallet limiti | Admin tarafından belirlenen limit aşıldığında admin'e alert — fazla fon cold wallet'a manuel transfer edilir (MVP) |
-| Reconciliation | Günlük otomatik reconciliation job'ı — on-chain bakiye (hot wallet + aktif deposit adresleri) ile platform ledger (DB) karşılaştırılır. Uyuşmazlık tespit edilirse admin'e critical alert |
+| Reconciliation | Günlük otomatik reconciliation job'ı — on-chain bakiye (hot wallet + aktif deposit adresleri) ile platform ledger (DB) karşılaştırılır. Uyuşmazlık tespit edilirse admin'e critical alert — **T165:** `skinora_backend_reconciliation_mismatches{network,scope}` → Grafana `reconciliation-mismatch` (kritik, para alarmı: Telegram + e-posta; aynı kapsamın sonraki dengeli turunda "çözüldü") ve her admin'e `ADMIN_RECONCILIATION_MISMATCH` (gelen kutusu + admin'in bağlı kanalları). Önceden yalnız AuditLog + açık paneldeki SignalR bandıydı (DEPLOY_RUNBOOK §P.4) |
 | Reconciliation kapsamı | Her deposit adresi: beklenen tutar vs gerçek bakiye. Hot wallet: toplam beklenen bakiye vs gerçek bakiye. Cold wallet: platform ledger'daki cold wallet kayıtları vs on-chain bakiye |
 | Cold wallet ledger kaydı | Hot→cold transfer yapıldığında platform ledger'ında kayıt oluşturulur (tutar, tarih, tx hash). Reconciliation bu kaydı kullanarak hot wallet bakiye düşüşünü cold wallet artışıyla eşleştirir — false mismatch önlenir |
 | Sweep hatası | Sweep başarısız olursa retry (exponential backoff, 3 deneme). Tüm denemeler başarısızsa admin'e alert ve **payout bekler** (yukarıdaki "Payout / iade kaynağı"). Teslimat öncesi iade zaten depozitten çıktığı için sweep'e bağlı değildir. **Not (2026-09-17):** bu satır daha önce "payout deposit adresinden doğrudan gönderilir (fallback)" diyordu; öyle bir yol kodda hiç olmadı — `SELLER_PAYOUT` satırı şema düzeyinde depozite bağlanamaz (`PaymentAddressId` NULL zorunlu, 06 §3.8), dolayısıyla iddia düzeltildi |
@@ -964,13 +964,16 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 | Bileşen | Karar |
 |---|---|
 | Araç | **Grafana Alerting** |
-| Kanal | Telegram bot (admin'e) |
+| Kanal | Telegram bot (operatörün sohbetine; backend'in kullanıcı bildirimleriyle aynı bot — T165) + e-posta (Grafana SMTP → Resend SMTP, T165) |
 
 | Seviye | Koşul | Aksiyon |
 |---|---|---|
+| **Para alarmı** (T165, etiket `category: money`, önem derecesinden bağımsız) | Zincir / sağlayıcı / sweep / payout / iade arızaları, onay kapısında bekleyen ödeme-iade (T169), sıcak cüzdan limiti ve yakıt, ücret kesintisi yedeği, günlük mutabakat uyuşmazlığı, backend'in para ile ilgili admin olayları | **Telegram + Email birlikte**, sürdükçe 4 sa'te bir hatırlatma (DEPLOY_RUNBOOK §P.4) |
 | Critical | Servis down, DB bağlantısı koptu, blockchain/Steam erişilemiyor | Anında Telegram + Email |
 | Warning | Hata oranı yükseldi, yanıt süresi arttı, disk %80+, job queue birikiyor | Telegram |
 | Info | Günlük özet, deployment tamamlandı | Sadece log |
+
+Para ile ilgili backend admin bildirimleri ayrıca her admin'in panel gelen kutusuna ve admin'in kendi bağladığı e-posta / Telegram kanalına gider (05 §7). Kanal sağlayıcısı seçili ama sırrı eksik olan kanal kapalı gibi davranır ve `notification-channel-misconfigured` alarmı verir (T165).
 
 ### 9.4 Hata Takibi
 
@@ -985,8 +988,9 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 
 | Bileşen | Karar |
 |---|---|
-| Dış monitoring | **Uptime Kuma** (self-hosted) — HTTP/TCP check, bildirim entegrasyonları |
-| İç monitoring | `/health` endpoint — DB, Redis, Steam API, Tron node bağlantılarını kontrol eder |
+| Dış monitoring (T165) | **Healthchecks.io** heartbeat — bu makineden dakikada bir ping (`skinora-heartbeat`, ping yalnız site **ve Grafana** sağlıklıyken — para alarmları Grafana'dan çıkar; T165 kapanış); ping durursa e-posta + Telegram. **UptimeRobot** — dışarıdan `https://<alan-adı>/api/health` (tünel/DNS yolu). İkisi de ücretsiz plan; seçim ve kurulum DEPLOY_RUNBOOK §P.5 |
+| Herkese açık sağlık ucu (T165) | `/api/health` (nginx `/health`'i de buna yönlendirir) — yalnız `{"status": …}`, DB + Redis; kontrol adı / hata metni yok |
+| İç monitoring | **Uptime Kuma** (self-hosted, aynı makine — makine düşünce o da düşer) ve ayrıntılı `/health` (yalnız compose ağı içinden) — DB, Redis bağlantılarını kontrol eder |
 
 ### 9.6 Maliyet
 

@@ -75,7 +75,25 @@ public sealed class ResendEmailClient : IResendEmailClient
         {
             _httpClient.BaseAddress = new Uri(_settings.BaseUrl);
         }
+
+        // T165 — Resend rejects every request without a User-Agent with 403
+        // (error 1010, "All API requests must include a User-Agent header" —
+        // resend.com/docs/knowledge-base/403-error-1010), even with a valid key.
+        // HttpClient sends none by default, so before T165 every production send
+        // would have failed permanently. curl sends one, which is why the
+        // runbook's manual smoke test never showed it.
+        if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
+        {
+            _httpClient.DefaultRequestHeaders.UserAgent.Add(
+                new ProductInfoHeaderValue(UserAgentProduct, UserAgentVersion));
+        }
     }
+
+    /// <summary>T165 — product token of the <c>User-Agent</c> sent to Resend.</summary>
+    public const string UserAgentProduct = "Skinora";
+
+    /// <summary>T165 — version token of the <c>User-Agent</c> sent to Resend.</summary>
+    public const string UserAgentVersion = "1.0";
 
     public async Task<ResendSendEmailResult> SendAsync(
         ResendSendEmailRequest request,

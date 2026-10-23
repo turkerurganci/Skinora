@@ -96,10 +96,12 @@ public static class UsersModule
         // in Users so the interface is available without pulling Resend into
         // this module; the concrete Resend sender lives in the same namespace
         // and is selected here at composition time.
-        var emailProvider = configuration[$"{ResendSettings.SectionName}:{nameof(ResendSettings.Provider)}"]
-            ?? ResendSettings.ProviderLogging;
+        // T165 — keyed on the evaluated channel state (Program.cs), so a real
+        // provider with incomplete secrets keeps the stub sender.
+        var channels = Skinora.Shared.Notifications.NotificationChannelAvailability
+            .FromConfiguration(key => configuration[key]);
 
-        if (string.Equals(emailProvider, ResendSettings.ProviderResend, StringComparison.OrdinalIgnoreCase))
+        if (channels.Get(Skinora.Shared.Enums.NotificationChannel.EMAIL).IsLive)
         {
             services.TryAddScoped<IEmailSender, ResendVerificationEmailSender>();
         }
@@ -113,10 +115,7 @@ public static class UsersModule
         // typed HttpClient for DiscordOAuthClient already; this branch
         // just registers the stub fallback so logging-mode environments
         // keep working without contacting Discord.
-        var discordProvider = configuration[$"{DiscordSettings.SectionName}:{nameof(DiscordSettings.Provider)}"]
-            ?? DiscordSettings.ProviderLogging;
-
-        if (!string.Equals(discordProvider, DiscordSettings.ProviderDiscord, StringComparison.OrdinalIgnoreCase))
+        if (!channels.Get(Skinora.Shared.Enums.NotificationChannel.DISCORD).IsLive)
         {
             services.TryAddScoped<IDiscordOAuthClient, StubDiscordOAuthClient>();
         }

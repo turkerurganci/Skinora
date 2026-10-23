@@ -24,6 +24,7 @@ using Skinora.Auth.Configuration;
 using Skinora.Notifications.Domain.Entities;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Persistence;
 using Skinora.Shared.Steam;
 using Skinora.Users.Application.Settings;
@@ -78,6 +79,90 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
 
         var telegram = notifications.GetProperty("telegram");
         Assert.False(telegram.GetProperty("connected").GetBoolean());
+    }
+
+    // ---------- T165 — channel availability ----------
+
+    [Fact]
+    public async Task GetSettings_EveryChannelCarriesAvailable()
+    {
+        _factory.Channels.Unavailable.Add(NotificationChannel.DISCORD);
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var body = await (await client.GetAsync("/api/v1/users/me/settings"))
+            .Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        var notifications = body.GetProperty("data").GetProperty("notifications");
+
+        Assert.True(notifications.GetProperty("email").GetProperty("available").GetBoolean());
+        Assert.True(notifications.GetProperty("telegram").GetProperty("available").GetBoolean());
+        Assert.False(notifications.GetProperty("discord").GetProperty("available").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(NotificationChannel.TELEGRAM, "/api/v1/users/me/settings/telegram/connect")]
+    [InlineData(NotificationChannel.DISCORD, "/api/v1/users/me/settings/discord/connect")]
+    [InlineData(NotificationChannel.EMAIL, "/api/v1/users/me/settings/email/send-verification")]
+    public async Task UnavailableChannel_ConnectOrVerify_Returns409ChannelUnavailable(
+        NotificationChannel channel, string path)
+    {
+        _factory.Channels.Unavailable.Add(channel);
+        var user = await _factory.CreateUserAsync(u => u.Email = "user@example.com");
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+
+        var response = await client.PostAsync(path, content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("CHANNEL_UNAVAILABLE", body.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(await _factory.GetPreferencesAsync(user.Id));
+        Assert.Null(await _factory.PeekEmailCodeAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task UnavailableChannel_CannotBeSwitchedOn_ButCanBeSwitchedOff()
+    {
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        var on = await client.PutAsJsonAsync("/api/v1/users/me/settings/notifications",
+            new { email = new { address = "user@example.com", enabled = true } });
+        Assert.Equal(HttpStatusCode.OK, on.StatusCode);
+
+        _factory.Channels.Unavailable.Add(NotificationChannel.EMAIL);
+
+        var again = await client.PutAsJsonAsync("/api/v1/users/me/settings/notifications",
+            new { email = new { enabled = true } });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        var body = await again.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("CHANNEL_UNAVAILABLE", body.GetProperty("error").GetProperty("code").GetString());
+
+        var off = await client.PutAsJsonAsync("/api/v1/users/me/settings/notifications",
+            new { email = new { enabled = false } });
+        Assert.Equal(HttpStatusCode.OK, off.StatusCode);
+        Assert.False(Assert.Single(await _factory.GetPreferencesAsync(user.Id)).IsEnabled);
+    }
+
+    [Fact]
+    public async Task UnavailableTelegram_LinkedButOff_CannotBeSwitchedOnAgain()
+    {
+        // T165 düzeltme turu (doğrulama bozması M23): the Telegram branch of the
+        // enabled:true check had no test — removing it went unnoticed.
+        var user = await _factory.CreateUserAsync();
+        var client = BuildAuthenticatedClient(user.Id, user.SteamId);
+        // Seeded directly: the connect + webhook path would spend the shared
+        // anonymous rate-limit bucket the Discord callback tests rely on.
+        await _factory.SeedLinkedTelegramAsync(user.Id, externalId: "520052", enabled: false);
+
+        _factory.Channels.Unavailable.Add(NotificationChannel.TELEGRAM);
+
+        var on = await client.PutAsJsonAsync("/api/v1/users/me/settings/notifications",
+            new { telegram = new { enabled = true } });
+        Assert.Equal(HttpStatusCode.Conflict, on.StatusCode);
+        var body = await on.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+        Assert.Equal("CHANNEL_UNAVAILABLE", body.GetProperty("error").GetProperty("code").GetString());
+        var telegram = Assert.Single(await _factory.GetPreferencesAsync(user.Id),
+            p => p.Channel == NotificationChannel.TELEGRAM);
+        Assert.False(telegram.IsEnabled);
     }
 
     // ---------- PUT /users/me/settings/language ----------
@@ -723,6 +808,22 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
         { }
     }
 
+    /// <summary>T165 — every channel available (the stub) unless listed in <see cref="Unavailable"/>.</summary>
+    public sealed class SwitchableChannelAvailability : INotificationChannelAvailability
+    {
+        public HashSet<NotificationChannel> Unavailable { get; } = [];
+
+        public IReadOnlyList<NotificationChannelStatus> All =>
+            Enum.GetValues<NotificationChannel>().Select(Get).ToList();
+
+        public NotificationChannelStatus Get(NotificationChannel channel) =>
+            Unavailable.Contains(channel)
+                ? new(channel, NotificationChannelState.Disabled, NotificationChannelAvailability.ProviderDisabled, [])
+                : new(channel, NotificationChannelState.Stub, "logging", []);
+
+        public bool IsAvailable(NotificationChannel channel) => Get(channel).IsAvailable;
+    }
+
     // ---------- factory ----------
 
     public sealed class Factory : WebApplicationFactory<Program>
@@ -734,6 +835,9 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
 
         /// <summary>08 §2.2a — limited-account probe double for this host.</summary>
         public ConfigurableAccountLimitedStub AccountLimitedStub { get; } = new();
+
+        /// <summary>T165 — per-test switch for which channels this deployment offers.</summary>
+        public SwitchableChannelAvailability Channels { get; } = new();
 
         public Factory()
         {
@@ -783,6 +887,22 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
                 .ToListAsync();
         }
 
+        public async Task SeedLinkedTelegramAsync(Guid userId, string externalId, bool enabled)
+        {
+            using var scope = Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Set<UserNotificationPreference>().Add(new UserNotificationPreference
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Channel = NotificationChannel.TELEGRAM,
+                IsEnabled = enabled,
+                ExternalId = externalId,
+                VerifiedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
         public async Task<string?> PeekEmailCodeAsync(Guid userId)
         {
             using var scope = Services.CreateScope();
@@ -804,6 +924,7 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
         {
             TradeHoldStub.Available = true;
             TradeHoldStub.Active = true;
+            Channels.Unavailable.Clear();
 
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -927,6 +1048,9 @@ public class AccountSettingsEndpointTests : IClassFixture<AccountSettingsEndpoin
                 // sidecar would otherwise fail every trade-eligibility gate closed.
                 services.RemoveAll<ISteamAccountLimitedProbe>();
                 services.AddSingleton<ISteamAccountLimitedProbe>(AccountLimitedStub);
+
+                services.RemoveAll<INotificationChannelAvailability>();
+                services.AddSingleton<INotificationChannelAvailability>(Channels);
             });
         }
 

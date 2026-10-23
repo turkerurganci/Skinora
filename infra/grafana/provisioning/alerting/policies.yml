@@ -1,4 +1,11 @@
 # T16 — Grafana Alerting notification policies (05 §9.3)
+# T165 — money alarms (label category=money) are routed first, to the
+# money-alarm contact point (Telegram + e-mail), whatever their severity.
+# No `continue`: a money alarm is not sent again through telegram-critical /
+# email-critical. Spam bound: a firing group is announced once (10 s after it
+# starts), then re-announced at most every 4 h while it keeps firing, plus one
+# "resolved" message. Resend's free plan allows 100 e-mails a day (shared with
+# the users' notification e-mails) — keep repeat_interval at hours, not minutes.
 apiVersion: 1
 
 policies:
@@ -9,6 +16,12 @@ policies:
     group_interval: 5m
     repeat_interval: 4h
     routes:
+      - receiver: money-alarm
+        matchers:
+          - category = money
+        group_wait: 10s
+        group_interval: 5m
+        repeat_interval: 4h
       - receiver: telegram-critical
         matchers:
           - severity = critical

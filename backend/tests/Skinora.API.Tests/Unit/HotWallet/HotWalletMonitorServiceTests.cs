@@ -32,6 +32,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
     private readonly RecordingPublisher _publisher = new();
     private readonly FakeTimeProvider _clock = new();
     private readonly StubPlatformWalletAddressProvider _walletAddresses = new();
+    private readonly RecordingThresholds _thresholds = new();
     private readonly HotWalletMonitorService _sut;
 
     public HotWalletMonitorServiceTests()
@@ -52,6 +53,7 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
             _publisher,
             _walletAddresses,
             _clock,
+            _thresholds,
             NullLogger<HotWalletMonitorService>.Instance);
     }
 
@@ -86,6 +88,8 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
         Assert.Equal(0, outcome.BreachCount);
         Assert.Empty(await LoadAuditLogsAsync());
         Assert.Empty(_publisher.Breaches);
+        // T165 — a failed run reports nothing (the last published value stays).
+        Assert.Empty(_thresholds.Reports);
     }
 
     [Fact]
@@ -111,6 +115,10 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
         Assert.Equal(0, outcome.BreachCount);
         Assert.Empty(_publisher.Breaches);
         Assert.Empty(await LoadAuditLogsAsync());
+        // T165 — every threshold reported as within, so a past alarm resolves.
+        Assert.Equal(
+            new[] { ("USDT", "Upper", false), ("USDC", "Upper", false), ("TRX", "Lower", false) },
+            _thresholds.Reports);
     }
 
     [Fact]
@@ -133,6 +141,10 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
 
         Assert.True(outcome.HotWalletChecked);
         Assert.Equal(1, outcome.BreachCount);
+        // T165 — the breach is also a metric (hot-wallet-threshold-breached).
+        Assert.Equal(
+            new[] { ("USDT", "Upper", true), ("USDC", "Upper", false), ("TRX", "Lower", false) },
+            _thresholds.Reports);
 
         var breach = Assert.Single(_publisher.Breaches);
         Assert.Equal("USDT", breach.Token);
@@ -418,6 +430,17 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
         {
             Breaches.Add(payload);
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingThresholds : IHotWalletThresholdObserver
+    {
+        public List<(string Asset, string Direction, bool Breached)> Reports { get; } = [];
+
+        public void Report(BlockchainNetwork network, string asset, string direction, bool breached)
+        {
+            Assert.Equal(BlockchainNetwork.TRON, network);
+            Reports.Add((asset, direction, breached));
         }
     }
 }

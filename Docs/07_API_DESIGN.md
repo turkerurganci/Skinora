@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.24** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T169a: AD40 depozit iade tavanı alanları, yeni AD42 (tavanın üstünde serbest bırakma). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.25** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T165: §5.6 kanal `available` alanı, U7/U9/U10/U15 için 409 `CHANNEL_UNAVAILABLE`. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -695,15 +695,17 @@ Davranış: Refresh token silinir, cookie temizlenir (`Set-Cookie: refreshToken=
 {
   "language": "tr",
   "notifications": {
-    "email": { "enabled": true, "address": "user@example.com", "verified": true },
-    "telegram": { "enabled": true, "connected": true, "username": "@playerone" },
-    "discord": { "enabled": false, "connected": true, "username": "PlayerOne#1234" },
+    "email": { "enabled": true, "address": "user@example.com", "verified": true, "available": true },
+    "telegram": { "enabled": true, "connected": true, "username": "@playerone", "available": true },
+    "discord": { "enabled": false, "connected": true, "username": "PlayerOne#1234", "available": false },
     "platform": { "enabled": true, "canDisable": false }
   }
 }
 ```
 
 `platform.canDisable`: Her zaman `false` — kapatılamaz (04 §7.6).
+
+`available` (T165): kurulum o kanaldan gönderim yapabiliyor mu. `false` = kanal kapalı (`Provider=disabled` — üretimde Discord, proje sahibi kararı 2026-10-21) ya da sağlayıcısının sırrı eksik ("misconfigured", DEPLOY_RUNBOOK §P.1). `false` iken açma (U7 `enabled: true`), bağlama (U9, U10) ve e-posta doğrulama kodu (U15) 409 `CHANNEL_UNAVAILABLE` döner; kapatma ve bağlantı kaldırma serbesttir; bu kanala bildirim teslimatı açılmaz (platform-içi bildirim her zaman yazılır).
 
 ### 5.7 U15 — `POST /users/me/settings/email/send-verification`
 
@@ -723,7 +725,7 @@ Davranış: Refresh token silinir, cookie temizlenir (`Set-Cookie: refreshToken=
 
 `expiresIn`: Kodun geçerlilik süresi (saniye) — 10 dk.
 
-**Hatalar:** 422 `NO_EMAIL_SET` (email adresi henüz tanımlanmamış), 429 `VERIFICATION_COOLDOWN` (çok sık istek)
+**Hatalar:** 422 `NO_EMAIL_SET` (email adresi henüz tanımlanmamış), 429 `VERIFICATION_COOLDOWN` (çok sık istek), 409 `CHANNEL_UNAVAILABLE` (e-posta bu kurulumda kullanılamıyor — §5.6 `available`, T165)
 
 429 `VERIFICATION_COOLDOWN` yanıtı, §2.9'daki rate limit 429'u gibi **`Retry-After` header'ı** taşır: kalan bekleme saniye cinsinden, yukarı yuvarlanmış (cooldown sürerken `0` olmaz). Aynı sayı insan için `error.message` içinde de yazılıdır; iki değer aynı kaynaktan üretilir.
 
@@ -769,7 +771,7 @@ Sadece değiştirilen kanallar gönderilir.
 
 **Response (200):** U6 ile aynı yapıda güncel settings.
 
-**Hatalar:** 400 `VALIDATION_ERROR`, 422 `CHANNEL_NOT_CONNECTED`
+**Hatalar:** 400 `VALIDATION_ERROR`, 422 `CHANNEL_NOT_CONNECTED`, 409 `CHANNEL_UNAVAILABLE` (`enabled: true` istenen kanal bu kurulumda kullanılamıyor — §5.6 `available`, T165; `enabled: false` ve yalnız adres değişikliği etkilenmez)
 
 ### 5.10 U8 — `PUT /users/me/settings/language`
 
@@ -810,6 +812,8 @@ Geçerli değerler: `en`, `zh`, `es`, `tr`
 
 Bot doğruladığında SignalR (RT2) ile `TelegramConnected` event'i push edilir.
 
+**Hatalar:** 409 `CHANNEL_UNAVAILABLE` (Telegram bu kurulumda kullanılamıyor — §5.6 `available`, T165)
+
 ### 5.11b W1 — `POST /webhooks/telegram`
 
 **Amaç:** Telegram Bot API webhook — Telegram'dan gelen update'leri alır (08 §5.2).
@@ -838,6 +842,8 @@ Bot doğruladığında SignalR (RT2) ile `TelegramConnected` event'i push edilir
 ```
 
 Frontend bu URL'e yönlendirir.
+
+**Hatalar:** 409 `CHANNEL_UNAVAILABLE` (Discord bu kurulumda kapalı — üretimde kapalı, §5.6 `available`, T165)
 
 ### 5.13 U10b — `GET /users/me/settings/discord/callback`
 
@@ -1789,8 +1795,9 @@ Sistem otomatik kontrol yapar ve sonucu döner. `autoCheckResult.resolved: true`
 | `ACCOUNT_SUSPENDED` | İlgili kullanıcı | Hesap askıya alındı (02 §14.0) | null |
 | `ACCOUNT_UNSUSPENDED` | İlgili kullanıcı | Hesap askısı kaldırıldı | null |
 | `PAYOUT_ISSUE_RESOLVED` | Satıcı | Bildirdiği ödeme sorunu çözüldü (§7.11, 02 §10.3) | transaction |
+| `ADMIN_RECONCILIATION_MISMATCH` | Admin | Günlük mutabakat bir ağda defter ile zincir arasında uyuşmazlık buldu (T165, 05 §3.3) | null |
 
-`targetType`: Frontend route mapping için. `null` → tıklama yönlendirmez. Eşleme `NotificationTargetMapper`'da tutulur: `ADMIN_FLAG_ALERT` kendi `FlagId` kolonuna, `ADMIN_PLATFORM_OUTAGE` platform geneli olduğu için hiçbir hedefe bağlanmaz; hesap seviyesi iki tip bir işleme bağlı olmadığı için `null` döner, kalan tipler işlem referansını taşır.
+`targetType`: Frontend route mapping için. `null` → tıklama yönlendirmez. Eşleme `NotificationTargetMapper`'da tutulur: `ADMIN_FLAG_ALERT` kendi `FlagId` kolonuna, `ADMIN_PLATFORM_OUTAGE` platform geneli, `ADMIN_RECONCILIATION_MISMATCH` ağ başına olduğu için hiçbir hedefe bağlanmaz; hesap seviyesi iki tip bir işleme bağlı olmadığı için `null` döner, kalan tipler işlem referansını taşır.
 
 > **Parity çapası (T133a):** Katalog **27 tip**tir ve 06 §2.13 ile birebir aynıdır — ad, hedef ve sıra dahil; normatif kaynak kod enum'u `NotificationType`'dır. v3.0'da `ITEM_ESCROWED` → `PAYMENT_WINDOW_OPEN`, `TRADE_OFFER_SENT_TO_BUYER` → `DELIVERY_EXPECTED` (hedef taraf alıcıdan **satıcıya** geçti); `ITEM_RETURNED` ve `ADMIN_STEAM_BOT_ISSUE` kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yok, platform Steam botu işletmiyor (02 §2.1, §15). Enum'a tip eklendiğinde bu tablo ve 06 §2.13 aynı commit'te güncellenir.
 
