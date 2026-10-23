@@ -267,6 +267,7 @@ describe('loadConfig — sends (T152)', () => {
       journalDir: '/var/lib/skinora-ethereum/tx-journal',
       maxSingleTransferUnits: null,
       maxDailyOutflowUnits: null,
+      maxDailyDepositRefundUnits: null,
       fuelMaxSingleWei: null,
       fuelMaxDailyWei: null,
       waitAlarmSeconds: 10_800,
@@ -333,6 +334,24 @@ describe('loadConfig — sends (T152)', () => {
       ).toBe('INVALID_CONFIG');
     },
   );
+
+  it('T172b — reads the deposit refund cap in token units; malformed refuses to start, empty leaves it unset', () => {
+    expect(
+      loadConfig({ ...baseEnv, ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT: '100' }, secrets())
+        .transfers.maxDailyDepositRefundUnits,
+    ).toBe(100_000_000n);
+    expect(
+      loadConfig({ ...baseEnv, ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT: '' }, secrets()).transfers
+        .maxDailyDepositRefundUnits,
+    ).toBeNull();
+    for (const bad of ['0', '-1', '1e2', '100.0000001', 'abc']) {
+      expect(
+        errorOf(() =>
+          loadConfig({ ...baseEnv, ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT: bad }, secrets()),
+        ).code,
+      ).toBe('INVALID_CONFIG');
+    }
+  });
 });
 
 describe('loadConfig — platform wallet ETH floors (T153)', () => {

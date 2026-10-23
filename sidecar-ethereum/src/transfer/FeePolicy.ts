@@ -106,7 +106,10 @@ export type DeferralReason =
   | 'FUEL_PENDING'
   | 'FUEL_LIMIT_REACHED'
   | 'FUEL_WALLET_LOW'
-  | 'HOT_WALLET_GAS_LOW';
+  | 'HOT_WALLET_GAS_LOW'
+  // T172b — the signer's 24-hour deposit refund cap (TransferGuard).
+  | 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED'
+  | 'DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED';
 
 export class TransferDeferredError extends SidecarError {
   constructor(

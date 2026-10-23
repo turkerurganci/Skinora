@@ -1576,6 +1576,37 @@ public class OutboundRowClosureTests : IntegrationTestBase
     }
 
     /// <summary>
+    /// T172a yeniden doğrulama S4-1 — the approval's compare-and-set matches the
+    /// restore note case-sensitively (binary collation) too, not only the earlier
+    /// ordinal read. Between the read and the write the note turns into its
+    /// lowercase form: the approval must not reopen that row.
+    /// </summary>
+    [Fact]
+    public async Task T172a_S4_1_Rev_A_Note_That_Turned_Lowercase_Since_The_Read_Is_Not_Reopened()
+    {
+        var row = await SeedUnsentRowWithDepositAsync(
+            BlockchainNetwork.TRON, BlockchainTransactionType.SELLER_PAYOUT,
+            BlockchainTransactionStatus.FAILED, RestoreNote);
+        _tronChain.Status = Final();
+        var closure = await ProposeTronOkAsync(row.Id);
+        _tronChain.OnVerify = async () =>
+        {
+            await using var other = CreateContext();
+            await other.Set<BlockchainTransaction>().Where(b => b.Id == row.Id)
+                .ExecuteUpdateAsync(u => u.SetProperty(b => b.ErrorMessage, RestoreNote.ToLowerInvariant()));
+        };
+
+        var result = await ApproveAsync(closure.Id, _bob.Id, TronHash);
+
+        Assert.Equal(ClosureError.RowNotOpen, result.Error);
+        var after = await ReloadRowAsync(row.Id);
+        Assert.Null(after.TxHash);
+        Assert.Equal(BlockchainTransactionStatus.FAILED, after.Status);
+        Assert.Equal(RestoreNote.ToLowerInvariant(), after.ErrorMessage);
+        Assert.Empty(await AuditAsync(AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED));
+    }
+
+    /// <summary>
     /// T172a doğrulama S4-5 — the restore note is matched case-sensitively
     /// everywhere: the candidate list (SQL, binary collation) agrees with the
     /// proposal and the approval (ordinal). A lowercase note is not the note:

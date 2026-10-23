@@ -4,7 +4,11 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-23 — T172b ✓ Tamamlandı (imza servislerinde depozitten iade 24 sa tavanı, 100 $, aşan iade bekler; sahip kararıyla sunucuda tek seferlik izin; doğrulama PASS 4 × S4, hepsi kapandı — TRON defteri girişleri 7 gün saklar (saat sıçraması sayımı silmez), runbook §D yeni izinden önce zincir kontrolü; backlog 49/169; T172b_REPORT.md, PR #378) **Merge teyidi (T172b kapanışında işlendi):** T165 (#375) main `44d32f54` CI 40005813788 ✓, Docker Publish 40005813725 ✓
+
 **Önceki güncelleme:** 2026-10-23 — T165 ✓ Tamamlandı (bildirim kanalları ve dış alarm; ilk doğrulama FAIL S3 ⚠ PARA + S1 ⚠ GÜVENLİK, yeniden doğrulama PASS 3 × S4 ⚠ PARA — kapanışta hepsi kapandı: Grafana sağlığı heartbeat'te, ilk açılış korumasının log ayarı sabit, eksik deposit adresi "çözüldü" demez; main `fcc94d8d` (T169a #376) dala birleştirildi, T169a iade tavanı kuralı para alarmı (28); 50 aktif / 168 çözülmüş; T165_REPORT.md, PR #375) **Merge teyidi (T172a düzeltme turunda işlendi):** T165 (#375) main `44d32f54` → Docker Publish `40005813725` ✓, CI `40005813788` (birleştirme anında koşuyordu).
+
+**Önceki güncelleme:** 2026-10-23 — T172b ⏳ yapım bitti, doğrulama bekliyor (imza servislerinde depozitten iade 24 sa tavanı, 100 $, aşan iade bekler; sahip kararıyla sunucuda tek seferlik izin; main T169a birleştirildi, backlog 49/169; PR #378) **Merge teyidi (T172b kapanışında işlendi):** T169a (#376) main `fcc94d8d` → CI `39995712182` ✓, Docker Publish `39995711969` ✓.
 
 **Önceki güncelleme:** 2026-10-23 — T172a ⏳ Devam ediyor (geri yükleme sonrası para araçları: kapatma aracı TRON + FAILED POST_RESTORE_DUPLICATE satırı, `outbound.dispatch_paused`, depozit indeks tabanı; T172a_REPORT.md, PR #377)
 
@@ -13,6 +17,7 @@
 **Önceki güncelleme:** 2026-10-23 — T165 ⏳ düzeltme turu bitti, yeniden doğrulama bekliyor (mutabakat uyuşmazlığı Telegram + e-posta + admin bildirimi; Grafana ilk açılış koruması; main 792f8ed2 birleştirildi; T165_REPORT.md, PR #375) Sonra bağımsız yeniden doğrulama ✓ PASS (HEAD `869198a9`, 3 × S4 ⚠ PARA) → kapanış.
 
 **Önceki güncelleme:** 2026-10-23 — T165 ⏳ yapım bitti, doğrulama bekliyor (e-posta + Telegram anahtarla açılır, Discord kapalı; para alarmları Telegram + e-posta; dış izleme heartbeat; T165_REPORT.md) Sonra bağımsız doğrulama ✗ FAIL (HEAD `f568396b`: S3 ⚠ PARA mutabakat uyuşmazlığı yalnız panelde, S1 ⚠ GÜVENLİK Grafana ilk açılış `example@email.com`, 6 × S4) → düzeltme turu.
+
 
 **Önceki güncelleme:** 2026-10-23 — T174 ✓ Tamamlandı (DEFERRED_BACKLOG §4 triyajı: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 11 ⚪ kalır; doğrulama PASS 3 × S4, hepsi kapandı; sahip kararları: yaptırım listesi API ile (ekran yok, T171), VPN/Tor canlıda kapalı (T175); main `d7aebce7` dala birleştirildi, 50 aktif / 167 çözülmüş; T174_REPORT.md, PR #374) **Merge teyidi (T169a kapanışında işlendi):** T174 (#374) main `792f8ed2` → CI `39930836478` ✓, Docker Publish `39930828460` ✓; T164 (#372) main `d7aebce7` → CI `39883489789` ✓, Docker Publish `39883489767` ✓.
 

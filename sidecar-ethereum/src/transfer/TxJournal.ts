@@ -99,6 +99,8 @@ export interface JournalRecord {
    * be against the transfer record.
    */
   readonly fuelFor?: FuelRequestIdentity | null;
+  /** T172b — the operator permit that let this deposit refund past the 24-hour cap. */
+  readonly depositRefundPermitId?: string | null;
 }
 
 /** What a fuel record remembers of the request it was sent for (T153). */

@@ -1,6 +1,6 @@
 # T172a — Yedekten geri yükleme sonrası para araçları (⚠ PARA)
 
-**Faz:** F9 | **Durum:** ⏳ Doğrulama ✗ FAIL (HEAD `8009a52f`) → düzeltme turu bitti, yeniden doğrulama bekliyor | **Tarih:** 2026-10-23
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — ilk doğrulama ✗ FAIL (HEAD `8009a52f`) → yeniden doğrulama ✓ PASS (HEAD `1c884579`) | **Tarih:** 2026-10-23
 
 ---
 
@@ -88,6 +88,15 @@ Kaynak: `T172a_VALIDATION.md` (1 × S1 ⚠ PARA, 5 × S4). Her bulgu: yapılan �
 | Doğrulama durumu | ✗ FAIL (HEAD `8009a52f`, bağımsız doğrulama) → düzeltme turu bitti, yeniden doğrulama bekliyor |
 | Bulgu sayısı | 1 × S1 ⚠ PARA (F1), 5 × S4 |
 | Düzeltme gerekli mi | Yapıldı (yukarıda "Düzeltme turu") |
+
+## Kapanış (yeniden doğrulama PASS, 2026-10-23)
+
+- **Yeniden doğrulama:** hedefli, ✓ PASS, HEAD `1c884579` (bağımsız alt ajan, Opus high). F1 (S1 ⚠ PARA) ve önceki 5 × S4 kapandı; yeni bulgu 3 × S4. Bozma 17/18 yakalandı. Kaynak rapor: `C:/Users/teknodeveloper/.claude/projects/c--projects-Escrow/f9-handoff/T172a_REVALIDATION.md`.
+- **3 × S4 kapandı:**
+  - **S4-1** — onay CAS'ındaki harf duyarlı not eşleşmesini (`Latin1_General_100_BIN2`) hiçbir test korumuyordu (M14 yaşadı). `T172a_S4_1_Rev_A_Note_That_Turned_Lowercase_Since_The_Read_Is_Not_Reopened` eklendi: okuma ile yazma arasında not küçük harfe dönerse onay satırı açmaz. `Collate` çağrısı kaldırılınca test kırılıyor (1 başarısız), geri konunca geçiyor.
+  - **S4-2** — main `c3b49409` (T172b #378, chore #380) dala merge commit ile alındı. Çakışmalar: belge sürüm başlıkları (08 v3.49), DOC_CHANGELOG, DEFERRED_BACKLOG sayacı (dosya satırlarından yeniden sayıldı: 48 aktif / 170 çözülmüş), STATUS/STATUS_CHANGELOG, runbook (iki dalın alarm satırları korundu), `NotificationAlertingProvisioningTests` (iki dalın para kuralları listede; `MoneyRules` = **31**). `rules.yml` iki dalın kurallarıyla kendiliğinden birleşti.
+  - **S4-3** — DEFERRED_BACKLOG durum satırı T165 (`44d32f54`) birleştirmesini de anıyor.
+- **Testler (LocalDB, API projesi):** `OutboundRowClosure` + `NotificationAlertingProvisioning` filtresi 148/148 geçti (her kuralın para / para dışı sınıflaması dahil).
 
 ## Altyapı Değişiklikleri
 

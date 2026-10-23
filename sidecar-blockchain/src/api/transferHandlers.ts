@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { logger } from '../logger.js';
-import { SidecarError } from '../errors/SidecarError.js';
+import { SidecarError, TransferDeferredError } from '../errors/SidecarError.js';
 import { TransferService, TokenSymbol } from '../transfer/TransferService.js';
 import { RefundService } from '../transfer/RefundService.js';
 import { transfersTotal } from '../metrics.js';
@@ -233,6 +233,22 @@ function handleTransferError(
   req: Request,
   flow: 'payout' | 'refund' | 'sweep' | 'cold-wallet-transfer',
 ): void {
+  // T172b — "not now, nothing signed or spent" (deposit refund cap). The
+  // Ethereum service's shape (T152): 503 with `deferred: true`, which the
+  // backend reads as Deferred — the row stays PENDING, no retry spent, never
+  // FAILED. Keyed on the error type, so no other failure can become a wait.
+  if (err instanceof TransferDeferredError) {
+    transfersTotal.inc({ type: flow, status: 'deferred' });
+    logger.warn({ code: err.code, flow, err: err.message }, `${flow} deferred — nothing signed`);
+    res.status(503).json({
+      error: err.code,
+      message: err.message,
+      deferred: true,
+      retryable: true,
+      waitingSince: null,
+    });
+    return;
+  }
   transfersTotal.inc({ type: flow, status: 'error' });
   if (err instanceof SidecarError) {
     const status = err.retryable ? 502 : 400;

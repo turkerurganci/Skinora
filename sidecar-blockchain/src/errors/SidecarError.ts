@@ -43,3 +43,20 @@ export class TransactionFailedError extends SidecarError {
     this.name = 'TransactionFailedError';
   }
 }
+
+/**
+ * T172b — the signer refused <i>for now</i> and nothing was signed or spent.
+ * The transfer handlers answer 503 with <c>deferred: true</c> (the Ethereum
+ * service's shape, T152), so the backend keeps the row PENDING without
+ * spending a retry and asks again (HttpBlockchainTransferClient →
+ * <c>TransferBroadcastStatus.Deferred</c>): the refund waits, it is never
+ * FAILED and never re-opened under a new id.
+ */
+export class TransferDeferredError extends SidecarError {
+  readonly deferred = true;
+
+  constructor(message: string, code: string) {
+    super(message, code, true);
+    this.name = 'TransferDeferredError';
+  }
+}

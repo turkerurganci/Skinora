@@ -59,6 +59,10 @@ public sealed class NotificationAlertingProvisioningTests
         // T172a doğrulama S4-4 — the dispatcher's stop switch left on (⚠ PARA;
         // classified when main (T165) was merged into T172a)
         "outbound-dispatch-paused",
+        // T172b — the signer refused a deposit refund over its own 24 h cap
+        // (⚠ PARA; classified when main T165 was merged into T172b)
+        "tron-deposit-refund-limit-refused",
+        "ethereum-deposit-refund-limit-refused",
     ];
 
     /// <summary>
@@ -93,7 +97,7 @@ public sealed class NotificationAlertingProvisioningTests
         Assert.Equal(all.Count, all.Distinct().Count());
         Assert.Empty(MoneyRules.Intersect(NonMoneyRules));
         Assert.Equal(all.ToHashSet(), MoneyRules.Concat(NonMoneyRules).ToHashSet());
-        Assert.Equal(29, MoneyRules.Length);
+        Assert.Equal(31, MoneyRules.Length);
     }
 
     [Theory]

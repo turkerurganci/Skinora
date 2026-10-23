@@ -105,6 +105,8 @@ export function createRouter(deps: RouterDeps): Router {
   // POST /api/transfer/refund { blockchainTransactionId, depositIndex, depositAddress, toBuyerAddress, amount, token }
   //   → 200 { txHash }
   //   Same error shape as /payout (plus DEPOSIT_ADDRESS_MISMATCH 400).
+  //   → 503 { error: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED' | 'DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED'
+  //          | 'DEPOSIT_REFUND_LEDGER_UNAVAILABLE', deferred: true }  (T172b — waits, nothing signed)
   apiRouter.post('/transfer/refund', refundHandler(deps.refundService));
 
   // POST /api/transfer/sweep { blockchainTransactionId, depositIndex, depositAddress, toHotWalletAddress, amount, token }

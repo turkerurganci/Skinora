@@ -1,0 +1,7 @@
+{
+  "error": "DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED",
+  "message": "Deposit refunds in 24 h would reach 130000000 (counted 80000000 + 50000000), above the configured limit 100000000 — the refund waits, nothing signed.",
+  "deferred": true,
+  "retryable": true,
+  "waitingSince": null
+}
