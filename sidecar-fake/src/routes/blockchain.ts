@@ -243,6 +243,8 @@ export function createBlockchainRouter(profile: NetworkProfile): Router {
         blockNumber: String(profile.blockNumber),
         gasLimit: '46201',
         fuelGasLimit: fromDeposit ? '21000' : '0',
+        // T169a — the deposit's own ETH the fuel tops up (the fake's deposits hold none).
+        depositBalanceWei: '0',
         baseFeePerGasWei: '167000000',
         maxPriorityFeePerGasWei: '50000000',
         maxFeePerGasWei: '384000000',

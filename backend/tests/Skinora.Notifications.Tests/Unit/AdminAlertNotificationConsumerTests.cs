@@ -153,6 +153,40 @@ public class AdminAlertNotificationConsumerTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task T169a_DepositRefundLimitHeld_FansOutPaymentFailure_WithLimitErrorCode()
+    {
+        var dispatcher = new RecordingDispatcher();
+        var sut = new DepositRefundLimitHeldAdminNotificationConsumer(
+            dispatcher, new InMemoryProcessedEventStore(), TwoAdmins(),
+            NullLogger<DepositRefundLimitHeldAdminNotificationConsumer>.Instance);
+
+        var transactionId = Guid.NewGuid();
+        var domainEvent = new DepositRefundLimitHeldEvent(
+            EventId: Guid.NewGuid(),
+            BlockchainTransactionId: Guid.NewGuid(),
+            TransactionId: transactionId,
+            Network: BlockchainNetwork.ETHEREUM,
+            Type: BlockchainTransactionType.BUYER_REFUND,
+            Amount: 64.5m,
+            UsedLast24hUsdt: 71.25m,
+            LimitUsdt: 100m,
+            OccurredAt: DateTime.UtcNow);
+
+        await sut.Handle(domainEvent, CancellationToken.None);
+
+        Assert.Equal(2, dispatcher.Requests.Count);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == Admin1);
+        Assert.Contains(dispatcher.Requests, r => r.UserId == Admin2);
+        Assert.All(dispatcher.Requests, r =>
+        {
+            Assert.Equal(NotificationType.ADMIN_PAYMENT_FAILURE, r.Type);
+            Assert.Equal(transactionId, r.TransactionId);
+            Assert.Equal("DEPOSIT_REFUND_DAILY_LIMIT:ETHEREUM:BUYER_REFUND", r.Parameters["ErrorCode"]);
+        });
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public async Task RefundBlocked_FansOutPaymentFailure_WithReasonErrorCode()
     {
         var dispatcher = new RecordingDispatcher();

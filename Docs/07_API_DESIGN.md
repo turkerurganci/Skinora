@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.23** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T168 — §4.4 kapatma/silme ToS kapısından muaf, yeniden onayda da; main'deki T160c (§9.33) ile birleşti. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.24** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T169a: AD40 depozit iade tavanı alanları, yeni AD42 (tavanın üstünde serbest bırakma). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -1845,7 +1845,7 @@ Tüm admin endpoint'leri `Authenticated + Admin rolü` gerektirir. Her endpoint 
 | `VIEW_FLAGS` | Flag'leri görüntüle |
 | `MANAGE_FLAGS` | Flag onayla/reddet (AD4, AD5) + hesabı askıya al / askıyı kaldır (AD20, AD21) |
 | `VIEW_TRANSACTIONS` | İşlemleri görüntüle |
-| `MANAGE_SETTINGS` | Parametreleri yönet (AD9) + bakım/kesinti kontrolü (AD30, AD31) + cüzdan ekranı ve ödeme/iade onayı (AD38–AD41) |
+| `MANAGE_SETTINGS` | Parametreleri yönet (AD9) + bakım/kesinti kontrolü (AD30, AD31) + cüzdan ekranı, ödeme/iade onayı ve depozit iade tavanını aşma (AD38–AD42) |
 | `VIEW_USERS` | Kullanıcı detay görüntüle |
 | `MANAGE_ROLES` | Rolleri yönet (süper admin) |
 | `VIEW_AUDIT_LOG` | Audit log görüntüle |
@@ -2759,20 +2759,23 @@ Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity)
 
 > **Bilinen sınır:** Ethereum servisi aktarımı istek kimliğiyle günlüğe bağlar; backend defter satırını gönderim **başarılı olduktan sonra** yazdığı için, servis imzalayıp cevap yolda kaybolursa admin'in yeniden denemesi yeni bir kimlikle ikinci bir aktarım yapabilir (para soğuk cüzdana gider, kayıp yok; mutabakat bir fazla aktarım gösterir). Yeniden denemeden önce Etherscan'de sıcak cüzdanın son çıkışına bakılması runbook'a yazıldı (DEPLOY_RUNBOOK §D).
 
-### 9.35 AD40 / AD41 — Ödeme ve iade onayı (`/admin/wallets/outbound-approvals`, T169) ⚠ PARA
+### 9.35 AD40 / AD41 / AD42 — Ödeme ve iade onayı, depozit iade tavanı (`/admin/wallets/outbound-approvals`, T169 / T169a) ⚠ PARA
 
 **Amaç:** `outbound.auto_send_enabled` (06 §3.17) `false` iken — test boyunca ve açılışta (11 T175) — her satıcı ödemesi (`SELLER_PAYOUT`) ve her alıcı iadesi (`BUYER_REFUND`, `EXCESS_REFUND`, `WRONG_TOKEN_REFUND`, `INCORRECT_AMOUNT_REFUND`, `LATE_PAYMENT_REFUND`) gönderilmeden önce bir admin onayı bekler (proje sahibi kararı 2026-10-21). Sweep ve iade kesintisi toplaması (`SWEEP`, `REFUND_FEE_SWEEP` — T160c; depozit → sıcak cüzdan) platformun kendi adresleri arasında olduğu için **beklemez**. Permission: `MANAGE_SETTINGS` (AD38/AD39 ile aynı; ayrı cüzdan izni gerekmez — öneriyle kaydedildi — ⚠). Onaylayan her zaman oturumdaki admindir; tek admin yeterlidir (bugün platformda tek admin var).
 
 | Uç | Açıklama |
 |---|---|
-| AD40 `GET /admin/wallets/outbound-approvals` | `{ autoSendEnabled, rows[] }` — kapının durumu ve onay bekleyen satırlar (her ağ, en eski önce, en çok 200): `blockchainTransactionId`, `transactionId`, `network`, `type`, `token` (işlemin beklediği), `chainToken` (satırın zincirde taşıdığı; çözülemezse `null`), `amount`, `gasFee` (iadede düşülmüş, payout'ta satıcıya yansıyan ücret; yoksa `null`), `toAddress`, `retryCount`, `createdAt`. Yalnız `PENDING`, hash'siz, onaysız ödeme/iade satırları |
+| AD40 `GET /admin/wallets/outbound-approvals` | `{ autoSendEnabled, rows[], depositRefundLimits[], limitHeldRows[] }` — kapının durumu ve onay bekleyen satırlar (her ağ, en eski önce, en çok 200): `blockchainTransactionId`, `transactionId`, `network`, `type`, `token` (işlemin beklediği), `chainToken` (satırın zincirde taşıdığı; çözülemezse `null`), `amount`, `gasFee` (iadede düşülmüş, payout'ta satıcıya yansıyan ücret; yoksa `null`), `toAddress`, `retryCount`, `createdAt`. Yalnız `PENDING`, hash'siz, onaysız ödeme/iade satırları. **T169a:** `depositRefundLimits[]` her ağ için `{ network, limitUsdt, usedLast24hUsdt }` (depozitten iade günlük tavanı ve son 24 saatin toplamı — 08 §3.3c); `limitHeldRows[]` tavanın şu an beklettiği iadeler (ilk bekleme önce, en çok 200): `blockchainTransactionId`, `transactionId`, `network`, `type`, `chainToken`, `amount`, `gasFee`, `toAddress`, `heldAt`, `approvedAt` (T169 onayı; yoksa `null`), `createdAt` |
 | AD41 `POST /admin/wallets/outbound-approvals/:id/approve` | Gövde yok. Satıra `ApprovedAt` + `ApprovedByAdminId` yazar ve aynı kayıtta `OUTBOUND_TRANSFER_APPROVED` audit satırı ekler (ağ, tür, token, tutar, ücret, alıcı, IP). **Hiçbir şey göndermez:** gönderim işi sonraki turunda (dakikada bir) satırı **olduğu gibi** gönderir — aynı kimlik, aynı tutar, aynı alıcı, imzalayan servisin kendi tavanları. Yanıt `{ blockchainTransactionId, network, type, amount, toAddress, approvedAt, approvedByAdminId }` |
+| AD42 `POST /admin/wallets/outbound-approvals/:id/release-daily-limit` | **T169a ⚠ PARA.** Gövde yok. Ağın depozit iade günlük tavanının beklettiği iadeyi tavanın üstünde gönderime bırakır: satıra `DepositRefundLimitReleasedAt` + `DepositRefundLimitReleasedByAdminId` yazar, `NextAttemptAt`'i temizler ve aynı kayıtta `DEPOSIT_REFUND_LIMIT_RELEASED` audit satırı ekler (ağ, tür, token, tutar, alıcı, tavan, son 24 saatin toplamı, ilk bekleme, IP). **Hiçbir şey göndermez:** gönderim işi sonraki turunda satırı gönderir (onay kapısı yine geçerlidir) ve tutarı toplama sayar. Yanıt `{ blockchainTransactionId, network, type, amount, toAddress, limitUsdt, usedLast24hUsdt, releasedAt, releasedByAdminId }`. Bilinmeyen kimlik 404 `ROW_NOT_FOUND`; tavanın şu an beklemediği satır 409 `ROW_NOT_HELD`; ikinci kez 409 `ALREADY_RELEASED` — reddedilen istek hiçbir şey yazmaz |
 
 **Kurallar:** yalnız ödeme/iade satırı (sweep → 422 `ROW_NOT_APPROVABLE`); yalnız `PENDING` ve hash'siz (değilse 409 `ROW_NOT_OPEN`); bir kez (409 `ALREADY_APPROVED`); bilinmeyen kimlik 404 `ROW_NOT_FOUND`. Reddedilen her istek hiçbir şey yazmaz. Kapı açıkken verilen onay da kaydedilir; kapı kapanana kadar etkisi yoktur.
 
 **Gönderim işi (08 §3.3b):** kapı kapalıyken onaysız ödeme/iade satırı aday sayılmaz — gönderilmez, `RetryCount` artmaz, `FAILED` olmaz, parti yerini de almaz; işin ikinci katmanı satırı tek tek açarken ayarı veritabanından yeniden okuyarak aynı koşulu sınar, böylece tur ortasında kapatılan kapı turda kalan onaysız satırları da durdurur (kapalı → açık geçiş sonraki turda). Ayar okunamazsa (satır yok, yapılandırılmamış, bozuk) kapı **kapalı** sayılır. Ethereum ücret "bekle" alarmı (`FeeCapWaitAlarmMinutes`) onay bekleyen satırı saymaz; onaylanan satır onay anından itibaren sayılır. Kapıyı açmak/kapatmak AD9 (`PUT /admin/settings/outbound.auto_send_enabled`) ile olur ve her ayar değişikliği gibi audit'lenir; env'den doldurulamaz. Açılış prosedürü DEPLOY_RUNBOOK §M.
 
-**Ekran:** S22 cüzdan ekranının üstünde "Onay bekleyen ödemeler" paneli (kapı durumu, liste, onay penceresi — ağ, tür, tutar, alıcı ve "geri alınamaz" uyarısı).
+**Ekran:** S22 cüzdan ekranının üstünde "Onay bekleyen ödemeler" paneli (kapı durumu, liste, onay penceresi — ağ, tür, tutar, alıcı ve "geri alınamaz" uyarısı). **T169a:** panelin altında "Günlük iade tavanı (depozitten)" — ağ başına son 24 saat / tavan, bekleyen iadeler ve "Tavanı aşarak gönder" (AD42; uyarılı onay penceresi).
+
+**Depozit iade tavanı ile onay (T169a, 08 §3.3c):** gönderim işi önce onay kapısını, sonra tavanı sınar; onay bekleyen satır tavana tartılmaz. Onaylanmış bir iade tavanı aşacaksa bekler — onay tavanı kaldırmaz, tavanı aşmak AD42'nin ayrı ve audit'li kararıdır (öneriyle kaydedildi — ⚠ PARA).
 
 ---
 

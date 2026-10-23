@@ -176,6 +176,16 @@ export async function seedHappyPath(): Promise<typeof seed> {
      WHERE [Key] = 'outbound.auto_send_enabled'`,
   );
 
+  // T169a — the deposit refund daily limit (100 USDT per network in any 24 h)
+  // would hold refunds once the suites' refunds of one run add up; the suites
+  // measure the refund pipeline, not the limit (DepositRefundDailyLimitTests
+  // own that), so the harness lifts it the way an admin would.
+  await r().query(
+    `UPDATE SystemSettings SET Value = '1000000', IsConfigured = 1, UpdatedAt = SYSUTCDATETIME()
+     WHERE [Key] IN ('blockchain.tron.deposit_refund_daily_limit_usdt',
+                     'blockchain.ethereum.deposit_refund_daily_limit_usdt')`,
+  );
+
   // Seller — MA verified + payout address + backdated account (dodges new-account limit).
   //
   // T166 — every seeded party carries the ToS + 18+ stamps (TosAccepted*,

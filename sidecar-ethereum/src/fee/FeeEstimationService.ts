@@ -41,7 +41,14 @@ import { SERVICE_NETWORK } from '../network.js';
  *     collected, so the whole fuel amount is the cost, plus the fuel send's own
  *     estimated gas at the expected price (manager decision, T154 validation ⚠ —
  *     the buyer bears both, ~0.05 $ today, as on TRON the deposit activation
- *     fee is deducted from the buyer's refund; shown at the F8 gate).</item>
+ *     fee is deducted from the buyer's refund; shown at the F8 gate).
+ *     T169a (proje sahibi kararı 2026-10-21 — ⚠ PARA: the refund is charged the
+ *     platform's whole outlay): the fuel is what the deposit LACKS of that
+ *     budget, as the signer sends it (`TransferService.sendFuel`: send needs −
+ *     available) — the deposit's own ETH (an earlier fuel's remainder) is read
+ *     at the same block and subtracted, and a deposit that already holds the
+ *     whole budget gets no fuel and costs the platform nothing (the signer
+ *     reports `platformSpendWei` 0 then — T160c F1).</item>
  *   <item><b>USDT</b> — wei × live ETH/USDT price (`EthPriceService`), rounded
  *     UP to cents, all in integers.</item>
  * </list>
@@ -96,6 +103,11 @@ export interface EthFeeEstimateResult {
    * 0 from the hot wallet.
    */
   readonly fuelGasLimit: string;
+  /**
+   * T169a — the deposit's own ETH at the estimate block, wei, subtracted from
+   * the fuel; "0" from the hot wallet (no fuel there).
+   */
+  readonly depositBalanceWei: string;
   readonly baseFeePerGasWei: string;
   readonly maxPriorityFeePerGasWei: string;
   readonly maxFeePerGasWei: string;
@@ -116,6 +128,8 @@ export interface FeeRpc {
     newestBlock: bigint,
     rewardPercentiles: readonly number[],
   ): Promise<FeeHistory>;
+  /** T169a — the deposit's ETH at the priced block (what the fuel tops up). */
+  getBalance(address: string, blockNumber: bigint): Promise<bigint>;
 }
 
 export interface FeePriceSource {
@@ -171,7 +185,7 @@ export class EthFeeEstimationService {
     ]);
 
     const latest = await this.deps.rpc.getBlockHeader('latest');
-    const [estimate, fuelGas, history, price] = await Promise.all([
+    const [estimate, fuelGas, history, price, depositBalance] = await Promise.all([
       this.simulate({ from, to: contract, data }, latest.number),
       fromDeposit && fuelFrom
         ? this.simulate(
@@ -181,6 +195,7 @@ export class EthFeeEstimationService {
         : Promise.resolve(0n),
       this.deps.rpc.feeHistory(FEE_HISTORY_BLOCKS, latest.number, [TIP_PERCENTILE]),
       this.deps.prices.getPrice(request.correlationId),
+      fromDeposit ? this.deps.rpc.getBalance(from, latest.number) : Promise.resolve(0n),
     ]);
 
     const baseFee = history.baseFeePerGas[history.baseFeePerGas.length - 1];
@@ -190,10 +205,15 @@ export class EthFeeEstimationService {
     const expectedPerGas = baseFee + tip;
     const maxPerGas = 2n * baseFee + tip;
 
-    // From a deposit the fuel is the signer's gas LIMIT × the cap price.
+    // From a deposit the fuel is the signer's gas LIMIT × the cap price, less
+    // the ETH the deposit already holds (T169a — what the signer actually
+    // sends), plus the fuel send's own fee; no fuel, no cost.
     const gasLimit = fromDeposit ? tokenGasLimit(estimate) : estimate;
+    const fuelWei = fromDeposit ? gasLimit * maxPerGas - depositBalance : 0n;
     const feeWei = fromDeposit
-      ? gasLimit * maxPerGas + fuelGas * expectedPerGas
+      ? fuelWei > 0n
+        ? fuelWei + fuelGas * expectedPerGas
+        : 0n
       : gasLimit * expectedPerGas;
 
     return {
@@ -204,6 +224,7 @@ export class EthFeeEstimationService {
       blockNumber: latest.number.toString(),
       gasLimit: gasLimit.toString(),
       fuelGasLimit: fuelGas.toString(),
+      depositBalanceWei: depositBalance.toString(),
       baseFeePerGasWei: baseFee.toString(),
       maxPriorityFeePerGasWei: tip.toString(),
       maxFeePerGasWei: maxPerGas.toString(),

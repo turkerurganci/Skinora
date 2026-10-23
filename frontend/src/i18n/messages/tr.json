@@ -503,7 +503,8 @@
       "OUTBOUND_ROW_CLOSURE_APPROVED": "Giden satır kapatma onaylandı",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "Giden satır kapatma reddedildi",
       "OUTBOUND_ROW_CLOSURE_REFUSED": "Giden satır kapatma geri çevrildi",
-      "OUTBOUND_TRANSFER_APPROVED": "Giden ödeme onaylandı"
+      "OUTBOUND_TRANSFER_APPROVED": "Giden ödeme onaylandı",
+      "DEPOSIT_REFUND_LIMIT_RELEASED": "Depozit iade tavanı serbest bırakıldı"
     }
   },
   "adminTransactions": {
@@ -573,7 +574,7 @@
       "payoutSentAt": "Gönderim",
       "refund": "İade Detayları",
       "refundOriginal": "Orijinal tutar",
-      "refundGasFee": "Gas fee",
+      "refundGasFee": "Ağ ücreti",
       "refundNet": "Net iade",
       "refundAddress": "İade adresi",
       "refundedAt": "İade zamanı",
@@ -945,7 +946,7 @@
         },
         "refunds": {
           "heading": "İadeler",
-          "body": "- İade yalnız para için yapılır; eşya hiçbir aşamada Skinora'da bulunmadığı için eşya iadesi yoktur.\n- İade, alıcının kabul anında seçtiği ağ için verdiği iade adresine gönderilir. Reddedilen ödemelerin (eksik tutar, fazla tutarın fazlası, parçalı ödemede sonraki transferler, yanlış token, süresi dolduktan sonra gelen ödeme) iadesi de aynı adrese gider.\n- Kabul edilmiş bir ödemenin iadesinde alıcı fiyatı ve komisyonu geri alır. TRON ağ ücreti, ödeme Skinora'nın cüzdanına aktarılmadan önce yapılan iadede tam iade edilir; aktarımdan sonra yapılan iadede, harcanmış olduğu için iade edilmez.\n- Her iadenin ağ ücreti iade tutarından düşülür; alıcı \"iade edilen tutar − iadenin ağ ücreti\" kadar alır. Ücret gönderimden hemen önce blok zincirinden hesaplanır; hesaplanamazsa ağın yedek ücreti ile son ölçülen ücretten küçük olanı kullanılır. Düşülen ücret işlem sayfasında, reddedilen ödemelerin iadesinde ayrıca bildirimde gösterilir.\n- Ağ ücreti iadenin büyük kısmını yutuyorsa (net iade, iadenin ağ ücretinin iki katından azsa) iade otomatik gönderilmez; para işlemin ödeme adresinde kalır ve bir yönetici elle karar verir.\n- Bazı dönemlerde iadeler de gönderilmeden önce yönetici onayı bekler (\"Mutabakat süresi ve satıcıya ödeme\").\n- İade adresinin doğruluğundan alıcı sorumludur. Yanlış ya da size ait olmayan bir adrese yapılan iade geri alınamaz."
+          "body": "- İade yalnız para için yapılır; eşya hiçbir aşamada Skinora'da bulunmadığı için eşya iadesi yoktur.\n- İade, alıcının kabul anında seçtiği ağ için verdiği iade adresine gönderilir. Reddedilen ödemelerin (eksik tutar, fazla tutarın fazlası, parçalı ödemede sonraki transferler, yanlış token, süresi dolduktan sonra gelen ödeme) iadesi de aynı adrese gider.\n- Kabul edilmiş bir ödemenin iadesinde alıcı fiyatı ve komisyonu geri alır. TRON ağ ücreti, ödeme Skinora'nın cüzdanına aktarılmadan önce yapılan iadede tam iade edilir; aktarımdan sonra yapılan iadede, harcanmış olduğu için iade edilmez.\n- Her iadenin ağ ücreti iade tutarından düşülür; alıcı \"iade edilen tutar − iadenin ağ ücreti\" kadar alır. İadenin ağ ücreti, Skinora'nın o iadeyi gönderebilmek için yaptığı blok zinciri harcamasının tamamıdır: TRON'da ödeme adresinin açılışı ile iadenin enerji ve bant ihtiyacı için o adrese gönderilen TRX ve bu gönderimlerin ücreti, Ethereum'da ödeme adresine gönderilen ETH ve o gönderimin ücreti; iade tutarını aşamaz. Ücret, iade gönderim sırasına alınırken blok zincirinden hesaplanır ve iadeyle birlikte kaydedilir; hesaplanamazsa ağın yedek ücreti ile son ölçülen ücretten küçük olanı kullanılır. İade daha sonra gönderilse de (yönetici onayı ya da günlük üst sınır için beklerken) ücret yeniden hesaplanmaz: alıcıdan kaydedilen tutar düşülür; gönderimin gerçek maliyetiyle aradaki fark, hangi yönde olursa olsun Skinora'ya aittir. Düşülen ücret işlem sayfasında, reddedilen ödemelerin iadesinde ayrıca bildirimde gösterilir.\n- Ağ ücreti iadenin büyük kısmını yutuyorsa (net iade, iadenin ağ ücretinin iki katından azsa) iade otomatik gönderilmez; para işlemin ödeme adresinde kalır ve bir yönetici elle karar verir.\n- Ödeme adreslerinden yapılan iadelerin toplamı her ağda herhangi bir 24 saatte bir üst sınırı aşamaz (şu an ağ başına 100 USDT). Bu sınırı aşacak iade bekletilir; sınırda yer açıldığında ya da bir yönetici inceleyip onayladığında gönderilir. Bekleme iadenin tutarını değiştirmez.\n- Bazı dönemlerde iadeler de gönderilmeden önce yönetici onayı bekler (\"Mutabakat süresi ve satıcıya ödeme\").\n- İade adresinin doğruluğundan alıcı sorumludur. Yanlış ya da size ait olmayan bir adrese yapılan iade geri alınamaz."
         },
         "disputes": {
           "heading": "İtirazlar",
@@ -1532,7 +1533,7 @@
       "refund": {
         "title": "İade özeti",
         "originalAmount": "Orijinal tutar",
-        "gasFee": "Gas fee",
+        "gasFee": "Ağ ücreti (iadenin zincir maliyeti)",
         "netRefundAmount": "Net iade",
         "refundAddress": "İade adresi",
         "txHash": "TX hash",
@@ -2378,6 +2379,33 @@
         "transaction": "İşlem kimliği",
         "cancel": "Vazgeç",
         "submit": "Onayla ve gönderime bırak"
+      },
+      "limit": {
+        "heading": "Günlük iade tavanı (depozitten)",
+        "usage": "{network}: son 24 saatte depozitlerden {used} / {limit} USDT iade edildi",
+        "intro": "Depozit adreslerinden yapılan iadelerin herhangi bir 24 saatteki toplamı ağ başına bu tavanı aşamaz. Aşacak iade beklemede kalır (başarısız sayılmaz, deneme hakkı harcanmaz) ve 24 saat önceki iadeler pencereden çıkınca kendiliğinden gider; tavandan büyük bir iade hiçbir zaman kendiliğinden gitmez. Sıcak cüzdandan çıkan iadeler sayılmaz. Tavan, Ayarlar ekranındaki blockchain.*.deposit_refund_daily_limit_usdt ayarıdır.",
+        "empty": "Tavana takılan iade yok.",
+        "ariaLabel": "Günlük iade tavanına takılan iadeler",
+        "columns": {
+          "network": "Ağ",
+          "type": "Tür",
+          "amount": "Tutar",
+          "to": "Alıcı adres",
+          "held": "Beklemede",
+          "action": "İşlem"
+        },
+        "release": "Tavanı aşarak gönder",
+        "confirm": {
+          "title": "İadeyi tavanın üstünde gönder",
+          "warning": "Bu iade bugünkü depozit iade tavanını aşacak. Serbest bıraktıktan sonra tutar zincirde gerçekten gönderilir ve geri alınamaz; tutar yine günlük toplama sayılır. İadenin gerçek olduğunu, ağı, tutarı ve alıcı adresini kontrol edin.",
+          "network": "Ağ",
+          "type": "Tür",
+          "amount": "Tutar",
+          "to": "Alıcı adres",
+          "transaction": "İşlem kimliği",
+          "cancel": "Vazgeç",
+          "submit": "Serbest bırak ve gönderime bırak"
+        }
       }
     },
     "errors": {
@@ -2389,6 +2417,8 @@
       "ROW_NOT_FOUND": "Giden satır bulunamadı.",
       "ROW_NOT_APPROVABLE": "Bu satır bir satıcı ödemesi ya da iade değil; onay beklemez.",
       "ALREADY_APPROVED": "Bu satır zaten onaylanmış.",
+      "ROW_NOT_HELD": "Bu iade günlük iade tavanına takılı değil; serbest bırakılacak bir şey yok.",
+      "ALREADY_RELEASED": "Bu iade zaten serbest bırakılmış.",
       "CLOSURE_NOT_FOUND": "Kapatma bulunamadı.",
       "ROW_NOT_ETHEREUM": "Satır Ethereum ağında değil.",
       "ROW_NOT_OUTBOUND": "Satır giden bir transfer değil.",

@@ -204,6 +204,14 @@ public class BlockchainTransactionConfiguration : IEntityTypeConfiguration<Block
         builder.Property(b => b.ApprovedAt);
         builder.Property(b => b.ApprovedByAdminId);
 
+        // T169a — the deposit refund daily limit (08 §3.3c). All NULL until the
+        // dispatcher counts / holds the row, or an admin releases it (AD42).
+        // No FK on the admin, as for ApprovedByAdminId (audit row carries it).
+        builder.Property(b => b.DepositRefundCountedAt);
+        builder.Property(b => b.DepositRefundLimitHeldAt);
+        builder.Property(b => b.DepositRefundLimitReleasedAt);
+        builder.Property(b => b.DepositRefundLimitReleasedByAdminId);
+
         builder.Property(b => b.CreatedAt)
             .IsRequired();
 

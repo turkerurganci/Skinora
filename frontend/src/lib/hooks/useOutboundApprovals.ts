@@ -1,7 +1,11 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { approveOutboundTransfer, listOutboundApprovals } from "@/lib/api/admin";
+import {
+  approveOutboundTransfer,
+  listOutboundApprovals,
+  releaseDepositRefundLimit,
+} from "@/lib/api/admin";
 
 const APPROVALS_ROOT = ["admin", "wallets", "outbound-approvals"] as const;
 
@@ -19,6 +23,22 @@ export function useApproveOutboundTransfer() {
   return useMutation({
     mutationFn: (blockchainTransactionId: string) =>
       approveOutboundTransfer(blockchainTransactionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: APPROVALS_ROOT });
+      queryClient.invalidateQueries({ queryKey: ["admin", "wallets", "overview"] });
+    },
+  });
+}
+
+/**
+ * T169a AD42 — release one refund held by its network's deposit refund daily
+ * limit; the dispatcher sends it on its next tick.
+ */
+export function useReleaseDepositRefundLimit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (blockchainTransactionId: string) =>
+      releaseDepositRefundLimit(blockchainTransactionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: APPROVALS_ROOT });
       queryClient.invalidateQueries({ queryKey: ["admin", "wallets", "overview"] });

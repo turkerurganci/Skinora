@@ -247,6 +247,18 @@ describe("terms — 02 §22 P2P clauses and the network rules (TR, authoritative
     // PAYMENT_REFUNDED carries no fee; the transaction page does.
     expect(s.refunds.body).toMatch(/Düşülen ücret işlem sayfasında/);
   });
+  it("T169a — the refund fee is the platform's whole outlay (both networks) and deposit refunds have a daily limit", () => {
+    expect(s.refunds.body).toMatch(/blok zinciri harcamasının tamamıdır/);
+    expect(s.refunds.body).toMatch(/TRON'da ödeme adresinin açılışı/);
+    expect(s.refunds.body).toMatch(/Ethereum'da ödeme adresine gönderilen ETH/);
+    expect(s.refunds.body).toMatch(/iade tutarını aşamaz/);
+    expect(s.refunds.body).toMatch(/herhangi bir 24 saatte/);
+    expect(s.refunds.body).toMatch(/ağ başına 100 USDT/);
+    expect(s.refunds.body).toMatch(/Bekleme iadenin tutarını değiştirmez/);
+    for (const messages of Object.values(LOCALES)) {
+      expect(messages.legal.terms.sections.refunds.body).toMatch(/100 USDT/);
+    }
+  });
   it("T168 fix B3 — the decline path is promised for an updated version too", () => {
     expect(s.suspension.body).toMatch(/güncellenmiş bir sürümünü kabul etmeden de/);
   });

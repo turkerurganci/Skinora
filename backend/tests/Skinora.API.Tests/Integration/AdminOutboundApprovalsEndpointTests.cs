@@ -38,6 +38,8 @@ public class AdminOutboundApprovalsEndpointTests : IClassFixture<AdminWalletsEnd
     {
         { "GET", Base },
         { "POST", $"{Base}/{RowId}/approve" },
+        // T169a — AD42.
+        { "POST", $"{Base}/{RowId}/release-daily-limit" },
     };
 
     [Theory]
@@ -132,6 +134,64 @@ public class AdminOutboundApprovalsEndpointTests : IClassFixture<AdminWalletsEnd
             .ToHashSet();
 
         Assert.Equal(Enum.GetValues<ApprovalError>().ToHashSet(), mapped);
+    }
+
+    // ---- T169a — AD42 release past the deposit refund daily limit (⚠ PARA) ----
+
+    [Fact]
+    public async Task Release_Is200_AndActsAsTheAuthenticatedAdmin_NotAsAnyoneTheBodyNames()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var other = await _factory.CreateUserAsync();
+        var rowId = Guid.Parse(RowId);
+        _factory.ApprovalFake.ReleaseResult = LimitReleaseResult.Ok(new DepositRefundLimitReleaseDto(
+            rowId, BlockchainNetwork.TRON, BlockchainTransactionType.BUYER_REFUND,
+            137.25m, "TBuyerRefund0000000000000000000000", 100m, 60m, DateTime.UtcNow, admin.Id));
+        var client = BuildClient(admin.Id, admin.SteamId, ["MANAGE_SETTINGS"]);
+
+        var response = await client.PostAsJsonAsync($"{Base}/{RowId}/release-daily-limit", new
+        {
+            releasedByAdminId = other.Id,
+            adminId = other.Id,
+            limitUsdt = 1_000_000m,
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var (call, actor, row) = Assert.Single(_factory.ApprovalFake.Calls);
+        Assert.Equal("release", call);
+        Assert.Equal(admin.Id, actor);
+        Assert.Equal(rowId, row);
+    }
+
+    [Theory]
+    [InlineData(LimitReleaseError.RowNotFound, HttpStatusCode.NotFound, "ROW_NOT_FOUND")]
+    [InlineData(LimitReleaseError.RowNotHeld, HttpStatusCode.Conflict, "ROW_NOT_HELD")]
+    [InlineData(LimitReleaseError.AlreadyReleased, HttpStatusCode.Conflict, "ALREADY_RELEASED")]
+    public async Task EveryReleaseRefusal_MapsToItsStatusAndCode(
+        LimitReleaseError error, HttpStatusCode status, string code)
+    {
+        var admin = await _factory.CreateUserAsync();
+        _factory.ApprovalFake.ReleaseResult = LimitReleaseResult.Fail(error, "reason text");
+        var client = BuildClient(admin.Id, admin.SteamId, ["MANAGE_SETTINGS"]);
+
+        var response = await client.PostAsJsonAsync($"{Base}/{Guid.NewGuid()}/release-daily-limit", new { });
+
+        Assert.Equal(status, response.StatusCode);
+        var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(code, json.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public void EveryLimitReleaseError_HasARowInTheMappingTable()
+    {
+        var mapped = typeof(AdminOutboundApprovalsEndpointTests)
+            .GetMethod(nameof(EveryReleaseRefusal_MapsToItsStatusAndCode))!
+            .GetCustomAttributes(typeof(Xunit.InlineDataAttribute), false)
+            .Cast<Xunit.InlineDataAttribute>()
+            .Select(a => (LimitReleaseError)a.GetData(null!).Single()[0])
+            .ToHashSet();
+
+        Assert.Equal(Enum.GetValues<LimitReleaseError>().ToHashSet(), mapped);
     }
 
     [Fact]

@@ -116,6 +116,26 @@ export function activationBurnSun(input: ActivationCostInput): number | null {
   return input.createNewAccountFeeSun + input.createAccountBandwidthFeeSun;
 }
 
+/**
+ * T169a doğrulama S4-4 (öneriyle kaydedildi — ⚠ PARA) — Bandwidth the
+ * activation takes from the hot wallet's STAKED pool: `270 × rate` bytes when
+ * that pool covers them (the case `activationBurnSun` charges no Bandwidth
+ * fee), else 0 (the chain burns the fee instead and leaves the pool alone).
+ * The refund's top-up TRX send follows the activation from the same wallet,
+ * so it sees what is left. An unread rate counts as 1 (mainnet): the top-up
+ * then sees less Bandwidth, so its fee can only come out charged, never missed.
+ */
+export function activationStakedBandwidthBytes(
+  input: Pick<
+    ActivationCostInput,
+    'depositExists' | 'senderStakedBandwidth' | 'createNewAccountBandwidthRate'
+  >,
+): number {
+  if (input.depositExists) return 0;
+  const bytes = ACTIVATION_TX_BYTES * (input.createNewAccountBandwidthRate ?? 1);
+  return input.senderStakedBandwidth >= bytes ? bytes : 0;
+}
+
 export interface DelegationPlanInput {
   /**
    * Energy the transfer consumes (simulation of the exact call) — planned in

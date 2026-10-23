@@ -48,6 +48,8 @@ const SAMPLE_RESULT: FeeEstimateResult = {
   bandwidthRequired: 350,
   bandwidthAvailable: 0,
   activationBurnSun: 0,
+  topUpSun: 0,
+  topUpFeeSun: 0,
   burnSun: 350_000,
   trxPriceUsdt: 0.5,
   priceSource: 'binance',
