@@ -279,17 +279,36 @@ public sealed class ReconciliationService : IReconciliationService
         var detectedAt = _clock.GetUtcNow().UtcDateTime;
 
         var depositMismatches = 0;
+        var depositMissing = 0;
         foreach (var deposit in depositAddresses)
         {
             if (!snapshotByAddress.TryGetValue(deposit.Address, out var tokens))
             {
                 _logger.LogWarning(
                     "Reconciliation snapshot missing deposit address {Address}.", deposit.Address);
+                depositMissing++;
                 continue;
             }
             depositMismatches += await ReconcileDepositAddressAsync(
                 deposit.Id, deposit.Address, tokens,
                 snapshot.BlockNumber, detectedAt, cancellationToken);
+        }
+
+        // T165 kapanış (yeniden doğrulama Y2, ⚠ PARA): a deposit address the
+        // snapshot left out was NOT compared. A balanced count over the rest is
+        // not "the deposit scope is balanced" — reporting 0 would resolve a
+        // mismatch that may still stand at the missing address. Report the scope
+        // only when it was compared in full, or when it found mismatches anyway
+        // (a positive count can only keep the alarm firing).
+        int? depositReported = depositMissing == 0 || depositMismatches > 0
+            ? depositMismatches
+            : null;
+        if (depositMissing > 0)
+        {
+            _logger.LogWarning(
+                "Reconciliation of {Network}: {Missing} deposit address(es) missing from the snapshot — the deposit scope is {Reported} this round.",
+                network, depositMissing,
+                depositReported is null ? "not reported (previous value kept)" : "reported with the mismatches found");
         }
 
         var hotChecked = false;
@@ -315,7 +334,7 @@ public sealed class ReconciliationService : IReconciliationService
         var totalMismatches = depositMismatches + hotMismatches + coldMismatches;
         await ReportMismatchesAsync(
             network,
-            depositMismatches,
+            depositReported,
             hotChecked ? hotMismatches : null,
             coldChecked ? coldMismatches : null,
             detectedAt,
@@ -410,13 +429,16 @@ public sealed class ReconciliationService : IReconciliationService
     /// </summary>
     private async Task ReportMismatchesAsync(
         BlockchainNetwork network,
-        int depositMismatches,
+        int? depositMismatches,
         int? hotMismatches,
         int? coldMismatches,
         DateTime detectedAt,
         CancellationToken cancellationToken)
     {
-        _runObserver.ReportMismatches(network, ReconciliationScope.DepositAddress, depositMismatches);
+        if (depositMismatches is { } deposit)
+        {
+            _runObserver.ReportMismatches(network, ReconciliationScope.DepositAddress, deposit);
+        }
         if (hotMismatches is { } hot)
         {
             _runObserver.ReportMismatches(network, ReconciliationScope.HotWallet, hot);
@@ -426,7 +448,7 @@ public sealed class ReconciliationService : IReconciliationService
             _runObserver.ReportMismatches(network, ReconciliationScope.ColdWallet, cold);
         }
 
-        var total = depositMismatches + (hotMismatches ?? 0) + (coldMismatches ?? 0);
+        var total = (depositMismatches ?? 0) + (hotMismatches ?? 0) + (coldMismatches ?? 0);
         if (total == 0) return;
 
         await _outbox.PublishAsync(
@@ -434,7 +456,7 @@ public sealed class ReconciliationService : IReconciliationService
                 EventId: Guid.NewGuid(),
                 Network: network.ToString(),
                 MismatchCount: total,
-                DepositAddressMismatches: depositMismatches,
+                DepositAddressMismatches: depositMismatches ?? 0,
                 HotWalletMismatches: hotMismatches ?? 0,
                 ColdWalletMismatches: coldMismatches ?? 0,
                 OccurredAt: detectedAt),

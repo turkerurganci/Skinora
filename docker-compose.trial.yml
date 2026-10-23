@@ -165,7 +165,8 @@ services:
   # T165 — heartbeat ("dead man's switch") to the outside monitor
   # (Healthchecks.io, DEPLOY_RUNBOOK §P). Every HEARTBEAT_INTERVAL_SECONDS it
   # checks the site from inside — the edge's /api/health (nginx → backend →
-  # database + Redis) and the front page — and pings HEARTBEAT_URL when both
+  # database + Redis), the front page and Grafana's /api/health (the money
+  # alarms leave through Grafana) — and pings HEARTBEAT_URL when all three
   # answer. When this PC, Docker or the stack is down, the pings stop and the
   # outside service alerts the owner (e-mail / Telegram) after its grace
   # time. HEARTBEAT_FAILURES_BEFORE_FAIL failed rounds in a row send /fail for
@@ -181,7 +182,11 @@ services:
       - HEARTBEAT_URL=${HEARTBEAT_URL:-}
       - HEARTBEAT_INTERVAL_SECONDS=${HEARTBEAT_INTERVAL_SECONDS:-60}
       - HEARTBEAT_FAILURES_BEFORE_FAIL=${HEARTBEAT_FAILURES_BEFORE_FAIL:-3}
-      - HEARTBEAT_CHECK_URLS=http://skinora-reverse-proxy/api/health http://skinora-reverse-proxy/
+      # T165 kapanış (yeniden doğrulama Y1, ⚠ PARA): Grafana's own health too.
+      # Every Grafana money alarm (category: money) leaves through Grafana; when
+      # it is down — or never starts (first-boot guard) — nothing else says so.
+      # Container-network address: Grafana publishes only 127.0.0.1:3001.
+      - HEARTBEAT_CHECK_URLS=http://skinora-reverse-proxy/api/health http://skinora-reverse-proxy/ http://skinora-grafana:3000/api/health
     volumes:
       - ./scripts/heartbeat/heartbeat.sh:/opt/skinora/heartbeat.sh:ro
     depends_on:

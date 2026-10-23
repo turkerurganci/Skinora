@@ -213,6 +213,12 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       assert.ok(resolve(mount.source).endsWith(join("scripts", "heartbeat", "heartbeat.sh")));
       assert.equal(hb.environment.HEARTBEAT_URL, "", "no ping URL in .env.example");
       assert.match(hb.environment.HEARTBEAT_CHECK_URLS, /http:\/\/skinora-reverse-proxy\/api\/health/);
+      // T165 kapanış (Y1, ⚠ PARA): the money alarms leave through Grafana, so a
+      // Grafana that is down or never started must stop the pings too. The
+      // container-network address: Grafana publishes only on 127.0.0.1.
+      const checks = hb.environment.HEARTBEAT_CHECK_URLS.split(/\s+/);
+      assert.ok(checks.includes("http://skinora-grafana:3000/api/health"), "Grafana health is a heartbeat check");
+      assert.ok(model.services["skinora-grafana"], "the checked Grafana service exists under that name");
     });
 
     test("T165: Grafana starts through the first-boot guard (no alert to the default example@email.com receiver)", () => {
@@ -225,6 +231,9 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       assert.ok(resolve(mount.source).endsWith(join("scripts", "grafana", "first-boot.sh")));
       const data = grafana.volumes.find((v) => v.target === "/var/lib/grafana");
       assert.equal(data?.type, "volume", "the guard's marker lives on the persistent data volume");
+      // T165 kapanış (Y1): the guard reads one Grafana log line, measured on
+      // 11.3.0. An upgrade must re-measure it (first-boot.sh header) first.
+      assert.equal(grafana.image, "grafana/grafana:11.3.0", "re-measure first-boot.sh's log line before upgrading Grafana");
     });
 
     test("refuses to render without the .env.trial marker (a forgotten --env-file must not fall back to the development .env)", () => {

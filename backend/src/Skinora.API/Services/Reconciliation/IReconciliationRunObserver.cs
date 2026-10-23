@@ -28,7 +28,9 @@ public interface IReconciliationRunObserver
     /// </summary>
     /// <remarks>
     /// Called only for a scope the round really compared: the deposit scope
-    /// on every completed round (0 when no deposit is active), the hot / cold
+    /// on every completed round (0 when no deposit is active) unless the
+    /// snapshot left a deposit address out and the rest balanced (then it was
+    /// not compared in full — a positive count is still reported), the hot / cold
     /// wallet only when its address is configured and was in the snapshot. An
     /// aborted round, or a scope not compared, reports nothing — the last
     /// value stays, so an unchecked wallet never reads as "balanced".

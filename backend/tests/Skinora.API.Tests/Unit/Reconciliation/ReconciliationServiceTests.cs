@@ -762,6 +762,51 @@ public sealed class ReconciliationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task T165_DepositAddressMissingFromSnapshot_DepositScopeNotReported_SoAnOpenAlarmIsNotResolved()
+    {
+        // T165 kapanış (yeniden doğrulama Y2, ⚠ PARA): the missing address was
+        // skipped and the scope reported 0 — a mismatch still standing there
+        // read "resolved". The scope was not compared in full: report nothing.
+        var balanced = await SeedDepositAddressAsync("TDepositFixture-Y2-balanced");
+        await SeedConfirmedDepositInflowAsync(balanced.Id, balanced.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 100m);
+        var missing = await SeedDepositAddressAsync("TDepositFixture-Y2-missing");
+        await SeedConfirmedDepositInflowAsync(missing.Id, missing.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 40m);
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [balanced.Address] = SnapshotForUsdt("100000000"),
+        });
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(_runs.Mismatches, m => m.Scope == ReconciliationScope.DepositAddress);
+        Assert.Empty(_outbox.Published);
+    }
+
+    [Fact]
+    public async Task T165_DepositAddressMissingFromSnapshot_MismatchFoundElsewhere_IsStillReported()
+    {
+        // A positive count can only keep the alarm firing: still reported.
+        var short1 = await SeedDepositAddressAsync("TDepositFixture-Y2-short");
+        await SeedConfirmedDepositInflowAsync(short1.Id, short1.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 100m);
+        var missing = await SeedDepositAddressAsync("TDepositFixture-Y2-missing2");
+        await SeedConfirmedDepositInflowAsync(missing.Id, missing.Address,
+            BlockchainTransactionType.BUYER_PAYMENT, StablecoinType.USDT, 40m);
+        _sidecar.QueueSnapshot(blockNumber: 1, addressTokens: new()
+        {
+            [short1.Address] = SnapshotForUsdt("90000000"), // 10 USDT short
+        });
+
+        await _sut.RunAsync(CancellationToken.None);
+
+        Assert.Equal((BlockchainNetwork.TRON, ReconciliationScope.DepositAddress, 1), Assert.Single(_runs.Mismatches));
+        var alert = Assert.IsType<ReconciliationMismatchAdminAlertEvent>(Assert.Single(_outbox.Published));
+        Assert.Equal(1, alert.DepositAddressMismatches);
+    }
+
+    [Fact]
     public async Task T165_EthereumMismatch_CarriesItsNetwork()
     {
         var eth = new EchoBalancesSidecar(); // every address answers 0

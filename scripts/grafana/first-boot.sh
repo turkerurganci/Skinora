@@ -22,8 +22,18 @@
 # within one poll, and until then the previous provisioned routing — ours —
 # is used).
 #
+# The guard reads ONE log line, so the guarded run pins its own logging
+# (T165 kapanış, yeniden doğrulama Y1): level info, console output, text
+# format, no logger filter muting provisioning.alerting — whatever GF_LOG_*
+# the operator set (warn, file, json …), which still applies to the real start.
+# Without the pin those settings left Grafana never starting (measured: warn →
+# "not provisioned within …" loop). The line itself was measured on
+# grafana/grafana:11.3.0; re-measure it before upgrading the image (the compose
+# test pins the version for that reason). A Grafana that does not start is
+# reported outside by the heartbeat (it checks Grafana's /api/health).
+#
 # Tested by first-boot.test.mjs (fake /run.sh) and measured live with an empty
-# volume (T165_REPORT "Düzeltme turu").
+# volume (T165_REPORT "Düzeltme turu" and "Kapanış").
 set -eu
 
 RUN="${GRAFANA_RUN:-/run.sh}"
@@ -36,6 +46,8 @@ if [ ! -f "$MARKER" ]; then
   echo "skinora: first boot — provisioning alerting with rule execution off"
   : >"$LOG"
   GF_UNIFIED_ALERTING_EXECUTE_ALERTS=false GF_SERVER_HTTP_ADDR=127.0.0.1 \
+    GF_LOG_LEVEL=info GF_LOG_MODE=console GF_LOG_CONSOLE_LEVEL=info \
+    GF_LOG_CONSOLE_FORMAT=text GF_LOG_FILTERS=provisioning.alerting:info \
     "$RUN" "$@" >>"$LOG" 2>&1 &
   pid=$!
   waited=0
