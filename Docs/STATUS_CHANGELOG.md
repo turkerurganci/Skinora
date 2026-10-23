@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-23 — T165 ⏳ yapım bitti, doğrulama bekliyor (e-posta + Telegram anahtarla açılır, Discord kapalı; para alarmları Telegram + e-posta; dış izleme heartbeat; T165_REPORT.md) Sonra bağımsız doğrulama ✗ FAIL (HEAD `f568396b`: S3 ⚠ PARA mutabakat uyuşmazlığı yalnız panelde, S1 ⚠ GÜVENLİK Grafana ilk açılış `example@email.com`, 6 × S4) → düzeltme turu.
+
 **Önceki güncelleme:** 2026-10-23 — T174 ✓ Tamamlandı (DEFERRED_BACKLOG §4 triyajı: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 11 ⚪ kalır; doğrulama PASS 3 × S4, hepsi kapandı; sahip kararları: yaptırım listesi API ile (ekran yok, T171), VPN/Tor canlıda kapalı (T175); main `d7aebce7` dala birleştirildi, 50 aktif / 167 çözülmüş; T174_REPORT.md, PR #374)
 
 **Önceki güncelleme:** 2026-10-23 — T174 ⏳ Devam ediyor (DEFERRED_BACKLOG §4: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 10 ⚪ kalır, 1 ⚪ → 🟡 ⚠ yaptırım ekranı yok; 48 aktif / 167 çözülmüş; T174_REPORT.md) **Merge teyidi (T174 kapanışında işlendi):** T164 (#372) main `d7aebce7` → CI `39883489789` ✓, Docker Publish `39883489767` ✓.

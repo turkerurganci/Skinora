@@ -1795,8 +1795,9 @@ Sistem otomatik kontrol yapar ve sonucu döner. `autoCheckResult.resolved: true`
 | `ACCOUNT_SUSPENDED` | İlgili kullanıcı | Hesap askıya alındı (02 §14.0) | null |
 | `ACCOUNT_UNSUSPENDED` | İlgili kullanıcı | Hesap askısı kaldırıldı | null |
 | `PAYOUT_ISSUE_RESOLVED` | Satıcı | Bildirdiği ödeme sorunu çözüldü (§7.11, 02 §10.3) | transaction |
+| `ADMIN_RECONCILIATION_MISMATCH` | Admin | Günlük mutabakat bir ağda defter ile zincir arasında uyuşmazlık buldu (T165, 05 §3.3) | null |
 
-`targetType`: Frontend route mapping için. `null` → tıklama yönlendirmez. Eşleme `NotificationTargetMapper`'da tutulur: `ADMIN_FLAG_ALERT` kendi `FlagId` kolonuna, `ADMIN_PLATFORM_OUTAGE` platform geneli olduğu için hiçbir hedefe bağlanmaz; hesap seviyesi iki tip bir işleme bağlı olmadığı için `null` döner, kalan tipler işlem referansını taşır.
+`targetType`: Frontend route mapping için. `null` → tıklama yönlendirmez. Eşleme `NotificationTargetMapper`'da tutulur: `ADMIN_FLAG_ALERT` kendi `FlagId` kolonuna, `ADMIN_PLATFORM_OUTAGE` platform geneli, `ADMIN_RECONCILIATION_MISMATCH` ağ başına olduğu için hiçbir hedefe bağlanmaz; hesap seviyesi iki tip bir işleme bağlı olmadığı için `null` döner, kalan tipler işlem referansını taşır.
 
 > **Parity çapası (T133a):** Katalog **27 tip**tir ve 06 §2.13 ile birebir aynıdır — ad, hedef ve sıra dahil; normatif kaynak kod enum'u `NotificationType`'dır. v3.0'da `ITEM_ESCROWED` → `PAYMENT_WINDOW_OPEN`, `TRADE_OFFER_SENT_TO_BUYER` → `DELIVERY_EXPECTED` (hedef taraf alıcıdan **satıcıya** geçti); `ITEM_RETURNED` ve `ADMIN_STEAM_BOT_ISSUE` kaldırıldı — item hiçbir zaman platformda bulunmadığı için iade edilecek eşya yok, platform Steam botu işletmiyor (02 §2.1, §15). Enum'a tip eklendiğinde bu tablo ve 06 §2.13 aynı commit'te güncellenir.
 
