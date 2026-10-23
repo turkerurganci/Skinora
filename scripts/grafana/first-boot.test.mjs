@@ -41,6 +41,8 @@ function fakeGrafana(dir, mode) {
       'echo "real grafana"',
       "",
     ].join("\n"),
+    // Executed directly, like the image's /run.sh (Linux needs the x bit).
+    { mode: 0o755 },
   );
   return { fake, record };
 }
