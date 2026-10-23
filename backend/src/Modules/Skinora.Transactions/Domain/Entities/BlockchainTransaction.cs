@@ -146,6 +146,35 @@ public class BlockchainTransaction
     /// <summary>T169 — the admin who approved the row (<see cref="ApprovedAt"/>); NULL with it.</summary>
     public Guid? ApprovedByAdminId { get; set; }
 
+    /// <summary>
+    /// T169a — when the dispatcher counted this refund against its network's
+    /// rolling 24-hour limit on refunds leaving a DEPOSIT address
+    /// (<c>blockchain.*.deposit_refund_daily_limit_usdt</c>, 08 §3.3c). Stamped,
+    /// under the limit's lock, just before the broadcast; the limit sums the
+    /// <c>Amount</c> of every non-FAILED row stamped in the last 24 hours. NULL
+    /// = not counted: not yet sent, held by the limit, or not a deposit refund
+    /// (hot-wallet refunds, payouts, sweeps).
+    /// </summary>
+    public DateTime? DepositRefundCountedAt { get; set; }
+
+    /// <summary>
+    /// T169a — the first time the deposit refund limit held this row back
+    /// (the admin alarm is raised once, on this transition). Kept after the row
+    /// is sent, as history. Held now = this is set, <see cref="DepositRefundCountedAt"/>
+    /// is NULL and the row is PENDING.
+    /// </summary>
+    public DateTime? DepositRefundLimitHeldAt { get; set; }
+
+    /// <summary>
+    /// T169a — when an admin let this held refund past the daily limit (AD42,
+    /// 07 §9.35; audit <c>DEPOSIT_REFUND_LIMIT_RELEASED</c>). The row is then
+    /// sent whatever the window's total and still counts toward it.
+    /// </summary>
+    public DateTime? DepositRefundLimitReleasedAt { get; set; }
+
+    /// <summary>T169a — the admin who released the row (<see cref="DepositRefundLimitReleasedAt"/>); NULL with it.</summary>
+    public Guid? DepositRefundLimitReleasedByAdminId { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime? ConfirmedAt { get; set; }
 

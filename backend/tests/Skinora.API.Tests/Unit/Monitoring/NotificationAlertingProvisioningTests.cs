@@ -53,7 +53,45 @@ public sealed class NotificationAlertingProvisioningTests
         "outbound-transfer-backlog",
         "reconciliation-network-failed",
         "gas-fee-fallback-charged",
+        // T169a — refund held by the deposit refund daily limit (⚠ PARA;
+        // classified when main was merged into T165)
+        "deposit-refund-daily-limit-held",
     ];
+
+    /// <summary>
+    /// Every rule that is deliberately NOT a money alarm. Together with
+    /// <see cref="MoneyRules"/> it must name every rule in rules.yml, so a rule
+    /// arriving from another branch cannot skip the money/non-money decision
+    /// (the T169a refund-limit rule merged in without its <c>category: money</c>).
+    /// </summary>
+    public static readonly string[] NonMoneyRules =
+    [
+        "backend-down",
+        "high-error-rate-backend",
+        "high-response-time-backend",
+        "steam-sidecar-down",
+        "steam-api-errors-high",
+        "notification-channel-misconfigured",
+        "notification-delivery-exhausted",
+        "db-backup-full-stale",
+        "db-backup-log-stale",
+        "db-data-size-warning",
+        "db-data-size-critical",
+        "db-monitor-probe-failing",
+    ];
+
+    [Fact]
+    public void EveryRule_IsClassified_AsMoneyOrNotMoney()
+    {
+        var all = Regex.Matches(Read("rules.yml"), @"\n      - uid: ([a-z0-9-]+)\n")
+            .Select(m => m.Groups[1].Value)
+            .ToList();
+
+        Assert.Equal(all.Count, all.Distinct().Count());
+        Assert.Empty(MoneyRules.Intersect(NonMoneyRules));
+        Assert.Equal(all.ToHashSet(), MoneyRules.Concat(NonMoneyRules).ToHashSet());
+        Assert.Equal(28, MoneyRules.Length);
+    }
 
     [Theory]
     [MemberData(nameof(MoneyRuleIds))]

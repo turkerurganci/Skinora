@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.14** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T169 — S06/S07 50 $ altında TRON devre dışı; S22 onay bekleyen ödemeler paneli. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
+**Versiyon: v4.15** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T169a: S22 "Günlük iade tavanı" bölümü; alıcının iade özetinde "Ağ ücreti (iadenin zincir maliyeti)". · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
 
 ---
 
@@ -1869,6 +1869,7 @@ Platform Steam hesabı işletmediği için izlenecek bot hesabı, emanet item sa
 - **Liste (en eski önce):** onay bekleyen `SELLER_PAYOUT` / `*_REFUND` satırları — ağ, tür, tutar (iadede düşülen ağ ücreti ayrı satırda), alıcı adres (kopyalanabilir), oluşma zamanı, **Onayla**. Boşsa "Onay bekleyen ödeme ya da iade yok."
 - **Onay penceresi:** ağ, tür, tutar, alıcı adres ve işlem kimliği; uyarı "Onaydan sonra bu tutar zincirde gerçekten gönderilir ve geri alınamaz. Ağı, tutarı ve alıcı adresini kontrol edin."; düğmeler "Vazgeç" / "Onayla ve gönderime bırak". Onaylanan satır panelden düşer. Reddedilen onay (`ROW_NOT_APPROVABLE`, `ROW_NOT_OPEN`, `ALREADY_APPROVED`, `ROW_NOT_FOUND`) hata olarak gösterilir; hiçbir şey yazılmaz.
 - Onay işlemi kendisi para göndermez ve tutara/alıcıya dokunmaz; her onay AuditLog `OUTBOUND_TRANSFER_APPROVED` (runbook §M).
+- **Günlük iade tavanı (depozitten) — T169a, ⚠ PARA (07 §9.35 AD40/AD42, 08 §3.3c):** panelin altında. Ağ başına "{ağ}: son 24 saatte depozitlerden {kullanılan} / {tavan} USDT iade edildi"; açıklama (kayan 24 saat, aşan iade bekler, tavandan büyük iade kendiliğinden gitmez, sıcak cüzdan iadesi sayılmaz, ayar adı); tavanın beklettiği iadeler tablosu (ağ, tür, tutar, alıcı adres, bekleme başlangıcı, **Tavanı aşarak gönder**), boşsa "Tavana takılan iade yok.". Onay penceresi ağ, tür, tutar, alıcı ve işlem kimliğini gösterir; uyarı "Bu iade bugünkü depozit iade tavanını aşacak. Serbest bıraktıktan sonra tutar zincirde gerçekten gönderilir ve geri alınamaz; tutar yine günlük toplama sayılır…"; düğmeler "Vazgeç" / "Serbest bırak ve gönderime bırak". Her serbest bırakma AuditLog `DEPOSIT_REFUND_LIMIT_RELEASED` (runbook §M.4).
 
 **Bölümler (her ağ için ayrı kart, ağ etiketiyle: "TRON (TRC-20)" / "Ethereum (ERC-20)"):**
 

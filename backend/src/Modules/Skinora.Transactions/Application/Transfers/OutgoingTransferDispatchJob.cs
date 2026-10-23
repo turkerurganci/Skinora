@@ -98,6 +98,7 @@ public sealed class OutgoingTransferDispatchJob
     private readonly IBlockchainNetworkSettingsProvider _networkSettings;
     private readonly IOutboundQueueObserver _queueObserver;
     private readonly IPlatformWalletAddressProvider _walletAddresses;
+    private readonly IDepositRefundLimitObserver _depositRefundLimitObserver;
     private readonly TimeProvider _clock;
     private readonly ILogger<OutgoingTransferDispatchJob> _logger;
 
@@ -111,6 +112,7 @@ public sealed class OutgoingTransferDispatchJob
         IBlockchainNetworkSettingsProvider networkSettings,
         IOutboundQueueObserver queueObserver,
         IPlatformWalletAddressProvider walletAddresses,
+        IDepositRefundLimitObserver depositRefundLimitObserver,
         TimeProvider clock,
         ILogger<OutgoingTransferDispatchJob> logger)
     {
@@ -123,6 +125,7 @@ public sealed class OutgoingTransferDispatchJob
         _networkSettings = networkSettings;
         _queueObserver = queueObserver;
         _walletAddresses = walletAddresses;
+        _depositRefundLimitObserver = depositRefundLimitObserver;
         _clock = clock;
         _logger = logger;
     }
@@ -149,6 +152,18 @@ public sealed class OutgoingTransferDispatchJob
         await ReportAwaitingApprovalAsync(now, autoSend, cancellationToken);
         await ReportQueueAsync(now, autoSend, cancellationToken);
 
+        await DispatchReachableAsync(now, autoSend, configured, cancellationToken);
+
+        // T169a — after the sends, so a hold made in this run alarms in this run.
+        await ReportDepositRefundLimitAsync(_clock.GetUtcNow().UtcDateTime, cancellationToken);
+    }
+
+    private async Task DispatchReachableAsync(
+        DateTime now,
+        bool autoSend,
+        List<BlockchainNetwork> configured,
+        CancellationToken cancellationToken)
+    {
         // T150 — a configured network in a detected outage is skipped the same
         // way (its rows keep their retry budget), every reachable network gets
         // its own oldest-first batch, and the batches are worked round-robin
@@ -297,7 +312,11 @@ public sealed class OutgoingTransferDispatchJob
                 && OutboundTypes.Contains(b.Type)
                 && (autoSend
                     || !OutboundApprovalGate.ApprovalTypes.Contains(b.Type)
-                    || b.ApprovedAt != null))
+                    || b.ApprovedAt != null)
+                // T169a — a refund the deposit refund daily limit holds waits
+                // for the window or an admin, not for the network: it has its
+                // own alarm (deposit-refund-daily-limit-held).
+                && !(b.DepositRefundLimitHeldAt != null && b.DepositRefundCountedAt == null))
             .GroupBy(b => b.Network)
             .Select(g => new
             {
@@ -315,6 +334,111 @@ public sealed class OutgoingTransferDispatchJob
             var oldestSeconds = group is null ? 0d : Math.Max(0d, (now - group.Oldest).TotalSeconds);
             _queueObserver.Report(network, group?.Count ?? 0, oldestSeconds, alarmSeconds);
         }
+    }
+
+    /// <summary>
+    /// T169a — per-network state of the deposit refund daily limit every run
+    /// (held rows, the 24-hour total, the limit) for the
+    /// <c>deposit-refund-daily-limit-held</c> alarm, and one warning line per
+    /// network while refunds are held.
+    /// </summary>
+    private async Task ReportDepositRefundLimitAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        var held = await _db.Set<BlockchainTransaction>()
+            .AsNoTracking()
+            .IgnoreQueryFilters()
+            .Where(DepositRefundDailyLimit.IsHeld)
+            .GroupBy(b => b.Network)
+            .Select(g => new { Network = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        foreach (var network in Enum.GetValues<BlockchainNetwork>())
+        {
+            var heldRows = held.FirstOrDefault(h => h.Network == network)?.Count ?? 0;
+            var used = await DepositRefundDailyLimit.UsedAsync(_db, network, now, excludingId: null, cancellationToken);
+            var limit = (await _networkSettings.GetAsync(network, cancellationToken)).DepositRefundDailyLimitUsdt;
+            _depositRefundLimitObserver.Report(network, heldRows, used, limit);
+            if (heldRows > 0)
+            {
+                _logger.LogWarning(
+                    "{Count} refund(s) on {Network} are held by the deposit refund daily limit ({Used} of {Limit} USDT sent from deposits in the last 24 h) — they go out when the window has room or an admin releases them (AD42).",
+                    heldRows, network, used, limit);
+            }
+        }
+    }
+
+    /// <summary>
+    /// T169a (proje sahibi kararı 2026-10-21 — ⚠ PARA) — weighs a refund that
+    /// is about to leave a DEPOSIT against its network's rolling 24-hour limit
+    /// (<see cref="DepositRefundDailyLimit"/>) and either stamps it as counted
+    /// (true: send it) or holds it (false: PENDING, no retry spent, never
+    /// FAILED; the admin alarm the first time). Check and stamp run under the
+    /// network's lock in one transaction, committed before the broadcast.
+    /// </summary>
+    private async Task<bool> PassDepositRefundLimitAsync(
+        BlockchainTransaction row,
+        CancellationToken cancellationToken)
+    {
+        var now = _clock.GetUtcNow().UtcDateTime;
+        var limit = (await _networkSettings.GetAsync(row.Network, cancellationToken)).DepositRefundDailyLimitUsdt;
+
+        await using var dbTx = await _db.Database.BeginTransactionAsync(cancellationToken);
+        await DepositRefundDailyLimit.LockAsync(_db, row.Network, now, cancellationToken);
+
+        // A row already admitted inside the window (an earlier attempt that
+        // failed transiently) stays admitted — it may have left already, so it
+        // is never un-counted to make room.
+        if (row.DepositRefundCountedAt is { } counted && counted > now - DepositRefundDailyLimit.Window)
+        {
+            await dbTx.CommitAsync(cancellationToken);
+            return true;
+        }
+
+        var used = await DepositRefundDailyLimit.UsedAsync(_db, row.Network, now, row.Id, cancellationToken);
+        var released = row.DepositRefundLimitReleasedAt is not null;
+        if (released || used + row.Amount <= limit)
+        {
+            row.DepositRefundCountedAt = now;
+            await _db.SaveChangesAsync(cancellationToken);
+            await dbTx.CommitAsync(cancellationToken);
+            if (released && used + row.Amount > limit)
+            {
+                _logger.LogWarning(
+                    "Refund row {Id} ({Type}) on {Network} goes past the deposit refund daily limit by an admin release: {Amount} + {Used} > {Limit} USDT.",
+                    row.Id, row.Type, row.Network, row.Amount, used, limit);
+            }
+            return true;
+        }
+
+        var firstHold = row.DepositRefundLimitHeldAt is null;
+        row.DepositRefundCountedAt = null;
+        row.DepositRefundLimitHeldAt ??= now;
+        row.NextAttemptAt = now.Add(DepositRefundDailyLimit.HeldRetryDelay);
+        row.ErrorMessage = TrimError(
+            DepositRefundDailyLimit.HeldErrorCode,
+            $"{row.Amount} USDT would bring {row.Network}'s deposit refunds of the last 24 h to {used + row.Amount}, above the {limit} USDT limit — waiting for the window or an admin release (AD42).");
+        if (firstHold)
+        {
+            await _outbox.PublishAsync(
+                new DepositRefundLimitHeldEvent(
+                    EventId: Guid.NewGuid(),
+                    BlockchainTransactionId: row.Id,
+                    TransactionId: row.TransactionId,
+                    Network: row.Network,
+                    Type: row.Type,
+                    Amount: row.Amount,
+                    UsedLast24hUsdt: used,
+                    LimitUsdt: limit,
+                    OccurredAt: now),
+                cancellationToken);
+        }
+        await _db.SaveChangesAsync(cancellationToken);
+        await dbTx.CommitAsync(cancellationToken);
+
+        _logger.LogWarning(
+            "Refund row {Id} ({Type}) on {Network} is HELD by the deposit refund daily limit: {Amount} + {Used} sent in the last 24 h > {Limit} USDT — left PENDING (no retry spent), asked again after {Delay}.",
+            row.Id, row.Type, row.Network, row.Amount, used, limit, DepositRefundDailyLimit.HeldRetryDelay);
+        return false;
     }
 
     private async Task<bool> DispatchOneAsync(Guid id, bool autoSend, CancellationToken cancellationToken)
@@ -471,6 +595,17 @@ public sealed class OutgoingTransferDispatchJob
             return false;
         }
         var broadcastToken = chainToken.Value;
+
+        // T169a — a refund leaving a deposit is weighed against the network's
+        // rolling 24-hour limit, after the approval gate (an unapproved row
+        // never gets here) and right before the broadcast. Held = PENDING, no
+        // retry spent; nothing is signed.
+        if (refundSource == RefundSource.Deposit
+            && DepositRefundDailyLimit.Applies(row.Type)
+            && !await PassDepositRefundLimitAsync(row, cancellationToken))
+        {
+            return false;
+        }
 
         // T152 — on a network with a fee cap (Ethereum, 08 §3.7.7) every
         // outbound send carries the admin setting and the signer refuses above

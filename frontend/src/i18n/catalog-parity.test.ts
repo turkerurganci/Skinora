@@ -58,7 +58,7 @@ describe("i18n ↔ catalogue parity", () => {
   it("expects a non-trivial key set (guard checks itself)", () => {
     expect(EXPECTED_STATUS_KEYS).toHaveLength(13);
     expect(EXPECTED_STEP_KEYS).toHaveLength(6);
-    expect(EXPECTED_ACTION_KEYS).toHaveLength(34);
+    expect(EXPECTED_ACTION_KEYS).toHaveLength(35); // T169a: + DEPOSIT_REFUND_LIMIT_RELEASED
   });
 
   it.each(LOCALES)("%s status labels cover exactly ExtendedStatus (04 §C01)", (locale) => {

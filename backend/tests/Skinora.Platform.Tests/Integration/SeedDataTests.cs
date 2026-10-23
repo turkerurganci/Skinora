@@ -95,9 +95,11 @@ public class SeedDataTests : IntegrationTestBase
         //   buffer + fallback, Ethereum minimum-refund multiplier).
         // + 2 T169 rows (seed indices 79–80: TRON's own minimum price and the
         //   outbound.auto_send_enabled payout/refund launch gate).
+        // + 2 T169a rows (seed indices 81–82: the per-network deposit refund
+        //   daily limit, 100 each).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(77, rows.Count);
-        Assert.Equal(77, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(79, rows.Count);
+        Assert.Equal(79, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -131,6 +133,8 @@ public class SeedDataTests : IntegrationTestBase
             "auth.banned_countries",
             "auth.min_steam_account_age_days",
             // T148 — Ethereum's per-network rows ship with the T142 values.
+            // T169a — deposit refund daily limit (100, owner decision 2026-10-21).
+            "blockchain.ethereum.deposit_refund_daily_limit_usdt",
             "blockchain.ethereum.fee_cap_usd_per_transfer",
             "blockchain.ethereum.fee_cap_wait_alarm_minutes",
             "blockchain.ethereum.finality_stall_alarm_minutes",
@@ -146,6 +150,8 @@ public class SeedDataTests : IntegrationTestBase
             "blockchain.refund_gas_fee_estimate_usdt",
             "blockchain.sweep_trx_fallback_sun",
             "blockchain.transfer_retry_intervals_minutes",
+            // T169a — deposit refund daily limit (100, owner decision 2026-10-21).
+            "blockchain.tron.deposit_refund_daily_limit_usdt",
             // T169 — TRON's own minimum price (50, owner decision 2026-10-21).
             "blockchain.tron.min_transaction_amount_usdt",
             // T149 — TRON network fee line buffer (0.007) and fallback (3.00).

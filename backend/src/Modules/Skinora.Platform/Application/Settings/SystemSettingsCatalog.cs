@@ -129,6 +129,8 @@ public static class SystemSettingsCatalog
         new("blockchain.tron.network_fee_fallback_usdt",  "blockchain_health",    "TRON ağ ücreti satırı — tahmin alınamazsa yazılan yedek",   "USDT"),
         // T169 — TRON's own minimum price (owner decision 2026-10-21).
         new("blockchain.tron.min_transaction_amount_usdt", "transaction_limits",  "TRON için en düşük satış tutarı — altında TRON kapalı",     "USDT"),
+        // T169a — the deposit refund daily limit (owner decision 2026-10-21).
+        new("blockchain.tron.deposit_refund_daily_limit_usdt", "wallet_security", "TRON — depozitten iadeye 24 saatlik tavan (aşan iade bekler)", "USDT"),
 
         // --- Ethereum per-network parameters (T148 — 05 §3.3a, 06 §1.4 "Ayarlar") ---
         // TRON keeps the unprefixed keys above. Values are the T142
@@ -145,6 +147,7 @@ public static class SystemSettingsCatalog
         new("blockchain.ethereum.hot_wallet_eth_balance_minimum",  "wallet_security", "Ethereum — hot wallet ETH bakiye alt eşiği (gas için)", "ETH"),
         new("blockchain.ethereum.fuel_wallet_eth_balance_minimum", "wallet_security", "Ethereum — yakıt cüzdanı ETH bakiye alt eşiği", "ETH"),
         new("blockchain.ethereum.min_refund_threshold_ratio",      "blockchain_health", "Ethereum — minimum iade eşiği (gas fee × bu oran altı iade yapılmaz)", "oran"),
+        new("blockchain.ethereum.deposit_refund_daily_limit_usdt", "wallet_security", "Ethereum — depozitten iadeye 24 saatlik tavan (aşan iade bekler)", "USDT"),
 
         // --- Buyer identification (open link toggle, 02 §16.2 "Yöntem 2'yi aktif/pasif") ---
         new("open_link_enabled",                          "buyer_identification", "Açık link yöntemi aktif",                                   null),

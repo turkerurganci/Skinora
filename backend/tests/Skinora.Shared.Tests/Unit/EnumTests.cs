@@ -440,8 +440,10 @@ public class EnumTests
     // ── AuditAction (33) ────────────────────────────────────────────
 
     [Fact]
-    public void AuditAction_ShouldHave34Values()
+    public void AuditAction_ShouldHave35Values()
     {
+        // 35 after T169a added DEPOSIT_REFUND_LIMIT_RELEASED (an admin lets a
+        // refund held by the deposit refund daily limit go, 07 §9.35 AD42).
         // 34 after T169 added OUTBOUND_TRANSFER_APPROVED (admin approval of a
         // payout/refund while outbound.auto_send_enabled is false, 07 §9.35).
         // 33 after T157 added OUTBOUND_ROW_CLOSURE_PROPOSED / _APPROVED /
@@ -468,7 +470,7 @@ public class EnumTests
         // row there — and never the reverse: do NOT delete enum values to
         // "align", every one of them has a writer.
         var values = Enum.GetValues<AuditAction>();
-        Assert.Equal(34, values.Length);
+        Assert.Equal(35, values.Length);
     }
 
     [Theory]

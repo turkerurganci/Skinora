@@ -33,7 +33,8 @@ public sealed record BlockchainNetworkSettings(
     decimal MinRefundThresholdRatio,
     decimal? NetworkFeeBufferRatio,
     decimal? NetworkFeeFallbackUsdt,
-    decimal? MinTransactionAmountUsdt = null);
+    decimal? MinTransactionAmountUsdt = null,
+    decimal DepositRefundDailyLimitUsdt = BlockchainNetworkSettingsProvider.DefaultDepositRefundDailyLimitUsdt);
 
 /// <summary>
 /// Default <see cref="IBlockchainNetworkSettingsProvider"/>. Same read-side
@@ -43,10 +44,17 @@ public sealed record BlockchainNetworkSettings(
 /// </summary>
 public sealed class BlockchainNetworkSettingsProvider : IBlockchainNetworkSettingsProvider
 {
+    /// <summary>
+    /// T169a — the deposit refund daily limit both networks seed (proje sahibi
+    /// kararı 2026-10-21: 100 $ per network per day); also the read-side
+    /// fallback, so a missing or bad row never lifts the limit.
+    /// </summary>
+    public const decimal DefaultDepositRefundDailyLimitUsdt = 100m;
+
     /// <summary>Seeded defaults (06 §3.17) — the read-side fallback per network.</summary>
     public static readonly BlockchainNetworkSettings TronDefaults = new(
         Network: BlockchainNetwork.TRON,
-        RefundGasFeeFallbackUsdt: 2.60m,
+        RefundGasFeeFallbackUsdt: 2.80m,
         PayoutGasFeeFallbackUsdt: 2.25m,
         MaxChargedGasFeeUsdt: 10.0m,
         HotWalletNativeBalanceMinimum: 1500m,
@@ -115,7 +123,8 @@ public sealed class BlockchainNetworkSettingsProvider : IBlockchainNetworkSettin
             MinRefundThresholdRatio: ReadDecimal(rows, keys.MinRefundThresholdRatio, defaults.MinRefundThresholdRatio),
             NetworkFeeBufferRatio: ReadOptionalBufferRatio(rows, keys.NetworkFeeBufferRatio, defaults.NetworkFeeBufferRatio),
             NetworkFeeFallbackUsdt: ReadOptionalDecimal(rows, keys.NetworkFeeFallbackUsdt, defaults.NetworkFeeFallbackUsdt),
-            MinTransactionAmountUsdt: ReadOptionalDecimal(rows, keys.MinTransactionAmountUsdt, defaults.MinTransactionAmountUsdt));
+            MinTransactionAmountUsdt: ReadOptionalDecimal(rows, keys.MinTransactionAmountUsdt, defaults.MinTransactionAmountUsdt),
+            DepositRefundDailyLimitUsdt: ReadDecimal(rows, keys.DepositRefundDailyLimitUsdt, defaults.DepositRefundDailyLimitUsdt));
     }
 
     /// <summary>

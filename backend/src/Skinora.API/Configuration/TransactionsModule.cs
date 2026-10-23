@@ -350,6 +350,8 @@ public static class TransactionsModule
         services.Configure<Skinora.API.Monitoring.OutboundQueueAlarmOptions>(
             configuration.GetSection(Skinora.API.Monitoring.OutboundQueueAlarmOptions.SectionName));
         services.AddSingleton<IOutboundQueueObserver, Skinora.API.Monitoring.PrometheusOutboundQueueObserver>();
+        // T169a — deposit refund daily limit gauges (deposit-refund-daily-limit-held).
+        services.AddSingleton<IDepositRefundLimitObserver, Skinora.API.Monitoring.PrometheusDepositRefundLimitObserver>();
         services.AddScoped<OutgoingTransferConfirmationJob>();
         services.AddScoped<SellerPayoutQueueJob>();
         // WP3 — deposit → hot wallet sweep producer. Queues the PENDING SWEEP
