@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ConfigError, DEFAULT_SECRET_PATHS, loadConfig, providerHost } from './index.js';
+import { DEFAULT_SHARED_SECRET_PATHS } from './sharedSecrets.js';
 import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
@@ -10,6 +11,9 @@ const BACKUP_URL = 'https://ethereum-sepolia.core.chainstack.com/abcdef012345678
 const signer = new EthereumHdWallet(MNEMONIC).deriveSigner(20);
 
 const baseEnv = {
+  // T171a — the INTERNAL_KEY variable is read only under development|test;
+  // production reads the Docker secret file (the "shared secrets" block below).
+  NODE_ENV: 'test',
   INTERNAL_KEY: KEY,
   ETHEREUM_RPC_PRIMARY_URL: PRIMARY_URL,
   ETHEREUM_RPC_BACKUP_URL: BACKUP_URL,
@@ -397,5 +401,98 @@ describe('providerHost', () => {
   it('shows the host only — the path carries the API key', () => {
     expect(providerHost(PRIMARY_URL)).toBe('eth-sepolia.g.alchemy.com');
     expect(providerHost(PRIMARY_URL)).not.toContain(RPC_KEY);
+  });
+});
+
+/**
+ * T171a — the internal key and the webhook secret come from Docker secret
+ * files, the same files the backend reads (DEFERRED_BACKLOG
+ * `SharedSecretsInPlainEnv`). The running process: startupWiring.test.ts.
+ */
+describe('loadConfig — shared secrets (T171a)', () => {
+  const WEBHOOK = 'w'.repeat(64);
+  const production = {
+    NODE_ENV: 'production',
+    ETHEREUM_RPC_PRIMARY_URL: PRIMARY_URL,
+  };
+  const mounted = () =>
+    secrets({
+      [DEFAULT_SHARED_SECRET_PATHS.internalKey]: KEY,
+      [DEFAULT_SHARED_SECRET_PATHS.webhookSecret]: WEBHOOK,
+    });
+
+  it('reads both from the compose mount points in production', () => {
+    expect(DEFAULT_SHARED_SECRET_PATHS).toEqual({
+      internalKey: '/run/secrets/ethereum_sidecar_internal_key',
+      webhookSecret: '/run/secrets/ethereum_webhook_secret',
+    });
+    const config = loadConfig(production, mounted());
+    expect(config.internalKey).toBe(KEY);
+    expect(config.webhookHmacKey).toBe(WEBHOOK);
+    expect(config.sharedSecretSources).toEqual({ internalKey: 'file', webhookSecret: 'file' });
+  });
+
+  it.each([
+    ['production', 'INTERNAL_KEY'],
+    ['production', 'WEBHOOK_SECRET'],
+    ['', 'INTERNAL_KEY'],
+    ['Development', 'WEBHOOK_SECRET'],
+  ])('NODE_ENV=%j refuses %s as a plain variable (SHARED_SECRET_IN_ENV)', (nodeEnv, variable) => {
+    const error = errorOf(() =>
+      loadConfig({ ...production, NODE_ENV: nodeEnv, [variable]: 'v'.repeat(64) }, mounted()),
+    );
+    expect(error.code).toBe('SHARED_SECRET_IN_ENV');
+    expect(error.message).not.toContain('v'.repeat(32));
+  });
+
+  it('development reads the variables; file and variable together is ambiguous', () => {
+    const config = loadConfig(
+      { ...baseEnv, NODE_ENV: 'development', WEBHOOK_SECRET: WEBHOOK },
+      secrets(),
+    );
+    expect(config.sharedSecretSources).toEqual({ internalKey: 'env', webhookSecret: 'env' });
+    expect(errorOf(() => loadConfig({ ...baseEnv, NODE_ENV: 'development' }, mounted())).code).toBe(
+      'SHARED_SECRET_AMBIGUOUS',
+    );
+  });
+
+  it('a mount point that is not a readable file stops the service (SHARED_SECRET_UNREADABLE)', () => {
+    const read = (path: string) => {
+      if (path === DEFAULT_SHARED_SECRET_PATHS.internalKey) throw new Error('EISDIR');
+      return mounted()(path);
+    };
+    expect(errorOf(() => loadConfig(production, read)).code).toBe('SHARED_SECRET_UNREADABLE');
+  });
+
+  it('no internal key file → INTERNAL_KEY_MISSING; a short one → INTERNAL_KEY_TOO_SHORT', () => {
+    expect(errorOf(() => loadConfig(production, secrets())).code).toBe('INTERNAL_KEY_MISSING');
+    expect(
+      errorOf(() =>
+        loadConfig(
+          production,
+          secrets({ [DEFAULT_SHARED_SECRET_PATHS.internalKey]: 'k'.repeat(31) }),
+        ),
+      ).code,
+    ).toBe('INTERNAL_KEY_TOO_SHORT');
+  });
+
+  it('the webhook secret may be absent (T151: acceptsPayments=false) but not short', () => {
+    const none = loadConfig(
+      production,
+      secrets({ [DEFAULT_SHARED_SECRET_PATHS.internalKey]: KEY }),
+    );
+    expect(none.webhookHmacKey).toBe('');
+    expect(none.sharedSecretSources.webhookSecret).toBe('none');
+    const short = errorOf(() =>
+      loadConfig(
+        production,
+        secrets({
+          [DEFAULT_SHARED_SECRET_PATHS.internalKey]: KEY,
+          [DEFAULT_SHARED_SECRET_PATHS.webhookSecret]: 'short-webhook-secret',
+        }),
+      ),
+    );
+    expect(short.code).toBe('WEBHOOK_SECRET_TOO_SHORT');
+    expect(short.message).not.toContain('short-webhook-secret');
   });
 });

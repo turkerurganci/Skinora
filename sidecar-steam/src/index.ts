@@ -1,7 +1,8 @@
 import express from 'express';
 import Redis from 'ioredis';
 import { config } from './config/index.js';
-import { InternalKeyError, requireInternalKey } from './config/internalKey.js';
+import { InternalKeyError } from './config/internalKey.js';
+import { SharedSecretError, loadInternalKey } from './config/sharedSecrets.js';
 import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { buildRouter } from './api/routes.js';
@@ -27,16 +28,27 @@ import {
   type LimitedAccountCache,
 } from './cache/LimitedAccountCache.js';
 
-// T161 — fail closed before anything is built or listens: without its internal
-// key (05 §3.4) the service does not start (config/internalKey.ts). The error
-// carries the code; the stack trace on stderr is the container's last word.
+// T161 / T171a — fail closed before anything is built or listens: without its
+// internal key (05 §3.4) the service does not start. T171a — the key comes from
+// its Docker secret file, the same file the backend reads
+// (config/sharedSecrets.ts); outside NODE_ENV=development|test a plain
+// INTERNAL_KEY variable stops the service. The error carries the code; the
+// stack trace on stderr is the container's last word.
 const internalKey = startupInternalKey();
 
 function startupInternalKey(): string {
   try {
-    return requireInternalKey(config.internalKey);
+    const loaded = loadInternalKey(process.env);
+    logger.info(
+      { internalKeySource: loaded.source },
+      'Internal key: loaded (source only — the value is never logged)',
+    );
+    return loaded.internalKey;
   } catch (err) {
-    const code = err instanceof InternalKeyError ? err.code : 'STARTUP_FAILED';
+    const code =
+      err instanceof InternalKeyError || err instanceof SharedSecretError
+        ? err.code
+        : 'STARTUP_FAILED';
     logger.fatal({ code }, `Steam sidecar refused to start: ${code}`);
     throw err;
   }

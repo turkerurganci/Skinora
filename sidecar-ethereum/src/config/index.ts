@@ -3,6 +3,12 @@ import { checksummedEvmAddress } from '../address/evmAddress.js';
 import { SidecarError } from '../errors/SidecarError.js';
 import { ETHEREUM_CHAINS, MAINNET_TOKEN_CONTRACTS, type EthereumChainName } from '../network.js';
 import { readSecretFile } from './secretFile.js';
+import {
+  INTERNAL_KEY_SPEC,
+  WEBHOOK_SECRET_SPEC,
+  resolveSharedSecret,
+  type SharedSecretSource,
+} from './sharedSecrets.js';
 import { TOKEN_DECIMALS, parseLimit } from '../transfer/units.js';
 
 /**
@@ -18,9 +24,10 @@ import { TOKEN_DECIMALS, parseLimit } from '../transfer/units.js';
  *
  * <para>
  * <b>Secrets are files, not variables.</b> The seed and the two signing keys
- * are Docker secrets (`*_FILE` paths, default `/run/secrets/...`); the
- * internal key, the webhook secret and the RPC URLs (which carry the
- * provider's API key) are environment values like the TRON service's.
+ * are Docker secrets (`*_FILE` paths, default `/run/secrets/...`). Since
+ * T171a so are the internal key and the webhook secret (config/sharedSecrets.ts
+ * — the variables only under NODE_ENV=development|test); the RPC URLs (which
+ * carry the provider's API key) are still environment values.
  * </para>
  */
 
@@ -47,6 +54,11 @@ export interface EthereumServiceConfig {
   readonly internalKey: string;
   /** HMAC secret for webhooks to the backend (05 §3.3a). Read now, used from T151 on; '' = not set. */
   readonly webhookHmacKey: string;
+  /** T171a — where the two shared secrets came from (logged at startup; never a value). */
+  readonly sharedSecretSources: {
+    readonly internalKey: SharedSecretSource;
+    readonly webhookSecret: SharedSecretSource;
+  };
   readonly backendUrl: string;
   readonly chain: EthereumChainName;
   readonly chainId: number;
@@ -292,17 +304,32 @@ export function loadConfig(
   env: Env,
   readMounted: MountedFileReader = readSecretFile,
 ): EthereumServiceConfig {
-  const internalKey = value(env, 'INTERNAL_KEY');
+  // T171a — both shared secrets from their Docker secret files (the same files
+  // the backend reads); the variables only under NODE_ENV=development|test.
+  const fail = (code: string, message: string) => new ConfigError(code, message);
+  const internal = resolveSharedSecret(INTERNAL_KEY_SPEC, env, readMounted, fail);
+  const webhook = resolveSharedSecret(WEBHOOK_SECRET_SPEC, env, readMounted, fail);
+
+  const internalKey = internal.value;
   if (internalKey === '') {
     throw new ConfigError(
       'INTERNAL_KEY_MISSING',
-      'INTERNAL_KEY is not set — the Ethereum service does not start without its internal key (05 §3.4, 08 §3.7.2).',
+      `The internal key is not set (${internal.path}; INTERNAL_KEY only in development) — the Ethereum service does not start without it (05 §3.4, 08 §3.7.2).`,
     );
   }
   if (internalKey.length < MIN_INTERNAL_KEY_LENGTH) {
     throw new ConfigError(
       'INTERNAL_KEY_TOO_SHORT',
-      `INTERNAL_KEY must be at least ${MIN_INTERNAL_KEY_LENGTH} characters (openssl rand -hex 32).`,
+      `The internal key must be at least ${MIN_INTERNAL_KEY_LENGTH} characters (openssl rand -hex 32).`,
+    );
+  }
+  // The webhook secret may be absent (payments are then not reported and
+  // /health says acceptsPayments=false, T151); when set it carries the same
+  // 32-character floor as the internal key.
+  if (webhook.value !== '' && webhook.value.length < MIN_INTERNAL_KEY_LENGTH) {
+    throw new ConfigError(
+      'WEBHOOK_SECRET_TOO_SHORT',
+      `The webhook secret must be at least ${MIN_INTERNAL_KEY_LENGTH} characters (openssl rand -hex 32).`,
     );
   }
 
@@ -368,7 +395,8 @@ export function loadConfig(
     port: listenPort(env),
     nodeEnv: value(env, 'NODE_ENV') || 'development',
     internalKey,
-    webhookHmacKey: value(env, 'WEBHOOK_SECRET'),
+    webhookHmacKey: webhook.value,
+    sharedSecretSources: { internalKey: internal.source, webhookSecret: webhook.source },
     backendUrl: value(env, 'BACKEND_URL') || 'http://skinora-backend:5000',
     chain,
     chainId: ETHEREUM_CHAINS[chain].chainId,
