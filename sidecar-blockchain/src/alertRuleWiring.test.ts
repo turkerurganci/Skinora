@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   energyDelegationStrandedTotal,
   solidBlockAgeSeconds,
@@ -74,5 +74,50 @@ describe('T170 — TRON per-network alerts wired to the series the service expor
     const block = ruleBlock('tron-api-errors-high');
     const name = (await tronApiErrorsTotal.get()).name;
     expect(block).toContain(`sum(rate(${name}[5m]))`);
+  });
+});
+
+/**
+ * T170 S4-2 — the production values the money alarms run on. A `for:` that
+ * drifts from 2m to 2h, or a stall default that drifts from 300 s to 3000 s,
+ * still parses, still loads and still "fires" — just hours late. Pinned here
+ * so such a change has to come with a test change.
+ */
+describe('T170 — production timings of the TRON money alarms', () => {
+  function forOf(uid: string): string {
+    const m = /^ {8}for: (\S+)$/m.exec(ruleBlock(uid));
+    if (!m) throw new Error(`${uid} has no for:`);
+    return m[1];
+  }
+
+  it.each([
+    ['tron-solid-block-stalled', '2m'],
+    ['tron-energy-delegation-stranded', '0s'],
+    ['tron-api-errors-high', '5m'],
+  ] as const)('%s holds for %s', (uid, expected) => {
+    expect(forOf(uid)).toBe(expected);
+  });
+
+  it('the stall threshold defaults to 300 s in the service', async () => {
+    const saved = process.env.TRON_SOLID_BLOCK_STALL_SECONDS;
+    delete process.env.TRON_SOLID_BLOCK_STALL_SECONDS;
+    try {
+      vi.resetModules();
+      const { config } = await import('./config/index.js');
+      expect(config.tronSolidBlockStallSeconds).toBe(300);
+    } finally {
+      if (saved !== undefined) process.env.TRON_SOLID_BLOCK_STALL_SECONDS = saved;
+      vi.resetModules();
+    }
+  });
+
+  it('the stall threshold defaults to 300 s in compose and the env example', () => {
+    const root = resolve(__dirname, '../..');
+    const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
+    expect(compose).toContain(
+      'TRON_SOLID_BLOCK_STALL_SECONDS=${TRON_SOLID_BLOCK_STALL_SECONDS:-300}',
+    );
+    const example = readFileSync(resolve(root, '.env.example'), 'utf8');
+    expect(example).toMatch(/^TRON_SOLID_BLOCK_STALL_SECONDS=300\r?$/m);
   });
 });

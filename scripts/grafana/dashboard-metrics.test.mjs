@@ -284,3 +284,94 @@ describe("Alert rules — every expression names an exported metric", () => {
     ]);
   });
 });
+
+// T170 S4-3 — a right metric name with a wrong label value is the same empty
+// panel: `asset="usdt"` or `direction="Upper"` match no series. Every label
+// value the Networks dashboard filters on is checked against the value the
+// source writes, read from the source itself.
+function readSource(...parts) {
+  return readFileSync(join(ROOT, ...parts), "utf8");
+}
+
+function enumMembers(file, name) {
+  const text = readSource(...file);
+  const body = new RegExp(String.raw`enum ${name}\s*\{([^}]*)\}`).exec(text)?.[1];
+  assert.ok(body, `enum ${name} not found`);
+  return [...body.replace(/\/\/\/.*$/gm, "").matchAll(/^\s*([A-Z][A-Z0-9_]*)\s*(?:=\s*\d+)?,?\s*$/gm)].map((m) => m[1]);
+}
+
+function labelSources() {
+  const hotWallet = readSource("backend", "src", "Skinora.API", "Services", "HotWallet", "HotWalletMonitorService.cs");
+  const observer = readSource("backend", "src", "Skinora.API", "Services", "HotWallet", "IHotWalletThresholdObserver.cs");
+  const constant = (name) => {
+    const v = new RegExp(`const string ${name} = "([^"]+)"`).exec(hotWallet)?.[1];
+    assert.ok(v, `HotWalletMonitorService.${name} not found`);
+    return v;
+  };
+  // The observer writes the direction lower-cased; the dashboard must too.
+  assert.ok(observer.includes("direction.ToLowerInvariant()"), "observer no longer lower-cases the direction");
+  const rpc = readSource("sidecar-ethereum", "src", "rpc", "RpcClient.ts");
+  const kinds = /type RpcFailureKind = ([^;]+);/.exec(rpc)?.[1];
+  assert.ok(kinds, "RpcFailureKind not found");
+  const transferTypes = new Set();
+  for (const file of walk(join(ROOT, "sidecar-blockchain", "src"), (p) => p.endsWith(".ts") && !p.endsWith(".test.ts"))) {
+    for (const m of readFileSync(file, "utf8").matchAll(/transfersTotal\.inc\(\{\s*type:\s*'([^']+)'/g)) transferTypes.add(m[1]);
+  }
+  return {
+    network: new Set(enumMembers(["backend", "src", "Skinora.Shared", "Enums", "BlockchainNetwork.cs"], "BlockchainNetwork")),
+    asset: new Set([
+      ...enumMembers(["backend", "src", "Skinora.Shared", "Enums", "StablecoinType.cs"], "StablecoinType"),
+      constant("TokenTrx"),
+    ]),
+    direction: new Set([constant("DirectionUpper"), constant("DirectionLower")].map((d) => d.toLowerCase())),
+    outcome: new Set(["ok", ...[...kinds.matchAll(/'([^']+)'/g)].map((m) => m[1])]),
+    type: transferTypes,
+  };
+}
+
+/** Every `label="value"` / `label=~"a|b"` in a query, variables and wildcards skipped. */
+function labelValues(expr) {
+  const out = [];
+  for (const m of expr.matchAll(/([a-z_]+)(=~|=)"([^"]*)"/g)) {
+    const values = m[2] === "=~" ? m[3].split("|") : [m[3]];
+    for (const v of values) if (!v.includes("$") && !/[.*+?\\]/.test(v)) out.push({ label: m[1], value: v });
+  }
+  return out;
+}
+
+describe("T170 Networks dashboard — label values the source writes", () => {
+  const net = dashboards().find((d) => d.file === "networks.json")?.json;
+  const sources = labelSources();
+
+  test("the sources are found (network, asset, direction, outcome, transfer type)", () => {
+    assert.deepEqual([...sources.network], ["TRON", "ETHEREUM"]);
+    assert.ok(sources.asset.has("USDT") && sources.asset.has("TRX"));
+    assert.deepEqual([...sources.direction], ["upper", "lower"]);
+    assert.ok(sources.outcome.has("transport") && sources.outcome.has("chain_mismatch"));
+    assert.ok(sources.type.has("BUYER_PAYMENT"));
+  });
+
+  test("every filtered label value is one the source writes", () => {
+    const wrong = [];
+    for (const { panel, expr } of promTargets(net)) {
+      for (const { label, value } of labelValues(expr)) {
+        if (label === "job") continue; // checked against prometheus.yml above
+        const known = sources[label];
+        if (!known) wrong.push(`${panel}: no source known for label "${label}"`);
+        else if (!known.has(value)) wrong.push(`${panel}: ${label}="${value}"`);
+      }
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  test("the network variable offers exactly the networks the backend labels", () => {
+    const options = net.templating.list[0].query.split(",");
+    for (const o of options) assert.ok(sources.network.has(o), o);
+  });
+
+  test("a wrong-case value is caught (bozma)", () => {
+    const sample = 'max(skinora_backend_hot_wallet_balance{network=~"$network", asset="usdt", direction="Upper"})';
+    const caught = labelValues(sample).filter(({ label, value }) => !sources[label].has(value));
+    assert.deepEqual(caught.map((c) => `${c.label}=${c.value}`), ["asset=usdt", "direction=Upper"]);
+  });
+});

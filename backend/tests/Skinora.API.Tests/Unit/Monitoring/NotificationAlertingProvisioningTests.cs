@@ -276,6 +276,20 @@ public sealed class NotificationAlertingProvisioningTests
         Assert.Contains("severity: critical", block);
     }
 
+    [Theory]
+    [InlineData("blockchain-service-degraded", "0s")]
+    [InlineData("hot-wallet-monitor-stale", "0s")]
+    [InlineData("hot-wallet-threshold-breached", "0s")]
+    public void BackendMoneyRules_HoldTheirProductionPendingPeriod(string uid, string expected)
+    {
+        // T170 S4-2 — a `for:` drifting from 0s to 1h still loads and still
+        // "fires", an hour late. The probe and the monitor already debounce,
+        // so these rules fire at once.
+        var match = Regex.Match(RuleBlock(uid), @"^ {8}for: (\S+)$", RegexOptions.Multiline);
+        Assert.True(match.Success, $"{uid} has no for:");
+        Assert.Equal(expected, match.Groups[1].Value);
+    }
+
     [Fact]
     public void NetworkAlertGroup_HasNoDollarSign()
     {
