@@ -84,6 +84,12 @@ jobs:
               # a change there must re-run the backend half too).
               - 'sidecar-blockchain/contracts/**'
               - 'sidecar-ethereum/contracts/**'
+              # T165 — the backend's alerting tests read the Grafana
+              # provisioning (rules / policies / contact points: every rule
+              # reads a series the backend publishes, money rules carry
+              # category=money, money is routed to Telegram + e-mail). An
+              # infra-only PR must run them.
+              - 'infra/grafana/**'
               - '.github/workflows/**'
             frontend:
               - 'frontend/**'

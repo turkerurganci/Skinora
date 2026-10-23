@@ -149,7 +149,7 @@ public sealed class OutgoingTransferDispatchJob
         // unapproved row is not sent, spends no retry and is not FAILED — it
         // simply is not picked, so it never takes a batch slot either.
         var autoSend = await OutboundApprovalGate.IsAutoSendEnabledAsync(_db, cancellationToken);
-        if (!autoSend) await LogAwaitingApprovalAsync(cancellationToken);
+        await ReportAwaitingApprovalAsync(now, autoSend, cancellationToken);
         await ReportQueueAsync(now, autoSend, cancellationToken);
 
         await DispatchReachableAsync(now, autoSend, configured, cancellationToken);
@@ -254,19 +254,28 @@ public sealed class OutgoingTransferDispatchJob
     /// <summary>
     /// T169 — one line per run and network while the gate is closed and rows
     /// wait for an admin approval (AD40 lists them). Not an error: holding the
-    /// row is the gate doing its job.
+    /// row is the gate doing its job. T165 — the same numbers go to
+    /// <see cref="IOutboundQueueObserver.ReportAwaitingApproval"/> for every
+    /// network on every run (zeros when the gate is open or nothing waits), so
+    /// the <c>outbound-awaiting-approval</c> money alarm reaches the operator's
+    /// Telegram chat / e-mail and resolves once the rows are approved.
     /// </summary>
-    private async Task LogAwaitingApprovalAsync(CancellationToken cancellationToken)
+    private async Task ReportAwaitingApprovalAsync(DateTime now, bool autoSend, CancellationToken cancellationToken)
     {
-        var waiting = await _db.Set<BlockchainTransaction>()
-            .AsNoTracking()
-            .IgnoreQueryFilters()
-            .Where(b => b.Status == BlockchainTransactionStatus.PENDING
-                && OutboundApprovalGate.ApprovalTypes.Contains(b.Type)
-                && b.ApprovedAt == null)
-            .GroupBy(b => b.Network)
-            .Select(g => new { Network = g.Key, Count = g.Count() })
-            .ToListAsync(cancellationToken);
+        var waiting = new List<AwaitingApproval>();
+        if (!autoSend)
+        {
+            var groups = await _db.Set<BlockchainTransaction>()
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(b => b.Status == BlockchainTransactionStatus.PENDING
+                    && OutboundApprovalGate.ApprovalTypes.Contains(b.Type)
+                    && b.ApprovedAt == null)
+                .GroupBy(b => b.Network)
+                .Select(g => new { Network = g.Key, Count = g.Count(), Oldest = g.Min(b => b.CreatedAt) })
+                .ToListAsync(cancellationToken);
+            waiting.AddRange(groups.Select(g => new AwaitingApproval(g.Network, g.Count, g.Oldest)));
+        }
 
         foreach (var group in waiting)
         {
@@ -274,7 +283,18 @@ public sealed class OutgoingTransferDispatchJob
                 "{Count} outbound payout/refund row(s) on {Network} wait for an admin approval ({Key} = false) — nothing sent until approved (admin wallets screen).",
                 group.Count, group.Network, OutboundApprovalGate.AutoSendKey);
         }
+
+        foreach (var network in Enum.GetValues<BlockchainNetwork>())
+        {
+            var group = waiting.FirstOrDefault(w => w.Network == network);
+            _queueObserver.ReportAwaitingApproval(
+                network,
+                group?.Count ?? 0,
+                group is null ? 0d : Math.Max(0d, (now - group.Oldest).TotalSeconds));
+        }
     }
+
+    private sealed record AwaitingApproval(BlockchainNetwork Network, int Count, DateTime Oldest);
 
     /// <summary>
     /// T152 — per-network queue visibility every run, for every network, before

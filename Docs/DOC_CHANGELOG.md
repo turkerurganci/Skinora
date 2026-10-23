@@ -57,6 +57,11 @@
 
 ## 05_TECHNICAL_ARCHITECTURE.md
 
+2026-10-23 (**T165 kapanışı (aynı sürüm v3.37):** §9.5 dış izleme satırı — heartbeat Grafana'nın sağlık ucunu da yoklar (yeniden doğrulama Y1, ⚠ PARA). Sürüm: main T169a (#376) birleştirildi; T165'in v3.35'i T169a'nın v3.35/v3.36'sıyla çakıştığı için v3.37.)
+
+2026-10-23 (**T165 düzeltme turu (aynı sürüm v3.37; dalda v3.35 idi):** §3.3 Reconciliation: uyuşmazlık artık panelden çıkıyor — `skinora_backend_reconciliation_mismatches{network,scope}` → Grafana `reconciliation-mismatch` (kritik, para alarmı) + `ADMIN_RECONCILIATION_MISMATCH`; §9.3 para alarmı satırına mutabakat uyuşmazlığı eklendi (doğrulama bulgu 1, ⚠ PARA).)
+
+2026-10-23 (**T165 — bildirim kanalları ve dış alarm (v3.37 — dalda v3.35 idi; kapanışta main T169a #376 birleştirilince T169a v3.35/v3.36 ile çakıştığı için bir üstü):** §9.3 Alerting: kanal satırı Telegram (backend'le aynı bot) + e-posta (Grafana SMTP → Resend SMTP); yeni **para alarmı** seviyesi — `category: money` etiketli her kural önem derecesinden bağımsız Telegram + e-posta birlikte, 4 sa'te bir hatırlatma; para ile ilgili backend admin bildirimleri admin'in kendi kanallarına da gider; sırrı eksik kanal kapalı + `notification-channel-misconfigured`. §9.5: dış izleme Uptime Kuma değil (aynı makinede, makineyle birlikte düşer) — Healthchecks.io heartbeat + UptimeRobot (ücretsiz planlar, DEPLOY_RUNBOOK §P.5); herkese açık `/api/health` yalnız durum döner; ayrıntılı `/health` yalnız compose ağı içinden.)
 2026-10-23 (**T169a kapanışı (v3.36, ⚠ PARA):** §3.3 "Depozitten iade günlük tavanı" satırına proje sahibi kararı 2026-10-23 (modal): admin onayı tavanı aşma izni sayılmaz, ayrı serbest bırakma AD42 kalır.)
 
 2026-10-23 (**T169a (v3.35 — T164 v3.34 ile çakıştığı için bir üstü, ⚠ PARA):** §3.3 "İade gas fee" — tutar = platformun tam zincir harcaması (servislerin `estimate-fee` ucu gönderimin adımlarını izler). Yeni satır "Depozitten iade günlük tavanı" — backend gönderim işinde, kayan 24 saat, `DepositRefundLimitLocks` satır kilidi, ele geçirilmiş backend'e karşı koruma değildir.)
@@ -81,6 +86,7 @@
 
 ## 06_DATA_MODEL.md
 
+2026-10-23 (**T165 düzeltme turu (v6.39 — dalda v6.38 idi; kapanışta main T169a v6.38 ile çakıştığı için bir üstü):** §2.13 `NotificationType` += `ADMIN_RECONCILIATION_MISMATCH` (29 değer, sona eklendi — int saklanır): günlük mutabakatın defter ↔ zincir uyuşmazlığı her admin'in gelen kutusuna ve bağlı kanallarına (05 §3.3 "admin'e critical alert"; doğrulama bulgu 1, ⚠ PARA). İşleme bağlı `ADMIN_PAYMENT_FAILURE` ağ başına bir olay için kullanılamadı.)
 2026-10-23 (**T169a (v6.38, ⚠ PARA):** §2.19 `AuditAction` += `DEPOSIT_REFUND_LIMIT_RELEASED` (35 değer, Fon). §3.8 `BlockchainTransaction` += `DepositRefundCountedAt`, `DepositRefundLimitHeldAt`, `DepositRefundLimitReleasedAt`, `DepositRefundLimitReleasedByAdminId`. §3.17 yeni satırlar seed 81–82 `blockchain.{tron,ethereum}.deposit_refund_daily_limit_usdt` = 100 (toplam 79); `blockchain.refund_gas_fee_estimate_usdt` 2.60 → 2.80 (migration yalnız hâlâ 2.60 olan satırı taşır). Yeni §3.26 `DepositRefundLimitLock` (ağ başına kilit satırı). Migration `T169a_DepositRefundDailyLimit`.)
 
 2026-10-22 (**T169 — kalan sahip kararları (v6.37):** §2.19 `AuditAction` += `OUTBOUND_TRANSFER_APPROVED` (34 değer); §3.8 `BlockchainTransaction` += `ApprovedAt`, `ApprovedByAdminId`; §3.17 iki yeni satır (seed 79 `blockchain.tron.min_transaction_amount_usdt` = 50, seed 80 `outbound.auto_send_enabled` = false; toplam 77) ve yeni varsayılanlar: `auth.banned_countries` IR,KP,CU,MM, TRON iade yedeği 2.60, TRON payout yedeği 2.25, TRX alt eşiği 1500, Ethereum iade yedeği 0.20 (öneriyle kaydedilenler ⚠); env'den dolan min/max/sıcak limit/teslimat değerleri 10/2900/4000/720 notu ve migration'ın yalnız eski varsayılandaki satırı taşıma kuralı.)
@@ -92,6 +98,9 @@
 
 ## 07_API_DESIGN.md
 
+2026-10-23 (**T165 düzeltme turu (aynı sürüm v4.25):** §8.1 tablo += `ADMIN_RECONCILIATION_MISMATCH` (Admin, `targetType` null — ağ başına).)
+
+2026-10-23 (**T165 (v4.25 — dalda v4.24 idi; kapanışta main T169a v4.24 ile çakıştığı için bir üstü):** §5.6 U6 her dış kanal için `available` (kurulum o kanaldan gönderebiliyor mu: `Provider=disabled` — üretimde Discord — ya da sırrı eksik sağlayıcı ⇒ `false`); `available=false` iken U7 `enabled: true`, U9 Telegram bağlama, U10 Discord bağlama ve U15 e-posta doğrulama kodu **409 `CHANNEL_UNAVAILABLE`**; kapatma ve bağlantı kaldırma serbest; teslimat açılmaz, platform-içi bildirim yazılır.)
 2026-10-23 (**T169a (v4.24, ⚠ PARA):** §9.35 AD40 yanıtı += `depositRefundLimits[]` (`network`, `limitUsdt`, `usedLast24hUsdt`) ve `limitHeldRows[]`; yeni **AD42** `POST /admin/wallets/outbound-approvals/:id/release-daily-limit` (`MANAGE_SETTINGS`; 404 `ROW_NOT_FOUND`, 409 `ROW_NOT_HELD` / `ALREADY_RELEASED`; audit `DEPOSIT_REFUND_LIMIT_RELEASED`); onay ile tavanın sırası; S22 "Günlük iade tavanı" bölümü. §9 izin tablosu `MANAGE_SETTINGS` satırı AD38–AD42.)
 
 2026-10-22 (**T168 — main (T169, #371) birleştirmesi (v4.23):** T168'in v4.21 / v4.22 girişleri main'deki T169'un v4.21 / v4.22'siyle çakıştı; girişler korundu, başlık main'in v4.22'sinin bir üstü olan v4.23'e alındı. Anlam değişikliği yok.)
@@ -177,6 +186,11 @@
 
 ## DEPLOY_RUNBOOK.md
 
+2026-10-23 (**T165 kapanışı — §P.4/§P.5/§P.6 (⚠ PARA):** main T169a (#376) birleştirildi: P.4 tabloya `deposit-refund-daily-limit-held` (T169a kuralı birleştirmede `category: money` aldı — 28 para kuralı; admin tüketicisi bilinçli gözlemcisiz), "yeni para alarmı eklemek" — testler artık her kuralı para / para dışı listesinde ister (`NonMoneyRules`). İlk açılış koruması log ayarından bağımsız (korumalı açılış `GF_LOG_*`'yi sabitler; sürüm yükseltmede log satırı yeniden ölçülür) ve P.5 heartbeat Grafana'nın `/api/health`'ini de yoklar (yeniden doğrulama Y1). P.6 adım 7a (Grafana durdurulunca heartbeat alarmı). Başlık: iki tarafın "Son güncelleme" metni birleştirildi, bölüm sırasına §P eklendi.)
+
+2026-10-23 (**T165 düzeltme turu — §P.4/§P.6:** P.4 tabloya `reconciliation-mismatch` (mutabakat uyuşmazlığı, kritik para alarmı + `ADMIN_RECONCILIATION_MISMATCH`; doğrulama bulgu 1, ⚠ PARA); "aynı türde ikinci olay" kararı (olay kimliği grup anahtarına eklenmedi — öneriyle kaydedildi ⚠ PARA, gerekçe metinde) ve yeniden başlatmada ölçümün kaybolması; **Grafana ilk açılış koruması** (`scripts/grafana/first-boot.sh`: boş volume'da varsayılan `example@email.com` yönlendirmesi ~60 sn çalışıyordu — doğrulama bulgu 2, ⚠ GÜVENLİK; ölçüldü); P.6 adım 8.)
+
+2026-10-23 (**T165 — yeni §P "Bildirim kanalları, para alarmları ve dış izleme":** P.1 kanal durumları (stub / live / disabled / misconfigured), deneme yayını overlay'i e-posta + Telegram'ı açık, Discord'u kapalı zorlar; P.2 Resend adımları (backend ve Grafana için iki ayrı Sending access anahtarı, webhook, Grafana SMTP `smtp.resend.com:587` STARTTLS) + `User-Agent` bulgusu; P.3 Telegram botu (tek bot iki iş, sohbet kimliğini webhook'tan önce alma, token loglanmaz), Discord kapalı; P.4 para alarmı listesi ve kanal eşlemesi; P.5 dış izleme seçimi (Healthchecks.io heartbeat birincil, UptimeRobot ikincil; Cloudflare Health Checks ücretsiz planda yok) + `skinora-heartbeat` + açık `/api/health`; P.6 T172 doğrulama adımları. §N T164'e, §O T169/T171'e ait olduğu için harf P.)
 2026-10-23 (**T169a kapanışı (⚠ PARA):** §M.4 "Sayılan" — proje sahibi kararı 2026-10-23 (modal): admin onayı tavanı aşma izni sayılmaz, tavanı aşmak AD42. §M.4 "Alarm" — Grafana açıklaması tavanı sabit yazmaz, geçerli değer `skinora_backend_deposit_refund_limit_usdt` (doğrulama S4-7). Yeni madde "Kesinti beklerken değişmez" (doğrulama S4-5). Başlık: main (T164 #372, T174 #374) birleştirmesinde iki tarafın "Son güncelleme" metni birleştirildi.)
 
 2026-10-23 (**T169a (⚠ PARA):** yeni §M.4 "Depozitten iade günlük tavanı" (ayar, sayılan, alarm, ne yapılır: dalga incelemesi, bekle ya da AD42 ile serbest bırak, tavandan büyük iade, audit, tavanı değiştirmek, sınır); §J.2 alarm tablosuna `deposit-refund-daily-limit-held` (warning, iki ağ).)

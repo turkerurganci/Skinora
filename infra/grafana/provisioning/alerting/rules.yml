@@ -4,6 +4,314 @@
 apiVersion: 1
 
 groups:
+  # ===========================================================================
+  # T165 — notification channels and money alarms ("para alarmı"). Kept as its
+  # own group at the top of the file so parallel branches that append to the
+  # two groups below do not touch these lines.
+  #
+  # category: money — the money-alarm contact point (policies.yml): Telegram +
+  # e-mail to the operator, whatever the severity. Every chain / sweep /
+  # payout / refund / wallet / fee rule above and below carries the label too
+  # (T165); a NEW money rule (T169a's refund cap, T170's wallets) only needs
+  # `category: money` next to its severity.
+  # ===========================================================================
+  - orgId: 1
+    name: Skinora Notification And Money Alerts
+    folder: Skinora Alerts
+    interval: 1m
+    rules:
+      # T169 gate (outbound.auto_send_enabled = false): a payout / refund is
+      # sent only after an admin approved it (AD41). Before T165 nobody was
+      # told outside the S22 wallets screen. One message when the first row
+      # starts waiting, a reminder every 4 h, "resolved" when all are approved.
+      - uid: outbound-awaiting-approval
+        title: Payouts Or Refunds Waiting For Admin Approval
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max by (network) (skinora_backend_outbound_awaiting_approval_rows) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 1m
+        labels:
+          severity: warning
+          category: money
+        annotations:
+          summary: 'A payout or refund is waiting for an admin approval on {{ .Labels.network }}'
+          description: >-
+            While outbound.auto_send_enabled is false (T169, the owner's trial-phase
+            decision) every seller payout and buyer refund waits PENDING until an admin
+            approves it on the admin wallets screen ("Onay bekleyen ödemeler", AD40/AD41).
+            Nothing is sent and the seller / buyer waits. Open the panel, check the row
+            (amount, recipient) and approve it.
+            skinora_backend_outbound_awaiting_approval_oldest_seconds shows how long the
+            oldest row has waited (DEPLOY_RUNBOOK §M).
+
+      # T77 monitor (TRON hot wallet; Ethereum: T170): before T165 a breach was
+      # an AuditLog row + a SignalR banner for whoever had the panel open.
+      - uid: hot-wallet-threshold-breached
+        title: Hot Wallet Beyond Its Threshold
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max by (network, asset, direction) (skinora_backend_hot_wallet_threshold_breached) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: warning
+          category: money
+        annotations:
+          summary: 'The {{ .Labels.network }} hot wallet is beyond its {{ .Labels.asset }} threshold ({{ .Labels.direction }})'
+          description: >-
+            direction=upper: the hot wallet holds more USDT / USDC than hot_wallet_limit
+            (T169: 4000 per network) — move the excess to cold storage (admin wallets
+            screen, AD39; DEPLOY_RUNBOOK §A #18). direction=lower: the gas asset (TRX) is
+            under hot_wallet.trx_balance_minimum — payouts and refunds will stall; top it
+            up. The alert resolves on the first monitor run within the threshold.
+            Ethereum's hot wallet USDT limit is not watched yet (DEFERRED_BACKLOG
+            EthereumHotWalletUsdtLimitUnmonitored, T170); its ETH floor is
+            ethereum-wallet-eth-low.
+
+      # T165 düzeltme turu — daily ledger reconciliation (05 §3.3 "admin'e
+      # critical alert"): before this a ledger / chain mismatch was an AuditLog
+      # row + a SignalR banner for whoever had the panel open. The backend
+      # publishes the mismatches its last completed round found per network
+      # and scope; the alarm resolves when a later round of that scope is
+      # balanced. Admins also get ADMIN_RECONCILIATION_MISMATCH in the inbox.
+      - uid: reconciliation-mismatch
+        title: Ledger And Chain Do Not Match
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max by (network, scope) (skinora_backend_reconciliation_mismatches) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: critical
+          category: money
+        annotations:
+          summary: 'Reconciliation: {{ .Labels.network }} {{ .Labels.scope }} does not match the chain ({{ .Values.A.Value }} mismatch(es))'
+          description: >-
+            The backend's daily ledger reconciliation (05 §3.3, tolerance zero) found
+            the platform's books and the on-chain balance apart (scope = DepositAddress,
+            HotWallet or ColdWallet). Money may be missing, or a payout / sweep is not in
+            the ledger. Do not approve payouts on that network until it is explained:
+            the per-token detail (expected, actual, delta, block) is in the
+            RECONCILIATION_MISMATCH audit rows of the admin panel. The alarm resolves
+            when a later round of the same scope is balanced (reconciliation.schedule_cron,
+            daily); a backend restart clears it until the next round (DEPLOY_RUNBOOK §P.4).
+
+      # Backend money alarms (IAdminMoneyAlarmObserver): the admin-broadcast
+      # consumers for a failed / blocked / deferred money movement publish the
+      # time of their latest event. Fires for an hour after each one — also when
+      # no admin account or admin channel exists.
+      - uid: admin-money-alarm-raised
+        title: Backend Money Alarm Raised
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (time() - max by (kind) (skinora_backend_admin_money_alarm_last_seconds)) or vector(1e12)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [3600]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: critical
+          category: money
+        annotations:
+          summary: 'Backend money alarm: {{ .Labels.kind }}'
+          description: >-
+            The backend raised a money alarm in the last hour; the same event is in
+            every admin's inbox (ADMIN_PAYMENT_FAILURE / ADMIN_ESCALATION) with the
+            transaction id. kind = notifications.transfer-dispatch-failed-admin (a payout
+            / refund / sweep exhausted its retries and is FAILED — retry it from the admin
+            panel), notifications.refund-blocked-admin (a refund could not be made: amount
+            below the minimum or negative after fees — the money stays on the deposit),
+            notifications.seller-payout-deferred-admin (the gas estimate ate the whole
+            payout three times — restore the hot wallet's energy, DEPLOY_RUNBOOK §C.2),
+            notifications.settlement-review-admin (a settlement is parked and holds the
+            buyer's money until an admin decides). Fires for one hour after each event; a
+            backend restart forgets the time.
+
+      # T165 — a real provider selected without its secrets (or with a
+      # placeholder / malformed one): the channel is treated as switched off.
+      - uid: notification-channel-misconfigured
+        title: Notification Channel Misconfigured
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max by (channel) (skinora_backend_notification_channel_state{state="misconfigured"}) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Notification channel {{ .Labels.channel }} is selected but not configured — nothing is sent on it'
+          description: >-
+            The backend's provider for this channel is the real one (Resend /
+            Telegram), but a secret is missing, still a placeholder or malformed. The
+            channel behaves as switched off: users cannot connect it and nothing is sent
+            on it. The backend's startup log names the missing keys (never their values).
+            Fill them in .env.trial and restart the backend (DEPLOY_RUNBOOK §P).
+
+      # T165 — an external delivery used up its retries (05 §7.5): a revoked
+      # Telegram token, a Resend key that lost its domain, the daily quota.
+      - uid: notification-delivery-exhausted
+        title: Notification Delivery Failed After All Retries
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (time() - max by (channel) (skinora_backend_notification_delivery_exhausted_last_seconds)) or vector(1e12)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [3600]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'A {{ .Labels.channel }} notification could not be delivered after all retries'
+          description: >-
+            A notification delivery on this channel exhausted its retries and is
+            FAILED (the in-app notification is still there). One user's blocked bot is
+            routine; several in an hour point at the channel itself: a revoked Telegram
+            token (401), a Resend key without access or an unverified domain (401/403),
+            the Resend daily quota (429, 100 a day on the free plan). Check the backend
+            log line "[T37 admin-alert] Notification delivery exhausted retries" and the
+            provider dashboard (DEPLOY_RUNBOOK §P). Fires for one hour after the last.
+
   - orgId: 1
     name: Skinora Critical Alerts
     folder: Skinora Alerts
@@ -116,6 +424,7 @@ groups:
         for: 2m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: Blockchain sidecar is down
           description: The skinora-blockchain-sidecar service has been unreachable for more than 2 minutes.
@@ -161,6 +470,7 @@ groups:
         for: 2m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: Ethereum finalized block is older than the stall threshold
           description: >-
@@ -209,6 +519,7 @@ groups:
         for: 0s
         labels:
           severity: critical
+          category: money
         annotations:
           summary: An Ethereum deposit's balance does not match the transfers the monitor saw
           description: >-
@@ -256,6 +567,7 @@ groups:
         for: 15m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: The Ethereum USDT contract is paused, deprecated or charging a fee
           description: >-
@@ -299,6 +611,7 @@ groups:
         for: 0m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: An Ethereum send's nonce was used by a transaction the service did not sign
           description: >-
@@ -344,6 +657,7 @@ groups:
         for: 0m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: An Ethereum send account is ahead of the transaction journal — no new signatures
           description: >-
@@ -391,6 +705,7 @@ groups:
         for: 0m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: An ETHEREUM_JOURNAL_ACKNOWLEDGED_NONCES value is above the chain nonce — ignored
           description: >-
@@ -440,6 +755,7 @@ groups:
         for: 5m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: The Ethereum payment monitor keeps failing to read or deliver a block range
           description: >-
@@ -488,6 +804,7 @@ groups:
         for: 0m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: The backend refuses the Ethereum service's webhook signature (401)
           description: >-
@@ -534,6 +851,7 @@ groups:
         for: 0m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: A final Ethereum transfer unknown to the journal — its Transfer log does not match the backend row
           description: >-
@@ -584,6 +902,7 @@ groups:
         for: 0m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: An Ethereum send's gas estimate is outside 21,000 to 1,000,000 — nothing signed
           description: >-
@@ -896,6 +1215,7 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: TronGrid API error rate elevated
           description: TronGrid API errors are occurring at more than 0.1/s for the last 5 minutes.
@@ -960,6 +1280,7 @@ groups:
         for: 2m
         labels:
           severity: critical
+          category: money
         annotations:
           summary: TronGrid is rejecting requests with 429 (quota)
           description: >-
@@ -1025,6 +1346,7 @@ groups:
         for: 15m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: TronGrid requests are on course to use 80% of the daily quota
           description: >-
@@ -1072,6 +1394,7 @@ groups:
         for: 0s
         labels:
           severity: warning
+          category: money
         annotations:
           summary: Native ETH reached an Ethereum deposit and is not fuel
           description: >-
@@ -1117,6 +1440,7 @@ groups:
         for: 10m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: The Ethereum balance reconciliation has not completed for 2.5 intervals
           description: >-
@@ -1166,6 +1490,7 @@ groups:
         for: 2m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: An Ethereum send has waited longer than the fee-cap wait threshold
           description: >-
@@ -1220,6 +1545,7 @@ groups:
         for: 10m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: An Ethereum platform wallet holds less ETH than its floor
           description: >-
@@ -1271,6 +1597,7 @@ groups:
         for: 5m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: Outbound transfers have been waiting PENDING longer than the network's threshold
           description: >-
@@ -1319,6 +1646,7 @@ groups:
         for: 15m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: The Ethereum service's JSON-RPC calls are slow (p95 above 3 s)
           description: >-
@@ -1365,6 +1693,7 @@ groups:
         for: 15m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: More PENDING outbound transfers wait on a network than its threshold
           description: >-
@@ -1413,6 +1742,7 @@ groups:
         for: 0m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: A network's ledger reconciliation round could not read its balances
           description: >-
@@ -1458,6 +1788,7 @@ groups:
         for: 0m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: A refund deduction or payout split was priced without a live gas estimate
           description: >-
@@ -1599,6 +1930,7 @@ groups:
         for: 0m
         labels:
           severity: warning
+          category: money
         annotations:
           summary: A refund is waiting because deposit refunds reached the network's 24-hour limit
           description: >-

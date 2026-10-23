@@ -1,0 +1,194 @@
+// T165 düzeltme turu — scripts/grafana/first-boot.sh against a fake Grafana
+// (/run.sh stand-in). The fake records every start with the rule-execution
+// switch it was given; in the guarded run it prints Grafana's real
+// "finished to provision alerting" log line and then waits for SIGTERM, like
+// the server. The live measurement with the real image (empty volume, fake
+// SMTP) is in T165_REPORT "Düzeltme turu".
+import { test, describe, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "first-boot.sh");
+const HAS_SH = spawnSync("sh", ["-c", "command -v grep && command -v sleep"], { encoding: "utf8" }).status === 0;
+if (!HAS_SH && process.env.CI) {
+  throw new Error("first-boot test: sh is required in CI");
+}
+
+const FINISHED = 'logger=provisioning.alerting level=info msg="finished to provision alerting"';
+
+// sh condition: true when Grafana 11.3 would print an info-level text line of
+// the provisioning.alerting logger to the console.
+const LOG_ALLOWS_INFO_TEXT = [
+  'case "${GF_LOG_LEVEL:-info}" in debug|info) true ;; *) false ;; esac',
+  'case "${GF_LOG_CONSOLE_LEVEL:-info}" in debug|info) true ;; *) false ;; esac',
+  'case "${GF_LOG_MODE:-console file}" in *console*) true ;; *) false ;; esac',
+  '[ "${GF_LOG_CONSOLE_FORMAT:-text}" = text ]',
+  'case "${GF_LOG_FILTERS:-}" in *provisioning.alerting:warn*|*provisioning.alerting:error*|*provisioning.alerting:crit*) false ;; *) true ;; esac',
+].join(" && ");
+
+// Operator logging that hides that line (T165 yeniden doğrulama Y1: warn
+// measured live — Grafana never started).
+const QUIET_LOGGING = {
+  GF_LOG_LEVEL: "warn",
+  GF_LOG_MODE: "file",
+  GF_LOG_CONSOLE_LEVEL: "error",
+  GF_LOG_CONSOLE_FORMAT: "json",
+  GF_LOG_FILTERS: "provisioning.alerting:error",
+};
+
+let work;
+
+// mode: "ok" — guarded run provisions then waits for TERM; "die" — guarded
+// run exits before provisioning; "hang" — guarded run never finishes.
+function fakeGrafana(dir, mode) {
+  const record = join(dir, "starts.log");
+  const logRecord = join(dir, "log-settings.log");
+  const fake = join(dir, "run.sh");
+  writeFileSync(
+    fake,
+    [
+      "#!/bin/sh",
+      `echo "start execute_alerts=\${GF_UNIFIED_ALERTING_EXECUTE_ALERTS:-default} addr=\${GF_SERVER_HTTP_ADDR:-any} args=$*" >> "${record.replace(/\\/g, "/")}"`,
+      `echo "log level=\${GF_LOG_LEVEL:-} mode=\${GF_LOG_MODE:-} format=\${GF_LOG_CONSOLE_FORMAT:-}" >> "${logRecord.replace(/\\/g, "/")}"`,
+      'if [ "${GF_UNIFIED_ALERTING_EXECUTE_ALERTS:-}" = "false" ]; then',
+      mode === "die" ? '  echo "logger=provisioning level=error msg=\\"failure\\""; exit 1' : "  :",
+      // Like Grafana: the info line reaches stdout only from a console logger
+      // at info (or lower), in text format, that no filter mutes.
+      mode === "ok" ? `  if ${LOG_ALLOWS_INFO_TEXT}; then echo '${FINISHED}'; fi` : "  :",
+      "  trap 'echo stopped >> \"" + record.replace(/\\/g, "/") + "\"; exit 0' TERM",
+      "  while :; do sleep 1; done",
+      "fi",
+      'echo "real grafana"',
+      "",
+    ].join("\n"),
+    // Executed directly, like the image's /run.sh (Linux needs the x bit).
+    { mode: 0o755 },
+  );
+  return { fake, record, logRecord };
+}
+
+function run(dir, fake, extraEnv = {}) {
+  return new Promise((resolvePromise) => {
+    const child = spawn("sh", [SCRIPT, "--homepath=/usr/share/grafana"], {
+      env: {
+        PATH: process.env.PATH,
+        GRAFANA_RUN: fake,
+        GF_PATHS_DATA: join(dir, "data"),
+        TMPDIR: dir,
+        ...extraEnv,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    child.on("close", (code) => resolvePromise({ code, out }));
+  });
+}
+
+const starts = (record) => (existsSync(record) ? readFileSync(record, "utf8").trim().split("\n") : []);
+
+describe("grafana first-boot.sh (T165)", { skip: !HAS_SH && "sh not available" }, () => {
+  before(() => {
+    work = mkdtempSync(join(tmpdir(), "grafana-first-boot-"));
+  });
+  after(() => rmSync(work, { recursive: true, force: true }));
+
+  function freshDir(name) {
+    const dir = join(work, name);
+    mkdirSync(join(dir, "data"), { recursive: true });
+    return dir;
+  }
+
+  test("empty volume: provisions with rule execution off on loopback, stops it, then starts Grafana normally", async () => {
+    const dir = freshDir("first");
+    const { fake, record } = fakeGrafana(dir, "ok");
+
+    const { code, out } = await run(dir, fake);
+
+    assert.equal(code, 0, out);
+    assert.deepEqual(starts(record), [
+      "start execute_alerts=false addr=127.0.0.1 args=--homepath=/usr/share/grafana",
+      "stopped",
+      "start execute_alerts=default addr=any args=--homepath=/usr/share/grafana",
+    ]);
+    assert.ok(existsSync(join(dir, "data", ".skinora-alerting-provisioned")), "marker written");
+    assert.match(out, /finished to provision alerting/, "the guarded run's log is shown");
+    assert.match(out, /real grafana/);
+  });
+
+  test("provisioned volume: no guarded run, Grafana starts directly", async () => {
+    const dir = freshDir("second");
+    writeFileSync(join(dir, "data", ".skinora-alerting-provisioned"), "");
+    const { fake, record } = fakeGrafana(dir, "ok");
+
+    const { code } = await run(dir, fake);
+
+    assert.equal(code, 0);
+    assert.deepEqual(starts(record), ["start execute_alerts=default addr=any args=--homepath=/usr/share/grafana"]);
+  });
+
+  test("guarded run dies before provisioning: exits non-zero, no marker, Grafana is not started", async () => {
+    const dir = freshDir("die");
+    const { fake, record } = fakeGrafana(dir, "die");
+
+    const { code, out } = await run(dir, fake);
+
+    assert.notEqual(code, 0);
+    assert.match(out, /stopped before alerting was provisioned/);
+    assert.deepEqual(starts(record), ["start execute_alerts=false addr=127.0.0.1 args=--homepath=/usr/share/grafana"]);
+    assert.ok(!existsSync(join(dir, "data", ".skinora-alerting-provisioned")));
+  });
+
+  test("operator logging that hides info lines (warn/file/json/filter): the guarded run pins its own, the real start keeps the operator's", async () => {
+    // T165 kapanış (yeniden doğrulama Y1, ⚠ PARA): the guard waited for an info
+    // line; GF_LOG_LEVEL=warn left Grafana never starting.
+    const dir = freshDir("quiet");
+    const { fake, record, logRecord } = fakeGrafana(dir, "ok");
+
+    const { code, out } = await run(dir, fake, { ...QUIET_LOGGING, GRAFANA_FIRST_BOOT_TIMEOUT_SECONDS: "5" });
+
+    assert.equal(code, 0, out);
+    assert.deepEqual(starts(record), [
+      "start execute_alerts=false addr=127.0.0.1 args=--homepath=/usr/share/grafana",
+      "stopped",
+      "start execute_alerts=default addr=any args=--homepath=/usr/share/grafana",
+    ]);
+    assert.deepEqual(starts(logRecord), [
+      "log level=info mode=console format=text",
+      "log level=warn mode=file format=json",
+    ]);
+    assert.ok(existsSync(join(dir, "data", ".skinora-alerting-provisioned")), "marker written");
+  });
+
+  test("control: under that logging the fake Grafana hides the line (so the pin is what passes the test above)", () => {
+    const dir = freshDir("quiet-control");
+    const { fake } = fakeGrafana(dir, "ok");
+    const guarded = (extra) =>
+      spawnSync("sh", ["-c", `"${fake.replace(/\\/g, "/")}" & sleep 1; kill $!`], {
+        env: { PATH: process.env.PATH, GF_UNIFIED_ALERTING_EXECUTE_ALERTS: "false", ...extra },
+        encoding: "utf8",
+      }).stdout ?? "";
+    assert.doesNotMatch(guarded(QUIET_LOGGING), /finished to provision alerting/);
+    assert.match(guarded({}), /finished to provision alerting/);
+  });
+
+  test("provisioning never finishes: gives up after the timeout, stops the guarded run, no marker", async () => {
+    const dir = freshDir("hang");
+    const { fake, record } = fakeGrafana(dir, "hang");
+
+    const { code, out } = await run(dir, fake, { GRAFANA_FIRST_BOOT_TIMEOUT_SECONDS: "2" });
+
+    assert.notEqual(code, 0);
+    assert.match(out, /not provisioned within 2s/);
+    assert.deepEqual(starts(record), [
+      "start execute_alerts=false addr=127.0.0.1 args=--homepath=/usr/share/grafana",
+      "stopped",
+    ]);
+    assert.ok(!existsSync(join(dir, "data", ".skinora-alerting-provisioned")));
+  });
+});

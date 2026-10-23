@@ -6,12 +6,20 @@ export interface EmailChannel {
   enabled: boolean;
   address: string | null;
   verified: boolean;
+  /**
+   * T165 — false when this deployment cannot send on the channel (switched
+   * off, or its provider is missing a secret). Enabling / connecting /
+   * verifying then answers 409 `CHANNEL_UNAVAILABLE`.
+   */
+  available: boolean;
 }
 
 export interface ExternalChannel {
   enabled: boolean;
   connected: boolean;
   username: string | null;
+  /** T165 — see {@link EmailChannel.available}. Production keeps Discord off. */
+  available: boolean;
 }
 
 export interface PlatformChannel {

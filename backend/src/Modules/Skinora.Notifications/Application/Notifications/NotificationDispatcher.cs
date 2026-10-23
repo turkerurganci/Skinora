@@ -9,6 +9,7 @@ using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
 using Skinora.Shared.BackgroundJobs;
 using Skinora.Shared.Enums;
+using Skinora.Shared.Notifications;
 using Skinora.Shared.Persistence;
 using Skinora.Users.Domain.Entities;
 
@@ -57,6 +58,7 @@ public sealed class NotificationDispatcher : INotificationDispatcher
     private readonly INotificationTemplateResolver _templateResolver;
     private readonly IBackgroundJobScheduler _jobScheduler;
     private readonly INotificationRealtimePublisher _realtimePublisher;
+    private readonly INotificationChannelAvailability _channels;
     private readonly ILogger<NotificationDispatcher> _logger;
 
     public NotificationDispatcher(
@@ -64,12 +66,14 @@ public sealed class NotificationDispatcher : INotificationDispatcher
         INotificationTemplateResolver templateResolver,
         IBackgroundJobScheduler jobScheduler,
         INotificationRealtimePublisher realtimePublisher,
+        INotificationChannelAvailability channels,
         ILogger<NotificationDispatcher> logger)
     {
         _dbContext = dbContext;
         _templateResolver = templateResolver;
         _jobScheduler = jobScheduler;
         _realtimePublisher = realtimePublisher;
+        _channels = channels;
         _logger = logger;
     }
 
@@ -128,6 +132,21 @@ public sealed class NotificationDispatcher : INotificationDispatcher
                         && p.ExternalId != null
                         && p.ExternalId != string.Empty)
             .ToListAsync(cancellationToken);
+
+        // T165 — a channel switched off (Provider = disabled, production
+        // Discord) or Misconfigured (real provider, incomplete secrets) gets no
+        // delivery row: nothing could send it, and a row would only burn its
+        // retry budget into a FAILED + admin alert for every notification. The
+        // preference itself is kept — the channel resumes when it is live again.
+        var skipped = enabledPreferences.RemoveAll(p => !_channels.IsAvailable(p.Channel));
+        if (skipped > 0)
+        {
+            _logger.LogDebug(
+                "Notification {Type} for {UserId}: {Skipped} enabled channel(s) skipped — channel unavailable in this deployment.",
+                request.Type,
+                request.UserId,
+                skipped);
+        }
 
         var enqueuedDeliveryIds = new List<Guid>(enabledPreferences.Count);
 

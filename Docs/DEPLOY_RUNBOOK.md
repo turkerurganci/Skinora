@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-23 — T169a: §M.4 depozitten iade günlük tavanı (bekleyen iade, AD42 serbest bırakma), §J.2 `deposit-refund-daily-limit-held` alarmı. · T174 — §O.1 yaptırım listesi artık API ile (ekran yok), kontrol listesi madde 13 buna uydu. · T164 (kapanış) — §N veritabanı yedeği (Express, otomatik tam + log), 10 GB alarmı, geri yükleme provası ve geri dönüş planı; §N.8 geri yükleme sonrası açılış sırası onay kapısıyla (§M, T169) ve bekleyen bütün giden satırların listesiyle; kapanışta §N.8 deneme penceresi ve kapatmanın defter açığı, §N.5 alarm zamanlaması. Bölüm sırası: §L T163 · §M T169 onay kapısı (§M.4 T169a iade tavanı) · §N T164 · §O T169 kurulum günü listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-23 — T165: §P bildirim kanalları (e-posta + Telegram açık, Discord kapalı), para alarmları (`deposit-refund-daily-limit-held` dahil) ve dış izleme (heartbeat; Grafana sağlık ucu dahil). · T169a — §M.4 depozitten iade günlük tavanı (bekleyen iade, AD42 serbest bırakma), §J.2 `deposit-refund-daily-limit-held` alarmı. · T174 — §O.1 yaptırım listesi artık API ile (ekran yok), kontrol listesi madde 13 buna uydu. · T164 (kapanış) — §N veritabanı yedeği (Express, otomatik tam + log), 10 GB alarmı, geri yükleme provası ve geri dönüş planı; §N.8 geri yükleme sonrası açılış sırası onay kapısıyla (§M, T169) ve bekleyen bütün giden satırların listesiyle; kapanışta §N.8 deneme penceresi ve kapatmanın defter açığı, §N.5 alarm zamanlaması. Bölüm sırası: §L T163 · §M T169 onay kapısı (§M.4 T169a iade tavanı) · §N T164 · §O T169 kurulum günü listesi · §P T165 bildirim kanalları ve dış izleme. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (77 satır — T169 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -1533,3 +1533,135 @@ Gerçek ağ kurulumunda (T171) ve deneme yayınında (§K) bu liste satır satı
 
 ### O.2 KMS/HSM (karar yok)
 Anahtarların donanım güvenlik modülüne taşınma eşiği **kararlaştırılmadı** — pilot (T173) sonrası proje sahibine sorulacak (T169, 2026-10-21). O zamana kadar tohum ve imza anahtarları Docker secret + çevrimdışı yedekte (T163) yazılım anahtarı olarak durur (DEFERRED_BACKLOG `SigningSecretsInPlainEnv`).
+
+---
+
+## P. Bildirim kanalları, para alarmları ve dış izleme (T165)
+
+> **Proje sahibi kararı 2026-10-21:** canlıda **e-posta (Resend) + Telegram botu açık, Discord kapalı**. Resend hesabı ve Telegram botu henüz açılmadı; anahtarlar sonra güvenli yoldan gelir. Kod ve yapılandırma, anahtarlar `.env.trial`'a yazılıp backend yeniden başlatılınca açılacak biçimde hazırdır; gerçek gönderim provası T172'dedir. Webhook adresleri (`https://<alan-adı>/api/v1/webhooks/…`) alan adı ve tünel (T162) bağlanınca çalışır.
+
+### P.1 Kanalların durumu
+
+Her kanalın (`Resend__Provider`, `Telegram__Provider`, `Discord__Provider`) dört hâli vardır; backend açılışta bir kez karar verir:
+
+| Durum | Ne zaman | Davranış |
+|---|---|---|
+| `stub` | `Provider=logging` (geliştirme, CI) | Mesaj yalnız loga yazılır, "gönderildi" sayılır. Geliştirme stack'inin varsayılanı |
+| `live` | gerçek sağlayıcı + bütün sırlar dolu ve biçimi doğru | Gerçek gönderim |
+| `disabled` | `Provider=disabled` | Kanal kapalı: kullanıcıya bağlama seçeneği gösterilmez (Discord satırı hiç görünmez), teslimat satırı açılmaz |
+| `misconfigured` | gerçek sağlayıcı seçili ama bir sır boş, yer tutucu (`your_…`, `REPLACE_IN_ENV`) ya da biçimi yanlış | **Kapalı gibi davranır** (bağlama / doğrulama uçları 409 `CHANNEL_UNAVAILABLE`, arayüzde "şu an kullanılamıyor", teslimat yok) + backend açılış logunda **hata satırı** (eksik anahtarların **adları**, değerleri asla) + `notification-channel-misconfigured` alarmı. Site çalışmaya devam eder |
+
+**Deneme yayını overlay'i** (`docker-compose.trial.yml`) üretim seçimini **zorlar**: `Resend__Provider=resend`, `Telegram__Provider=telegram`, `Discord__Provider=disabled` — `.env.trial` ne derse desin. Anahtarlar gelmeden açılan deneme yayınında e-posta ve Telegram `misconfigured` görünür; bu beklenen durumdur. Açılış logunda kontrol:
+
+```bash
+$TRIAL logs skinora-backend | grep "Notification channel"
+# Notification channel EMAIL: MISCONFIGURED (provider resend) — … Resend:ApiKey (missing), Resend:WebhookSigningSecret (missing) …
+# Notification channel TELEGRAM: LIVE (provider telegram).
+# Notification channel DISCORD: DISABLED (provider disabled) …
+```
+
+Sırlar (`RESEND_API_KEY`, `RESEND_WEBHOOK_SIGNING_SECRET`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET_TOKEN`, `GRAFANA_SMTP_PASSWORD`, `HEARTBEAT_URL`) bugünkü ortak sırlar gibi `.env.trial` → container env yolundan gelir; dosyadan okunmaları T171'dedir (DEFERRED_BACKLOG `SharedSecretsInPlainEnv`, T165 bu satıra eklendi).
+
+### P.2 E-posta — Resend (sahibin adımları)
+
+Ayrıntı ve DNS tablosu: [RESEND_SETUP.md](INTEGRATION_RUNBOOKS/RESEND_SETUP.md). Sıra:
+
+1. resend.com'da hesap aç (ücretsiz plan: ayda 3.000, **günde 100** e-posta, 1 webhook ucu — resend.com/pricing, 2026-10-23).
+2. **Domains → Add domain** → alan adı (`skinora.com`). Verilen DKIM/SPF/Return-Path kayıtlarını Cloudflare DNS'e ekle, "Verify" yeşil olana kadar bekle (RESEND_SETUP §2).
+3. **API Keys → Create** → izin **Sending access**, alan adına kısıtlı → backend anahtarı → `.env.trial`: `RESEND_API_KEY=re_…`.
+4. **API Keys → Create** (ikinci, yine Sending access) → **Grafana** anahtarı → `.env.trial`: `GRAFANA_SMTP_PASSWORD=re_…`. Ayrı anahtar: biri sızarsa ya da iptal edilirse diğer yol çalışmaya devam eder (öneriyle kaydedildi — ⚠ GÜVENLİK).
+5. **Webhooks → Add endpoint** → `https://<alan-adı>/api/v1/webhooks/resend`, olaylar `email.bounced`, `email.complained`, `email.delivery_delayed`, `email.failed`, `email.suppressed` → signing secret → `.env.trial`: `RESEND_WEBHOOK_SIGNING_SECRET=whsec_…` (önek dahil).
+6. `.env.trial`: `RESEND_FROM_ADDRESS="Skinora <noreply@<alan-adı>>"`, `GRAFANA_SMTP_FROM_ADDRESS=alerts@<alan-adı>`, `ALERT_EMAIL_TO=<sahibin alarm adresi>`.
+7. `$TRIAL up -d --wait skinora-backend skinora-grafana` → log `Notification channel EMAIL: LIVE`.
+
+> **Not (T165 bulgusu):** Resend, `User-Agent` başlığı olmayan her isteği anahtar geçerli olsa da **403** ile reddeder (resend.com/docs/knowledge-base/403-error-1010). .NET `HttpClient` bu başlığı kendiliğinden göndermez; T165'ten önce üretimdeki her e-posta kalıcı hata alacaktı. İstemci artık `User-Agent: Skinora/1.0` gönderir (testli). `curl` başlığı kendisi eklediği için elle duman testi bunu göstermez.
+
+**Grafana e-postası:** Grafana kendi SMTP istemcisiyle Resend SMTP'sine bağlanır — `smtp.resend.com:587`, STARTTLS zorunlu, kullanıcı `resend`, parola = Grafana'nın Resend anahtarı (resend.com/docs/send-with-smtp). Taban dosyada kapalı, deneme yayınında açık (`GF_SMTP_ENABLED=true`); parola boşken e-posta entegrasyonları gönderim anında hata loglar, Telegram yine çalışır. Seçim gerekçesi: Grafana'nın e-posta için tek yolu SMTP'dir; ikinci bir sağlayıcı açmak yerine aynı Resend hesabı kullanılır (öneriyle kaydedildi — ⚠).
+
+### P.3 Telegram botu (sahibin adımları)
+
+Ayrıntı: [TELEGRAM_SETUP.md](INTEGRATION_RUNBOOKS/TELEGRAM_SETUP.md). **Tek bot iki iş görür** (öneriyle kaydedildi — ⚠): backend kullanıcıların (ve adminlerin) bildirimlerini DM ile gönderir, Grafana operatör alarmlarını `TELEGRAM_CHAT_ID`'ye gönderir.
+
+1. Telegram'da `@BotFather` → `/newbot` → ad + kullanıcı adı (ör. `SkinoraBot`; alınmışsa başka) → token → `.env.trial`: `TELEGRAM_BOT_TOKEN=<token>`, `TELEGRAM_BOT_USERNAME=<@ olmadan kullanıcı adı>`. `/setjoingroups` → Disable.
+2. Webhook sırrı üret: `openssl rand -hex 32` → `.env.trial`: `TELEGRAM_WEBHOOK_SECRET_TOKEN=<çıktı>`.
+3. **Sohbet kimliği (webhook kurulmadan önce):** kendi Telegram hesabınla bota `/start` yaz, sonra
+   ```bash
+   curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates" | grep -o '"chat":{"id":-\?[0-9]*'
+   ```
+   → `.env.trial`: `TELEGRAM_CHAT_ID=<sayı>`. (Webhook kurulduktan sonra `getUpdates` 409 verir; sıra önemli. Bir alarm grubu istenirse botu gruba ekleyip aynı yolla grubun negatif kimliği alınır — bu durumda `/setjoingroups` Enable kalmalı.)
+4. `$TRIAL up -d --wait skinora-backend skinora-grafana-provisioning skinora-grafana` → log `Notification channel TELEGRAM: LIVE`.
+5. Alan adı + tünel bağlıysa webhook'u kur (TELEGRAM_SETUP §4): `url=https://<alan-adı>/api/v1/webhooks/telegram`, `secret_token=$TELEGRAM_WEBHOOK_SECRET_TOKEN`, `allowed_updates=["message"]`, `drop_pending_updates=true`. `getWebhookInfo` → `pending_update_count: 0`, `last_error_date` yok.
+6. Admin hesabın sitede **Ayarlar → Bağlı hesaplar → Telegram → Bağla** ile bota bağlanır; ayrıca **Bildirimler → E-posta** adresini doğrular. Böylece panelin admin bildirimleri (para alarmları dahil) admin'in kendi Telegram'ına ve e-postasına da gelir.
+
+> **Token loglara yazılmaz (T165, ⚠ GÜVENLİK):** Bot API token'ı istek yolunda taşır (`/bot<token>/sendMessage`). `IHttpClientFactory`'nin varsayılan kayıt işleyicileri bu URL'yi Information seviyesinde loga (ve Loki'ye) yazardı — logu okuyan botu ele geçirirdi. Telegram istemcisinin varsayılan logları kaldırıldı (`TelegramTransportRegistration`, testte "varsayılan kayıt token'ı loglar / bizimki loglamaz" karşılaştırmasıyla).
+
+**Discord** üretimde kapalıdır (`Discord__Provider=disabled`): kullanıcı ayarlarında bağlama seçeneği görünmez, uçlar 409 döner, bildirim gitmez. Açmak sahibin kararıdır; adımlar [DISCORD_SETUP.md](INTEGRATION_RUNBOOKS/DISCORD_SETUP.md).
+
+### P.4 Para alarmları ve kanal eşlemesi
+
+**"Para alarmı"** = zincir / sweep / payout / iade / cüzdan / ücret ile ilgili her alarm. İki bağımsız yolla panel dışına çıkar:
+
+1. **Grafana yolu (operatöre):** `category: money` etiketli her kural, önem derecesi ne olursa olsun **önce** `money-alarm` contact point'ine gider: **Telegram (`TELEGRAM_CHAT_ID`) + e-posta (`ALERT_EMAIL_TO`) birlikte**. İlk bildirim ~10 sn içinde, sürdükçe **4 saatte bir** hatırlatma, bitince "resolved" (policies.yml). Para dışı kritik alarmlar eskisi gibi: Telegram saatte bir + e-posta 4 saatte bir; uyarılar Telegram 4 saatte bir.
+2. **Backend yolu (adminlere):** para ile ilgili admin bildirimleri (aşağıda) her admin'in panel gelen kutusuna **ve** admin'in kendi bağladığı e-posta / Telegram kanalına gider (P.3 adım 6). Aynı olaylar ayrıca `skinora_backend_admin_money_alarm_last_seconds{kind}` yayımlar ve `admin-money-alarm-raised` kuralı onları 1. yola da taşır — hiçbir admin kanal bağlamamış olsa bile.
+
+| Alarm | Kaynak | Yol |
+|---|---|---|
+| `outbound-awaiting-approval` — onay kapısında bekleyen ödeme/iade (T169, §M) | dispatch işi her dakika ağ başına sayar | Grafana (uyarı, para): bekleme başlayınca bir kez, 4 sa'te bir hatırlatma, hepsi onaylanınca "resolved" |
+| `hot-wallet-threshold-breached` — sıcak cüzdan limiti aşıldı / TRX tabanının altında (TRON) | T77 izleyicisi | Grafana (uyarı, para). Önceden yalnız AuditLog + açık paneldeki SignalR bandı vardı |
+| `admin-money-alarm-raised` — payout/iade/sweep denemeleri tükendi (FAILED), iade yapılamadı, satıcı ödemesi ertelendi, park edilmiş settlement | backend admin olayları | Grafana (kritik, para) + panel + admin kanalları |
+| `reconciliation-mismatch` — günlük mutabakat defter ile zincir arasında uyuşmazlık buldu (ağ + kapsam: deposit / sıcak / soğuk; tolerans sıfır, 05 §3.3) | mutabakat turu, `skinora_backend_reconciliation_mismatches{network,scope}` | Grafana (kritik, para): ilk tur bir kez, 4 sa'te bir hatırlatma, aynı kapsamın sonraki dengeli turunda "çözüldü" + her admin'e `ADMIN_RECONCILIATION_MISMATCH` (gelen kutusu + kanalları, her uyuşmazlıklı turda). Ayrıntı (beklenen, gerçek, fark, blok) paneldeki `RECONCILIATION_MISMATCH` denetim kayıtlarında; açıklanana kadar o ağda ödeme onaylanmaz. Önceden yalnız AuditLog + açık paneldeki SignalR bandıydı (T165 düzeltme turu) |
+| `deposit-refund-daily-limit-held` — depozitten iade ağın 24 saatlik tavanına takıldı, bekliyor (T169a, §M.4) | gönderim işi, `skinora_backend_deposit_refund_limit_held_rows{network}` | Grafana (uyarı, **para** — T165 kapanışında main birleştirilirken etiketlendi): bekleme başlayınca bir kez, 4 sa'te bir hatırlatma, iade çıkınca "resolved" + her admin'e `ADMIN_PAYMENT_FAILURE` (`DEPOSIT_REFUND_DAILY_LIMIT`; panel + admin kanalları). Admin tüketicisi bilinçli olarak **para alarmı gözlemcisiz**: operatöre giden yol bu kural, gözlemci aynı beklemeyi `admin-money-alarm-raised` olarak ikinci kez duyururdu |
+| Zincir / sağlayıcı / Ethereum günlüğü / mutabakat / yakıt / ücret kuralları (T151–T160b; 23 kural) | servis + backend metrikleri | Grafana (para) |
+| `notification-channel-misconfigured`, `notification-delivery-exhausted` | backend | Grafana (uyarı, para değil) — kanalın kendisi bozuksa |
+
+**Yeni bir para alarmı eklemek** (T170 cüzdan alarmları; T169a günlük iade tavanı eklendi — 28 para kuralı): Grafana kuralına `severity`'nin yanına `category: money` yazmak yeter; backend olayından geliyorsa admin tüketicisi `IAdminMoneyAlarmObserver`'lı kurucuyu kullanır (kendi metrik + kuralı olan olay hariç: o zaman gözlemcisiz, yukarıdaki iki örnek gibi). Testler listeyi sabitler: `NotificationAlertingProvisioningTests` her kuralı **para** (`MoneyRules`) ya da **para dışı** (`NonMoneyRules`) listesinde ister — başka daldan etiketsiz gelen bir kural da (T169a'da olduğu gibi) bilinçli sınıflandırılmadan yeşil olmaz; `AdminAlertNotificationConsumerTests.MoneyAlarmCategory_IsExactlyTheMoneyConsumers` tüketiciler için aynısını yapar.
+
+**Spam sınırı:** Resend ücretsiz planı günde 100 e-posta (kullanıcı bildirimleriyle paylaşılır). Grafana e-postası grup başına en çok 4 saatte bir; `repeat_interval` dakikalara indirilmez.
+
+**Aynı türde ikinci olay (öneriyle kaydedildi — ⚠ PARA):** `admin-money-alarm-raised` tür (`kind`) başına tek alarmdır: ateşteyken gelen ikinci, üçüncü olay operatöre **ayrı** Telegram / e-posta üretmez; alarmın bir saatlik penceresi son olaydan yeniden başlar ve 4 saatlik hatırlatma sürer. Olay kimliği grup anahtarına **eklenmedi**: (1) her olay zaten her admin'e ayrı bildirim olarak (işlem kimliğiyle) panelde ve admin kanallarında gelir; operatör alarmının işi "para tarafında bakılacak bir şey var" demek, olay defteri tutmak değil; (2) olay başına etiket Prometheus'ta sınırsız seri demektir; (3) bir arıza dalgası (ör. sıcak cüzdan boşken 30 ödemenin tükenmesi) operatöre 30 e-posta atar ve kullanıcı bildirimleriyle paylaşılan günlük 100 e-posta kotasını tüketir. Backend yeniden başlarsa zaman damgası unutulur; alarm erken "çözüldü" der, panel bildirimleri kalır. Aynı sınır `reconciliation-mismatch` için de geçerli: backend yeniden başlarsa ölçüm kaybolur, alarm bir sonraki mutabakat turuna (günlük) kadar "çözüldü" görünür; tur uyuşmazlığı yeniden bulursa yeniden ateşler.
+
+**Grafana ilk açılış koruması (T165 düzeltme turu, ⚠ GÜVENLİK):** boş veri volume'uyla ilk açılışta Grafana 11.3 Alertmanager'ı önce kendi varsayılan yönlendirmesiyle (e-posta → `example@email.com`, gerçek bir alan adı) başlatır, provision edilmiş yönlendirmeyi ancak bir sonraki yoklamada (60 sn) yükler; o arada ateşleyen alarm, içeriğiyle birlikte gerçek SMTP üzerinden o adrese gider (ölçüldü; 11.3'te varsayılan yapılandırma ayarlanamıyor). `skinora-grafana` bu yüzden `scripts/grafana/first-boot.sh` ile açılır: veri volume'unda `.skinora-alerting-provisioned` işareti yoksa Grafana bir kez **kural çalıştırma kapalı** (`GF_UNIFIED_ALERTING_EXECUTE_ALERTS=false`) ve yalnız loopback'te açılır, "finished to provision alerting" satırını görünce kapatılır, işaret yazılır, sonra normal açılır — Alertmanager ilk kuraldan önce bizim yönlendirmeyle başlar. İlk açılış ~5 sn uzar; sonraki açılışlarda koruma atlanır. Logda: `skinora: first boot — provisioning alerting with rule execution off` → `skinora: alerting provisioned — starting Grafana`. Koruma başarısız olursa (provision hatası, 300 sn) Grafana açılmaz ve container yeniden dener; işaret yazılmaz — bunu dışarıya heartbeat haber verir (P.5: Grafana'nın `/api/health`'i heartbeat kontrollerinden biri). **Log ayarından bağımsız (T165 kapanış, yeniden doğrulama Y1, ⚠ PARA):** koruma tek bir **info** log satırını bekler; korumalı ilk açılış bu yüzden kendi log ayarını sabitler (`GF_LOG_LEVEL=info`, `GF_LOG_MODE=console`, `GF_LOG_CONSOLE_LEVEL=info`, `GF_LOG_CONSOLE_FORMAT=text`, `GF_LOG_FILTERS=provisioning.alerting:info`); operatörün `GF_LOG_*` ayarları (warn, file, json) normal açılışta geçerli kalır. Sabitleme yokken `GF_LOG_LEVEL=warn` Grafana'yı hiç açtırmıyordu (yeniden doğrulamada ölçüldü); sabitlemeyle gerçek 11.3.0 imajında warn + json + filtreyle ilk açılış tamamlandı (kapanışta ölçüldü). **Grafana sürümü yükseltilirken** bu log satırı (`msg="finished to provision alerting"`) yeni sürümde yeniden ölçülür; compose testi sürümü 11.3.0'a bu yüzden sabitler. Volume'u sıfırlamak (`docker volume rm …grafana-data`) korumayı yeniden çalıştırır.
+
+### P.5 Dış izleme — site çökerse haber (sahibin adımları)
+
+**Sorun:** Grafana bu PC'de çalışır; PC, Docker Desktop ya da internet bağlantısı düşerse alarm verecek olan da düşer. Dışarıdan bakan bir hizmet gerekir.
+
+**Seçim (öneriyle kaydedildi — ⚠):** iki ücretsiz hizmet, iki ayrı yön:
+
+| Hizmet | Yön | Neyi yakalar | Ücretsiz plan (resmî sayfa, 2026-10-23) |
+|---|---|---|---|
+| **Healthchecks.io** (birincil) | **heartbeat** — PC'den dışarı ping; ping **durursa** alarm | PC kapandı/uyudu, Docker durdu, yığın çöktü, backend/DB/Redis/nginx/frontend yanıt vermiyor, **Grafana düştü ya da hiç açılmadı** (para alarmları onun üstünden gider), ev interneti kesildi | 20 kontrol, kontrol başına 100 log; e-posta ve Telegram (HealthchecksBot) bildirimi; ticari kullanım kısıtı yok (healthchecks.io/pricing) |
+| **UptimeRobot** (ikincil) | dışarıdan HTTP isteği | alan adı / DNS / Cloudflare / tünel yolu kırıldı (PC ayakta ama dışarıdan erişilemiyor) | 50 monitör, 5 dk aralık; şartlar ticari kullanıma izin veriyor ("available for any use, including commercial", uptimerobot.com/terms, 2026-05-26 sürümü) |
+
+Elenenler: **Cloudflare Health Checks** ücretsiz planda yok (yalnız Pro ve üstü — developers.cloudflare.com/health-checks); **Better Stack** ücretsiz planı 10 monitör+heartbeat, yalnız e-posta/Slack, Telegram yok. Tünel arkasında hepsinden önemlisi: **heartbeat yönü porta ve tünele ihtiyaç duymaz** (yalnız dışarı bağlantı), bu yüzden birincildir.
+
+**Herkese açık sağlık ucu:** `https://<alan-adı>/api/health` (ve `/health`, nginx aynı uca yönlendirir) yalnız `{"status":"healthy"}` döner — 200 sağlıklı/degraded, 503 sağlıksız; veritabanı + Redis kontrolleri; kontrol adı, süre, hata metni **yok**, önbelleğe alınmaz, giriş gerektirmez. Ayrıntılı `/health` (kontrol adları + hata mesajları — bir SQL bağlantı hatası sunucu adı taşıyabilir) artık yalnız compose ağı içinden (`http://skinora-backend:5000/health`, compose healthcheck, Uptime Kuma) okunur; T165'ten önce nginx onu internete açıyordu (⚠ GÜVENLİK).
+
+**Healthchecks.io kurulumu:**
+1. healthchecks.io'da hesap aç → **Add Check** → ad `skinora-trial` → **Period 1 dakika, Grace 5 dakika** (ping 60 sn'de bir; PC düşünce en geç ~6 dk'da alarm).
+2. **Integrations** → e-posta (hesap e-postası hazır) + **Telegram** (HealthchecksBot'a `/start` → gelen bağlantıyla projeye bağla).
+3. Kontrolün ping URL'si (`https://hc-ping.com/<uuid>`) → `.env.trial`: `HEARTBEAT_URL=…` (sır gibi sakla: URL'yi bilen sahte ping atabilir).
+4. `$TRIAL up -d skinora-heartbeat` → `$TRIAL logs skinora-heartbeat` → `started - every 60s …`. Panelde kontrol "up" olur.
+
+`skinora-heartbeat` (deneme yayını overlay'i, `curlimages/curl:8.21.0`, `scripts/heartbeat/heartbeat.sh`): her turda `http://skinora-reverse-proxy/api/health`, ön sayfayı (`/`, yönlendirmeler izlenir) ve **Grafana'nın sağlık ucunu** (`http://skinora-grafana:3000/api/health`, konteyner ağı adresi — Grafana dışarıya yalnız 127.0.0.1:3001'de açık) dener; üçü de 2xx ise ping atar; **3 tur üst üste** başarısızsa **bir kez** `…/fail` gönderir (anında alarm), düzelince yeniden ping (Healthchecks "up" bildirir). `restart: unless-stopped`: Docker Desktop açılınca kendiliğinden devam eder. **PC yeniden başlayınca otomatik devam için** Windows oturumu açılmalı ve Docker Desktop "Start Docker Desktop when you sign in" açık olmalı (§K.3); oturum açılmazsa yığın da heartbeat de başlamaz ve Healthchecks alarm verir — istenen davranış. `HEARTBEAT_URL` boşsa container bekler ve bunu bir kez loglar. Port yayımlamaz.
+
+**Neden Grafana da (T165 kapanış, yeniden doğrulama Y1, ⚠ PARA):** 28 para alarmının hepsi Grafana'dan çıkar (P.4). Grafana çöker ya da ilk açılış koruması onu açmazsa bu alarmlar **sessizce** kaybolur; backend admin yolu (panel + admin kanalları) sürer ama Grafana kurallarının çoğu backend olayı değil, metriktir. Heartbeat'in Grafana'yı da yoklaması, Grafana düşünce ping'i durdurur; Healthchecks sahibe haber verir. Hangi kontrolün düştüğü `$TRIAL logs skinora-heartbeat` içinde: `CHECK_FAILED - http://skinora-grafana:3000/api/health …`. Kontrol listesi `docker-compose.trial.yml` içinde sabittir (`HEARTBEAT_CHECK_URLS`), `.env.trial` ile değişmez.
+
+**UptimeRobot kurulumu (alan adı + tünel bağlandıktan sonra):**
+1. uptimerobot.com'da hesap → **New monitor** → tür **HTTP(s)**, URL `https://<alan-adı>/api/health`, aralık 5 dk.
+2. Alarm kişisi: e-posta (ücretsiz). İkinci monitör: `https://<alan-adı>/` (ön sayfa).
+3. Cloudflare'de **Bot Fight Mode** açıksa izleme isteklerine meydan okuma (challenge) dönebilir; o durumda Cloudflare → Security → WAF → Custom rules ile `/api/health` yoluna "Skip" kuralı eklenir.
+
+### P.6 Doğrulama (T172 provasında)
+
+| # | Adım | Beklenen |
+|---|---|---|
+| 1 | `$TRIAL logs skinora-backend \| grep "Notification channel"` | EMAIL LIVE, TELEGRAM LIVE, DISCORD DISABLED |
+| 2 | Kullanıcı ayarları ekranı | Discord satırı yok; Telegram "Bağla" çalışır; e-posta doğrulama kodu gelir |
+| 3 | Grafana → Alerting → Contact points → `money-alarm` → **Test** | Telegram'a "PARA ALARMI" mesajı **ve** `ALERT_EMAIL_TO`'ya e-posta |
+| 4 | Onay kapısı kapalıyken bir satış tamamla | ≤ 2 dk içinde Telegram + e-posta: "A payout or refund is waiting for an admin approval on TRON"; onaydan sonra "RESOLVED" |
+| 5 | `curl -s https://<alan-adı>/api/health` | `{"status":"healthy"}`, başka alan yok |
+| 6 | `$TRIAL stop skinora-backend`, 4 dk bekle | heartbeat `CHECK_FAILED … (3 in a row)` + `fail signal sent`; Healthchecks'ten e-posta/Telegram; UptimeRobot "down". `$TRIAL start skinora-backend` → ikisi de "up" |
+| 7 | Docker Desktop'ı kapat (ya da PC'yi uyut) | ≤ 6 dk içinde Healthchecks alarmı |
+| 7a | `$TRIAL stop skinora-grafana`, 4 dk bekle | heartbeat `CHECK_FAILED - http://skinora-grafana:3000/api/health … (3 in a row)` + `fail signal sent`; Healthchecks alarmı. `$TRIAL start skinora-grafana` → "up" |
+| 8 | İlk kurulumda `$TRIAL logs skinora-grafana \| grep "skinora:"` | `first boot — provisioning alerting with rule execution off` ve `alerting provisioned — starting Grafana`; `example@email.com`'a hiçbir e-posta gitmez (Resend panelinde alıcı listesi) |

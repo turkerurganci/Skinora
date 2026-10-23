@@ -4,6 +4,12 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-23 — T169a ✓ Tamamlandı (iade kesintisi = platformun tam zincir harcaması, TRON yedeği 2,80; depozitten iadeye ağ başına 24 saatte 100 $ tavanı + AD42; doğrulama PASS 7 × S4, hepsi kapandı; sahip kararı: admin onayı tavanı aşma izni sayılmaz; main `792f8ed2` dala birleştirildi, 50 aktif / 168 çözülmüş; T169a_REPORT.md, PR #376) **Merge teyidi (T165 kapanışında işlendi):** T169a (#376) main `fcc94d8d` → CI `39995712182` ✓, Docker Publish `39995711969` ✓.
+
+**Önceki güncelleme:** 2026-10-23 — T165 ⏳ düzeltme turu bitti, yeniden doğrulama bekliyor (mutabakat uyuşmazlığı Telegram + e-posta + admin bildirimi; Grafana ilk açılış koruması; main 792f8ed2 birleştirildi; T165_REPORT.md, PR #375) Sonra bağımsız yeniden doğrulama ✓ PASS (HEAD `869198a9`, 3 × S4 ⚠ PARA) → kapanış.
+
+**Önceki güncelleme:** 2026-10-23 — T165 ⏳ yapım bitti, doğrulama bekliyor (e-posta + Telegram anahtarla açılır, Discord kapalı; para alarmları Telegram + e-posta; dış izleme heartbeat; T165_REPORT.md) Sonra bağımsız doğrulama ✗ FAIL (HEAD `f568396b`: S3 ⚠ PARA mutabakat uyuşmazlığı yalnız panelde, S1 ⚠ GÜVENLİK Grafana ilk açılış `example@email.com`, 6 × S4) → düzeltme turu.
+
 **Önceki güncelleme:** 2026-10-23 — T174 ✓ Tamamlandı (DEFERRED_BACKLOG §4 triyajı: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 11 ⚪ kalır; doğrulama PASS 3 × S4, hepsi kapandı; sahip kararları: yaptırım listesi API ile (ekran yok, T171), VPN/Tor canlıda kapalı (T175); main `d7aebce7` dala birleştirildi, 50 aktif / 167 çözülmüş; T174_REPORT.md, PR #374) **Merge teyidi (T169a kapanışında işlendi):** T174 (#374) main `792f8ed2` → CI `39930836478` ✓, Docker Publish `39930828460` ✓; T164 (#372) main `d7aebce7` → CI `39883489789` ✓, Docker Publish `39883489767` ✓.
 
 **Önceki güncelleme:** 2026-10-23 — T169a ⏳ yapım bitti, doğrulama bekliyor (iade kesintisi = platformun tam zincir harcaması, TRON yedeği 2,80; depozitten iadeye ağ başına 24 saatte 100 $ tavanı + AD42; T169a_REPORT.md, PR #376) **Merge teyidi (T169a dalında işlendi):** T169 (#371) main `21c93062` → CI `39850436226` ✓, Docker Publish `39850436112` ✓; T168 (#370) main `69c68df6` → CI `39854740137` ✓ (tamamlandı), Docker Publish `39854740205` ✓.
