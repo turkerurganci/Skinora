@@ -45,7 +45,7 @@ public class NotificationRealtimePublisherTests
 
         await sut.PublishAdminHotWalletThresholdBreachedAsync(
             new NotificationRealtimePayloads.AdminHotWalletThresholdBreached(
-                "USDT", "Upper", 5000m, 6000m, 456L, DateTime.UtcNow),
+                "USDT", "Upper", 5000m, 6000m, 456L, DateTime.UtcNow, "ETHEREUM"),
             CancellationToken.None);
 
         var send = Assert.Single(clients.Sends);
