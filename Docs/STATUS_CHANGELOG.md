@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-23 — T172b ⏳ yapım bitti, doğrulama bekliyor (imza servislerinde depozitten iade 24 sa tavanı, 100 $, aşan iade bekler; sahip kararıyla sunucuda tek seferlik izin; main T169a birleştirildi, backlog 49/169; PR #378) **Merge teyidi (T172b kapanışında işlendi):** T169a (#376) main `fcc94d8d` → CI `39995712182` ✓, Docker Publish `39995711969` ✓.
+
 **Önceki güncelleme:** 2026-10-23 — T169a ✓ Tamamlandı (iade kesintisi = platformun tam zincir harcaması, TRON yedeği 2,80; depozitten iadeye ağ başına 24 saatte 100 $ tavanı + AD42; doğrulama PASS 7 × S4, hepsi kapandı; sahip kararı: admin onayı tavanı aşma izni sayılmaz; main `792f8ed2` dala birleştirildi, 50 aktif / 168 çözülmüş; T169a_REPORT.md, PR #376)
 
 **Önceki güncelleme:** 2026-10-23 — T174 ✓ Tamamlandı (DEFERRED_BACKLOG §4 triyajı: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 11 ⚪ kalır; doğrulama PASS 3 × S4, hepsi kapandı; sahip kararları: yaptırım listesi API ile (ekran yok, T171), VPN/Tor canlıda kapalı (T175); main `d7aebce7` dala birleştirildi, 50 aktif / 167 çözülmüş; T174_REPORT.md, PR #374) **Merge teyidi (T169a kapanışında işlendi):** T174 (#374) main `792f8ed2` → CI `39930836478` ✓, Docker Publish `39930828460` ✓; T164 (#372) main `d7aebce7` → CI `39883489789` ✓, Docker Publish `39883489767` ✓.

@@ -1,6 +1,6 @@
 # T172b — İmza servislerinde depozitten iade günlük tavanı (⚠ PARA)
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (yapım bitti + sahip kararıyla tek seferlik izin eklendi, doğrulama bekliyor) | **Tarih:** 2026-10-23
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — doğrulama ✓ PASS (4 × S4; S1/S2/S3 yok — bkz. "Doğrulama", "Kapanış") | **Tarih:** 2026-10-23
 
 **Kaynak:** proje sahibi kararı 2026-10-23 (modal) — T169a'nın backend'e koyduğu "depozitten iadeye ağ başına günlük 100 $" tavanı imza servislerinde de olsun; backend ele geçirilse ya da hatalı olsa bile imzalayıcı bu toplamı aşan depozit iadesini imzalamasın. Sıra: mainnet pilotundan (T173) önce. T169a'nın açık bıraktığı sınır (`DepositRefundLimitBackendOnly`, T169a dalında) bununla kapanır.
 
@@ -71,8 +71,8 @@
 - `backend/src/Modules/Skinora.Transactions/Application/Transfers/HttpBlockchainTransferClient.cs` — `SignerDepositRefundLimitCodes`
 - `docker-compose.yml` (iki env, `DEPOSIT_REFUND_LEDGER_DIR`, volume `skinora-tron-deposit-refunds`), `.env.example`, `infra/grafana/provisioning/alerting/rules.yml` (iki kural)
 - İzin: `sidecar-{blockchain,ethereum}/src/transfer/DepositRefundPermits.ts`, `src/cli/permitCli.ts`, `src/cli/depositRefundPermit.ts` (yeni); `DepositRefundLimit.ts` / Ethereum `TransferGuard.ts`, `TransferService.ts`, `TxJournal.ts` (izin alanı), `wiring.ts`, iki `index.ts`, iki `metrics.ts`
-- Testler: `sidecar-blockchain/src/transfer/DepositRefundLimit.test.ts` (yeni, 25), `DepositRefundPermits.test.ts` (yeni, 22), `TransferService.test.ts`, `api/transferHandlers.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`; `sidecar-ethereum/src/transfer/TransferService.test.ts` (+9 tavan, +13 izin/parite), `Fuel.test.ts`, `api/transferHandlers.test.ts`, `config/index.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`, `wiring.test.ts`; `backend/tests/Skinora.Transactions.Tests/Contract/DepositRefundLimitDeferredContractTests.cs` (yeni, 6)
-- Belgeler: `Docs/plan/11_F9.md` (v1.28, T172b), `Docs/05_TECHNICAL_ARCHITECTURE.md` (v3.35, §3.3), `Docs/08_INTEGRATION_SPEC.md` (v3.47, §3.3a, §3.7.6), `Docs/DEPLOY_RUNBOOK.md` (§B, §C.3, §D, §O), `Docs/DOC_CHANGELOG.md`, `Docs/IMPLEMENTATION_STATUS.md`, `Docs/STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`
+- Testler: `sidecar-blockchain/src/transfer/DepositRefundLimit.test.ts` (yeni, 25; kapanışta 32), `DepositRefundPermits.test.ts` (yeni, 22), `TransferService.test.ts`, `api/transferHandlers.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`; `sidecar-ethereum/src/transfer/TransferService.test.ts` (+9 tavan, +13 izin/parite), `Fuel.test.ts`, `api/transferHandlers.test.ts`, `config/index.test.ts`, `config/composeWiring.test.ts`, `alertRuleWiring.test.ts`, `wiring.test.ts`; `backend/tests/Skinora.Transactions.Tests/Contract/DepositRefundLimitDeferredContractTests.cs` (yeni, 6)
+- Belgeler: `Docs/plan/11_F9.md` (v1.29, T172b), `Docs/05_TECHNICAL_ARCHITECTURE.md` (v3.37, §3.3), `Docs/08_INTEGRATION_SPEC.md` (v3.48, §3.3a, §3.7.6), `Docs/DEPLOY_RUNBOOK.md` (§B, §C.3, §D, §M.4, §O), `Docs/DOC_CHANGELOG.md`, `Docs/IMPLEMENTATION_STATUS.md`, `Docs/STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`
 
 ## Kabul Kriterleri Kontrolü
 
@@ -93,13 +93,15 @@
 
 | Kapsam | Komut | Sonuç |
 |---|---|---|
-| TRON servisi (tamamı) | `cd sidecar-blockchain && npx vitest run` | 37 dosya, **706/706** ✓ (önce 654) |
-| Ethereum servisi (tamamı) | `cd sidecar-ethereum && npx vitest run` | 37 dosya, **921/921** ✓ |
+| TRON servisi (tamamı) | `cd sidecar-blockchain && npx vitest run` | 37 dosya, **721/721** ✓ (HEAD `7c86f507`; önce 654 — rapor ilk yazıldığında 706'ydı, izin testleri sonra eklendi) · kapanış: **728/728** |
+| Ethereum servisi (tamamı) | `cd sidecar-ethereum && npx vitest run` | 37 dosya, **928/928** ✓ (HEAD `7c86f507`; rapor ilk yazıldığında 921) · kapanış: **929/929** |
 | Lint + build | `npm run lint && npm run build` (iki servis) | temiz |
 | Backend Transactions (tamamı) | `dotnet test tests/Skinora.Transactions.Tests` | 1.888 test: 1.885 ✓ + 3 ✗ — üçü mutasyon ölçümünden kalan bayat DLL (`--no-build`); yeniden derleyince ilgili 256 test (`Contract`, `HttpBlockchainTransferClient`, `OutgoingTransferDispatchJob`) **256/256** ✓ |
 | Compose | `docker compose -f docker-compose.yml [-f docker-compose.trial.yml] config`, `node --test scripts/compose-exposure.test.mjs` | geçerli; deneme overlay'inde env + `skinora-trial_skinora-tron-deposit-refunds` volume'ü; 10/10 ✓ |
 
-### Bilerek bozma (mutasyon) — tavan 16/16, izin 13/13 yakalandı
+### Bilerek bozma (mutasyon) — yapım turu: tavan 16/16, izin 13/13 yakalandı
+
+Bu tur pencere **uzunluğunu** (24 sa → 12 sa) ve defter **şemasını** (geçerli JSON, yanlış biçim) bozmadı; doğrulayıcının turunda ikisi kaçtı (S4-1, S4-2; kapanışta kapandı). Doğrulayıcının kendi turu: **28 bozmadan 26'sı yakalandı**; kapanış turu aşağıda "Kapanış".
 
 | # | Bozulan satır | Yakalayan |
 |---|---|---|
@@ -133,6 +135,14 @@
 | E10 | Ethereum iade kimliğini yanlış iletir | 1 — ilk koşuda **kaçtı** (bütün izin testleri aynı kimlikteydi); "başka iade kimliği" testi eklendi |
 | E11 | Ethereum ortak kilit yok (izinle) | 1 (E2'nin eşzamanlılık testi) |
 
+## Doğrulama
+
+| Tur | HEAD | Verdict | Bulgular | Sonuç |
+|---|---|---|---|---|
+| Bağımsız doğrulama (alt ajan, Opus high) | `7c86f507` | ✓ PASS | 4 — S4: 4 (S4-1 ⚠ PARA, S4-2, S4-3 ⚠ PARA, S4-4 ⚠ PARA) | Kriterlerin hepsi ✓; derlenmiş kodla Docker'sız uçtan uca prova (CLI'nin yazdığı izni servis kodu tüketti; yeniden başlatmadan sonra sayım korundu; bozuk defter → bekler). Bozma 26/28 yakalandı; kaçan iki bozma S4-1/S4-2 oldu. Dört S4 kapanışta kapandı |
+
+Kaynak rapor: `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T172b_VALIDATION.md` (2026-10-23T18:26:26Z). Yapım raporu uyuşmazlıkları (test sayıları, belge sürümleri, bozma kapsamı, saat etkisinin tarifi) bu raporda düzeltildi.
+
 ## Altyapı Değişiklikleri
 
 - Yeni env: `DEPOSIT_REFUND_DAILY_LIMIT_USDT`, `ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT` (`.env.example` 100; compose varsayılansız — boş = bekler), `DEPOSIT_REFUND_LEDGER_DIR` (compose sabit).
@@ -146,7 +156,7 @@
 - Dal: `task/T172b-imza-servisi-iade-tavani` (origin/main `792f8ed2`'den; main `fcc94d8d` — T169a #376 — merge commit ile alındı)
 - Commit'ler: `f1220cf8` (servisler), `07aadcf2` (compose/env/alarm/backend), `8ba6cd35` (belgeler), `24c14548` (PR no), `9e6e5f20` (biçim düzeltmesi — kayıtlı bypass ile koordinatör push etti), `bccba273` (BYPASS_LOG), `672c33cf` (tek seferlik izin), `1b7e0fa6` (main birleştirmesi), sonrası belgeler
 - PR: #378
-- CI: run 39990390212 (`24c14548`) ✗ — yalnız Lint (prettier, `sidecar-ethereum/src/wiring.test.ts`); düzeltme `9e6e5f20` kayıtlı bypass ile, run 39993478110 ✓ success. Son HEAD'in run'ı aşağıdaki memory/PR notunda.
+- CI: run 39990390212 (`24c14548`) ✗ — yalnız Lint (prettier, `sidecar-ethereum/src/wiring.test.ts`); düzeltme `9e6e5f20` kayıtlı bypass ile, run 39993478110 ✓ success. Doğrulanan HEAD `7c86f507` run 39998139306 ✓ success (bütün bloke edici işler ve advisory E2E). Kapanış HEAD'inin run'ı "Kapanış"ta.
 
 ## T169a ile ilişki
 
@@ -155,9 +165,24 @@
 - 05 §3.3 ve 08 §3.3c'deki "ele geçirilmiş backend'e karşı koruma değildir" cümleleri ikinci katmana (T172b) çevrildi; runbook §M.4 adım 4: AD42 imza servisinin tavanını kaldırmaz → tek seferlik izin.
 - Davranış birlikte: backend tavanı tutar; geçirdiği iade imza servisinde de sayılır. Aynı değerdeyken servis yalnız ayrışmada (AD42, tek büyük iade, backend hatası/ele geçirilmesi) reddeder. Backend'in sayımı `FAILED` satırları düşer, servisinki belirsiz yayınları düşmez → servis biraz daha sıkı olabilir.
 
+## Kapanış (2026-10-23)
+
+**Girdi:** doğrulama ✓ PASS (HEAD `7c86f507`), 4 × S4.
+
+| Bulgu | Durum |
+|---|---|
+| S4-1 ⚠ PARA — TRON pencere uzunluğu testte sabit değildi (testler sabiti modülden alıyordu; 12 sa'e indirmek yeşil kalıyordu) | **Kapandı (test):** "the window is exactly 24 hours — pinned by a literal" — süre testte elle yazılı (`24 * HOUR`): 12 sa ve 23 sa 59 dk'da iade bekler, 24 sa + 1 ms'de geçer. Bozma: pencere **12 sa** → 1 test kırıldı; **36 sa** → 2 test kırıldı |
+| S4-2 — geçerli JSON ama yanlış biçimli TRON defteri için test yoktu | **Kapandı (test):** `it.each` 4 durum (`{}`, `[{"foo":1}]`, `units:"abc"`, `at:"now"`) → defter açılmaz, iade `DEPOSIT_REFUND_LEDGER_UNAVAILABLE` ile bekler, hiçbir şey imzalanmaz/harcanmaz. Bozma: `isEntry` denetimi atlandı → 3 test kırıldı (`{}` dizi denetiminde zaten düşüyor) |
+| S4-3 ⚠ PARA — saat ileri sıçrayınca TRON defterindeki sayılmış girişler dosyadan kalıcı siliniyordu | **Kapandı (kod + test):** `DepositRefundLimit.reserve` 24 saati yalnız **sayımda** uygular; dosyadan silme `DEPOSIT_REFUND_RETENTION_MS` = **7 gün** sonra. İleri tarihli giriş (saat ilerideyken yazılmış) gerçek saat onu geçene kadar sayılır. Testler: "a jump ahead and back does not erase what was counted" (90 → +30 sa'te 5 → saat geri: 10 daha bekler, yeniden başlatmada da), "an entry stamped in the future keeps counting", "entries leave the FILE only after 7 days". Bozmalar: saklama = 24 sa (eski davranış) → 2 test; ileri tarihli giriş sayılmaz → 2 test. **Ethereum:** işlem günlüğü kayıt silmez (`TxJournal`'da silme yolu yok), kalıcı etki yok — eş test "S4-3 twin: clock jumps ahead, then back — the journal keeps every record"; bozma (ileri tarihli kayıt sayılmaz) → 1 test kırıldı. Runbook §D adım 5 (saat notu, NTP), 08 §3.3a |
+| S4-4 ⚠ PARA — runbook §D adım 2.4: belirsiz yayından sonra yeni izinden önce zincir kontrolü yoktu | **Kapandı (runbook):** yeni izin yazmadan önce: defterde `txHash` varsa gezginde o hash; yoksa ya da Ethereum'da depozit ve alıcı adresinin token hareketleri + depozit bakiyesi; transfer görünüyorsa yeni izin **yazılmaz** (iade ikinci kez çıkar); görünmüyorsa birkaç dakika bekleyip bir kez daha bakılır |
+
+**Kapanış bozma turu:** 6 bozma (TRON pencere 12 sa, 36 sa, `isEntry` atlama, saklama = pencere, ileri tarihli giriş sayılmaz; Ethereum ileri tarihli kayıt sayılmaz) → **6/6 yakalandı**; her birinden sonra dosya geri yüklendi.
+
+**Testler (kapanış):** TRON `npx vitest run` **728/728** (37 dosya) · Ethereum **929/929** (37 dosya) · iki serviste `tsc --noEmit` ve `eslint src/` temiz · prettier (değişen dosyalar) temiz. Backend'e dokunulmadı. Docker kullanılmadı.
+
 ## Known Limitations / Follow-up
 
 - Tavandan büyük tek iade / AD42 için yol artık sunucuda tek seferlik izin (sahip kararı 2026-10-23, modal); izin komutu konteyner içinde çalışır — Docker'la canlı prova yapılmadı (birim testleri + derleme), T172 deneme yayınında bir kez denenmeli.
 - TRON'da belirsiz biten (ağa çıkmış olabilecek) yayın girişimi sayılmaya devam eder; zincirden txid ile doğrulayıp düşmek (TRON işlemi ~60 sn'de süresi dolar) sonraki bir iyileştirme olabilir.
 - TRON defter volume'ü silinirse (`down -v`) son 24 saatin sayımı unutulur — çift ödeme yaratmaz, tavan o gün için iki katına açılabilir (runbook §D madde 4).
-- Saat geri alınırsa girişler pencerede daha uzun kalır (daha sıkı); ileri alınırsa erken düşer — konak erişimi gerektirir.
+- Saat geri alınırsa girişler pencerede daha uzun kalır (daha sıkı). **İleri sıçrarsa** sıçrama sürdükçe eski girişler sayımın dışında kalır (tavan erken açılır). Doğrulama öncesi TRON defteri pencereden çıkan girişleri o anki saate göre **dosyadan kalıcı** siliyordu (S4-3); kapanışta girişler dosyada 7 gün tutuluyor, saat düzelince yeniden sayılıyor. Yalnız **7 günden büyük** ileri sıçrama TRON'da girişleri kalıcı siler (runbook §D adım 5: NTP). Ethereum işlem günlüğü kayıt silmez. Konak erişimi gerektirir; backend tetikleyemez.

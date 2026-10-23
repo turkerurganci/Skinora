@@ -1780,6 +1780,24 @@ describe('T172b — deposit refund daily cap', () => {
     await restarted.refund(depositRefund(3, '10', 'B'));
   });
 
+  it('S4-3 twin: clock jumps ahead, then back — the journal keeps every record', async () => {
+    const HOUR = 60 * 60 * 1000;
+    const start = clock;
+    const { service } = build({ maxDepositRefund: CAP });
+    await service.refund(depositRefund(1, '90'));
+    // 30 h ahead: the 90 is outside the window for now, a 5 is signed.
+    clock = start + 30 * HOUR;
+    await service.refund(depositRefund(2, '5', 'B'));
+    // Back to the right time: the 90 counts again, and so does the 5 stamped
+    // in the future — 10 more would make 105.
+    clock = start + 1 * HOUR;
+    await expect(service.refund(depositRefund(3, '10', 'B'))).rejects.toMatchObject({
+      reason: 'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    });
+    await service.refund(depositRefund(3, '5', 'B'));
+    expect(chain.sent).toHaveLength(3);
+  });
+
   it('two refunds from two deposits at once cannot both pass (60 + 60 against 100)', async () => {
     const { service, journal } = build({ maxDepositRefund: CAP });
     const results = await Promise.allSettled([

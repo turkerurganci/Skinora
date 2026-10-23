@@ -256,15 +256,81 @@ describe('the rolling 24-hour window', () => {
     );
   });
 
-  it('entries that left the window are dropped from the file on the next write', async () => {
+  it('the window is exactly 24 hours — pinned by a literal, not by the constant (S4-1)', async () => {
+    // Uses a literal on purpose: a test that imports the constant would stay
+    // green if the window were halved (twice the cap a day) or stretched.
+    const HOUR = 60 * 60 * 1000;
+    const h = refundService(limit('100'));
+    await h.service.refund(refund(1, '100'));
+
+    // 12 h and 23 h 59 min later the refund still counts: nothing more goes.
+    for (const at of [12 * HOUR, 23 * HOUR + 59 * 60 * 1000]) {
+      clock = T0 + at;
+      expect((await refusal(h.service.refund(refund(2, '1')))).code).toBe(
+        'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+      );
+    }
+    // Just past 24 h the room is back — a 36 h window would still refuse.
+    clock = T0 + 24 * HOUR + 1;
+    await h.service.refund(refund(2, '100'));
+    expect(h.sendTransfer).toHaveBeenCalledTimes(2);
+  });
+
+  it('entries leave the FILE only after 7 days, not when they leave the window', async () => {
+    const DAY = 24 * 60 * 60 * 1000;
     const h = refundService(limit('100'));
     await h.service.refund(refund(1, '10'));
-    clock = T0 + DEPOSIT_REFUND_WINDOW_MS + 1;
-    await h.service.refund(refund(2, '10'));
-    const onDisk = JSON.parse(readFileSync(join(dir, 'deposit-refunds.json'), 'utf8'));
-    expect(
-      onDisk.map((e: { blockchainTransactionId: string }) => e.blockchainTransactionId),
-    ).toEqual(['bt-2']);
+    const ids = (): string[] =>
+      JSON.parse(readFileSync(join(dir, 'deposit-refunds.json'), 'utf8')).map(
+        (e: { blockchainTransactionId: string }) => e.blockchainTransactionId,
+      );
+
+    clock = T0 + DAY + 1; // out of the window: no longer counted, still on disk
+    await h.service.refund(refund(2, '100'));
+    expect(ids()).toEqual(['bt-1', 'bt-2']);
+
+    clock = T0 + 7 * DAY + 1; // past the retention: dropped on the next write
+    await h.service.refund(refund(3, '1'));
+    expect(ids()).toEqual(['bt-2', 'bt-3']);
+  });
+});
+
+describe('the host clock jumps (S4-3)', () => {
+  const HOUR = 60 * 60 * 1000;
+
+  it('a jump ahead and back does not erase what was counted', async () => {
+    const h = refundService(limit('100'));
+    await h.service.refund(refund(1, '90'));
+
+    // The clock jumps 30 h ahead (NTP fault, manual setting) and a refund is
+    // written then: the 90 is out of the window for now, but it stays on disk.
+    clock = T0 + 30 * HOUR;
+    await h.service.refund(refund(2, '5'));
+
+    // The clock comes back: the 90 counts again (and the 5, stamped in the
+    // future, counts too) — another 10 would make 105.
+    clock = T0 + 1 * HOUR;
+    expect((await refusal(h.service.refund(refund(3, '10')))).code).toBe(
+      'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    );
+    await h.service.refund(refund(3, '5'));
+    expect(h.sendTransfer).toHaveBeenCalledTimes(3);
+
+    // …and a restart reading the file agrees.
+    const restarted = refundService(limit('100'));
+    expect((await refusal(restarted.service.refund(refund(4, '0.000001')))).code).toBe(
+      'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    );
+  });
+
+  it('an entry stamped in the future (clock was ahead) keeps counting until real time passes it', async () => {
+    clock = T0 + 48 * HOUR;
+    await refundService(limit('100')).service.refund(refund(1, '100'));
+    clock = T0; // back to the right time, two days "before" the entry
+    const h = refundService(limit('100'));
+    expect((await refusal(h.service.refund(refund(2, '1')))).code).toBe(
+      'DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED',
+    );
   });
 });
 
@@ -356,6 +422,35 @@ describe('fail closed: unset, malformed, no ledger', () => {
     );
     expect(h.sendTransfer).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['an object, not a list', '{}'],
+    ['a list with a non-entry', '[{"foo": 1}]'],
+    [
+      'units not a number',
+      JSON.stringify([
+        { key: 'k', blockchainTransactionId: 'bt', units: 'abc', at: T0, txHash: null },
+      ]),
+    ],
+    [
+      'at not a number',
+      JSON.stringify([
+        { key: 'k', blockchainTransactionId: 'bt', units: '1', at: 'now', txHash: null },
+      ]),
+    ],
+  ])(
+    'valid JSON of the wrong shape (%s) is never treated as empty → every deposit refund waits (S4-2)',
+    async (_label, content) => {
+      writeFileSync(join(dir, 'deposit-refunds.json'), content);
+      expect(openDepositRefundLedger(dir).ledger).toBeNull();
+      const h = refundService(limit('100'));
+      expect((await refusal(h.service.refund(refund(1, '1')))).code).toBe(
+        'DEPOSIT_REFUND_LEDGER_UNAVAILABLE',
+      );
+      expect(h.withDelegation).not.toHaveBeenCalled();
+      expect(h.sendTransfer).not.toHaveBeenCalled();
+    },
+  );
 
   it('a ledger directory that cannot be created → unavailable (the service still starts)', () => {
     const file = join(dir, 'a-file');

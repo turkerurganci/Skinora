@@ -75,6 +75,18 @@ import type { DepositRefundPermitStore } from './DepositRefundPermits.js';
 /** Rolling window of the cap. */
 export const DEPOSIT_REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * How long an entry stays in the FILE after it was counted (T172b doğrulama
+ * S4-3). Leaving the 24-hour window only stops it counting; it is deleted
+ * from disk much later, so a host clock that jumps ahead for a while (NTP
+ * fault, manual setting) and then comes back cannot erase what was counted:
+ * once the clock is right again the entry is inside the window again. Only a
+ * jump of more than this long loses entries (DEPLOY_RUNBOOK §D, saat notu).
+ * An entry stamped in the future (written while the clock was ahead) keeps
+ * counting until real time passes it — the safe side.
+ */
+export const DEPOSIT_REFUND_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
 const LEDGER_FILE = 'deposit-refunds.json';
 
 export type DepositRefundRefusal =
@@ -267,9 +279,12 @@ export class DepositRefundLimit {
     }
     const now = this.now();
     const since = now - DEPOSIT_REFUND_WINDOW_MS;
-    const live = this.ledger.list().filter((entry) => entry.at >= since);
+    const keepSince = now - DEPOSIT_REFUND_RETENTION_MS;
+    // Counted: inside the window (or stamped in the future). Kept on disk:
+    // everything younger than the retention, counted or not (S4-3).
+    const kept = this.ledger.list().filter((entry) => entry.at >= keepSince);
     let used = 0n;
-    for (const entry of live) used += BigInt(entry.units);
+    for (const entry of kept) if (entry.at >= since) used += BigInt(entry.units);
     const projected = used + units;
     depositRefundWindowUsdt.set(this.toUsdt(used));
     const key = randomUUID();
@@ -307,8 +322,9 @@ export class DepositRefundLimit {
       permitId,
     };
     try {
-      // Entries that left the window are dropped on the same write.
-      this.ledger.replace([...live, entry]);
+      // Entries older than the retention (not merely the window) are dropped
+      // on the same write.
+      this.ledger.replace([...kept, entry]);
     } catch (err) {
       if (permitId !== null) this.restorePermit(permitId);
       throw this.refuse(
