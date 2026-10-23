@@ -52,7 +52,8 @@ public class OutboundApprovalTests : IntegrationTestBase
     private async Task<BlockchainTransaction> SeedRowAsync(
         BlockchainTransactionType type,
         BlockchainTransactionStatus status = BlockchainTransactionStatus.PENDING,
-        string? txHash = null)
+        string? txHash = null,
+        string depositAddress = TronAddress)
     {
         await using var ctx = CreateContext();
         var tx = NewTransaction(_seller.Id, network: BlockchainNetwork.TRON);
@@ -64,7 +65,7 @@ public class OutboundApprovalTests : IntegrationTestBase
         Guid? depositId = null;
         if (type != BlockchainTransactionType.SELLER_PAYOUT)
         {
-            var deposit = NewPaymentAddress(tx.Id, BlockchainNetwork.TRON, TronAddress, ++_seq);
+            var deposit = NewPaymentAddress(tx.Id, BlockchainNetwork.TRON, depositAddress, ++_seq);
             ctx.Set<PaymentAddress>().Add(deposit);
             await ctx.SaveChangesAsync();
             depositId = deposit.Id;
@@ -81,7 +82,7 @@ public class OutboundApprovalTests : IntegrationTestBase
             Type = type,
             PaymentAddressId = type == BlockchainTransactionType.SWEEP ? depositId : null,
             TxHash = txHash,
-            FromAddress = type == BlockchainTransactionType.SELLER_PAYOUT ? string.Empty : TronAddress,
+            FromAddress = type == BlockchainTransactionType.SELLER_PAYOUT ? string.Empty : depositAddress,
             ToAddress = SellerWallet,
             Amount = 40m + (++_seq),
             Token = StablecoinType.USDT,
@@ -247,6 +248,8 @@ public class OutboundApprovalTests : IntegrationTestBase
     // T172a — the dispatcher's stop switch (outbound.dispatch_paused, ⚠ PARA)
     // =================================================================
 
+    private const string SecondDeposit = "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8";
+
     private async Task SetSettingAsync(string key, string value)
     {
         await using var ctx = CreateContext();
@@ -275,7 +278,7 @@ public class OutboundApprovalTests : IntegrationTestBase
         await SetSettingAsync(OutboundDispatchPause.PausedKey, "true");
         var payout = await SeedRowAsync(BlockchainTransactionType.SELLER_PAYOUT);
         var refund = await SeedRowAsync(BlockchainTransactionType.BUYER_REFUND);
-        var sweep = await SeedRowAsync(BlockchainTransactionType.SWEEP);
+        var sweep = await SeedRowAsync(BlockchainTransactionType.SWEEP, depositAddress: SecondDeposit);
         await using (var ctx = CreateContext())
         {
             Assert.Null((await Service(ctx).ApproveAsync(_admin.Id, payout.Id, null, CancellationToken.None)).Error);
@@ -324,7 +327,7 @@ public class OutboundApprovalTests : IntegrationTestBase
         // Two sweeps in one run; the switch is turned on while the first one
         // is being sent. The second is not sent.
         var first = await SeedRowAsync(BlockchainTransactionType.SWEEP);
-        var second = await SeedRowAsync(BlockchainTransactionType.SWEEP);
+        var second = await SeedRowAsync(BlockchainTransactionType.SWEEP, depositAddress: SecondDeposit);
         _tron.OnBroadcast = () => SetSettingAsync(OutboundDispatchPause.PausedKey, "true");
 
         await DispatchAsync();

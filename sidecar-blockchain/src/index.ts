@@ -20,6 +20,7 @@ import { TronDelegationClient } from './tron/TronDelegationClient.js';
 import { EnergyDelegationService } from './wallet/EnergyDelegationService.js';
 import { TransferService } from './transfer/TransferService.js';
 import { RefundService } from './transfer/RefundService.js';
+import { TransferVerifier } from './transfer/TransferVerifier.js';
 import { TransferGuard, parseLimitUnits } from './transfer/TransferGuard.js';
 import { TronResourceClient } from './tron/TronResourceClient.js';
 import { TrxPriceService } from './fee/TrxPriceService.js';
@@ -157,6 +158,12 @@ const refundService = new RefundService({
   energyDelegation,
   guard: transferGuard,
 });
+// T172a — the closure tool's chain check (read-only; solidified transactions only).
+const transferVerifier = new TransferVerifier({
+  solidityUrl: config.tronSolidityUrl,
+  apiKey: config.tronApiKey,
+  tokenContracts,
+});
 const feeEstimationService = new FeeEstimationService({
   resourceClient: tronResourceClient,
   priceService: trxPriceService,
@@ -217,6 +224,7 @@ app.use(
     transferService,
     refundService,
     feeEstimationService,
+    transferVerifier,
   }),
 );
 

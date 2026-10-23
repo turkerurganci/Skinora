@@ -86,9 +86,6 @@ public class OutboundRowClosureTests : IntegrationTestBase
     private const string TronHash = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     private const string TronHash2 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
-    private static readonly string TronUsdtContract =
-        Contracts.ResolveContractAddress(BlockchainNetwork.TRON, StablecoinType.USDT);
-
     private static readonly IStablecoinContractRegistry Contracts =
         StablecoinContractRegistry.FromOptions(new StablecoinContractOptions());
 
