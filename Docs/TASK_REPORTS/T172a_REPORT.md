@@ -44,7 +44,7 @@ Kaynak: DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling` (T164), DEPLOY_
 | Backend — kapanış/onay/cüzdan uç noktaları (SQL Server LocalDB, migration'lı şema) | ✓ 151/151 + 11/11 | `dotnet test tests/Skinora.API.Tests --filter "OutboundRowClosureTests|OutboundApprovalTests|AdminOutboundClosuresEndpointTests|AdminWalletsEndpointTests"`; fikstür düzeltmesinden sonra `OutboundApprovalTests` 11/11 |
 | Backend — Transactions (adres ayırıcı, taban, gönderim işi, sözleşmeler) | ✓ 271/271 → sözleşme düzeltmesi sonrası `Contract` 124/124 | `--filter "PaymentAddress|OutgoingTransferDispatchJob|Contract"` |
 | Backend — Platform (seed, katalog, ayarlar) | ✓ 136/136 | `--filter "SeedData|Catalog|Setting"` |
-| Backend — tam proje koşusu (API, Transactions, Platform, Shared) | bkz. "Notlar — tam koşu" | LocalDB |
+| Backend — tam proje koşusu (LocalDB) | API 1010/1012 → 2 gerçek kırık düzeltildi (migration provası testleri eski CHECK adı ve 77 ayar sayısını bekliyordu) → `MigrationRehearsalTests` 30/30; Transactions 1900/1905 → 5 hata 1 ms'lik kurulum hatası (LocalDB eşzamanlı yük), tek başına 8/8 ✓; Platform 235/235; Shared 593/593 | `dotnet test tests/<proje>` |
 | TRON servisi | ✓ 40/40 yeni (22 + 18); `tsc --noEmit`, eslint, prettier temiz | `npx vitest run src/transfer/TransferVerifier.test.ts src/api/verifyHandler.test.ts` |
 | Frontend | ✓ 466/466 (46 dosya), `npm run lint` temiz, `tsc --noEmit` temiz | `npx vitest run` |
 | Canlı Nile (salt okunur) | ✓ 8/8 | Gerçek TRC-20 transferi `29a02e38…e566` (blok 72.079.005): tam eşleşme MATCH; büyük harf kimlik MATCH; göndericisiz MATCH; tutar+1, yanlış alıcı, yanlış gönderen, yanlış token → NO_MATCHING_TRANSFER; bilinmeyen kimlik → NOT_FOUND |
