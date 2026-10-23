@@ -165,6 +165,8 @@ export function candidate(
   return {
     blockchainTransactionId: "row-1",
     transactionId: "tx-1",
+    network: "ETHEREUM",
+    rowStatus: "PENDING",
     type: "SELLER_PAYOUT",
     token: "USDT",
     chainToken: "USDT",
@@ -182,6 +184,7 @@ export function closure(overrides: Partial<OutboundClosure> = {}): OutboundClosu
   return {
     id: "c1",
     status: "PROPOSED",
+    network: "ETHEREUM",
     blockchainTransactionId: "row-1",
     transactionId: "tx-1",
     rowType: "SELLER_PAYOUT",

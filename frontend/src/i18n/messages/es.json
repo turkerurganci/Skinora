@@ -2262,13 +2262,13 @@
       "successTx": "Transacción"
     },
     "closures": {
-      "heading": "Cierre de fila saliente (dos personas)",
-      "intro": "Úselo solo cuando el servicio de firma de Ethereum perdió su registro y un pago ya salió en la cadena mientras su fila sigue pendiente. Un administrador propone el hash de la transacción; otro distinto lo aprueba volviendo a escribirlo. Esta herramienta nunca envía dinero.",
+      "heading": "Cierre de filas salientes en {network} (dos personas)",
+      "intro": "Úsalo solo cuando un pago ya salió en la cadena mientras su fila sigue pendiente: después de que el servicio de firma de Ethereum perdiera su diario, o después de restaurar la base de datos (TRON o Ethereum; DEPLOY_RUNBOOK §N.8). Un administrador propone el hash de la transacción en cadena; otro administrador lo aprueba escribiendo el hash de nuevo y el sistema lo comprueba en la cadena contra la fila. Esta herramienta nunca envía dinero.",
       "noMoney": "Esta herramienta no envía dinero.",
       "candidates": {
-        "heading": "Filas salientes abiertas de Ethereum",
-        "empty": "No hay filas salientes abiertas de Ethereum.",
-        "ariaLabel": "Filas salientes abiertas de Ethereum",
+        "heading": "Filas salientes abiertas en {network}",
+        "empty": "No hay filas salientes abiertas en {network}.",
+        "ariaLabel": "Filas salientes abiertas en {network}",
         "columns": {
           "type": "Tipo",
           "amount": "Importe",
@@ -2305,7 +2305,8 @@
         "ownProposal": "Usted propuso este cierre. Debe aprobarlo otro administrador.",
         "rowStatus": "Estado de la fila",
         "tokenDiffers": "La transacción esperaba {expected}; esta fila mueve {actual} en la cadena (reembolso de token incorrecto).",
-        "tokenUnresolved": "No se puede determinar el token que esta fila mueve en la cadena; la herramienta no puede cerrarla."
+        "tokenUnresolved": "No se puede determinar el token que esta fila mueve en la cadena; la herramienta no puede cerrarla.",
+        "restoredFailed": "Cerrada a mano tras una restauración (POST_RESTORE_DUPLICATE). Aprobar devuelve esta misma fila al pago real, para que la contabilidad la vuelva a contar."
       },
       "actions": {
         "approve": "Aprobar",
@@ -2318,7 +2319,10 @@
         "row": "Fila: {type}, {amount} {token} a {to}",
         "hash": "Hash de la transacción en la cadena",
         "hashHelp": "0x seguido de 64 caracteres hexadecimales.",
+        "hashHelpTron": "El id de la transacción TRON: 64 caracteres hexadecimales, sin 0x (como lo muestra Tronscan).",
         "hashInvalid": "Introduzca un hash válido (0x + 64 caracteres hexadecimales).",
+        "hashInvalidTron": "Introduce un id de transacción TRON válido (64 caracteres hexadecimales, sin 0x).",
+        "restoredFailed": "Cerrada a mano tras una restauración (POST_RESTORE_DUPLICATE). Aprobar devuelve esta misma fila al pago real, para que la contabilidad la vuelva a contar.",
         "explorer": "Abrir este hash en {explorer}",
         "reason": "Motivo",
         "reasonHelp": "Qué nonce/cuenta y con qué lo hizo coincidir en la cadena (mínimo 20 caracteres).",

@@ -1181,8 +1181,9 @@ export function hotToColdTransfer(
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
- * Outbound-row closure tool (T157) — two-person tool that binds an on-chain
- * transaction hash to a stuck Ethereum outbound row. It never sends money.
+ * Outbound-row closure tool (T157; T172a — TRON and the row a database restore
+ * left behind) — two-person tool that binds an on-chain transaction hash to an
+ * outbound row that already went out on chain. It never sends money.
  * ────────────────────────────────────────────────────────────────────────── */
 
 export type OutboundClosureStatus = "PROPOSED" | "APPROVED" | "REJECTED";
@@ -1190,6 +1191,14 @@ export type OutboundClosureStatus = "PROPOSED" | "APPROVED" | "REJECTED";
 export interface OutboundClosureCandidate {
   blockchainTransactionId: string;
   transactionId: string;
+  /** T172a — "TRON" | "ETHEREUM". */
+  network: string;
+  /**
+   * T172a — "PENDING", or "FAILED" for a row closed by hand after a database
+   * restore (POST_RESTORE_DUPLICATE) that the closure brings back to the real
+   * payment.
+   */
+  rowStatus: OutboundRowStatus;
   type: string;
   /** The stablecoin the transaction expected. */
   token: string;
@@ -1210,6 +1219,8 @@ export interface OutboundClosureCandidate {
 export interface OutboundClosure {
   id: string;
   status: OutboundClosureStatus;
+  /** T172a — "TRON" | "ETHEREUM". */
+  network: string;
   blockchainTransactionId: string;
   transactionId: string;
   rowType: string;
@@ -1237,13 +1248,31 @@ export interface ProposeOutboundClosureRequest {
   reason: string;
 }
 
-export function listOutboundClosureCandidates(): Promise<OutboundClosureCandidate[]> {
-  return apiClient<OutboundClosureCandidate[]>("/admin/wallets/outbound-closures/candidates");
+function closureQuery(params: Record<string, string | undefined>): string {
+  const pairs = Object.entries(params).filter(
+    (entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== "",
+  );
+  return pairs.length === 0
+    ? ""
+    : `?${pairs.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
 }
 
-export function listOutboundClosures(status?: OutboundClosureStatus): Promise<OutboundClosure[]> {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiClient<OutboundClosure[]>(`/admin/wallets/outbound-closures${qs}`);
+/** T172a — `network` narrows the list to one network's panel. */
+export function listOutboundClosureCandidates(
+  network?: string,
+): Promise<OutboundClosureCandidate[]> {
+  return apiClient<OutboundClosureCandidate[]>(
+    `/admin/wallets/outbound-closures/candidates${closureQuery({ network })}`,
+  );
+}
+
+export function listOutboundClosures(
+  status?: OutboundClosureStatus,
+  network?: string,
+): Promise<OutboundClosure[]> {
+  return apiClient<OutboundClosure[]>(
+    `/admin/wallets/outbound-closures${closureQuery({ status, network })}`,
+  );
 }
 
 export function proposeOutboundClosure(

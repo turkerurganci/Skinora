@@ -2262,13 +2262,13 @@
       "successTx": "交易"
     },
     "closures": {
-      "heading": "关闭出款记录（双人操作）",
-      "intro": "仅在Ethereum签名服务丢失其日志、且某笔付款已在链上发出但其记录仍显示待处理时使用。一名管理员提议链上交易哈希；另一名不同的管理员通过再次输入该哈希来批准。此工具绝不会发送资金。",
+      "heading": "{network} 出账行关闭（双人）",
+      "intro": "仅当一笔付款已在链上发出、但其记录仍显示待处理时使用——以太坊签名服务丢失日志后，或数据库恢复后（TRON 或以太坊；DEPLOY_RUNBOOK §N.8）。一名管理员提交链上交易哈希；另一名管理员重新输入哈希进行批准，系统会在链上将其与该行核对。此工具绝不发送资金。",
       "noMoney": "此工具不会发送资金。",
       "candidates": {
-        "heading": "未关闭的Ethereum出款记录",
-        "empty": "没有未关闭的Ethereum出款记录。",
-        "ariaLabel": "未关闭的Ethereum出款记录",
+        "heading": "{network} 上未完成的出账行",
+        "empty": "{network} 上没有未完成的出账行。",
+        "ariaLabel": "{network} 上未完成的出账行",
         "columns": {
           "type": "类型",
           "amount": "金额",
@@ -2305,7 +2305,8 @@
         "ownProposal": "此关闭申请由您提议，必须由另一名管理员批准。",
         "rowStatus": "记录状态",
         "tokenDiffers": "该交易预期的代币是 {expected}；此记录在链上转移的是 {actual}（错误代币退款）。",
-        "tokenUnresolved": "无法确定此记录在链上转移的代币；该工具无法关闭它。"
+        "tokenUnresolved": "无法确定此记录在链上转移的代币；该工具无法关闭它。",
+        "restoredFailed": "恢复后被手动关闭（POST_RESTORE_DUPLICATE）。批准会将同一行恢复为真实付款，账目会重新计入。"
       },
       "actions": {
         "approve": "批准",
@@ -2318,7 +2319,10 @@
         "row": "记录：{type}，{amount} {token}，收款方 {to}",
         "hash": "链上交易哈希",
         "hashHelp": "0x 后接 64 位十六进制字符。",
+        "hashHelpTron": "TRON 交易 ID：64 个十六进制字符，不带 0x（与 Tronscan 显示一致）。",
         "hashInvalid": "请输入有效的交易哈希（0x + 64 位十六进制字符）。",
+        "hashInvalidTron": "请输入有效的 TRON 交易 ID（64 个十六进制字符，不带 0x）。",
+        "restoredFailed": "恢复后被手动关闭（POST_RESTORE_DUPLICATE）。批准会将同一行恢复为真实付款，账目会重新计入。",
         "explorer": "在 {explorer} 上打开此哈希",
         "reason": "原因",
         "reasonHelp": "是哪个 nonce/账户，以及您在链上匹配了什么（至少 20 个字符）。",

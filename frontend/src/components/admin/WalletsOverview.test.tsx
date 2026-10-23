@@ -74,9 +74,11 @@ describe("WalletsOverview — one section per network", () => {
     expect(eth().queryByText("501.25 USDT")).toBeNull();
     expect(tron().queryByText("Fuel wallet")).toBeNull();
 
-    // The closure tool belongs to the Ethereum section only.
-    expect(eth().getByTestId("closure-panel")).toBeInTheDocument();
-    expect(tron().queryByTestId("closure-panel")).toBeNull();
+    // T172a — each network has its own closure tool (TRON after a restore).
+    expect(eth().getByTestId("closure-panel")).toHaveAttribute("data-network", "ETHEREUM");
+    expect(tron().getByTestId("closure-panel")).toHaveAttribute("data-network", "TRON");
+    expect(api.listOutboundClosureCandidates).toHaveBeenCalledWith("TRON");
+    expect(api.listOutboundClosureCandidates).toHaveBeenCalledWith("ETHEREUM");
   });
 
   it("shows UNAVAILABLE explicitly and never as a zero balance", async () => {
