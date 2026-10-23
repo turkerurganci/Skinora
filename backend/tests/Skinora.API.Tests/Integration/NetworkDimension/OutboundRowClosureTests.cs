@@ -1543,6 +1543,62 @@ public class OutboundRowClosureTests : IntegrationTestBase
         Assert.Equal(BlockchainTransactionStatus.FAILED, (await ReloadRowAsync(row.Id)).Status);
     }
 
+    /// <summary>
+    /// T172a doğrulama S4-1 — the approval's compare-and-set requires the row
+    /// to still carry NO hash. Here the row keeps its status but gets a hash
+    /// (the dispatcher, or another closure path) between the approval's read
+    /// and its write: the approval must not overwrite that hash.
+    /// </summary>
+    [Theory]
+    [InlineData(BlockchainTransactionStatus.PENDING, null)]
+    [InlineData(BlockchainTransactionStatus.FAILED, RestoreNote)]
+    public async Task T172a_S4_1_A_Row_That_Got_A_Hash_Since_The_Read_Is_Not_Overwritten(
+        BlockchainTransactionStatus status, string? note)
+    {
+        var row = await SeedUnsentRowWithDepositAsync(
+            BlockchainNetwork.TRON, BlockchainTransactionType.SELLER_PAYOUT, status, note);
+        _tronChain.Status = Final();
+        var closure = await ProposeTronOkAsync(row.Id);
+        _tronChain.OnVerify = async () =>
+        {
+            await using var other = CreateContext();
+            await other.Set<BlockchainTransaction>().Where(b => b.Id == row.Id)
+                .ExecuteUpdateAsync(u => u.SetProperty(b => b.TxHash, TronHash2));
+        };
+
+        var result = await ApproveAsync(closure.Id, _bob.Id, TronHash);
+
+        Assert.Equal(ClosureError.RowNotOpen, result.Error);
+        var after = await ReloadRowAsync(row.Id);
+        Assert.Equal(TronHash2, after.TxHash);
+        Assert.Equal(status, after.Status);
+        Assert.Empty(await AuditAsync(AuditAction.OUTBOUND_ROW_CLOSURE_APPROVED));
+    }
+
+    /// <summary>
+    /// T172a doğrulama S4-5 — the restore note is matched case-sensitively
+    /// everywhere: the candidate list (SQL, binary collation) agrees with the
+    /// proposal and the approval (ordinal). A lowercase note is not the note:
+    /// the row is neither listed nor reopenable.
+    /// </summary>
+    [Fact]
+    public async Task T172a_S4_5_A_Lowercase_Note_Is_Neither_Listed_Nor_Reopenable()
+    {
+        var noted = await SeedUnsentRowWithDepositAsync(
+            BlockchainNetwork.TRON, BlockchainTransactionType.SELLER_PAYOUT,
+            BlockchainTransactionStatus.FAILED, RestoreNote);
+        var lowercase = await SeedUnsentRowWithDepositAsync(
+            BlockchainNetwork.TRON, BlockchainTransactionType.BUYER_REFUND,
+            BlockchainTransactionStatus.FAILED, RestoreNote.ToLowerInvariant(), depositIndex: 8,
+            depositAddress: TronColdWallet); // any other TRON address: the deposit is not under test
+
+        await using var ctx = CreateContext();
+        var listed = await Service(ctx).ListCandidatesAsync(BlockchainNetwork.TRON, CancellationToken.None);
+
+        Assert.Contains(listed, c => c.BlockchainTransactionId == noted.Id);
+        Assert.DoesNotContain(listed, c => c.BlockchainTransactionId == lowercase.Id);
+    }
+
     private async Task DispatchAsync()
     {
         var registry = new FakeBlockchainServiceRegistry()
@@ -1644,20 +1700,24 @@ public class OutboundRowClosureTests : IntegrationTestBase
 
         public List<TransferVerifyRequest> VerifyReads { get; } = [];
 
-        public Task<TransferVerifyResult> VerifyTransferAsync(
+        /// <summary>Runs inside the verify read — a concurrent write landing between the approval's read and its compare-and-set.</summary>
+        public Func<Task>? OnVerify { get; set; }
+
+        public async Task<TransferVerifyResult> VerifyTransferAsync(
             TransferVerifyRequest request, CancellationToken cancellationToken)
         {
             VerifyReads.Add(request);
+            if (OnVerify is not null) await OnVerify();
             if (OnChain is not null)
             {
                 var asked = new TransferStatusExpectation(
                     Contracts.ResolveContractAddress(network, request.Token),
                     request.From ?? string.Empty, request.To, request.Amount);
-                return Task.FromResult(new TransferVerifyResult(
+                return new TransferVerifyResult(
                     SameTransfer(asked, OnChain) ? TransferVerifyOutcome.Match : TransferVerifyOutcome.NoMatchingTransfer,
-                    123));
+                    123);
             }
-            return Task.FromResult(Verify);
+            return Verify;
         }
 
         public Task<TransferBroadcastResult> BroadcastAsync(

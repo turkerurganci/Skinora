@@ -474,7 +474,8 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
                 && (b.Status == BlockchainTransactionStatus.PENDING
                     || (b.Status == BlockchainTransactionStatus.FAILED
                         && b.ErrorMessage != null
-                        && b.ErrorMessage.StartsWith(PostRestoreDuplicateMarker))))
+                        && EF.Functions.Collate(b.ErrorMessage, CaseSensitiveCollation)
+                            .StartsWith(PostRestoreDuplicateMarker))))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(b => b.TxHash, closure.TxHash)
                 .SetProperty(b => b.Status, BlockchainTransactionStatus.DETECTED)
@@ -589,8 +590,17 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
             : "txHash must be 0x followed by 64 hex digits.";
 
     /// <summary>
+    /// Binary collation for the note match in SQL (T172a doğrulama S4-5): the
+    /// database collation is case-insensitive, <see cref="IsOpen"/> is ordinal.
+    /// With it the candidate list, the proposal and the approval's
+    /// compare-and-set agree — <c>post_restore_duplicate</c> is not the note.
+    /// </summary>
+    private const string CaseSensitiveCollation = "Latin1_General_100_BIN2";
+
+    /// <summary>
     /// The rows the tool may close (T172a): outbound, no hash, and either
-    /// PENDING or FAILED with the post-restore note.
+    /// PENDING or FAILED with the post-restore note (case-sensitive, like
+    /// <see cref="IsOpen"/>).
     /// </summary>
     private static IQueryable<BlockchainTransaction> OpenRows(IQueryable<BlockchainTransaction> rows) =>
         rows.Where(b => b.TxHash == null
@@ -598,7 +608,8 @@ public sealed partial class OutboundRowClosureService : IOutboundRowClosureServi
             && (b.Status == BlockchainTransactionStatus.PENDING
                 || (b.Status == BlockchainTransactionStatus.FAILED
                     && b.ErrorMessage != null
-                    && b.ErrorMessage.StartsWith(PostRestoreDuplicateMarker))));
+                    && EF.Functions.Collate(b.ErrorMessage, CaseSensitiveCollation)
+                        .StartsWith(PostRestoreDuplicateMarker))));
 
     private static bool IsOpen(BlockchainTransaction row) =>
         row.TxHash is null
