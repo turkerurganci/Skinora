@@ -1,6 +1,6 @@
 # Skinora — Implementation Status
 
-**Son güncelleme:** 2026-10-23 — T174 ✓ Tamamlandı (DEFERRED_BACKLOG §4 triyajı: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 11 ⚪ kalır; doğrulama PASS 3 × S4, hepsi kapandı; sahip kararları: yaptırım listesi API ile (ekran yok, T171), VPN/Tor canlıda kapalı (T175); main `d7aebce7` dala birleştirildi, 50 aktif / 167 çözülmüş; T174_REPORT.md, PR #374) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+**Son güncelleme:** 2026-10-23 — T172b ⏳ Devam ediyor (imza servislerinde depozitten iade 24 saatlik tavanı, TRON + Ethereum, 100 $, aşan iade bekler; sahip kararı 2026-10-23, T173 öncesi; yapım bitti, doğrulama bekliyor; T172b_REPORT.md, PR #PR_NO) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
 
 **Önceki güncellemeler:** → [`STATUS_CHANGELOG.md`](STATUS_CHANGELOG.md) (en yeni en üstte).
 
@@ -377,6 +377,7 @@
 | T171 | Kurulum günü | ⬚ Bekliyor |
 | T172 | Sunucuda prova (Nile + Sepolia) | ⬚ Bekliyor |
 | T172a | Yedekten geri yükleme sonrası para araçları (⚠ PARA; T173'ten önce — sahip kararı 2026-10-22) | ⬚ Bekliyor |
+| T172b | İmza servislerinde depozitten iade günlük tavanı (⚠ PARA; T173'ten önce — sahip kararı 2026-10-23) | ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor: iki imza servisi depozitten iadenin kayan 24 saatlik toplamını kendisi tutar (TRON volume'deki defter, Ethereum işlem günlüğü), 100 $'ı aşan / ayarsız iade 503 `deferred` ile bekler, backend `PENDING` tutar; alarmlar `*-deposit-refund-limit-refused`; mutasyon 16/16 ([rapor](TASK_REPORTS/T172b_REPORT.md), PR [#PR_NO](https://github.com/turkerurganci/Skinora/pull/PR_NO)) |
 | T173 | Mainnet pilotu | ⬚ Bekliyor |
 | T174 | DEFERRED_BACKLOG §4 triyajı | ✓ Tamamlandı — doğrulama PASS (HEAD `4289552e`, 3 × S4; bağımsız doğrulama Opus high; kapanışta S4-1 satır no, S4-2 biçim, S4-3 plana bağlama kapandı): 2026-10-17'de ⚪ sayılan 16 satır bugünkü kodla ölçüldü: 5 ✅ bayat (WP1/WP2/WP4b+T147/WP7/WP9), 10 ⚪ kalır (metin güncel), `sanctions-expansion` ⚪ → 🟡 → ⚪ (sahip kararı 2026-10-23: yaptırım listesi yönetici ekranı yapılmayacak, API ile girilir — DEPLOY_RUNBOOK §O.1 + madde 13 `curl` yordamı, T171 kabul kriteri); `vpn-fraud` sahip kararı 2026-10-23: canlıda kapalı başlar, pilotta karar (T175 kabul kriteri); backlog main 55/162 → 50/167 (main `d7aebce7` birleştirildi); rapor [`T174_REPORT.md`](TASK_REPORTS/T174_REPORT.md), PR [#374](https://github.com/turkerurganci/Skinora/pull/374) |
 | T175 | Çıkış kapısı (12 §6.3) + açılış | ⬚ Bekliyor |

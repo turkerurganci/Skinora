@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-23 — T174 ✓ Tamamlandı (DEFERRED_BACKLOG §4 triyajı: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 11 ⚪ kalır; doğrulama PASS 3 × S4, hepsi kapandı; sahip kararları: yaptırım listesi API ile (ekran yok, T171), VPN/Tor canlıda kapalı (T175); main `d7aebce7` dala birleştirildi, 50 aktif / 167 çözülmüş; T174_REPORT.md, PR #374)
+
 **Önceki güncelleme:** 2026-10-23 — T174 ⏳ Devam ediyor (DEFERRED_BACKLOG §4: 16 ⚪ satır ölçüldü — 5 ✅ bayat, 10 ⚪ kalır, 1 ⚪ → 🟡 ⚠ yaptırım ekranı yok; 48 aktif / 167 çözülmüş; T174_REPORT.md) **Merge teyidi (T174 kapanışında işlendi):** T164 (#372) main `d7aebce7` → CI `39883489789` ✓, Docker Publish `39883489767` ✓.
 
 **Önceki güncelleme:** 2026-10-23 — T164 ✓ Tamamlandı (veritabanı yedeği ve geri dönüş planı; ilk doğrulama FAIL S1 ⚠ PARA, yeniden doğrulama PASS 5 × S4 — kapanışta dördü kapandı; main T163/T169/T168 dala birleştirildi, runbook §L · §M · §N · §O; T164_REPORT.md, PR #372)
