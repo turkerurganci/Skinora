@@ -595,6 +595,108 @@ groups:
             network's gas tariff before anything else (DEPLOY_RUNBOOK §J
             "Gas tahmini").
 
+      # T172b (proje sahibi kararı 2026-10-23, ⚠ PARA) — the TRON signer refused
+      # a deposit refund under its own 24-hour deposit refund cap (DEPOSIT_REFUND_DAILY_LIMIT_USDT).
+      # The backend's T169a limit should have held it first, so a refusal
+      # here means the two disagree: an admin release above the cap, a
+      # single refund larger than the cap, an unset cap / unusable ledger, or
+      # a backend asking for more than it should. Every refused attempt counts
+      # (the backend asks again every minute), so the rule fires while it lasts.
+      - uid: tron-deposit-refund-limit-refused
+        title: TRON Signer Refused A Deposit Refund (24h Cap)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_blockchain_deposit_refund_limit_refusals_total[1h])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: The TRON signer refused a deposit refund under its 24-hour cap — the refund waits
+          description: >-
+            Nothing was signed and nothing spent; the backend keeps the refund
+            row PENDING (no retry spent) and asks again every minute. Read the
+            refusal reason on the series (DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED /
+            DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED / DEPOSIT_REFUND_LEDGER_UNAVAILABLE),
+            compare with the backend's held refunds, and follow DEPLOY_RUNBOOK
+            §D "Depozitten iade tavanı (imza servisi)" — never raise DEPOSIT_REFUND_DAILY_LIMIT_USDT
+            before the refunds counted in the last 24 hours are accounted for.
+
+      # T172b (proje sahibi kararı 2026-10-23, ⚠ PARA) — the Ethereum signer refused
+      # a deposit refund under its own 24-hour deposit refund cap (ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT).
+      # The backend's T169a limit should have held it first, so a refusal
+      # here means the two disagree: an admin release above the cap, a
+      # single refund larger than the cap, an unset cap / unusable ledger, or
+      # a backend asking for more than it should. Every refused attempt counts
+      # (the backend asks again every minute), so the rule fires while it lasts.
+      - uid: ethereum-deposit-refund-limit-refused
+        title: Ethereum Signer Refused A Deposit Refund (24h Cap)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_ethereum_deposit_refund_limit_refusals_total[1h])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: The Ethereum signer refused a deposit refund under its 24-hour cap — the refund waits
+          description: >-
+            Nothing was signed and nothing spent; the backend keeps the refund
+            row PENDING (no retry spent) and asks again every minute. Read the
+            refusal reason on the series (DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED /
+            DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED),
+            compare with the backend's held refunds, and follow DEPLOY_RUNBOOK
+            §D "Depozitten iade tavanı (imza servisi)" — never raise ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT
+            before the refunds counted in the last 24 hours are accounted for.
+
       # T164 — SQL Server Express caps one database's data files at 10 GB; past
       # it every INSERT that needs a new page fails (Msg 1105 / 1827) — sales,
       # payments, the job storage. The backend publishes the used space and

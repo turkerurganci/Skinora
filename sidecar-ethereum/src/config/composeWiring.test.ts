@@ -59,6 +59,8 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
     // T152 — send caps (fail closed) and the fee-cap wait alarm threshold.
     ['ETHEREUM_MAX_SINGLE_TRANSFER_USDT', 'ETHEREUM_MAX_SINGLE_TRANSFER_USDT'],
     ['ETHEREUM_MAX_DAILY_OUTFLOW_USDT', 'ETHEREUM_MAX_DAILY_OUTFLOW_USDT'],
+    // T172b — the deposit refund cap (fail closed: unset → deposit refunds wait).
+    ['ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT', 'ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT'],
     ['ETHEREUM_FUEL_MAX_SINGLE_ETH', 'ETHEREUM_FUEL_MAX_SINGLE_ETH'],
     ['ETHEREUM_FUEL_MAX_DAILY_ETH', 'ETHEREUM_FUEL_MAX_DAILY_ETH'],
     ['ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS'],

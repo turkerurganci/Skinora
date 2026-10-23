@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  depositRefundLimitRefusalsTotal,
   monitorScanFailuresTotal,
   rpcRequestDuration,
   transferStatusUnverifiedTotal,
@@ -180,5 +181,17 @@ describe('T158 — the new Ethereum alarms read the series the service exports',
     expect(block).toContain(`histogram_quantile(0.95, sum by (le) (rate(${name}_bucket[10m])))`);
     expect(block).toMatch(/type: gt\s+params: \[3\]/);
     expect(block).toMatch(/for: 15m/);
+  });
+});
+
+describe('ethereum-deposit-refund-limit-refused (T172b) — wired to the series the service exports', () => {
+  it('fires on any refusal in the last hour, as critical, at once', async () => {
+    const block = ruleBlock('ethereum-deposit-refund-limit-refused');
+    const expr = /^\s+expr: (.+)$/m.exec(block)?.[1] ?? '';
+    const { name } = await depositRefundLimitRefusalsTotal.get();
+    expect(expr).toBe(`sum(increase(${name}[1h])) or vector(0)`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/for: 0m/);
+    expect(block).toMatch(/severity: critical/);
   });
 });
