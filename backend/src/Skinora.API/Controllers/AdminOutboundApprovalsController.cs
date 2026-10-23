@@ -60,4 +60,32 @@ public sealed class AdminOutboundApprovalsController : ControllerBase
         return StatusCode(status, ApiResponse<object>.Fail(
             code, result.Message ?? code, traceId: HttpContext.TraceIdentifier));
     }
+
+    /// <summary>
+    /// T169a AD42 — <c>POST /admin/wallets/outbound-approvals/:id/release-daily-limit</c>:
+    /// let one refund held by its network's deposit refund daily limit go past
+    /// the limit (08 §3.3c). ⚠ PARA; audited <c>DEPOSIT_REFUND_LIMIT_RELEASED</c>.
+    /// </summary>
+    [HttpPost("{id:guid}/release-daily-limit")]
+    [Authorize(Policy = PolicyManageSettings)]
+    [RateLimit("admin-write")]
+    public async Task<IActionResult> ReleaseDailyLimit(Guid id, CancellationToken cancellationToken)
+    {
+        var claim = User.FindFirstValue(AuthClaimTypes.UserId);
+        if (!Guid.TryParse(claim, out var adminId)) return Unauthorized();
+
+        var result = await _service.ReleaseDailyLimitAsync(
+            adminId, id, HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken);
+        if (result.Error is null) return Ok(result.Value);
+
+        var (status, code) = result.Error.Value switch
+        {
+            LimitReleaseError.RowNotFound => (StatusCodes.Status404NotFound, "ROW_NOT_FOUND"),
+            LimitReleaseError.RowNotHeld => (StatusCodes.Status409Conflict, "ROW_NOT_HELD"),
+            LimitReleaseError.AlreadyReleased => (StatusCodes.Status409Conflict, "ALREADY_RELEASED"),
+            _ => (StatusCodes.Status500InternalServerError, "INTERNAL_ERROR"),
+        };
+        return StatusCode(status, ApiResponse<object>.Fail(
+            code, result.Message ?? code, traceId: HttpContext.TraceIdentifier));
+    }
 }

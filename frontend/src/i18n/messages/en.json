@@ -503,7 +503,8 @@
       "OUTBOUND_ROW_CLOSURE_APPROVED": "Outbound row closure approved",
       "OUTBOUND_ROW_CLOSURE_REJECTED": "Outbound row closure rejected",
       "OUTBOUND_ROW_CLOSURE_REFUSED": "Outbound row closure refused",
-      "OUTBOUND_TRANSFER_APPROVED": "Outbound payment approved"
+      "OUTBOUND_TRANSFER_APPROVED": "Outbound payment approved",
+      "DEPOSIT_REFUND_LIMIT_RELEASED": "Deposit refund limit released"
     }
   },
   "adminTransactions": {
@@ -573,7 +574,7 @@
       "payoutSentAt": "Sent at",
       "refund": "Refund Details",
       "refundOriginal": "Original amount",
-      "refundGasFee": "Gas fee",
+      "refundGasFee": "Network fee",
       "refundNet": "Net refund",
       "refundAddress": "Refund address",
       "refundedAt": "Refunded at",
@@ -945,7 +946,7 @@
         },
         "refunds": {
           "heading": "Refunds",
-          "body": "- Refunds are for money only; there is no item refund, because the item is never with Skinora.\n- A refund goes to the refund address the buyer gave at acceptance for the chosen network. Refunds of rejected payments (a short amount, the excess of an overpayment, later transfers in a split payment, a wrong token, a payment arriving after the window expired) go to the same address.\n- When an accepted payment is refunded, the buyer gets back the price and the commission. The TRON network fee is refunded in full if the refund happens before the payment is moved to Skinora's wallet; if it happens after the move, it is not refunded because it has been spent.\n- The network fee of each refund is deducted from the refund amount; the buyer receives \"refunded amount − the refund's network fee\". The fee is calculated from the blockchain just before sending; if it cannot be calculated, the smaller of the network's fallback fee and the last measured fee is used. The deducted fee is shown on the transaction page, and for refunds of rejected payments also in the notification.\n- If the network fee would swallow most of the refund (the net refund is less than twice the refund's network fee), the refund is not sent automatically; the money stays on the transaction's payment address and an admin decides manually.\n- In some periods Skinora also holds refunds for admin approval before sending them (\"Settlement period and payout to the seller\").\n- The buyer is responsible for the refund address being correct. A refund sent to a wrong address, or to one that is not yours, cannot be recovered."
+          "body": "- Refunds are for money only; there is no item refund, because the item is never with Skinora.\n- A refund goes to the refund address the buyer gave at acceptance for the chosen network. Refunds of rejected payments (a short amount, the excess of an overpayment, later transfers in a split payment, a wrong token, a payment arriving after the window expired) go to the same address.\n- When an accepted payment is refunded, the buyer gets back the price and the commission. The TRON network fee is refunded in full if the refund happens before the payment is moved to Skinora's wallet; if it happens after the move, it is not refunded because it has been spent.\n- The network fee of each refund is deducted from the refund amount; the buyer receives \"refunded amount − the refund's network fee\". The refund's network fee is everything Skinora spends on the blockchain to send that refund: on TRON, the activation of the payment address and the TRX sent to it for the refund's energy and bandwidth, plus the fees of those sends; on Ethereum, the ETH sent to the payment address and that send's fee. It can never exceed the refund amount. The fee is calculated from the blockchain when the refund is queued for sending and is recorded with it; if it cannot be calculated, the smaller of the network's fallback fee and the last measured fee is used. If the refund is sent later (while it waits for admin approval or for room under the daily limit), the fee is not recalculated: the recorded amount is deducted, and any difference from what the send actually costs, in either direction, is Skinora's. The deducted fee is shown on the transaction page, and for refunds of rejected payments also in the notification.\n- If the network fee would swallow most of the refund (the net refund is less than twice the refund's network fee), the refund is not sent automatically; the money stays on the transaction's payment address and an admin decides manually.\n- Refunds sent from payment addresses may not exceed a limit on each network in any 24 hours (currently 100 USDT per network). A refund that would cross it is held, and is sent when the limit has room again or an admin has reviewed and released it. Holding a refund does not change its amount.\n- In some periods Skinora also holds refunds for admin approval before sending them (\"Settlement period and payout to the seller\").\n- The buyer is responsible for the refund address being correct. A refund sent to a wrong address, or to one that is not yours, cannot be recovered."
         },
         "disputes": {
           "heading": "Disputes",
@@ -1532,7 +1533,7 @@
       "refund": {
         "title": "Refund summary",
         "originalAmount": "Original amount",
-        "gasFee": "Gas fee",
+        "gasFee": "Network fee (the refund’s on-chain cost)",
         "netRefundAmount": "Net refund",
         "refundAddress": "Refund address",
         "txHash": "TX hash",
@@ -2378,6 +2379,33 @@
         "transaction": "Transaction id",
         "cancel": "Cancel",
         "submit": "Approve and release for sending"
+      },
+      "limit": {
+        "heading": "Daily refund limit (from deposits)",
+        "usage": "{network}: {used} / {limit} USDT refunded from deposits in the last 24 hours",
+        "intro": "Refunds that leave deposit addresses may not exceed this limit per network in any 24 hours. A refund that would cross it waits (not failed, no retry spent) and goes out on its own when the refunds of 24 hours ago leave the window; a refund larger than the limit never goes on its own. Refunds from the hot wallet do not count. The limit is the blockchain.*.deposit_refund_daily_limit_usdt setting on the Settings screen.",
+        "empty": "No refund is held by the limit.",
+        "ariaLabel": "Refunds held by the daily refund limit",
+        "columns": {
+          "network": "Network",
+          "type": "Type",
+          "amount": "Amount",
+          "to": "Recipient address",
+          "held": "Held since",
+          "action": "Action"
+        },
+        "release": "Send past the limit",
+        "confirm": {
+          "title": "Send the refund past the limit",
+          "warning": "This refund will exceed today’s deposit refund limit. Once released the amount is really sent on chain and cannot be undone; it still counts toward the daily total. Check that the refund is genuine, and the network, amount and recipient address.",
+          "network": "Network",
+          "type": "Type",
+          "amount": "Amount",
+          "to": "Recipient address",
+          "transaction": "Transaction ID",
+          "cancel": "Cancel",
+          "submit": "Release and queue for sending"
+        }
       }
     },
     "errors": {
@@ -2389,6 +2417,8 @@
       "ROW_NOT_FOUND": "The outbound row was not found.",
       "ROW_NOT_APPROVABLE": "This row is not a seller payout or a refund; it never waits for an approval.",
       "ALREADY_APPROVED": "This row is already approved.",
+      "ROW_NOT_HELD": "This refund is not held by the daily refund limit; there is nothing to release.",
+      "ALREADY_RELEASED": "This refund is already released.",
       "CLOSURE_NOT_FOUND": "The closure was not found.",
       "ROW_NOT_ETHEREUM": "The row is not on Ethereum.",
       "ROW_NOT_OUTBOUND": "The row is not an outbound transfer.",

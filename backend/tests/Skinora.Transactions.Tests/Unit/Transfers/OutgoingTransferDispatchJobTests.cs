@@ -83,6 +83,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             _settings,
             _observer,
             _walletAddresses,
+            _limitObserver,
             _clock,
             NullLogger<OutgoingTransferDispatchJob>.Instance);
     }
@@ -111,6 +112,7 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
 
     private readonly SeededNetworkSettings _settings = new();
     private readonly CapturingQueueObserver _observer = new();
+    private readonly CapturingLimitObserver _limitObserver = new();
     private readonly StubWalletAddresses _walletAddresses = new();
 
     public void Dispose()
@@ -1099,6 +1101,276 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
         };
     }
 
+    // ---- T169a — deposit refund daily limit (proje sahibi kararı 2026-10-21, ⚠ PARA) ----
+    // Fixture limits are never the seeded 100: a test that passes on the seed
+    // value alone would not show the setting is read.
+
+    /// <summary>A TRON deposit refund of <paramref name="amount"/>, queued one second after the previous seed.</summary>
+    private async Task<RefundFixture> SeedLimitRefundAsync(decimal amount,
+        BlockchainTransactionType type = BlockchainTransactionType.EXCESS_REFUND)
+    {
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        return await SeedRefundAsync(type, amount);
+    }
+
+    private async Task<BlockchainTransaction> ReloadAsync(Guid id) =>
+        await _db.Set<BlockchainTransaction>().AsNoTracking().IgnoreQueryFilters().FirstAsync(b => b.Id == id);
+
+    [Fact]
+    public async Task T169a_Deposit_Refunds_Stop_At_The_Limit_The_One_That_Would_Cross_It_Waits_And_Alarms_Once()
+    {
+        // 30 + 35 = 65 ≤ 70; + 20 = 85 > 70 → the third waits.
+        _settings.DepositRefundDailyLimit = 70m;
+        var first = await SeedLimitRefundAsync(30m);
+        var second = await SeedLimitRefundAsync(35m, BlockchainTransactionType.INCORRECT_AMOUNT_REFUND);
+        var third = await SeedLimitRefundAsync(20m, BlockchainTransactionType.LATE_PAYMENT_REFUND);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal([first.RefundRow.Id, second.RefundRow.Id], _client.Calls.Select(c => c.BlockchainTransactionId));
+        var now = _clock.GetUtcNow().UtcDateTime;
+        Assert.Equal(now, (await ReloadAsync(first.RefundRow.Id)).DepositRefundCountedAt);
+        var held = await ReloadAsync(third.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, held.Status);
+        Assert.Equal(0, held.RetryCount);
+        Assert.Null(held.DepositRefundCountedAt);
+        Assert.Equal(now, held.DepositRefundLimitHeldAt);
+        Assert.Equal(now + DepositRefundDailyLimit.HeldRetryDelay, held.NextAttemptAt);
+        Assert.StartsWith(DepositRefundDailyLimit.HeldErrorCode, held.ErrorMessage);
+        var alert = Assert.IsType<DepositRefundLimitHeldEvent>(Assert.Single(_outbox.Events));
+        Assert.Equal(third.RefundRow.Id, alert.BlockchainTransactionId);
+        Assert.Equal(BlockchainNetwork.TRON, alert.Network);
+        Assert.Equal(20m, alert.Amount);
+        Assert.Equal(65m, alert.UsedLast24hUsdt);
+        Assert.Equal(70m, alert.LimitUsdt);
+        Assert.Equal((1, 65m, 70m), _limitObserver.Last[BlockchainNetwork.TRON]);
+
+        // The next ticks within the quarter hour do not even pick it up; the
+        // one after weighs it again, still above — no second alarm.
+        _clock.Advance(DepositRefundDailyLimit.HeldRetryDelay);
+        await _sut.ExecuteAsync();
+        Assert.Equal(2, _client.Calls.Count);
+        Assert.Single(_outbox.Events);
+        Assert.Equal(now, (await ReloadAsync(third.RefundRow.Id)).DepositRefundLimitHeldAt);
+    }
+
+    [Fact]
+    public async Task T169a_Exactly_The_Limit_Passes_A_Cent_Above_It_Waits()
+    {
+        _settings.DepositRefundDailyLimit = 48.50m;
+        await SeedLimitRefundAsync(20.25m);
+        await SeedLimitRefundAsync(28.25m);
+        var cent = await SeedLimitRefundAsync(0.01m);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(2, _client.Calls.Count);
+        Assert.NotNull((await ReloadAsync(cent.RefundRow.Id)).DepositRefundLimitHeldAt);
+    }
+
+    [Fact]
+    public async Task T169a_A_Held_Refund_Goes_Out_When_The_Rolling_Window_Has_Room_Not_At_Midnight()
+    {
+        _settings.DepositRefundDailyLimit = 70m;
+        var sent = await SeedLimitRefundAsync(60m);
+        await _sut.ExecuteAsync();
+        var held = await SeedLimitRefundAsync(20m);
+        await _sut.ExecuteAsync();
+        Assert.NotNull((await ReloadAsync(held.RefundRow.Id)).DepositRefundLimitHeldAt);
+        var sentAt = (await ReloadAsync(sent.RefundRow.Id)).DepositRefundCountedAt!.Value;
+
+        // One minute short of 24 h after the 60 was sent: still in the window.
+        _clock.SetUtcNow(new DateTimeOffset(sentAt + DepositRefundDailyLimit.Window - TimeSpan.FromMinutes(1), TimeSpan.Zero));
+        await _sut.ExecuteAsync();
+        Assert.Single(_client.Calls);
+
+        // That weighing set the next one a quarter of an hour later; a minute
+        // after the window frees, the row is not due yet.
+        _clock.SetUtcNow(new DateTimeOffset(sentAt + DepositRefundDailyLimit.Window + TimeSpan.FromMinutes(1), TimeSpan.Zero));
+        await _sut.ExecuteAsync();
+        Assert.Single(_client.Calls);
+
+        // Due again, the 60 is out of the window: 0 + 20 ≤ 70.
+        _clock.SetUtcNow(new DateTimeOffset(
+            sentAt + DepositRefundDailyLimit.Window - TimeSpan.FromMinutes(1) + DepositRefundDailyLimit.HeldRetryDelay,
+            TimeSpan.Zero));
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(held.RefundRow.Id, _client.Calls[^1].BlockchainTransactionId);
+        var row = await ReloadAsync(held.RefundRow.Id);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, row.Status);
+        Assert.Equal(_clock.GetUtcNow().UtcDateTime, row.DepositRefundCountedAt);
+        Assert.Single(_outbox.Events); // one alarm for the whole hold
+    }
+
+    [Fact]
+    public async Task T169a_A_Refund_Larger_Than_The_Limit_Never_Passes_On_Its_Own()
+    {
+        _settings.DepositRefundDailyLimit = 70m;
+        var big = await SeedLimitRefundAsync(70.01m, BlockchainTransactionType.BUYER_REFUND);
+
+        await _sut.ExecuteAsync();
+        _clock.Advance(TimeSpan.FromDays(2));
+        await _sut.ExecuteAsync();
+
+        Assert.Empty(_client.Calls);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, (await ReloadAsync(big.RefundRow.Id)).Status);
+    }
+
+    [Fact]
+    public async Task T169a_An_Admin_Release_Lets_One_Held_Refund_Go_And_It_Still_Counts()
+    {
+        _settings.DepositRefundDailyLimit = 50m;
+        await SeedLimitRefundAsync(40m);
+        var held = await SeedLimitRefundAsync(30m);
+        await _sut.ExecuteAsync();
+        Assert.Single(_client.Calls);
+
+        var tracked = await _db.Set<BlockchainTransaction>().FirstAsync(b => b.Id == held.RefundRow.Id);
+        tracked.DepositRefundLimitReleasedAt = _clock.GetUtcNow().UtcDateTime;
+        tracked.NextAttemptAt = null;
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(held.RefundRow.Id, _client.Calls[^1].BlockchainTransactionId);
+        // 40 + 30 = 70 sent: the release counts, so even 1 more waits.
+        var next = await SeedLimitRefundAsync(1m);
+        await _sut.ExecuteAsync();
+        Assert.Equal(2, _client.Calls.Count);
+        Assert.NotNull((await ReloadAsync(next.RefundRow.Id)).DepositRefundLimitHeldAt);
+        Assert.Equal((1, 70m, 50m), _limitObserver.Last[BlockchainNetwork.TRON]);
+    }
+
+    [Fact]
+    public async Task T169a_The_Approval_Gate_Comes_First_And_An_Approval_Does_Not_Lift_The_Limit()
+    {
+        _settings.DepositRefundDailyLimit = 25m;
+        SetAutoSend("false");
+        var refund = await SeedLimitRefundAsync(30m);
+
+        await _sut.ExecuteAsync();
+
+        // Unapproved: never weighed — no hold, no alarm.
+        Assert.Empty(_client.Calls);
+        Assert.Null((await ReloadAsync(refund.RefundRow.Id)).DepositRefundLimitHeldAt);
+        Assert.Empty(_outbox.Events);
+
+        var tracked = await _db.Set<BlockchainTransaction>().FirstAsync(b => b.Id == refund.RefundRow.Id);
+        tracked.ApprovedAt = _clock.GetUtcNow().UtcDateTime;
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        await _sut.ExecuteAsync();
+
+        // Approved but above the limit: held, alarmed — still nothing sent.
+        Assert.Empty(_client.Calls);
+        Assert.NotNull((await ReloadAsync(refund.RefundRow.Id)).DepositRefundLimitHeldAt);
+        Assert.IsType<DepositRefundLimitHeldEvent>(Assert.Single(_outbox.Events));
+    }
+
+    [Fact]
+    public async Task T169a_A_Retry_Of_An_Admitted_Refund_Does_Not_Count_Itself_Twice()
+    {
+        // 40 admitted, the broadcast fails transiently; its retry finds 40 in
+        // the window — its own — and must not read 40 + 40 > 50.
+        _settings.DepositRefundDailyLimit = 50m;
+        var refund = await SeedLimitRefundAsync(40m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.TransientFailure, null, "SIDECAR_TIMEOUT", "timeout");
+
+        await _sut.ExecuteAsync();
+        var admitted = await ReloadAsync(refund.RefundRow.Id);
+        Assert.Equal(1, admitted.RetryCount);
+        Assert.NotNull(admitted.DepositRefundCountedAt);
+
+        _client.NextResult = new TransferBroadcastResult(TransferBroadcastStatus.Success, "tx-stub", null, null);
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(2, _client.Calls.Count);
+        Assert.Equal(BlockchainTransactionStatus.DETECTED, (await ReloadAsync(refund.RefundRow.Id)).Status);
+        Assert.Null((await ReloadAsync(refund.RefundRow.Id)).DepositRefundLimitHeldAt);
+    }
+
+    [Fact]
+    public async Task T169a_A_Failed_Refund_Frees_Its_Room()
+    {
+        _settings.DepositRefundDailyLimit = 50m;
+        var failed = await SeedLimitRefundAsync(40m);
+        _client.NextResult = new TransferBroadcastResult(
+            TransferBroadcastStatus.InvalidRequest, null, "TRANSFER_REJECTED", "rejected");
+        await _sut.ExecuteAsync();
+        Assert.Equal(BlockchainTransactionStatus.FAILED, (await ReloadAsync(failed.RefundRow.Id)).Status);
+
+        _client.NextResult = new TransferBroadcastResult(TransferBroadcastStatus.Success, "tx-stub", null, null);
+        var next = await SeedLimitRefundAsync(45m);
+        await _sut.ExecuteAsync();
+
+        Assert.Equal(next.RefundRow.Id, _client.Calls[^1].BlockchainTransactionId);
+    }
+
+    [Fact]
+    public async Task T169a_Payouts_Sweeps_And_Hot_Wallet_Refunds_Neither_Count_Nor_Wait()
+    {
+        _settings.DepositRefundDailyLimit = 10m;
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        _walletAddresses.EthereumHotWalletAddress = EthereumHot;
+        var payout = await SeedPayoutAsync(500m);
+        var hotWalletRefund = await SeedEthereumRefundAfterSweepAsync(
+            BlockchainTransactionType.BUYER_REFUND, BlockchainTransactionStatus.CONFIRMED);
+
+        await _sut.ExecuteAsync();
+
+        Assert.Contains(_client.Calls, c => c.BlockchainTransactionId == payout.PayoutRow.Id);
+        var call = Assert.Single(ethereum.Calls);
+        Assert.Equal(hotWalletRefund.RefundRow.Id, call.BlockchainTransactionId);
+        Assert.True(call.FromHotWallet);
+        Assert.Null((await ReloadAsync(hotWalletRefund.RefundRow.Id)).DepositRefundCountedAt);
+        Assert.Null((await ReloadAsync(payout.PayoutRow.Id)).DepositRefundCountedAt);
+        Assert.Equal((0, 0m, 10m), _limitObserver.Last[BlockchainNetwork.ETHEREUM]);
+        Assert.Equal((0, 0m, 10m), _limitObserver.Last[BlockchainNetwork.TRON]);
+    }
+
+    [Fact]
+    public async Task T169a_The_Limit_Is_Per_Network()
+    {
+        // TRON is full; an Ethereum deposit refund (before the sweep) still goes.
+        _settings.DepositRefundDailyLimit = 99.5m;
+        var ethereum = new StubBlockchainTransferClient();
+        _registry.With(BlockchainNetwork.ETHEREUM, transfers: ethereum);
+        await SeedLimitRefundAsync(99.5m);
+        var tronHeld = await SeedLimitRefundAsync(1m);
+        var ethereumRefund = await SeedEthereumRefundAfterSweepAsync(BlockchainTransactionType.EXCESS_REFUND, sweepStatus: null);
+
+        await _sut.ExecuteAsync();
+
+        var ethereumCall = Assert.Single(ethereum.Calls);
+        Assert.Equal(ethereumRefund.RefundRow.Id, ethereumCall.BlockchainTransactionId);
+        Assert.False(ethereumCall.FromHotWallet);
+        Assert.NotNull((await ReloadAsync(tronHeld.RefundRow.Id)).DepositRefundLimitHeldAt);
+        Assert.Equal((1, 99.5m, 99.5m), _limitObserver.Last[BlockchainNetwork.TRON]);
+        Assert.Equal((0, 99m, 99.5m), _limitObserver.Last[BlockchainNetwork.ETHEREUM]);
+    }
+
+    [Fact]
+    public async Task T169a_A_Held_Refund_Is_Not_In_The_Stall_Queue()
+    {
+        _settings.DepositRefundDailyLimit = 30m;
+        await SeedLimitRefundAsync(25m);
+        await SeedLimitRefundAsync(25m);
+
+        await _sut.ExecuteAsync();
+        _clock.Advance(TimeSpan.FromHours(5));
+        await _sut.ExecuteAsync();
+
+        // The held refund has its own alarm; the stall queue does not see it.
+        Assert.Equal(0, _observer.Last[BlockchainNetwork.TRON].Rows);
+        Assert.Equal(1, _limitObserver.Last[BlockchainNetwork.TRON].Held);
+    }
+
     private sealed class CapturingQueueObserver : IOutboundQueueObserver
     {
         public Dictionary<BlockchainNetwork, (int Rows, double Oldest, double? Alarm)> Last { get; } = new();
@@ -1107,13 +1379,30 @@ public sealed class OutgoingTransferDispatchJobTests : IDisposable
             Last[network] = (pendingRows, oldestPendingSeconds, alarmSeconds);
     }
 
+    private sealed class CapturingLimitObserver : IDepositRefundLimitObserver
+    {
+        public Dictionary<BlockchainNetwork, (int Held, decimal Used, decimal Limit)> Last { get; } = new();
+
+        public void Report(BlockchainNetwork network, int heldRows, decimal usedUsdt, decimal limitUsdt) =>
+            Last[network] = (heldRows, usedUsdt, limitUsdt);
+    }
+
     private sealed class SeededNetworkSettings : IBlockchainNetworkSettingsProvider
     {
         public decimal EthereumFeeCap { get; set; } = 0.50m;
 
+        /// <summary>
+        /// T169a — the deposit refund daily limit. The send-path tests predate
+        /// it and use whatever amounts they need, so it is out of their way by
+        /// default; the limit's own tests set it (fixture values are not the
+        /// seeded 100).
+        /// </summary>
+        public decimal DepositRefundDailyLimit { get; set; } = 1_000_000m;
+
         public Task<BlockchainNetworkSettings> GetAsync(BlockchainNetwork network, CancellationToken cancellationToken)
         {
             var defaults = BlockchainNetworkSettingsProvider.DefaultsFor(network);
+            defaults = defaults with { DepositRefundDailyLimitUsdt = DepositRefundDailyLimit };
             return Task.FromResult(network == BlockchainNetwork.ETHEREUM
                 ? defaults with { FeeCapUsdPerTransfer = EthereumFeeCap }
                 : defaults);

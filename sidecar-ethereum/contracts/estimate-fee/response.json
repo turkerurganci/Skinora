@@ -6,6 +6,7 @@
   "blockNumber": "26215000",
   "gasLimit": "46201",
   "fuelGasLimit": "21000",
+  "depositBalanceWei": "0",
   "baseFeePerGasWei": "80000000000",
   "maxPriorityFeePerGasWei": "1000000001",
   "maxFeePerGasWei": "161000000001",
