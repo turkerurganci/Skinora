@@ -90,11 +90,48 @@ Tam tablo DEPLOY_RUNBOOK §P.7'de. Özet:
 
 ## Canlı Ölçüm (Docker — ayrı compose projesi `t170mon`)
 
-LIVE_PLACEHOLDER
+**Kurulum:** `prom/prometheus:v2.53.3` + `grafana/grafana:11.3.0`, compose proje adı `t170mon` (adlandırılmış volume yok; `escrow` volume'larına ve başka konteynerlere dokunulmadı), Grafana'ya bu dalın `infra/grafana/provisioning` kopyası (yalnız contact point yer tutucuları sahte değerle). Prometheus iki servisi ana makinede kazıdı: bu dalın derlenmiş **TRON servisi** (`sidecar-blockchain/dist`, Nile) ve **Ethereum servisi** (`sidecar-ethereum/dist`, Sepolia; birincil sağlayıcı bilerek erişilemez `http://127.0.0.1:9/` = `deadprimary`, yedek `ethereum-sepolia-rpc.publicnode.com`). Bütün eşikler **üretim değerleri** (300 sn, 1800 sn, 0,5/10 dk). Backend çalıştırılmadı (SQL + Redis gerektirir) — backend metrikli paneller boş, bağlantıları birim testleriyle doğrulandı.
+
+**Provisioning:** Grafana logu `finished to provision alerting` + `finished to provision dashboards`, hata yok; API'de **45 kural** (beş T170 kuralı dahil) ve **6 pano** (`skinora-networks` dahil).
+
+**Panel verisi (Grafana veri kaynağı vekili üzerinden, Networks panosunun her sorgusu):**
+
+| Panel | Değer |
+|---|---|
+| TRON — Solid blok yaşı / eşik | 66–114 sn (canlı Nile) / 300 |
+| TRON — Solid blok | 72.082.851 → 72.083.103 |
+| TRON — TronGrid günlük projeksiyon / bütçe | 225,9 / 100.000 |
+| TRON — TronGrid p95 | 0,095 sn (`walletsolidity.getnowblock`) |
+| TRON — servis up, izlenen adres, takılı kilit | 1, 0, 0 |
+| Ethereum — Finalized yaşı / eşik | 825–1179 sn / 1800 |
+| Ethereum — RPC sağlayıcı hata oranı | `deadprimary` = 1 |
+| Ethereum — RPC p95 | `publicnode` 0,24–0,47 sn |
+| Ethereum — gönderim beklemesi / eşik | fee_cap/unmined/gas 0 / 10.800 |
+| Ethereum — izleyicinin finalized'a uzaklığı, mutabakat oranı | 0, 0,03–0,14 |
+| Erişilebilirlik — servis (30 gün) | iki iş için 1 |
+| System — CPU / bellek / çalışma süresi (tron, ethereum) | dolu (backend/steam çalıştırılmadı) |
+
+**Alarm ateşledi — TRON zincir ilerlemiyor (`tron-solid-block-stalled`, kritik, para):** TRON servisi `TRON_SOLIDITY_URL=http://127.0.0.1:9` (erişilemeyen sağlayıcı) ile yeniden başlatıldı (22:14:51 yerel / 19:14:51 UTC). Yaş serisi (dakikalık): `114 → 38 → 98 → 158 → 218 → 278 → 338 → 398 → 458 → 518`; aynı anda `skinora_blockchain_tron_api_errors_total{error_type="network"}` arttı (T170 öncesi bu sayaç 0'da kalırdı). Kural 19:20:20'de pending, **19:22:20'de `firing`** (`{category: money, severity: critical}`); Alertmanager 19:22:39'da **`money-alarm`** contact point'ine (Telegram + e-posta) gönderdi (sahte kimlikle: `money-alarm/email[0] … SMTP not configured; money-alarm/telegram[0] … 401`). Servis gerçek Nile ile yeniden başlatılınca (yaş 81 sn) kural ~20 sn içinde `inactive` oldu.
+
+**Alarm ateşledi — Ethereum sağlayıcı hatası (`ethereum-rpc-provider-failing`, uyarı, para):** `deadprimary` oranı 1; kural 19:14:20'de pending, **19:24:20'de `firing`** (`provider=deadprimary`), 19:24:33'te `money-alarm`'a gönderildi. Ödemeler (finalized okuma) yedek sağlayıcıdan sürdü (finalized yaşı normal).
+
+**Ölçüm ortamının yan etkisi (T170 dışı):** `ethereum-usdt-status` pending oldu — yerel çalıştırmada Sepolia USDT kontratının durumu okunamadı (`skinora_ethereum_usdt_status_ok` = 0); mevcut kural, beklenen davranış.
+
+**Kapatma:** iki node süreci durduruldu, `docker compose -p t170mon down`, Prometheus'un anonim volume'u silindi.
 
 ## Test Sonuçları
 
-TESTS_PLACEHOLDER
+| Tür | Sonuç | Komut / ayrıntı |
+|---|---|---|
+| Backend unit (tüm Unit filtresi) | ✓ 2515/2515 | `dotnet test Skinora.sln --filter "FullyQualifiedName!~.Integration&FullyQualifiedName!~.Contract"` — Shared 602, Disputes 25, Steam 59, Fraud 19, Auth 96, Platform 161, Users 49, Realtime 44, API 223, Transactions 1079, Notifications 158 |
+| Backend integration (LocalDB, değişen koda dokunanlar) | ✓ 24/24 | `PlatformHealthProbeJobTests` + `AdminMaintenanceEndpointTests` (sınıf başına benzersiz DB) |
+| Backend odaklı | ✓ 64/64 | `HotWalletMonitorServiceTests` + `NotificationAlertingProvisioningTests` |
+| `dotnet format --verify-no-changes --severity error` (değişen dosyalar) | ✓ | çıkış 0 |
+| TRON servisi | ✓ 36 dosya / 686 test | `npx vitest run`; `tsc --noEmit` temiz; `eslint src/` temiz; prettier (değişen dosyalar, `--end-of-line auto`) temiz |
+| Ethereum servisi | ✓ 37 dosya / 904 test | `npx vitest run`; `tsc --noEmit`, eslint, prettier (değişen dosya) temiz |
+| Script testleri | ✓ 120/120 | `node --test "scripts/**/*.test.mjs"` (yeni `dashboard-metrics.test.mjs` 13/13, `compose-exposure` 14/14) |
+| Frontend | ~ | yalnız `events.ts`'e bir alan; prettier temiz; tsc/vitest CI'da (yerelde `node_modules` yok) |
+| **Bozma** | ✓ | (1) panolar T16 hâline geri alınınca `dashboard-metrics.test.mjs` 6 testte kırıldı (application/business/security/system adları, veri kaynağı, iş adları); (2) canlı ölçümde sağlayıcı bozulunca iki alarm ateşledi, düzelince söndü |
 
 ## Altyapı Değişiklikleri
 
