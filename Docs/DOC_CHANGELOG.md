@@ -59,6 +59,8 @@
 
 ## 05_TECHNICAL_ARCHITECTURE.md
 
+2026-10-24 (**T171a — ortak sırlar Docker secret (v3.40, ⚠ GÜVENLİK):** §3.5 Production satırı: ortak sırlar (JWT, iki webhook sırrı, üç iç anahtar, bildirim sırları, Grafana SMTP, heartbeat) Docker secret dosyası, backend + karşı uç aynı dosyadan, Development dışında env yolu kapalı; kalanlar (DB/Redis, Grafana yönetici, sağlayıcı API anahtarları) → `ThirdPartyCredentialsInPlainEnv`. Secret envanterinde iç anahtar, HMAC ve JWT satırları gerçeğe çekildi (Key Vault / "otomatik rotation" ifadeleri kalktı; döndürme DEPLOY_RUNBOOK §L.9).)
+
 2026-10-23 (**T170 — izleme (v3.39; main'deki T172b v3.38'in üstü):** §9.2 "Ağ başına" metrik kategorisi + panolar paragrafı (altı pano, ağ başına Networks panosu, metrik adı testi, iş metrikleri yayımlanmıyor → backlog `BusinessMetricsNotPublished`); §9.3 ağ başına alarmlar paragrafı (servis sağlıksız, zincir ilerlemiyor, sağlayıcı hatası, sıcak cüzdan limiti iki ağda, yakıt, izleyici kör — kapsam ve üretim eşikleri DEPLOY_RUNBOOK §P.7); §9.5 "Ölçülen erişilebilirlik" satırı.)
 
 2026-10-23 (**T172b — main T165 (#375) birleştirmesi (v3.38):** T172b'nin v3.37'si T165'in v3.37'siyle çakıştığı için bir üstü; içerik değişmedi — aşağıdaki iki T172b girdisi (v3.37 yazılı) bu sürümdedir.)
@@ -177,6 +179,8 @@
 
 ## 11_IMPLEMENTATION_PLAN.md
 
+2026-10-24 (**T171a — ortak sırlar Docker secret (`plan/11_F9.md` v1.30, ⚠ GÜVENLİK):** T171'den önce yeni görev "T171a: Ortak sırlar Docker secret" — T171 kabul kriterindeki "ortak sırlar env yerine secret dosyasından" maddesinin kod parçası kurulum gününden önce (DEFERRED_BACKLOG `SharedSecretsInPlainEnv` T165 eki dahil). T171 kriteri T171a'ya atıf yapacak biçimde güncellendi: kurulum günü dosyaları yeni değerlerle üretir ve DEPLOY_RUNBOOK §L.9 / §O #12a kontrolünü yapar.)
+
 2026-10-23 (**T172b — sunucuda tek seferlik izin (proje sahibi kararı 2026-10-23, modal) (`plan/11_F9.md` v1.29):** T172b kabul kriterlerine tek seferlik izin (sunucuda komut, HTTP yok; ağ + iade kimliği + alıcı + tutar + süre; tek kullanım; izinli iade sayılır) ve testleri eklendi.)
 
 2026-10-23 (**T172b — proje sahibi kararı 2026-10-23 (modal) (`plan/11_F9.md` v1.29 — main'deki T169a v1.27/v1.28 ile çakıştığı için):** T172a'dan sonra yeni görev "T172b: İmza servislerinde depozitten iade günlük tavanı (⚠ PARA)" — kabul kriterleri, kaynak (sahip kararı + T169a, backlog `DepositRefundLimitBackendOnly`), sıra T173'ten önce.)
@@ -211,6 +215,8 @@
 2026-08-25 (**`Doc12PreP2PStale`** — doküman v3.0 P2P akışına hizalandı. Bu dosya F7 boyunca hiç güncellenmemiş ve **kaldırılmış** kavramları normatif metin olarak taşımaya devam etmişti: `ITEM_ESCROWED` ×11, `TRADE_OFFER_SENT_TO_SELLER` ×9, `TRADE_OFFER_SENT_TO_BUYER` ×6, platform bot'ları ×13 — buna karşılık `SELLER_CONFIRMED`, `DELIVERY_EXPECTED`, `PAYMENT_WINDOW_OPEN` ve "mutabakat" **sıfır** kez. Diğer dokümanlarda aynı statüler yalnız *"v3.0'da kaldırıldı"* tarihsel notu olarak geçerken burada hâlâ **doğrulama kuralıydı**. Güncellenen bölümler: §1.2 kapsam · §3.5 entegrasyon kapsamı · §4.2–§4.6 VAL matrisleri · §7.1 kanıt örneği · §12.1 state geçiş matrisi · §12.2 özel durumlar · §13.1/§13.3/§13.4/§13.5 ek kontroller. Davranış değişikliği yok — protokol koda ve 02/03/06/07'ye hizalandı; state geçişleri `TransactionStateMachine`'den birebir okundu.)
 
 ## DEPLOY_RUNBOOK.md
+
+2026-10-24 (**T171a — ortak sırlar Docker secret (⚠ GÜVENLİK):** yeni **§L.9** (dosya tablosu, kurallar ve hata kodları, açılış satırıyla doğrulama, kurulum günü altı adımı, geliştirme ortamından geçiş, döndürme sırası — önce karşı uç durdurulur, `jwt_previous_secret` varsayılan bağlı değil (öneriyle kaydedildi — ⚠), bu PC'de konteyner ölçümü, sınırlar → `ThirdPartyCredentialsInPlainEnv`); §0 L satırı; §B JWT / webhook / iç anahtar / Ethereum / Telegram satırları dosyaya çekildi; §G.1, §G.6 (render adımı token'ı dosyadan, `TELEGRAM_BOT_TOKEN_UNREADABLE`); §J.1 adım 3 ve `ethereum-webhook-signature-refused` yordamı; §K.3 yeni sırlar, §K.4 adım 2 `secrets/trial/` ortak sır döngüsü; §L.1 kapsam dışı ve §L.8 sınır satırı; §O yeni #12a; §P.1–§P.5 sırları `.env.trial` yerine `secrets/trial/*.txt`.)
 
 2026-10-23 (**T170 kapanışı — doğrulama S4-1 / S4-4 ve main T172b (#378) birleştirmesi (⚠ PARA):** §P.7 kapsam tablosunda `ethereum-rpc-provider-failing` "taşıma hatası ya da yanlış zincir" (yanlış zincirdeki sağlayıcı artık her reddedilen denemede `outcome="chain_mismatch"` sayılır; birincil sağlıklıyken denenmeyen yanlış zincirdeki yedek ilk kullanımda görünür); doğrulama tablosuna adım 3b (birincil sağlayıcı başka zincirde) ve adım 5 (gerçek backend ile uçtan uca: Ethereum sıcak limit, servis sağlıksız, izleyici bayat — T172'ye devir). Birleştirmede §P.4/§P.6 para kuralı sayısı 30 + 5 = 35; başlıkta bölüm sırasına §P (§P.7) eklendi.)
 

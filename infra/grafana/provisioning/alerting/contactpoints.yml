@@ -3,7 +3,8 @@
 #
 # Values are substituted by the skinora-grafana-provisioning render step
 # (docker-compose.yml), not by Grafana:
-#   TELEGRAM_BOT_TOKEN  bot token (the same bot the backend uses — DEPLOY_RUNBOOK §P)
+#   TELEGRAM_BOT_TOKEN  bot token (the same bot the backend uses — DEPLOY_RUNBOOK §P);
+#                       T171a: read from the Docker secret file telegram_bot_token
 #   TELEGRAM_CHAT_ID    the operator's chat / group id the alerts go to
 #   ALERT_EMAIL_TO      the operator's alert mailbox
 # E-mail leaves through Grafana's own SMTP client (GF_SMTP_*, Resend SMTP —

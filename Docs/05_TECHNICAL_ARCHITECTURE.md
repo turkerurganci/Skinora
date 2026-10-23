@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.39** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T170: §9.2 ağ başına metrikler ve panolar, §9.3 ağ başına alarmlar, §9.5 ölçülen erişilebilirlik. · T172b (v3.38) — §3.3: imza servislerinde depozitten iade 24 sa tavanı, aşan iade bekler; sunucuda tek seferlik izin (⚠ PARA). · T165 (v3.37): §9.3 para alarmı (Telegram + e-posta, mutabakat uyuşmazlığı dahil), §9.5 dış izleme (Grafana sağlığı dahil) ve açık sağlık ucu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.40** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-24 — T171a: §3.5 ortak sırlar (JWT, webhook, iç anahtarlar, bildirim sırları) Docker secret dosyasından; env yolu üretimde kapalı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -440,7 +440,7 @@ Tüm hassas bilgiler (credentials, key'ler, connection string'ler) ortam bazınd
 | Ortam | Strateji |
 |---|---|
 | Development | `.env` dosyası — `.gitignore`'da, repo'ya dahil edilmez |
-| Production | **İmza sırları** (tohumlar, cüzdan anahtarları): Docker secret **dosyası**, yalnız kendi ağının servisine (T150, T163); env yolu kapalı. **Diğer sırlar** (JWT, webhook HMAC, iç anahtarlar, DB/Redis parolası, API anahtarları): bugün `.env` → container env'i; dosyaya taşınmaları T171'e bırakıldı (DEFERRED_BACKLOG `SharedSecretsInPlainEnv`) |
+| Production | **İmza sırları** (tohumlar, cüzdan anahtarları): Docker secret **dosyası**, yalnız kendi ağının servisine (T150, T163); env yolu kapalı. **Ortak sırlar** (JWT imza anahtarı, iki webhook HMAC sırrı, üç iç anahtar, bildirim kanalı sırları, Grafana SMTP parolası, heartbeat URL'si): Docker secret **dosyası**, backend'e ve karşı uçtaki tek servise **aynı dosyadan** (T171a, DEPLOY_RUNBOOK §L.9); Development dışında env yolu kapalı — değişken görülürse servis açılmaz. **Kalanlar** (DB/Redis parolası, Grafana yönetici parolası, sağlayıcı API anahtarları): bugün `.env` → container env'i (DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`) |
 
 **Secret envanteri ve rotation politikası:**
 
@@ -452,10 +452,10 @@ Tüm hassas bilgiler (credentials, key'ler, connection string'ler) ortam bazınd
 | Ethereum depozit tohumu | **Ayrı kök tohum** (11 §F8 K7) | Kendi Docker secret'ı (`ethereum_hd_mnemonic`, T150), yalnız Ethereum servisine; yoksa servis açılmaz. Çevrimdışı yedeği ve geri yükleme provası DEPLOY_RUNBOOK §L (T163; aynı arşivde, kendi adres kontrolüyle). TRON tohumuyla hiçbir konteynerde birlikte bulunmaz |
 | Ethereum sıcak cüzdan anahtarı | Payout ve soğuk aktarım imzası | Docker secret `ethereum_hot_wallet_private_key` (T150), yalnız Ethereum servisine; TRON sıcak anahtarıyla aynı kural. Açılışta `ETHEREUM_HOT_WALLET_ADDRESS`'i kontrol ettiği doğrulanır. İmzada kullanımı T152 |
 | Ethereum yakıt cüzdanı anahtarı | Depozitlere gas için ETH gönderimi | Docker secret `ethereum_fuel_wallet_private_key` (T150). **Sıcak cüzdan anahtarından ayrı** (öneriyle kaydedildi — ⚠) — aynı anahtar/adres ya da sıcak/soğuk adresi kontrol eden bir yakıt anahtarı servisi açılışta durdurur (T150); yalnız Ethereum servisine; tek ve günlük tavanla korunur (08 §3.7.5, T153) |
-| Internal API key | Sidecar ↔ Backend `X-Internal-Key` | Deploy sırasında otomatik rotation imkanı |
-| HMAC shared secret | Webhook imzalama secret'ı | Deploy sırasında otomatik rotation imkanı |
+| Internal API key | Sidecar ↔ Backend `X-Internal-Key` | Sidecar başına ayrı Docker secret (`steam_/blockchain_/ethereum_sidecar_internal_key`, T171a); backend ve sidecar aynı dosyayı okur, ≥ 32 karakter. Döndürme: dosya + iki ucun birlikte yeniden oluşturulması (DEPLOY_RUNBOOK §L.9) |
+| HMAC shared secret | Webhook imzalama secret'ı | Ağ başına ayrı Docker secret (`blockchain_webhook_secret`, `ethereum_webhook_secret`, T171a); backend ve ağın servisi aynı dosyayı okur, ≥ 32 karakter, iki ağınki farklı. Döndürme DEPLOY_RUNBOOK §L.9 |
 | DB connection string | SQL Server credentials | Key Vault'ta, rotation periyodik |
-| JWT signing key | Access/Refresh token imzalama | Key Vault'ta, rotation sırasında eski key geçici olarak valid kalır (grace period) |
+| JWT signing key | Access/Refresh token imzalama | Docker secret `jwt_secret` (T171a), yalnız backend'e, ≥ 32 karakter; rotation sırasında eski key `jwt_previous_secret` dosyasından geçici olarak valid kalır (grace period, DEPLOY_RUNBOOK §L.9) |
 
 **Güvenlik kuralları:**
 
