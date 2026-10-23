@@ -1,6 +1,6 @@
 # Skinora — Data Model
 
-**Versiyon: v6.37** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-22 — T169 — sahip kararları: TRON en düşük tutarı, ödeme onay kapısı, yeni varsayılanlar. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
+**Versiyon: v6.38** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `09_CODING_GUIDELINES.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T172a — kapatma aracı TRON'a açıldı, `outbound.dispatch_paused`, depozit indeks tabanı (⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#06_data_modelmd)
 
 > **v6.0 (T115, 2026-08-08):** P2P geçişi — item custody kaldırıldı, `TransactionStatus` yeniden tanımlandı, teslimat doğrulama alanları eklendi, `TradeOffer`/`PlatformSteamBot`/`BotRecoveryItem` entity'leri kaldırıldı.
 
@@ -43,7 +43,7 @@ Bu doküman, Skinora platformundaki tüm veri yapılarını tanımlar. Entity'le
 | 26 | Fraud | **ItemPriceCache** | Steam Market `priceoverview` fiyat sonuçlarının on-demand cache'i — fraud fiyat sapma kontrolü için (08 §7.3) |
 | 27 | Kullanıcı & Kimlik | **UserWalletAddress** *(T146 — §1.4, §3.1a)* | Kullanıcının ağ başına ödeme ve iade adresi |
 | 28 | İşlem | **TransactionNetworkOption** *(T147 — §1.4, §3.5b)* | İlanın kabul ettiği ağlar ve her ağ için satıcı ödeme adresi snapshot'ı |
-| 29 | Finans | **OutboundRowClosure** *(T157 — §3.8b)* | Ethereum giden satırını zincirdeki hash'le kapatma önerisi ve iki aşamalı onayı (⚠ PARA — para göndermez, satırı bağlar) |
+| 29 | Finans | **OutboundRowClosure** *(T157 — §3.8b; T172a TRON)* | Giden satırı zincirdeki hash'le kapatma önerisi ve iki aşamalı onayı (⚠ PARA — para göndermez, satırı bağlar) |
 
 ### 1.2 İlişki Diyagramı
 
@@ -898,7 +898,7 @@ Her işlem için üretilen benzersiz blockchain ödeme adresi ve izleme durumu.
 | `TransactionId` | guid | FK → Transaction, UNIQUE, NOT NULL | 1:1 ilişki |
 | `Network` | int | NOT NULL | Enum: BlockchainNetwork (§2.25; T145) — işlemin ağı; adres ve HD indeksi bu ağa aittir |
 | `Address` | string(50) | UNIQUE (`Network`+`Address`), NOT NULL | İşlemin ağındaki depozit adresi (bugün TRC-20), kanonik biçimde (§1.4) |
-| `HdWalletIndex` | int | UNIQUE (`Network`+`HdWalletIndex`), NOT NULL | BIP-44 derivation index — **ağ başına** monoton artan, asla reuse edilmez (her ağın tohumu ayrı, 11 §F8 K7; T145) |
+| `HdWalletIndex` | int | UNIQUE (`Network`+`HdWalletIndex`), NOT NULL | BIP-44 derivation index — **ağ başına** monoton artan, asla reuse edilmez (her ağın tohumu ayrı, 11 §F8 K7; T145). **T172a:** sonraki indeks = `max(MAX + 1, taban)`; taban ağ başına dağıtım ayarıdır (`PaymentAddresses__MinimumNextIndex__<AĞ>`, veritabanı geri yüklemesinden sonra — DEPLOY_RUNBOOK §N.8 (b)) ve yalnız yükseltir |
 | `ExpectedAmount` | decimal(18,6) | NOT NULL | Beklenen toplam tutar (fiyat + komisyon) = `Transaction.TotalAmount`, 2 ondalıklı; alıcıya gösterilen tutar bunun kendisidir (T144, §8.3) |
 | `ExpectedToken` | int | NOT NULL | Enum: StablecoinType |
 | `MonitoringStatus` | int | NOT NULL | Enum: MonitoringStatus — yaşam döngüsü ve `ACTIVE`in iki anlamı için §2.16 notu, tetikleyiciler için 08 §3.4 |
@@ -1003,14 +1003,14 @@ Satıcının payout sorununu bildirmesi ve çözüm takibi (02 §10.3).
 
 ### 3.8b OutboundRowClosure *(T157)*
 
-Ethereum servisi işlem günlüğünü kaybedince (`JOURNAL_BEHIND_CHAIN`, DEPLOY_RUNBOOK §D adım 7) zincirde olduğu hâlde backend'de `PENDING` kalan **giden satırı** zincirdeki hash'le kapatma kaydı (07 §9.32). ⚠ PARA — **araç para göndermez**: onay yalnız `BlockchainTransaction.TxHash` yazar ve durumu `PENDING → DETECTED` yapar; onay işi sonrasını zincirden bitirir.
+Zincirde olduğu hâlde backend'de `PENDING` kalan **giden satırı** zincirdeki hash'le kapatma kaydı (07 §9.32): Ethereum servisi işlem günlüğünü kaybedince (`JOURNAL_BEHIND_CHAIN`, DEPLOY_RUNBOOK §D adım 7) ve — **T172a** — veritabanı geri yüklendikten sonra iki ağda (DEPLOY_RUNBOOK §N.8). ⚠ PARA — **araç para göndermez**: onay yalnız `BlockchainTransaction.TxHash` (ve kaydedilmemişse doğrulanan göndereni, `FromAddress`) yazar ve durumu `PENDING → DETECTED` yapar; T172a'dan beri `ErrorMessage`'ı `POST_RESTORE_DUPLICATE` ile başlayan hash'siz `FAILED` satırı da aynı satır üzerinde `DETECTED`'e getirir. Onay işi sonrasını zincirden bitirir.
 
 | Field | Tip | Kısıt | Açıklama |
 |-------|-----|-------|----------|
 | `Id` | guid | PK | |
 | `BlockchainTransactionId` | guid | FK → BlockchainTransaction, NOT NULL | Kapatılacak giden satır |
-| `Network` | int | NOT NULL, CHECK = `ETHEREUM` | Araç yalnız Ethereum içindir (TRON'un servisinde günlük yoktur) |
-| `TxHash` | string(100) | NOT NULL | Zincirdeki hash — kanonik biçim (§1.4): `0x` + 64 küçük harfli onaltılık hane |
+| `Network` | int | NOT NULL, CHECK ∈ (`TRON`, `ETHEREUM`) | Satırın ağı (T157'de yalnız Ethereum; T172a'da TRON eklendi) |
+| `TxHash` | string(100) | NOT NULL | Zincirdeki hash, küçük harf: Ethereum `0x` + 64 onaltılık hane; TRON 64 onaltılık hane, öneksiz |
 | `Reason` | string(2000) | NOT NULL | Öneren admin'in gerekçesi (hangi hesap/nonce, neyle eşleşti) |
 | `Status` | int | NOT NULL | Enum: OutboundRowClosureStatus (§2.27) |
 | `ProposedByAdminId` | guid | FK → User, NOT NULL | Öneren admin |
@@ -1019,7 +1019,7 @@ Ethereum servisi işlem günlüğünü kaybedince (`JOURNAL_BEHIND_CHAIN`, DEPLO
 | `DecisionNote` | string(2000) | NULL | Ret/geri çekme notu |
 | `CreatedAt`, `UpdatedAt`, `RowVersion` | | | `BaseEntity` |
 
-> **Kurallar (veritabanında da tekrarlanır):** `APPROVED` ⇒ `DecidedByAdminId` dolu ve **≠ `ProposedByAdminId`** (`CK_OutboundRowClosures_Approved_DifferentAdmin`); `PROPOSED` ⇔ karar alanları NULL (`CK_OutboundRowClosures_Decision_Fields`); `Network = 'ETHEREUM'` (`CK_OutboundRowClosures_Network_Ethereum`). Tekillik: bir satırın tek canlı (`REJECTED` olmayan) kaydı (`UQ_OutboundRowClosures_Row_Live`) ve bir hash'in tek canlı kaydı (`UQ_OutboundRowClosures_Network_TxHash_Live`) — ayrıca `BlockchainTransaction (Network, TxHash, EventIndex)` tekilliği hash'in iki satıra bağlanmasını engeller.
+> **Kurallar (veritabanında da tekrarlanır):** `APPROVED` ⇒ `DecidedByAdminId` dolu ve **≠ `ProposedByAdminId`** (`CK_OutboundRowClosures_Approved_DifferentAdmin`); `PROPOSED` ⇔ karar alanları NULL (`CK_OutboundRowClosures_Decision_Fields`); `Network IN ('TRON', 'ETHEREUM')` (`CK_OutboundRowClosures_Network_Known`; T172a — eskisi `CK_OutboundRowClosures_Network_Ethereum`). Tekillik: bir satırın tek canlı (`REJECTED` olmayan) kaydı (`UQ_OutboundRowClosures_Row_Live`) ve bir hash'in tek canlı kaydı (`UQ_OutboundRowClosures_Network_TxHash_Live`) — ayrıca `BlockchainTransaction (Network, TxHash, EventIndex)` tekilliği hash'in iki satıra bağlanmasını engeller.
 >
 > **Silme politikası:** Workflow Record — DELETE tanımlı değil; `Status` ve karar alanları güncellenir, karar sonrası frozen. Her adım `AuditLog`'a yazılır (§2.19 `OUTBOUND_ROW_CLOSURE_*`).
 
@@ -1326,6 +1326,7 @@ Tablo seed sırasıyla (`SystemSettingSeed`) listelenir; toplam **77 anahtar** (
 | `blockchain.ethereum.min_refund_threshold_ratio` | Monitoring | decimal | 2.0 | **T149 — Ethereum.** En düşük iade eşiği çarpanı (net iade < gas × oran → iade yok, admin uyarısı); canlı tahmin kullandığı için Ethereum'da yalnız tozu engeller (02 §4.6). TRON karşılığı `min_refund_threshold_ratio` |
 | `blockchain.tron.min_transaction_amount_usdt` | Limit | decimal | 50 | **T169 — TRON'un kendi en düşük satış tutarı.** Fiyatı bunun altındaki ilan TRON'u kabul edemez, alıcı TRON'da ödeyemez (422 `NETWORK_MIN_AMOUNT_NOT_MET`, 07 §7.2/§7.6); sihirbaz ve kabul formu TRON'u devre dışı gösterir (07 §7.4 `networkMinPrices`, §7.5 `networkQuotes[].unavailableReason`). Satır bozuk/eksikse kod tarafı varsayılan (50) geçerlidir — kural sessizce düşmez. Ethereum'un böyle bir satırı yok. Proje sahibi kararı 2026-10-21 |
 | `outbound.auto_send_enabled` | Settlement | bool | false | **T169 ⚠ PARA — ödeme açılış kapısı (11 T175).** `false` iken her `SELLER_PAYOUT` ve `*_REFUND` satırı admin onayı bekler (07 §9.35 AD40/AD41, `BlockchainTransaction.ApprovedAt`); `SWEEP` ve `REFUND_FEE_SWEEP` beklemez. Env'den doldurulamaz (T125/T129 kapıları gibi `Default` seed, yalnız admin açar); satır okunamazsa kapı kapalı sayılır. Test boyunca kapalı (proje sahibi kararı 2026-10-21); ilk en az 5 gerçek teslimat elle incelendikten sonra açılır — DEPLOY_RUNBOOK §M |
+| `outbound.dispatch_paused` | Settlement | bool | false | **T172a ⚠ PARA — gönderim işinin durdurma anahtarı.** `false` dışında okunan her değer (true, boş, bozuk) gönderim işini durdurur: hiçbir giden satır (ödeme, iade, sweep; her ağ; onaylı ya da değil) gönderilmez, `RetryCount` artmaz, `FAILED` olmaz; anahtar her gönderimden önce yeniden okunur. Satır yoksa durmaz (migration onu tohumlar). Onay işi, izleme ve kuyruklama sürer. Veritabanı geri yüklemesinden sonra imza servisleri kapatma aracının (07 §9.32) zincir okuması için açıkken kullanılır — DEPLOY_RUNBOOK §N.8. Env'den doldurulamaz (`Default` seed) |
 
 > **Anahtar yeniden adlandırma (T123, 2026-08-13):** `trade_offer_seller_timeout_minutes` → **`seller_confirm_timeout_minutes`**, `trade_offer_buyer_timeout_minutes` → **`delivery_timeout_minutes`**. İki ad da custodial dönemden kalmıştı ve v3.0'da **ikisi de yanlıştı**: platform artık trade offer oluşturmuyor (03 §2.3 notu) ve — pahalı olan yarısı — "buyer" anahtarı **satıcının** teslimat penceresini besliyordu, yani admin satıcı teslimatsızlığını "Alıcı trade offer timeout süresi" etiketli bir kutudan yönetiyordu (T119 sorumluluk denetimi). Satır `Id`'leri değişmedi → migration bir `UpdateData`'dır; admin'in girdiği `Value` korunur. Env bootstrap adı anahtardan türetildiği için deploy adları da değişti: `SKINORA_SETTING_SELLER_CONFIRM_TIMEOUT_MINUTES` / `SKINORA_SETTING_DELIVERY_TIMEOUT_MINUTES` (DEPLOY_RUNBOOK §A #2/#6).
 

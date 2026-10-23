@@ -112,6 +112,11 @@ services:
       # T158 (a) — PENDING outbound rows per network above which the
       # outbound-transfer-backlog alert fires (default 25, DEPLOY_RUNBOOK §J).
       - OutboundQueueAlarm__PendingRowsThreshold=${OUTBOUND_PENDING_ROWS_ALARM_THRESHOLD:-25}
+      # T172a — per-network floor for the next deposit HD index, set only after
+      # a database restore (DEPLOY_RUNBOOK §N.8 (b)). 0 = no floor. The next
+      # index is max(MAX(HdWalletIndex) + 1, floor): a floor can never reuse one.
+      - PaymentAddresses__MinimumNextIndex__TRON=${PAYMENT_ADDRESS_MIN_NEXT_INDEX_TRON:-0}
+      - PaymentAddresses__MinimumNextIndex__ETHEREUM=${PAYMENT_ADDRESS_MIN_NEXT_INDEX_ETHEREUM:-0}
       # Price source for the PRICE_DEVIATION fraud rule (DEPLOY_RUNBOOK §C.1).
       # Default "logging" = fail-open, no outbound call to steamcommunity.com.
       - SteamMarket__Provider=${STEAM_MARKET_PROVIDER:-logging}

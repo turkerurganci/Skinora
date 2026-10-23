@@ -1,8 +1,8 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-23 — T174 — §O.1 yaptırım listesi artık API ile (ekran yok), kontrol listesi madde 13 buna uydu. · T164 (kapanış) — §N veritabanı yedeği (Express, otomatik tam + log), 10 GB alarmı, geri yükleme provası ve geri dönüş planı; §N.8 geri yükleme sonrası açılış sırası onay kapısıyla (§M, T169) ve bekleyen bütün giden satırların listesiyle; kapanışta §N.8 deneme penceresi ve kapatmanın defter açığı, §N.5 alarm zamanlaması. Bölüm sırası: §L T163 · §M T169 onay kapısı · §N T164 · §O T169 kurulum günü listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-23 — T172a — §N.8 geri yükleme sonrası para araçları: gönderim durdurma, depozit indeks tabanı, iki ağda kapatma aracı. · T164 (kapanış) — §N veritabanı yedeği (Express, otomatik tam + log), 10 GB alarmı, geri yükleme provası ve geri dönüş planı; §N.8 geri yükleme sonrası açılış sırası onay kapısıyla (§M, T169) ve bekleyen bütün giden satırların listesiyle; kapanışta §N.8 deneme penceresi ve kapatmanın defter açığı, §N.5 alarm zamanlaması. Bölüm sırası: §L T163 · §M T169 onay kapısı · §N T164 · §O T169 kurulum günü listesi. · **Kapsam:** Production deploy öncesi sağlanması zorunlu/önerilen environment değişkenleri + sidecar config parity + runtime-tunable ayar davranışı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
-> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (77 satır — T169 sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
+> Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (78 satır — T172a sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
 ---
 
@@ -112,6 +112,7 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `ETHEREUM_USDT_CONTRACT` / `ETHEREUM_USDC_CONTRACT` | backend + Ethereum servisi | **T148 — Ethereum'un token kontratları (`EthereumStablecoinContracts__*`).** Boş = Ethereum mainnet USDT `0xdac17f…1ec7` / USDC `0xa0b869…eb48`. Sepolia'da T159'un kurduğu USDT kopyası yazılır; Ethereum servisinin izlediği adresle aynı olmalı (TRON'daki `TRON_*_CONTRACT` kuralının eşi) |
 | `ETHEREUM_HOT_WALLET_ADDRESS` / `ETHEREUM_COLD_WALLET_ADDRESS` | backend + Ethereum servisi | **T148 — Ethereum'un sıcak/soğuk cüzdan adresi** (TRON'un `HOT/COLD_WALLET_ADDRESS` kuralının eşi; her ağın çifti ayrıdır, 05 §3.3a). `0x` + 40 hex; karışık harfli değer geçerli EIP-55 sağlaması taşımalı, yoksa backend açılmaz. Boş = Ethereum depozitleri sweep kuyruğuna girmez, Ethereum mutabakatının sıcak/soğuk kapsamı atlanır. Panelde `blockchain.ethereum.{hot,cold}_wallet_address` olarak salt okunur görünür |
 | `OUTBOUND_PENDING_ROWS_ALARM_THRESHOLD` (`OutboundQueueAlarm__PendingRowsThreshold`) | backend | **T158 (a).** Bir ağda bu sayıdan fazla `PENDING` giden satır (payout, iade, sweep) 15 dk boyunca beklerse `outbound-transfer-backlog` alarmı. Varsayılan **25** (bir gönderim partisinden — ağ başına dakikada 20 satır — fazlası). Sıfır ya da eksi değer varsayılana düşer. Backend `skinora_backend_outbound_pending_rows_alarm_threshold{network}` olarak yayımlar; kural ona böler (§J.2) |
+| `PAYMENT_ADDRESS_MIN_NEXT_INDEX_TRON` / `_ETHEREUM` (`PaymentAddresses__MinimumNextIndex__<AĞ>`) | backend | **T172a ⚠ PARA — yalnız veritabanı geri yüklendikten sonra.** Ağ başına bir sonraki depozit HD indeksinin tabanı: sonraki indeks = `max(MAX(HdWalletIndex) + 1, taban)`. Olağan işletimde **0** (taban yok). Taban yalnız yükseltir — mevcut en büyük indeksin altındaki ya da ona eşit değer etkisizdir, yeniden kullanım üretemez. Bilinmeyen ağ adı ya da negatif değer backend'i açmaz (fail-fast). Doldurma kuralı §N.8 (b) |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `ALERT_EMAIL_TO` | monitoring (Grafana) | Alert kanalı — **ayrıca Grafana'nın açılması için zorunlu.** `contactpoints.yml` bir Telegram kanalı tanımlar; Grafana provisioning'inde koşul yoktur, tanımlı kanal doğrulanamazsa Grafana startup'ta abort eder ve container crash-loop'a girer. Değerler `skinora-grafana-provisioning` render adımıyla yerine konur (§G.6) |
 
 > **Deploy sırası — blockchain servisi backend'le birlikte ya da ondan önce (T148).** T148'den itibaren servis her webhook'a `network` yazar, backend her isteğe `network` yazar. İki tarafın da eski karşı tarafla çalışma yolu var ama dar: backend `network`'süz webhook'u **yalnız TRON'un sırrıyla imzalanmışsa** TRON sayar (açıkça yazılmış yanlış değer yine reddedilir), servis de `network`'süz isteği kabul eder. Yine de backend ile `sidecar-blockchain` imajını **aynı deploy'da** (ya da önce servisi) güncelleyin: servisin 4xx'i kalıcı saydığı webhook'lar yeniden gönderilmez, iki tarafın sürümlerinin ayrı kalması elle kurtarma gerektiren bir ödeme olayı kaybına yol açabilir. Ethereum servisi (T150) baştan `network` yazar; onun için bu istisna yoktur.
@@ -1162,7 +1163,7 @@ Aynı akışın küçük hâli CI'da her Ethereum servisi değişikliğinde koş
 2. Proje sahibinin açık kararı alınır.
 3. Admin → Ayarlar → `outbound.auto_send_enabled` = `true` (AD9; ayar değişikliği audit'lenir).
 4. Doğrula: `SELECT Value FROM SystemSettings WHERE [Key]='outbound.auto_send_enabled'` → `true`; panel "Otomatik gönderim açık" der; bekleyen onaysız satırlar sonraki turda gönderilir.
-5. Geri kapatmak (acil durdurma dahil) aynı ayarla yapılır ve **hemen** etkilidir: gönderim işi onaysız her ödeme/iade satırını göndermeden hemen önce ayarı veritabanından yeniden okur (önbellek yok), yani o anda süren turda henüz gönderilmemiş onaysız satırlar da bekler. Kapatma anında imzalanmakta olan tek satır (en çok bir tane) geri alınamaz. Daha önce onaylanmış satırlar ve sweep'ler gitmeye devam eder. Ters yön (kapalı → açık) bir tur gecikmeli işler: açma, süren turu değiştirmez; onaysız satırlar sonraki turda (≤ 1 dk) gider.
+5. Geri kapatmak (acil durdurma dahil) aynı ayarla yapılır ve **hemen** etkilidir: gönderim işi onaysız her ödeme/iade satırını göndermeden hemen önce ayarı veritabanından yeniden okur (önbellek yok), yani o anda süren turda henüz gönderilmemiş onaysız satırlar da bekler. Kapatma anında imzalanmakta olan tek satır (en çok bir tane) geri alınamaz. Daha önce onaylanmış satırlar ve sweep'ler gitmeye devam eder — **bütün** gönderimi (onaylı satırlar, sweep'ler, her ağ) durdurmak için ayrı anahtar `outbound.dispatch_paused` (§N.8 adım 2, T172a). Ters yön (kapalı → açık) bir tur gecikmeli işler: açma, süren turu değiştirmez; onaysız satırlar sonraki turda (≤ 1 dk) gider.
 
 ---
 
@@ -1332,7 +1333,12 @@ Geri yüklenen veritabanı `T_yedek` anındadır (§N.6 adım 3'ün yazdığı a
 - **EMERGENCY_HOLD kilit değildir.** Hold yalnız o işlem için **yeni satır açılmasını** durdurur (`SellerPayoutQueueJob`, `SweepQueueJob` hold'daki işlemi atlar). Var olan bir `PENDING` satırı gönderim işi (`OutgoingTransferDispatchJob`) hold'a bakmadan gönderir.
 - **Kilit iki katmandır:** (1) imza servisleri kapalıyken hiçbir şey imzalanmaz; (2) onay kapısı kapalıyken `SELLER_PAYOUT` ve `*_REFUND` satırı, imza servisleri açıldıktan sonra da **onaysız gitmez** — geri yüklemeden sonra açılan her yeni satır onaysızdır. Geri yüklenen veritabanında **önceden onaylanmış** (`ApprovedAt` dolu) ama `PENDING` satırlar ise kapıdan geçer: aşağıda adım 5'te tek tek bakılır. `SWEEP`, `REFUND_FEE_SWEEP` ve sıcak→soğuk aktarım kapıya takılmaz (platformun kendi cüzdanları arası); tekrar edilen bir sweep zaten boşalmış depozitten gönderemez (TRON'da enerji/TRX yakabilir, para platformdan çıkmaz) — yine de adım 5'te kapatılır.
 
-**(b) Depozit adresinin yeniden verilmesi.** Yeni adres indeksi `MAX(HdWalletIndex) + 1`'dir (ağ başına). Geri yüklenen veritabanının en büyük indeksi küçüktür → `T_yedek`'ten sonra **zaten verilmiş** adresler yeni işlemlere **tekrar verilir**; kayıp işlemin alıcısı geç öderse para yeni işleme yazılabilir. Bugün kodda indeks tabanı **yoktur** (DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling`, sahip kararı 2026-10-22: araçlar mainnet pilotundan — T173 — önce, T172a). Taban gelene kadar: yeni satış açılmaz (tünel kapalı) — o adreslerin ödeme pencereleri geçene ve adresler zincirde boş görünene kadar; ya da sahibin kararıyla risk kabul edilir ve o adresler elle izlenir.
+**(b) Depozit adresinin yeniden verilmesi.** Yeni adres indeksi `max(MAX(HdWalletIndex) + 1, taban)`'dır (ağ başına). Geri yüklenen veritabanının en büyük indeksi küçüktür → taban konmazsa `T_yedek`'ten sonra **zaten verilmiş** adresler yeni işlemlere **tekrar verilir**; kayıp işlemin alıcısı geç öderse para yeni işleme yazılabilir. **Taban (T172a):** `PAYMENT_ADDRESS_MIN_NEXT_INDEX_TRON` / `_ETHEREUM` (§B) backend açılmadan **önce** (adım 3; açılışta `EnsurePaymentAddressJob` kabul edilmiş işlemlere hemen adres ayırır) `.env.trial`'a yazılır: **eski kopyadaki en büyük indeks + 1.000**; eski kopya yoksa **geri yüklenenin en büyüğü + 10.000** (öneriyle kaydedildi — ⚠ PARA: atlanan indeks hiç türetilmez, maliyeti yoktur; pay, kayıp dönemin bilinmeyen satış sayısını örter):
+```sql
+SELECT Network, MAX(HdWalletIndex) AS EnBuyuk FROM [OLD].dbo.PaymentAddresses GROUP BY Network;      -- eski kopya
+SELECT Network, MAX(HdWalletIndex) AS EnBuyuk FROM Skinora.dbo.PaymentAddresses GROUP BY Network;    -- geri yüklenen
+```
+Taban yalnız yükseltir: mevcut en büyüğün altındaki ya da ona eşit değer etkisizdir, yeniden kullanım üretemez; bilinmeyen ağ adı ya da negatif değer backend'i açmaz. Backend log'unda ilk yeni adreste `Deposit index floor applied on <ağ>` görünür. Taban bir sonraki geri yüklemeye kadar kalabilir (zararsız). Eski kopyada olup geri yüklenende olmayan adresler (adım 1c) izlenmez — onlara gelen geç ödeme mutabakatta da görünmez; o adresler gezginde elle izlenir.
 
 **(c) Gelen ödemeler.** `T_yedek`'ten sonra depozitlere gelen ödemeler veritabanında yoktur. Mutabakat turu (`ReconciliationJob`, 03:00 UTC) depozit bakiyelerini zincirle karşılaştırır ve fark alarmı verir; geri yüklemeden sonra bir tur **hemen** koşulur (adım 7). Zincirde veritabanından **fazla** görünen bakiye (`ethereum-deposit-balance-mismatch`, mutabakat ekranı) bir kayıp gelen ödemedir: işlem geri yüklenen veritabanında durumuna göre el ile ilerletilir ya da iade edilir. **Eksik** fark (zincirde veritabanından az) ise çoğunlukla adım 5'te `FAILED POST_RESTORE_DUPLICATE` ile kapatılmış ama zincirde gerçekten yapılmış bir ödeme/iadedir — kayıp ödeme diye yorumlanmaz, adım 5'teki geri getirmeyle kapanır.
 
@@ -1361,9 +1367,14 @@ WHERE NOT EXISTS (SELECT 1 FROM Skinora.dbo.PaymentAddresses r WHERE r.Network =
 ```sql
 SELECT [Key], Value, IsConfigured FROM Skinora.dbo.SystemSettings WHERE [Key] = 'outbound.auto_send_enabled';
 ```
-`false` olmalı (satır yoksa ya da okunamazsa kapı kapalı sayılır). `true` ise (geri yüklenen hâl T175'te kapı açıldıktan sonrasından): adım 3'te backend açılır açılmaz, imza servisleri hâlâ kapalıyken, Admin → Ayarlar → `outbound.auto_send_enabled` = `false` (audit'lenir) ve bu sorguyla doğrulayın.
+`false` olmalı (satır yoksa ya da okunamazsa kapı kapalı sayılır). **Gönderimi durdurun (T172a, ⚠ PARA)** — hâlâ backend kapalıyken:
+```sql
+UPDATE Skinora.dbo.SystemSettings SET Value = 'true', UpdatedAt = SYSUTCDATETIME() WHERE [Key] = 'outbound.dispatch_paused';
+SELECT [Key], Value FROM Skinora.dbo.SystemSettings WHERE [Key] IN ('outbound.auto_send_enabled', 'outbound.dispatch_paused');
+```
+`outbound.dispatch_paused = true` iken gönderim işi **hiçbir** satırı göndermez (ödeme, iade, sweep; her ağ; onaylı ya da değil): satır `PENDING` kalır, deneme hakkı harcanmaz, `FAILED` olmaz; anahtar her satırdan önce yeniden okunur. Onay işi, izleme ve kuyruklama sürer. Bu, imza servislerinin adım 5'te kapatma aracının zincir okuması için **açılabilmesini** sağlar. Değer `false` dışında herhangi bir şeyse (bozuk, boş) durdurulmuş sayılır. Aynı adımda (b)'deki taban `.env.trial`'a yazılır. Kapı `true` ise (geri yüklenen hâl T175'te kapı açıldıktan sonrasından): adım 3'te backend açılır açılmaz, imza servisleri hâlâ kapalıyken, Admin → Ayarlar → `outbound.auto_send_enabled` = `false` (audit'lenir) ve bu sorguyla doğrulayın.
 
-**3. Backend + frontend (+ Redis) açılır; imza servisleri ve tünel KAPALI.**
+**3. Backend + frontend (+ Redis) açılır; imza servisleri ve tünel KAPALI.** Adım 2'deki durdurma açıkken (T172a) gönderim işi hiçbir satırı denemez; aşağıdaki deneme penceresi yalnız durdurma uygulanmamışsa geçerlidir.
 ```bash
 $TRIAL up -d --wait skinora-redis skinora-backend skinora-frontend skinora-reverse-proxy   # imza servisleri ve tünel YOK
 ```
@@ -1386,9 +1397,17 @@ ORDER BY r.CreatedAt;
 `Kaynak = YENI`: geri yüklemeden **sonra** açılmış satır (adım 3'teki işler). `OldAyniTur`: aynı işlemin aynı türdeki satırı eski kopyada (ör. `CONFIRMED <hash> <id>` = o ödeme zaten yapılmış). `OLD` yoksa `LEFT JOIN` ve `OldAyniTur` çıkarılır, her satır zincirle karşılaştırılır.
 
 **5. Karar — satır satır, iki kişi, denetim notu (işlem kimliği, hash, kim, ne zaman):**
+
+**5a. İmza servisleri — gönderim durdurulmuşken (T172a).** Önce adım 2'nin sorgusu: `outbound.dispatch_paused` = `true`. Sonra (tünel kapalı kalır):
+```bash
+$TRIAL --profile ethereum up -d --wait skinora-blockchain-sidecar skinora-ethereum-sidecar
+$TRIAL logs --since 3m skinora-backend | grep "Outgoing transfers are paused"   # her tur — hiçbir şey gönderilmiyor
+```
+Servisler şimdi yalnız zincir okur (gönderim işi durdurulmuş); onay işi `DETECTED` satırları bitirir.
+
 - **Zincirde gönderilmiş** (`OldAyniTur` `CONFIRMED` ya da gezginde `T_yedek`'ten sonra bu alıcıya bu tutarda transfer var):
-  - **Ethereum, `Kaynak = ESKI`** (aynı kimlik, günlükte): AD33–AD37 kapatma aracı (zincirdeki hash'le kapatır, §D adım 7.4).
-  - **`SELLER_PAYOUT` / `*_REFUND` — TRON, ya da Ethereum `YENI`:** satır kapatılır; gönderim işi yalnız `PENDING` okur, `SellerPayoutQueueJob` ve iade tüketicisi aynı işlemde aynı türde **herhangi bir** satır varken yenisini açmaz:
+  - **Kapatma aracı — iki ağda, iki kişi (AD33–AD37; Admin → Cüzdanlar → ağın "Giden satır kapatma" paneli; T172a, ⚠ PARA):** satır ağın aday listesindedir (`PENDING`, hash'siz). Bir admin zincirdeki işlem kimliğini (TRON: Tronscan'deki 64 onaltılık, `0x`'siz; Ethereum: `0x` + 64) ve gerekçeyi önerir; **farklı** bir admin kimliği yeniden yazarak onaylar. Onay servise sorar ve yalnız şu hâlde geçer: işlem kesinleşmiş ve başarılı (TRON ≥ 20 onay, solidity düğümü; Ethereum `finalized`) **ve** token kontratının, satırın göndereninden (ödemede ağın sıcak cüzdanı, iadede işlemin depozitosu ya da Ethereum'da sweep sonrası sıcak cüzdan), satırın alıcısına, **tam** tutarda `Transfer` olayı var. Eksik/yanlış kanıt, cevap vermeyen servis → ret (fail-closed). Onaylanan satır hash'i taşır ve `DETECTED` olur — gönderim işi onu bir daha göndermez; onay işi zincirden `CONFIRMED` yapar, ödeme satırı işlemi de tamamlar (`ITEM_DELIVERED → COMPLETED`). Kaydedilmemiş gönderen satıra yazılır (mutabakat ve iade kesinti defteri satırı doğru adresten sayar). **Aynı işlem kimliği ikinci bir satırı kapatamaz** (servis + veritabanı tekil indeksleri). Geri yüklemeden sonra **yeni kimlikle** açılmış (`YENI`) satır da aynı yolla kapanır: zincirdeki ödeme onun alıcısına, onun tutarında yapılmıştır. Ethereum `ESKI` satırı da bu araçla (§D adım 7.4). Araç reddederse (`AMBIGUOUS_ROW_MATCH` — aynı alıcı/token/tutarda iki açık satır, `ROW_TRANSFER_UNRESOLVED`, servis cevap vermiyor) aşağıdaki elle yol.
+  - **Elle yol (araç kullanılamıyorsa) — `SELLER_PAYOUT` / `*_REFUND`:** satır kapatılır; gönderim işi yalnız `PENDING` okur, `SellerPayoutQueueJob` ve iade tüketicisi aynı işlemde aynı türde **herhangi bir** satır varken yenisini açmaz:
     ```sql
     BEGIN TRAN;
     UPDATE Skinora.dbo.BlockchainTransactions
@@ -1410,7 +1429,8 @@ ORDER BY r.CreatedAt;
      WHERE r.Id = '<Id>' AND r.Status = 'FAILED' AND o.Status = 'CONFIRMED';   -- (1 row affected) olmalı
     COMMIT;
     ```
-    İşlemin kendi durumu (`Transactions`) da eski kopyadakine elle getirilir. Bu yapılana kadar mutabakatta o adres için eksik fark **beklenir**. Bunu güvenle yapan araç yok — DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling`, plan **T172a** (T173'ten önce).
+    İşlemin kendi durumu (`Transactions`) da eski kopyadakine elle getirilir. Bu yapılana kadar mutabakatta o adres için eksik fark **beklenir**.
+    **Araçla geri getirme (T172a — tercih edilen yol, ⚠ PARA):** yukarıdaki SQL yerine aynı iki kişilik araç. `FAILED` + `POST_RESTORE_DUPLICATE` notlu, hash'siz satır ağın aday listesinde "geri yüklemeden sonra elle kapatıldı" işaretiyle görünür; öneri + farklı admin onayı satırı **aynı satır üzerinde** zincirdeki ödemeye getirir (`FAILED → DETECTED → CONFIRMED`; blok, onay sayısı ve gerçek ücret zincirden, gönderen yazılır, ödeme satırında işlem tamamlanır). Eski kopya gerekmez. Not ile başlamayan `FAILED` satır (gerçekten gönderilmemiş) araçla açılamaz. Sınırlar: `ConfirmedAt` onay anıdır (özgün an değil); TRON depozit gönderiminin platform harcaması (`PlatformNetworkCost`) ölçülmemiş kalır (AD38 `costUnmeasured`).
   - **`SWEEP` / `REFUND_FEE_SWEEP`:** satır eski kopyadaki değerlere getirilir (`Status`, `TxHash`, `ConfirmedAt`, `ConfirmationCount`) — sweep'in `CONFIRMED` olması satıcı ödemesinin ön koşuludur.
 - **Zincirde yok** (gönderilmemiş): satır kalır. Onaylıysa (`ApprovedAt` dolu) imza servisi açılınca gider — doğrudur, ödeme hiç yapılmamıştır. Onaysızsa onay kapısının panelinde bekler (adım 8).
 - **Karar verilemiyor** (gezgin cevap vermiyor, tutar/adres eşleşmiyor): onaylıysa onay geri alınır — satır kapının arkasında bekler:
@@ -1421,11 +1441,11 @@ ORDER BY r.CreatedAt;
   Kapıya takılmayan türdeyse (sweep) işlem EMERGENCY_HOLD'a alınır **ve** satır `FAILED` yapılır (yukarıdaki gibi; hold yalnız yeni satırı durdurur).
 - (b) satırları için yeni satış açılmaz (tünel kapalı kalır) — yukarıda.
 
-**6. Son kontrol — imza servislerinden hemen önce:** adım 2 sorgusu `false`; adım 4 sorgusu yeniden: her satır ya `Kaynak = ESKI` ve "zincirde yok" diye işaretlenmiş, ya da **onaysız** (kapının arkasında). Adım 5'ten sonra açılan yeni satırlar da onaysızdır — onay verilmedikçe gitmez.
+**6. Son kontrol — gönderimi açmadan hemen önce:** adım 2 sorgusu `auto_send_enabled = false`, `dispatch_paused = true`; adım 4 sorgusu yeniden: her satır ya `Kaynak = ESKI` ve "zincirde yok" diye işaretlenmiş, ya da **onaysız** (kapının arkasında). Adım 5'ten sonra açılan yeni satırlar da onaysızdır — onay verilmedikçe gitmez.
 
-**7. İmza servisleri, mutabakat turu, tünel:**
+**7. Gönderimi açma, mutabakat turu, tünel:** Admin → Ayarlar → `outbound.dispatch_paused` = `false` (audit'lenir; T172a) — onaylı satırlar ve sweep'ler sonraki turda (≤ 1 dk) gider, onaysızlar kapının arkasında bekler.
 ```bash
-$TRIAL --profile ethereum up -d --wait skinora-blockchain-sidecar skinora-ethereum-sidecar skinora-steam-sidecar
+$TRIAL --profile ethereum up -d --wait skinora-blockchain-sidecar skinora-ethereum-sidecar skinora-steam-sidecar   # 5a'da açılmadıysa
 $TRIAL logs --since 5m skinora-backend | grep -E "wait for an admin approval|picked up"   # onaysızlar bekliyor
 ```
 Ethereum günlük alarmlarını izleyin (§D). Mutabakat turu (c): admin panelinden `reconciliation.schedule_cron`'u geçici olarak `*/10 * * * *` yapın (yeniden başlatmadan uygulanır, §E), ilk tur bitince eski değere döndürün. Fark kalmayınca tünel: `$TRIAL --profile tunnel up -d --wait`.
@@ -1466,7 +1486,7 @@ diff fp_Skinora.txt fp_Skinora_drill.txt     # yedekten sonra yazılan tablolar 
 
 ### N.10 Bilinen sınırlar
 
-- **Para mutabakatı için iki araç eksik** (DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling`, ⚠ PARA): TRON'da gönderilmiş bir satırı zincirdeki hash'le kapatan araç yok (Ethereum'da AD33–AD37 var) ve depozit adres indeksine taban konamıyor (§N.8 (b)).
+- **Geri yükleme sonrası para araçları (T172a; DEFERRED_BACKLOG `PostRestoreChainReconciliationTooling` kapandı):** gönderim durdurma anahtarı, depozit indeks tabanı, iki ağda kapatma aracı ve `FAILED POST_RESTORE_DUPLICATE` satırını geri getirme §N.8'de. Kalan sınırlar (⚠ PARA): araçla getirilen satırın `ConfirmedAt`'i onay anıdır; TRON depozit gönderiminin platform harcaması ölçülmemiş kalır (AD38 `costUnmeasured`); sweep'i yolda olan Ethereum alıcı iadesinin göndereni çözülemez (araç reddeder — sweep kesinleşince yeniden önerilir); durdurma anahtarı admin'in elle sıcak→soğuk aktarımını (AD39) durdurmaz; aynı alıcı/token/tutarda iki açık satır araçla kapanmaz (`AMBIGUOUS_ROW_MATCH`, elle yol).
 - **Yedek ile site aynı makinede.** İkinci kopya (§N.3) elle; unutulursa disk kaybında yedek de gider.
 - **Yedeğin yaşı `msdb`'den okunur:** SQL Server'ın "yedek alındı" demesidir; dosyanın sonradan elle silinmesini görmez. `RESTORE VERIFYONLY`'den geçmeyen dosya silinir ama `msdb` kaydı kalır.
 - **Saklama yalnız `Skinora` adlı veritabanını** yedekler; `Skinora_before_restore_*` gibi kopyalar yedeklenmez.
