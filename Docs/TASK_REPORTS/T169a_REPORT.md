@@ -1,6 +1,6 @@
 # T169a — İade tam maliyet kesintisi + depozitten iade günlük tavanı (⚠ PARA)
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor — yapım bitti, doğrulama bekliyor | **Tarih:** 2026-10-23
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — doğrulama PASS (7 × S4, kapanışta hepsi kapandı) | **Tarih:** 2026-10-23
 
 ---
 
@@ -143,9 +143,11 @@ Görev talimatındaki ek noktalar: yeni toplama göre yedek değerler gözden ge
 ## Doğrulama
 | Alan | Sonuç |
 |---|---|
-| Doğrulama durumu | Bekliyor (yönetici düzeni — bağımsız doğrulama alt ajanı) |
-| Bulgu sayısı | — |
-| Düzeltme gerekli mi | — |
+| Doğrulama durumu | ✓ PASS — bağımsız doğrulama alt ajanı (Opus high), HEAD `79f864e4`, 2026-10-23 |
+| Bulgu sayısı | 7 × S4 (S1/S2/S3 yok); hepsi kapanışta kapandı — "Kapanış" |
+| Bozma (doğrulamanın kendi turu) | sidecar **17/17** yakalandı · backend **15/20** (yaşayan 5'in 2'si yedekli savunma katmanı B4/B5 — birlikte yakalanıyor; 3'ü test açığı S4-1..S4-3, kapanışta kapandı) |
+| Kaynak rapor | `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T169a_VALIDATION.md` |
+| Düzeltme gerekli mi | Hayır (S4'ler kapanışta) |
 
 ## Altyapı Değişiklikleri
 - **Migration: Var** — `20261022214930_T169a_DepositRefundDailyLimit`: `BlockchainTransactions` +4 NULL kolon; yeni tablo `DepositRefundLimitLocks` (+ `TRON`, `ETHEREUM` satırları); `SystemSettings` +2 satır (seed 81–82, 100); `blockchain.refund_gas_fee_estimate_usdt` açıklaması + değeri yalnız hâlâ `2.60` ise `2.80` (Down tersi aynı koşulla). Toplam 61 migration.
@@ -156,11 +158,12 @@ Görev talimatındaki ek noktalar: yeni toplama göre yedek değerler gözden ge
 ## Commit & PR
 - Branch: `task/T169a-iade-tam-maliyet`
 - Commit: `8c97a391` — tam maliyet kesintisi (servisler); `adfb2f00` — günlük tavan + yedek 2,80 (backend, frontend, alarm); `33585d99` — main (`69c68df6`, T168 #370) birleştirmesi; `14189439` — belgeler, hukuk metni, e2e harness, rapor/status/memory; PR numarasını işleyen son commit dal HEAD'i
-- PR: #376
-- CI: PR #376 run'ı — sonuç ve run ID yöneticiye son mesajda (dal HEAD'inin run'ı)
+- Kapanış: `50067c8f` — main (`792f8ed2`: T164 #372, T174 #374) birleştirmesi; kapanış commit'i (S4-1..S4-7, belgeler, kayıtlar) — dal HEAD'i
+- PR: [#376](https://github.com/turkerurganci/Skinora/pull/376)
+- CI: PR #376 dal HEAD'i run'ı — sonuç yöneticiye son mesajda
 
 ## Kararlar (öneriyle kaydedildi — ⚠ PARA)
-1. **TRON takviyesinin bandı** sıcak cüzdanın o anki kalan bandından hesaplanır (bant ≥ 270 bayt → 0, değilse 270 × `getTransactionFee`). Sweep satırı (T149) her zaman "yakılmış" sayar; iade tahmini gönderimden dakikalar önce alındığı için canlı okuma gerçeğe daha yakın (Nile 6'da takviyenin ücreti 0 ölçüldü). Ana ağda günde 5–20 satışta ücretsiz bant erken biter → kesinti çoğunlukla bandı içerir.
+1. **TRON takviyesinin bandı** sıcak cüzdanın o anki kalan bandından hesaplanır (bant ≥ 270 bayt → 0, değilse 270 × `getTransactionFee`). Sweep satırı (T149) her zaman "yakılmış" sayar; canlı okuma gerçeğe daha yakın (tahmin kuyruğa alınırken alınır — S4-5; açılışın aynı gönderimde harcadığı kilitli bant düşülür — S4-4) (Nile 6'da takviyenin ücreti 0 ölçüldü). Ana ağda günde 5–20 satışta ücretsiz bant erken biter → kesinti çoğunlukla bandı içerir.
 2. **Ethereum'da depozitin ETH'si düşülür** (imzacının yakıtı gibi). Sahip kararı "depozite gönderilen yakıt" diyor; gönderilmeyen yakıt kesilmez. Aynı depozitten ikinci iade artık fazla kesilmez.
 3. **TRON iade yedeği 2,60 → 2,80** (yeni tanımın ana ağ alt kolu: yeni depozit + USDT tutan alıcı, 8,44 TRX × 0,3313); **Ethereum 0,20 kaldı** (ana ağ tam maliyeti ~0,05–0,08). min(ölçülen, sabit) kuralı değişmedi (alıcı yedekte ayardan fazla ödemez).
 4. **Kayan 24 saat** (gece yarısı sıfırlaması yok; servislerin sıcak cüzdan tavanıyla aynı).
@@ -173,15 +176,36 @@ Görev talimatındaki ek noktalar: yeni toplama göre yedek değerler gözden ge
 
 ## Açık Sorular (bloklamayan)
 1. **Tavan backend'de** — ele geçirilmiş bir backend'e karşı koruma değildir (backlog'un 2026-09-17'deki ilk sorusu buydu). Servis tarafında sayım (Ethereum günlüğü var, TRON'da kalıcı defter yok) ayrı iş: ⚪ `DepositRefundLimitBackendOnly`. Gerçek ağdan önce karar gerekir mi?
-2. **100 $'dan büyük tek iade her zaman admin kararı ister** (satış 10–2.900 $; 100 $ üstü her iptal iadesi). Test döneminde iadeler zaten onaylı olduğu için admin iki kez tıklar (onay + AD42). "Onay = tavanı aşma izni" istenirse küçük bir değişiklik — sahibe sorulabilir.
+2. ~~**100 $'dan büyük tek iade her zaman admin kararı ister** — "onay = tavanı aşma izni" mi?~~ **Cevaplandı — proje sahibi kararı 2026-10-23 (modal):** admin onayı tavanı aşma izni **SAYILMAZ**, ayrı serbest bırakma (AD42) kalır. Kod zaten böyle; 02 §4.7, 05 §3.3, 08 §3.3c, plan (viii), DEPLOY_RUNBOOK §M.4'e işlendi.
 3. **Sepolia'da yedek:** Ethereum iade yedeği 0,20 Sepolia'nın tam maliyetinin (~0,7–0,9) altında; tahmin 3 denemede de alınamazsa deneme yayınında fark platformda kalır (test parası, `gas-fee-fallback-charged` alarmlı). Deneme yayını DB'sinde ayar yükseltilsin mi?
 
+## Kapanış (2026-10-23)
+
+**Girdi:** bağımsız doğrulama ✓ PASS (HEAD `79f864e4`), 7 × S4. Kaynak: `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T169a_VALIDATION.md`.
+
+| Bulgu | Durum |
+|---|---|
+| S4-1 ⚠ PARA (test açığı) — admin'in tavan değeri gerçek okuyucudan geçerek sınanmıyordu | **Kapandı (test):** `DepositRefundDailyLimitTests.A_Limit_Raised_To_150_Lets_60_And_50_Both_Go` ve `A_Limit_Lowered_To_55_Holds_The_60_And_Lets_The_50_Go` (LocalDB, migration'lı şema, gerçek `BlockchainNetworkSettingsProvider` + gönderim işi; Ethereum satırı etkilenmez). Bozma B17 (okuyucu ayarı okumaz, hep 100) → **2 test kırıldı** |
+| S4-2 ⚠ PARA (test açığı) — 24 saat sabitlenmemişti | **Kapandı (test):** `A_Held_Refund_Still_Waits_At_23h55_And_Goes_After_24h` mutlak saatlerle (23 sa 55 dk'da bekler, 24 sa 11 dk'da gider). Bozma `Window` 24 → 12 sa → **1 test kırıldı**; 24 → 36 sa → **1 test kırıldı** |
+| S4-3 (test açığı) — satır yokken TRON iade yedeği 2,80 sabitlenmemişti | **Kapandı (test + hizalama):** `NetworkContractTests.Without_A_Usable_Row_The_Tron_Refund_Fallback_Is_2_80` (satır silinmiş / yapılandırılmamış). Bozma `TronDefaults` 2,80 → 2,60 → **2 test kırıldı**. Ayrıca `GasFeeSettingsProvider.DefaultRefundGasFeeEstimateUsdt` 2,60'ta kalmıştı (yorumu "seed'i yansıtır" diyordu; para yolunda tüketicisi yok) → 2,80; aynı test onu da sınar (bozma 2,60 → 2 test kırıldı) |
+| S4-4 ⚠ PARA — TRON takviye bandı, açılışın aynı gönderimde harcadığı kilitli bandı düşmüyordu (≤ ~0,09 $ platform aleyhine) | **Kapandı (kod + test; öneriyle kaydedildi — ⚠ PARA):** `DelegationPlanner.activationStakedBandwidthBytes` — açılış, sıcak cüzdanın kilitli bandı `270 × getCreateNewAccountBandwidthRate` baytı karşılıyorsa o kadarını tüketir (karşılamıyorsa zincir 0,1 TRX yakar, havuza dokunmaz); oran okunamazsa 1 sayılır (ücret yalnız artabilir). `FeeEstimationService` takviye bandını kalan bantla tartar. 6 yeni test (400 kilitli → 130 kalır → +270.000 SUN; 540 → 0; oran 2; karşılanamayan açılış; okunamayan oran; var olan depozit). Bozmalar: çıkarma kaldırıldı → 3 kırıldı; okunamayan oran 0 sayıldı → 1 kırıldı; açılış hep tüketir → 2 kırıldı. Payout ve sweep satırı değişmedi |
+| S4-5 ⚠ PARA — ücret kuyruğa alınırken hesaplanıyor, hukuk metni "gönderimden hemen önce" diyordu | **Kapandı (belge; kod bilerek değişmedi — öneriyle kaydedildi, ⚠ PARA):** Kullanıcı Sözleşmesi "İadeler" (tr/en/es/zh): ücret iade gönderim sırasına alınırken hesaplanır ve kaydedilir; sonra (onay / günlük tavan beklemesi) yeniden hesaplanmaz, kaydedilen tutar düşülür, gerçek maliyetle fark iki yönde Skinora'nın. Sayfa tarihi `LEGAL_TEXT_DATE` 2026-10-21 → 2026-10-23 (T169a metni değiştirdiği hâlde eski kalmıştı). 02 §4.7, 08 §3.1a "Tahminin zamanı", plan (ii), runbook §M.4 |
+| S4-6 — dal main'in 2 commit gerisinde, 10 dosyada çakışma | **Kapandı:** `origin/main` `792f8ed2` (T164 #372, T174 #374) merge commit `50067c8f` ile alındı. 05 v3.34 ve plan v1.26 main'de alınmıştı → T169a v3.35 / v1.27 (kapanışta v3.36 / v1.28); DOC_CHANGELOG girdileri iki taraf; runbook başlığı birleşti, bölüm sırası §L · §M (+§M.4) · §N · §O; STATUS_CHANGELOG main geçmişi + T174 ✓ ve T169a ⏳ girdileri; BYPASS_LOG kronolojik; DEFERRED_BACKLOG **50 aktif / 168 çözülmüş** (dosyanın kendi `awk`'iyle; main 50/167 + `DepositRefundDailyLimitUndecided` ✅, yeni ⚪ `DepositRefundLimitBackendOnly`); Grafana: main'in T164 kuralları + T169a kuralı sonda |
+| S4-7 — Grafana açıklamasında sabit "100 USDT" | **Kapandı:** açıklama ayara atıf yapar ("the admin setting, seeded 100 USDT; the value in force is `skinora_backend_deposit_refund_limit_usdt`"); runbook §M.4 aynı |
+
+**Sahip kararı (2026-10-23, modal):** admin onayı tavanı aşma izni **SAYILMAZ**, ayrı serbest bırakma (AD42) kalır. Kod değişmedi (zaten böyle); 02 §4.7, 05 §3.3, 08 §3.3c, plan (viii), runbook §M.4.
+
+**İmza servisi tavanı → T172b** (ayrı görev; plan/STATUS satırını kendi dalı ekler — bu dalda eklenmedi).
+
+**Testler (kapanış):** backend LocalDB (`INTEGRATION_TEST_SQL_SERVER=(localdb)\MSSQLLocalDB`, merge sonrası): Transactions **1893/1893**, API **1004/1004** (+5 yeni test: 979 + 3 tavan + 2 yedek), Platform **235/235**, Shared **593/593**; `dotnet build Skinora.sln` 0 hata; `dotnet format --verify-no-changes --severity error` (değişen dosyalar) rc=0 · sidecar-blockchain `npx vitest run` **669/669** (+6), `tsc --noEmit`, eslint, prettier (LF) temiz; `alertRuleWiring` TRON 3/3, Ethereum 19/19 · sidecar-ethereum `src/fee` 65/65 (değişmedi) · frontend `src/components/legal` + `src/i18n` 50/50, `i18n:check` 4 × 1722, `tsc --noEmit` temiz. Bozmalar (her biri uygulandı, koşuldu, geri alındı; `git status` temiz): B17 → 2 kırıldı, Window 12 sa → 1, 36 sa → 1, `TronDefaults` 2,60 → 2, `GasFeeSettingsProvider` 2,60 → 2; sidecar S4-4 üç bozma → 3 / 1 / 2. Docker kullanılmadı.
+
 ## Known Limitations / Follow-up
-- **Tahmin ile gönderim arası:** kesinti kuyruğa alma anında sabitlenir; T169 onay kapısıyla gönderim saatler sonra olabilir — o arada TRX/ETH fiyatı, sıcak cüzdanın bandı ya da depozit bakiyesi değişirse fark platformda (önceden de böyleydi).
+- **Tahmin ile gönderim arası** (doğrulama S4-5 — öneriyle kaydedildi, ⚠ PARA): kesinti kuyruğa alma anında sabitlenir; T169 onay kapısı ya da günlük tavan yüzünden gönderim saatler/günler sonra olabilir — o arada TRX/ETH fiyatı, sıcak cüzdanın bandı ya da depozit bakiyesi değişirse fark iki yönde de platformda. Kod bilerek değiştirilmedi: alıcıya gösterilen tutar = kesilen tutar. Belgeler buna göre düzeltildi (hukuk metni 4 dil, 02, 08 §3.1a, plan (ii), runbook §M.4).
 - **Kalıntı ikinci kez kullanılabilir:** iadenin takviyesinden/yakıtından depozitte kalan TRX/ETH, aynı depozitten sonraki bir gönderimin (ör. sweep) ihtiyacını azaltır; o gönderimin ücreti (TRON ağ ücreti satırı) kabul anında tam fiyatlandığı için platform küçük bir artı yapar (alıcı aleyhine, iade başı ~0,1–0,5 $; TRON'da yalnız aynı depozitten iade + sweep olan satışlarda).
 - **Ethereum "ayrılmış" ETH:** imzacı, depozitin yolda olan başka gönderimlerine ayrılan ETH'yi düşer (`reservedOn`); tahmin düşmez (aynı depozitten eşzamanlı iki gönderim nadir; olursa kesinti biraz düşük kalır).
 - **Devretme yolu (uyuyan kilit, `ENERGY_STAKING_ENABLED=false`):** kilit hesabının devret/geri al bandı (~0,28 TRX) kesintiye girmez.
-- **Hukuk metnindeki "Ücret gönderimden hemen önce hesaplanır"** (T168) onay kapısı açıkken tam doğru değil (kuyruğa alma anında hesaplanır); bu görevde değiştirilmedi — T168 metni kontrol edilmeli.
+- ~~Hukuk metnindeki "Ücret gönderimden hemen önce hesaplanır"~~ — kapanışta düzeltildi (S4-5).
+- **İmza servislerinde tavan yok:** depozit iadesi tavanı yalnız backend'de (⚪ `DepositRefundLimitBackendOnly`); imza servisi tarafındaki tavan ayrı görev **T172b**'dir (plan/STATUS satırını kendi dalı ekler).
 - **Göstergeler gönderim işiyle güncellenir:** iş çalışmazsa (Hangfire durursa) `held_rows` son değerinde kalır.
 - **Seed açıklamaları** (T160b'nin `SystemSettingSeed` satırları 50/64/68/70'teki "runtime tahmin alınamazsa" cümleleri) yalnız satır 50 için güncellendi.
 

@@ -804,6 +804,90 @@ describe('FeeEstimationService — T169a refund charge = the platform spend of t
     expect(burned.burnSun - covered.burnSun).toBe(270_000);
   });
 
+  // T169a doğrulama S4-4 (⚠ PARA) — the activation goes first from the same
+  // hot wallet. When its STAKED Bandwidth pays the 270 activation bytes, the
+  // top-up only has what is left: below 270 its own 270 bytes burn.
+  it('the top-up sees the hot wallet Bandwidth the activation left: 400 staked → 130 left → its 270 bytes burn', async () => {
+    const { service } = buildService({
+      ...holder,
+      hotWallet: { bandwidthAvailable: 400, stakedBandwidthAvailable: 400 },
+    });
+
+    const result = await service.estimate(refund);
+
+    // Staked covered the activation bytes: no 0.1 TRX activation Bandwidth fee…
+    expect(result.activationBurnSun).toBe(1_000_000);
+    // …but they came out of the pool the top-up then needs.
+    expect(result.topUpFeeSun).toBe(270_000);
+    // 1 + 1,000,000 + 7,071,349 + 270,000.
+    expect(result.burnSun).toBe(8_341_350);
+  });
+
+  it('540 staked: the activation takes 270, the top-up rides on the other 270', async () => {
+    const { service } = buildService({
+      ...holder,
+      hotWallet: { bandwidthAvailable: 540, stakedBandwidthAvailable: 540 },
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_000_000);
+    expect(result.topUpFeeSun).toBe(0);
+  });
+
+  it('the activation takes 270 × rate: at rate 2, 600 staked leaves 60 — the top-up burns', async () => {
+    const { service } = buildService({
+      ...holder,
+      hotWallet: { bandwidthAvailable: 600, stakedBandwidthAvailable: 600 },
+      createNewAccountBandwidthRate: 2,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_000_000);
+    expect(result.topUpFeeSun).toBe(270_000);
+  });
+
+  it('activation NOT covered by staked Bandwidth (rate 2): fee burned, pool left to the top-up', async () => {
+    // Rate 2: 540 bytes needed, 300 staked → the chain burns 0.1 TRX instead.
+    const { service } = buildService({
+      ...holder,
+      hotWallet: { bandwidthAvailable: 300, stakedBandwidthAvailable: 300 },
+      createNewAccountBandwidthRate: 2,
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(1_100_000);
+    expect(result.topUpFeeSun).toBe(0);
+  });
+
+  it('an unread rate counts as 1 for the top-up — its fee can only come out charged', async () => {
+    const { service } = buildService({
+      ...holder,
+      hotWallet: { bandwidthAvailable: 500, stakedBandwidthAvailable: 500 },
+      createNewAccountBandwidthRate: null,
+    });
+
+    const result = await service.estimate(refund);
+
+    // 500 − 270 = 230 < 270.
+    expect(result.topUpFeeSun).toBe(270_000);
+  });
+
+  it('an existing deposit needs no activation: the whole pool is the top-up’s', async () => {
+    const { service } = buildService({
+      energyRequired: 64_285,
+      stakingEnabled: false,
+      hotWallet: { bandwidthAvailable: 400, stakedBandwidthAvailable: 400 },
+    });
+
+    const result = await service.estimate(refund);
+
+    expect(result.activationBurnSun).toBe(0);
+    expect(result.topUpFeeSun).toBe(0);
+  });
+
   it("an existing deposit's own TRX is subtracted, as the broadcast's top-up subtracts it", async () => {
     // An earlier top-up left 2,000,000 SUN: 7,071,350 − 2,000,000 = 5,071,350.
     const { service } = buildService({

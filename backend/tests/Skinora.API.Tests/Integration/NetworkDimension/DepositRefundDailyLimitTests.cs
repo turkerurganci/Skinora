@@ -160,6 +160,79 @@ public class DepositRefundDailyLimitTests : IntegrationTestBase
     }
 
     // =================================================================
+    // The admin's value is the one weighed (doğrulama S4-1)
+    // =================================================================
+
+    [Fact]
+    public async Task A_Limit_Raised_To_150_Lets_60_And_50_Both_Go()
+    {
+        // On the seeded 100 the 50 would wait (60 + 50 > 100): only the
+        // admin's 150, read through the real provider, lets it go.
+        await SetLimitAsync("150");
+        var first = await SeedRefundAsync(60m);
+        var second = await SeedRefundAsync(50m);
+
+        await DispatchAsync();
+
+        Assert.Equal(
+            new[] { first.Id, second.Id }.OrderBy(i => i),
+            _tron.Broadcasts.Select(b => b.BlockchainTransactionId).OrderBy(i => i));
+        Assert.Null((await ReloadAsync(second.Id)).DepositRefundLimitHeldAt);
+        await using var ctx = CreateContext();
+        var provider = new BlockchainNetworkSettingsProvider(ctx);
+        Assert.Equal(150m, (await provider.GetAsync(BlockchainNetwork.TRON, CancellationToken.None)).DepositRefundDailyLimitUsdt);
+        // One network's row does not move the other's.
+        Assert.Equal(100m, (await provider.GetAsync(BlockchainNetwork.ETHEREUM, CancellationToken.None)).DepositRefundDailyLimitUsdt);
+    }
+
+    [Fact]
+    public async Task A_Limit_Lowered_To_55_Holds_The_60_And_Lets_The_50_Go()
+    {
+        // On the seeded 100 it is the other way round (the 60 goes, the 50 waits).
+        await SetLimitAsync("55");
+        var first = await SeedRefundAsync(60m);
+        var second = await SeedRefundAsync(50m);
+
+        await DispatchAsync();
+
+        Assert.Equal(second.Id, Assert.Single(_tron.Broadcasts).BlockchainTransactionId);
+        var held = await ReloadAsync(first.Id);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, held.Status);
+        Assert.Equal(Start.UtcDateTime, held.DepositRefundLimitHeldAt);
+        Assert.Contains("above the 55 USDT limit", held.ErrorMessage);
+    }
+
+    // =================================================================
+    // The window is 24 hours of wall clock (doğrulama S4-2)
+    // =================================================================
+
+    [Fact]
+    public async Task A_Held_Refund_Still_Waits_At_23h55_And_Goes_After_24h()
+    {
+        // Absolute times, not DepositRefundDailyLimit.Window: the owner's
+        // decision is "24 saat" (2026-10-21), so a shorter or longer window
+        // must break this test.
+        var first = await SeedRefundAsync(60m);
+        var second = await SeedRefundAsync(50m);
+
+        await DispatchAsync();
+        Assert.Equal(first.Id, Assert.Single(_tron.Broadcasts).BlockchainTransactionId);
+
+        // 23 h 55 min after the 60 was counted: still in the window.
+        _clock.SetUtcNow(Start + TimeSpan.FromHours(23) + TimeSpan.FromMinutes(55));
+        await DispatchAsync();
+        Assert.Single(_tron.Broadcasts);
+        Assert.Equal(BlockchainTransactionStatus.PENDING, (await ReloadAsync(second.Id)).Status);
+
+        // 24 h 11 min: the 60 has left the window (and the 15-minute re-weigh
+        // set at 23 h 55 min is due) — the 50 goes on its own.
+        _clock.SetUtcNow(Start + TimeSpan.FromHours(24) + TimeSpan.FromMinutes(11));
+        await DispatchAsync();
+        Assert.Equal(second.Id, _tron.Broadcasts[^1].BlockchainTransactionId);
+        Assert.Equal(2, _tron.Broadcasts.Count);
+    }
+
+    // =================================================================
     // Seeded limit → hold → AD40 → AD42 → sent
     // =================================================================
 

@@ -1603,8 +1603,9 @@ groups:
           summary: A refund is waiting because deposit refunds reached the network's 24-hour limit
           description: >-
             Refunds that leave deposit addresses on this network have sent
-            blockchain.*.deposit_refund_daily_limit_usdt (100 USDT) in the last 24
-            hours, and the next one would cross it. It waits PENDING (no retry
+            blockchain.*.deposit_refund_daily_limit_usdt (the admin setting, seeded
+            100 USDT; the value in force is skinora_backend_deposit_refund_limit_usdt)
+            in the last 24 hours, and the next one would cross it. It waits PENDING (no retry
             spent, never FAILED) and goes out on its own when the refunds of 24
             hours ago leave the window; a refund larger than the limit never does.
             Check skinora_backend_deposit_refund_limit_used_usdt against

@@ -358,6 +358,31 @@ public class NetworkContractTests : IntegrationTestBase
         Assert.Null(ethereum.MinTransactionAmountUsdt);
     }
 
+    [Theory]
+    [InlineData(false)] // row deleted
+    [InlineData(true)]  // row present but unconfigured
+    public async Task Without_A_Usable_Row_The_Tron_Refund_Fallback_Is_2_80(bool keepUnconfigured)
+    {
+        // T169a doğrulama S4-3 — the seeded row is tested elsewhere; this pins
+        // the code-side value both readers use when the row is gone (the
+        // T169a owner-recorded 2.80, ⚠ PARA), not the old 2.60.
+        await using (var ctx = CreateContext())
+        {
+            var rows = ctx.Set<SystemSetting>()
+                .Where(s => s.Key == BlockchainNetworkSettingKeys.Tron.RefundGasFeeFallbackUsdt);
+            if (keepUnconfigured)
+                await rows.ExecuteUpdateAsync(u => u.SetProperty(s => s.IsConfigured, false));
+            else
+                await rows.ExecuteDeleteAsync();
+        }
+
+        await using var read = CreateContext();
+        Assert.Equal(2.80m,
+            (await new BlockchainNetworkSettingsProvider(read).GetAsync(BlockchainNetwork.TRON, default)).RefundGasFeeFallbackUsdt);
+        Assert.Equal(2.80m,
+            (await new Skinora.Transactions.Application.GasFee.GasFeeSettingsProvider(read).GetAsync(default)).RefundGasFeeEstimateUsdt);
+    }
+
     [Fact]
     public async Task An_Admin_Change_To_One_Network_Does_Not_Move_The_Other()
     {

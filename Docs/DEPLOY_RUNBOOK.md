@@ -1169,8 +1169,9 @@ Aynı akışın küçük hâli CI'da her Ethereum servisi değişikliğinde koş
 > **Proje sahibi kararı 2026-10-21:** depozit adreslerinden yapılan iadelerin günlük toplamı ağ başına 100 $'ı aşarsa aşan iade bekler, alarm verir, ertesi gün ya da admin kararıyla devam eder (08 §3.3c).
 
 - **Ayar:** `blockchain.tron.deposit_refund_daily_limit_usdt`, `blockchain.ethereum.deposit_refund_daily_limit_usdt` (seed 100; AD9 ile değişir, env'den doldurulmaz). Pencere **kayan 24 saat**tir — gece yarısı sıfırlanmaz.
-- **Sayılan:** depozitten çıkan iadeler (TRON'da hepsi, Ethereum'da sweep öncesi). Sıcak cüzdandan çıkan iade, payout, sweep sayılmaz. Onay kapısı (§M.1) önce gelir: onay bekleyen iade tavana tartılmaz; onaylanan iade tavanı aşacaksa **yine bekler**.
-- **Alarm:** ilk beklemede admin bildirimi (`ADMIN_PAYMENT_FAILURE`, kod `DEPOSIT_REFUND_DAILY_LIMIT:<ağ>:<tür>`) ve Grafana `deposit-refund-daily-limit-held` (bekleyen satır kaldıkça).
+- **Sayılan:** depozitten çıkan iadeler (TRON'da hepsi, Ethereum'da sweep öncesi). Sıcak cüzdandan çıkan iade, payout, sweep sayılmaz. Onay kapısı (§M.1) önce gelir: onay bekleyen iade tavana tartılmaz; onaylanan iade tavanı aşacaksa **yine bekler** (proje sahibi kararı 2026-10-23, modal: admin onayı tavanı aşma izni sayılmaz — tavanı aşmak 3. adımdaki ayrı serbest bırakmadır, AD42).
+- **Alarm:** ilk beklemede admin bildirimi (`ADMIN_PAYMENT_FAILURE`, kod `DEPOSIT_REFUND_DAILY_LIMIT:<ağ>:<tür>`) ve Grafana `deposit-refund-daily-limit-held` (bekleyen satır kaldıkça; açıklama tavanı sabit yazmaz, geçerli değer `skinora_backend_deposit_refund_limit_usdt` göstergesindedir).
+- **Kesinti beklerken değişmez:** iadenin ağ ücreti kuyruğa alınırken hesaplanıp satıra yazılır; bekleme (onay ya da tavan) sonrasında yeniden hesaplanmaz — alıcıya gösterilen tutar kesilen tutardır (08 §3.1a "Tahminin zamanı").
 - **Ne yapılır:**
   1. Admin → **Cüzdanlar** (S22) → "Onay bekleyen ödemeler" panelinin altındaki **"Günlük iade tavanı (depozitten)"**: ağ başına "son 24 saatte X / 100 USDT" ve bekleyen iadeler.
   2. **Beklenmeyen bir iade dalgası mı?** Son 24 saatin iadelerini (cüzdan ekranı "son giden satırlar", işlemler) gözden geçir. Sebebini bilmediğin bir dalga bu tavanın var olma sebebidir — serbest bırakma, önce incele (gerekirse `outbound.auto_send_enabled` = `false` ile bütün ödemeleri durdur, §M.3 madde 5).

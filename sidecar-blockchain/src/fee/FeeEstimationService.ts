@@ -9,6 +9,7 @@ import {
   ACTIVATION_TX_BYTES,
   ESTIMATED_TRANSFER_TX_BYTES,
   activationBurnSun,
+  activationStakedBandwidthBytes,
   burnSun as transferBurnSun,
   callerEnergyShare,
   planDelegation,
@@ -379,8 +380,16 @@ export class FeeEstimationService {
       // After activation the deposit holds the 1 SUN that created it.
       const balanceSun = depositExists ? senderState!.balanceSun : ACTIVATION_SUN;
       topUp = topUpSun(requiredBurn, balanceSun);
+      // T169a doğrulama S4-4 (öneriyle kaydedildi — ⚠ PARA): the activation
+      // goes first from the same hot wallet; when its staked Bandwidth pays the
+      // activation bytes, the top-up only sees what is left of the pool.
+      const activationBandwidth = activationStakedBandwidthBytes({
+        depositExists,
+        senderStakedBandwidth: hotWalletResources.stakedBandwidthAvailable,
+        createNewAccountBandwidthRate: feeParams.createNewAccountBandwidthRate,
+      });
       topUpFee =
-        topUp > 0 && hotWalletResources.bandwidthAvailable < TRX_SEND_TX_BYTES
+        topUp > 0 && hotWalletResources.bandwidthAvailable - activationBandwidth < TRX_SEND_TX_BYTES
           ? TRX_SEND_TX_BYTES * feeParams.bandwidthFeeSun
           : 0;
       burnSun = (depositExists ? 0 : ACTIVATION_SUN) + activationSun + topUp + topUpFee;
