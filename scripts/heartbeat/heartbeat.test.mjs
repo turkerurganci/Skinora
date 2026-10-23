@@ -6,7 +6,9 @@ import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn, spawnSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, join } from "node:path";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "heartbeat.sh");
@@ -125,5 +127,56 @@ describe("heartbeat.sh (T165)", { skip: !HAS_TOOLS && "sh/curl not available" },
     const { code, out } = await run(envFor({ HEARTBEAT_INTERVAL_SECONDS: "1m", HEARTBEAT_ROUNDS: "1" }));
     assert.equal(code, 2);
     assert.match(out, /HEARTBEAT_CONFIG_INVALID/);
+  });
+
+  // T171a — in the trial the ping URL is the Docker secret heartbeat_url.
+  describe("ping URL from a secret file (T171a)", () => {
+    let dir;
+    before(() => {
+      dir = mkdtempSync(join(tmpdir(), "heartbeat-secret-"));
+    });
+    after(() => rmSync(dir, { recursive: true, force: true }));
+
+    test("reads the URL from HEARTBEAT_URL_FILE and never prints it", async () => {
+      reset();
+      const file = join(dir, "heartbeat_url");
+      writeFileSync(file, `${base}/ping/file-secret-uuid\n`);
+      const { code, out } = await run(envFor({ HEARTBEAT_URL: "", HEARTBEAT_URL_FILE: file, HEARTBEAT_ROUNDS: "1" }));
+      assert.equal(code, 0, out);
+      assert.deepEqual(pings(), ["/ping/file-secret-uuid"]);
+      assert.doesNotMatch(out, /file-secret-uuid/);
+    });
+
+    test("an empty or missing file idles like an empty HEARTBEAT_URL", async () => {
+      reset();
+      const empty = join(dir, "empty");
+      writeFileSync(empty, "");
+      for (const file of [empty, join(dir, "missing")]) {
+        const { code, out } = await run(envFor({ HEARTBEAT_URL: "", HEARTBEAT_URL_FILE: file, HEARTBEAT_ROUNDS: "1" }));
+        assert.equal(code, 0, out);
+        assert.match(out, /HEARTBEAT_DISABLED/);
+      }
+      assert.deepEqual(state.hits, []);
+    });
+
+    test("a directory at the mount point stops it (Docker's stand-in for a missing source)", async () => {
+      reset();
+      const directory = join(dir, "made-by-docker");
+      mkdirSync(directory);
+      const { code, out } = await run(envFor({ HEARTBEAT_URL: "", HEARTBEAT_URL_FILE: directory, HEARTBEAT_ROUNDS: "1" }));
+      assert.equal(code, 2);
+      assert.match(out, /HEARTBEAT_URL_UNREADABLE/);
+      assert.deepEqual(state.hits, []);
+    });
+
+    test("the URL in both places is refused", async () => {
+      reset();
+      const file = join(dir, "both");
+      writeFileSync(file, `${base}/ping/file-secret-uuid`);
+      const { code, out } = await run(envFor({ HEARTBEAT_URL_FILE: file, HEARTBEAT_ROUNDS: "1" }));
+      assert.equal(code, 2);
+      assert.match(out, /HEARTBEAT_URL_AMBIGUOUS/);
+      assert.doesNotMatch(out, /secret-uuid/);
+    });
   });
 });

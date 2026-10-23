@@ -168,6 +168,12 @@ jobs:
               - 'docker-compose.yml'
               - 'docker-compose.override.yml'
               - 'docker-compose.trial.yml'
+              # T171a — compose-secrets.test.mjs also renders the e2e stack and
+              # reads the file names the backend and the sidecars read.
+              - 'docker-compose.e2e.yml'
+              - 'backend/src/Skinora.API/Configuration/SharedSecretFiles.cs'
+              - 'sidecar-*/src/config/sharedSecrets.ts'
+              - 'e2e/src/config.ts'
               - '.env.example'
               - '.github/workflows/**'
 

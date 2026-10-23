@@ -11,9 +11,13 @@
 # a dev template; keep it out of real runs.
 #
 # Values come from .env (gitignored). This file contains ${VAR} references only —
-# never a secret literal. Services receive only the env they need. Signing
-# material (seeds, wallet keys) is not env at all: Docker secrets under
-# ./secrets, each mounted into its own network's service alone (T150, T163).
+# never a secret literal. Services receive only the env they need. Secrets are
+# not env at all: Docker secrets under ./secrets (gitignored), each mounted
+# only into the services that use it — signing material (seeds, wallet keys)
+# into its own network's service alone (T150, T163); the shared secrets (JWT,
+# webhook HMAC, internal keys, notification channel secrets) into the backend
+# and the one service at the other end, from ONE file (T171a). See the
+# `secrets:` block at the end and secrets/README.md.
 #
 # Prerequisite: the schema is NOT auto-migrated at startup. Apply migrations
 # before first boot — see Docs/DEPLOY_RUNBOOK.md §G.
@@ -50,12 +54,15 @@ services:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
       - Redis__ConnectionString=${REDIS_CONNECTION_STRING}
-      - Jwt__Secret=${JWT_SECRET}
+      # T171a — Jwt:Secret, the two webhook secrets, the three internal keys and
+      # the four notification channel secrets are Docker secrets (`secrets:`
+      # below, /run/secrets/<name>), read by SharedSecretFiles. Outside
+      # Development a variable for any of them stops the backend
+      # (SHARED_SECRET_IN_ENV) — do not add them back here.
       - Jwt__Issuer=${JWT_ISSUER:-skinora}
       - Jwt__Audience=${JWT_AUDIENCE:-skinora-client}
       - Jwt__AccessTokenExpiryMinutes=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
       - Jwt__RefreshTokenExpiryDays=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
-      - Webhook__BlockchainSharedSecret=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}
       - Serilog__WriteTo__1__Args__uri=${LOKI_URL:-http://skinora-loki:3100}
       # Browser-facing origin — CORS. The frontend is same-origin behind nginx,
       # so this only matters for direct :5000 access and non-browser clients.
@@ -75,12 +82,11 @@ services:
       - SteamOpenId__ReVerifyReturnToUrl=${STEAM_OPENID_REVERIFY_RETURN_TO}
       - SteamOpenId__FrontendCallbackUrl=${STEAM_OPENID_FRONTEND_CALLBACK}
       - SteamOpenId__WebApiKey=${STEAM_API_KEY}
-      # Backend → sidecar internal API auth (X-Internal-Key, 05 §3.4). Must match
-      # the INTERNAL_KEY each sidecar receives below.
+      # Backend → sidecar internal API auth (X-Internal-Key, 05 §3.4). The keys
+      # are Docker secrets (T171a): the backend and each sidecar read the SAME
+      # file (steam_sidecar_internal_key, blockchain_sidecar_internal_key).
       - SteamSidecar__BaseUrl=http://skinora-steam-sidecar:5100
-      - SteamSidecar__InternalKey=${STEAM_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
       - BlockchainSidecar__BaseUrl=http://skinora-blockchain-sidecar:5200
-      - BlockchainSidecar__InternalKey=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
       # TRC-20 contracts the backend arms the payment monitor with. Same two
       # values the sidecar reads below — they MUST agree, or the sidecar
       # classifies a real deposit as wrong_token and auto-refunds it. Empty
@@ -101,10 +107,9 @@ services:
       # together with --profile ethereum) OPENS Ethereum to new transactions,
       # which is the launch decision of DEPLOY_RUNBOOK §J, not a default. Empty
       # makes every Ethereum call fail closed and leaves TRON untouched.
-      # The webhook secret MUST differ from TRON's (BLOCKCHAIN_WEBHOOK_SECRET).
+      # The webhook secret MUST differ from TRON's: secrets/ethereum_webhook_secret.txt
+      # vs secrets/blockchain_webhook_secret.txt (T171a — Docker secrets).
       - EthereumSidecar__BaseUrl=${ETHEREUM_SIDECAR_BASE_URL:-}
-      - EthereumSidecar__InternalKey=${ETHEREUM_SIDECAR_INTERNAL_KEY:-}
-      - Webhook__EthereumSharedSecret=${ETHEREUM_WEBHOOK_SECRET:-}
       - EthereumStablecoinContracts__Usdt=${ETHEREUM_USDT_CONTRACT:-}
       - EthereumStablecoinContracts__Usdc=${ETHEREUM_USDC_CONTRACT:-}
       - ETHEREUM_HOT_WALLET_ADDRESS=${ETHEREUM_HOT_WALLET_ADDRESS:-}
@@ -127,19 +132,15 @@ services:
       # (owner decision 2026-10-21) — so the secrets alone open a channel. A
       # real provider with an empty / placeholder / malformed secret runs as
       # "misconfigured": switched off + error log + notification-channel-
-      # misconfigured alert; it never falls back to the stub. Secrets are env
-      # like the other shared secrets until T171 (DEFERRED_BACKLOG
-      # SharedSecretsInPlainEnv). TELEGRAM_BOT_TOKEN is the same bot Grafana
-      # alerts through (skinora-grafana-provisioning below).
+      # misconfigured alert; it never falls back to the stub. The secrets are
+      # Docker secrets since T171a (resend_api_key, resend_webhook_signing_secret,
+      # telegram_bot_token, telegram_webhook_secret_token). telegram_bot_token
+      # is the same bot Grafana alerts through (skinora-grafana-provisioning).
       - Resend__Provider=${RESEND_PROVIDER:-logging}
-      - Resend__ApiKey=${RESEND_API_KEY:-}
-      - Resend__WebhookSigningSecret=${RESEND_WEBHOOK_SIGNING_SECRET:-}
       - Resend__FromAddress=${RESEND_FROM_ADDRESS:-Skinora <noreply@skinora.com>}
       - Telegram__Provider=${TELEGRAM_PROVIDER:-logging}
-      - Telegram__BotToken=${TELEGRAM_BOT_TOKEN:-}
       - Telegram__BotUsername=${TELEGRAM_BOT_USERNAME:-SkinoraBot}
       - Telegram__BotUrl=https://t.me/${TELEGRAM_BOT_USERNAME:-SkinoraBot}
-      - Telegram__WebhookSecretToken=${TELEGRAM_WEBHOOK_SECRET_TOKEN:-}
       - Discord__Provider=${DISCORD_PROVIDER:-logging}
       # --- 19 mandatory SystemSettings (DEPLOY_RUNBOOK §A) ---
       # SettingsBootstrapService hydrates unconfigured rows from these and
@@ -172,6 +173,19 @@ services:
       # seeded Default rows (IsConfigured = true), and the bootstrap only touches
       # unconfigured rows — env never overrides a configured value (06 §8.9). They
       # are changed through the admin UI only.
+    # T171a — the shared secrets (DEFERRED_BACKLOG SharedSecretsInPlainEnv).
+    # Every file must EXIST (secrets/README.md); the optional ones may be empty.
+    secrets:
+      - jwt_secret
+      - blockchain_webhook_secret
+      - ethereum_webhook_secret
+      - steam_sidecar_internal_key
+      - blockchain_sidecar_internal_key
+      - ethereum_sidecar_internal_key
+      - resend_api_key
+      - resend_webhook_signing_secret
+      - telegram_bot_token
+      - telegram_webhook_secret_token
     depends_on:
       skinora-db:
         condition: service_healthy
@@ -251,10 +265,10 @@ services:
       # The sidecar's ONLY Steam credential (T133): a Web API key for anonymous
       # inventory reads and trade-hold probes. No bot account, no password, no
       # maFile secret — the custody layer that needed them is gone (05 §3.2).
-      # No WEBHOOK_SECRET either: this sidecar signs nothing any more.
+      # No webhook secret either: this sidecar signs nothing any more.
       - STEAM_API_KEY=${STEAM_API_KEY}
-      # Must match the backend's SteamSidecar__InternalKey above.
-      - INTERNAL_KEY=${STEAM_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
+      # T171a — the internal key is the Docker secret steam_sidecar_internal_key
+      # (below), the backend's own file; no INTERNAL_KEY variable here.
       # Inventory cache (08 §2.3). Empty → in-memory fallback.
       - REDIS_URL=${STEAM_SIDECAR_REDIS_URL:-}
       # Steam Community inventory queue ceiling (08 §2.6, T120). Separate from
@@ -272,6 +286,9 @@ services:
       - STEAM_LIMITED_ACCOUNT_DEADLINE_MS=${STEAM_SIDECAR_LIMITED_ACCOUNT_DEADLINE_MS:-}
       - STEAM_LIMITED_ACCOUNT_CACHE_TTL_SECONDS=${STEAM_SIDECAR_LIMITED_ACCOUNT_CACHE_TTL_SECONDS:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
+    # T171a — read from /run/secrets/steam_sidecar_internal_key (config/sharedSecrets.ts).
+    secrets:
+      - steam_sidecar_internal_key
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -331,9 +348,8 @@ services:
       # signer reads no stake, never delegates and ignores the two values
       # above; every deposit transfer burns. Default false.
       - ENERGY_STAKING_ENABLED=${ENERGY_STAKING_ENABLED:-false}
-      # Must match the backend's BlockchainSidecar__InternalKey above.
-      - INTERNAL_KEY=${BLOCKCHAIN_SIDECAR_INTERNAL_KEY:-${INTERNAL_KEY}}
-      - WEBHOOK_SECRET=${BLOCKCHAIN_WEBHOOK_SECRET:-${WEBHOOK_SECRET}}
+      # T171a — the internal key and the webhook secret are Docker secrets
+      # (below), the backend's own files; no INTERNAL_KEY / WEBHOOK_SECRET here.
       - TRON_API_KEY=${TRON_API_KEY}
       - TRON_API_KEY_SECONDARY=${TRON_API_KEY_SECONDARY:-}
       - PAYMENT_POLLING_INTERVAL_MS=${PAYMENT_POLLING_INTERVAL_MS:-3000}
@@ -361,9 +377,13 @@ services:
     # T163 — mounted at /run/secrets/<name>; the service reads them from there
     # (sidecar-blockchain/src/config/signingSecrets.ts). Offline backup and
     # restore drill: DEPLOY_RUNBOOK §L, scripts/wallet-backup/.
+    # T171a — plus the two shared secrets, the SAME files the backend reads
+    # (sidecar-blockchain/src/config/sharedSecrets.ts).
     secrets:
       - tron_hd_mnemonic
       - tron_hot_wallet_private_key
+      - blockchain_sidecar_internal_key
+      - blockchain_webhook_secret
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -386,7 +406,7 @@ services:
   # Signing material arrives ONLY as Docker secrets (files under ./secrets,
   # see secrets/README.md) and ONLY to this service: the TRON seed and keys
   # never reach it, and its seed and keys reach no other container. It does
-  # not start without INTERNAL_KEY (>= 32 chars), its seed and a primary RPC.
+  # not start without its internal key (>= 32 chars), its seed and a primary RPC.
   skinora-ethereum-sidecar:
     build:
       context: ./sidecar-ethereum
@@ -398,10 +418,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - BACKEND_URL=${ETHEREUM_SIDECAR_BACKEND_URL:-http://skinora-backend:5000}
-      # Must match the backend's EthereumSidecar__InternalKey above.
-      - INTERNAL_KEY=${ETHEREUM_SIDECAR_INTERNAL_KEY:-}
-      # Must match the backend's Webhook__EthereumSharedSecret (used from T151).
-      - WEBHOOK_SECRET=${ETHEREUM_WEBHOOK_SECRET:-}
+      # T171a — the internal key and the webhook secret are Docker secrets
+      # (below), the backend's own files; no INTERNAL_KEY / WEBHOOK_SECRET here.
       - ETHEREUM_NETWORK=${ETHEREUM_NETWORK:-sepolia}
       # Provider URLs carry the API keys (08 §3.7.1: Alchemy primary,
       # Chainstack backup; per-provider eth_getLogs limits, §3.7.4).
@@ -455,10 +473,13 @@ services:
     volumes:
       - skinora-ethereum-tx-journal:/var/lib/skinora-ethereum/tx-journal
     # Mounted at /run/secrets/<name>; the service reads them from there.
+    # T171a — plus the two shared secrets, the SAME files the backend reads.
     secrets:
       - ethereum_hd_mnemonic
       - ethereum_hot_wallet_private_key
       - ethereum_fuel_wallet_private_key
+      - ethereum_sidecar_internal_key
+      - ethereum_webhook_secret
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -609,21 +630,33 @@ services:
   #
   # sed uses | as the delimiter: Telegram tokens/chat ids and e-mail addresses
   # cannot contain it. $$ escapes compose's own interpolation.
+  #
+  # T171a — the bot token is the Docker secret telegram_bot_token (the
+  # backend's own file), not an environment value. A mount point that is not a
+  # readable file (Docker's directory for a missing source) stops the render,
+  # so Grafana does not start (TELEGRAM_BOT_TOKEN_UNREADABLE). An EMPTY token
+  # renders empty and Grafana refuses it at startup, as before.
   skinora-grafana-provisioning:
     image: alpine:3.20
     container_name: skinora-grafana-provisioning
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - ALERT_EMAIL_TO=${ALERT_EMAIL_TO}
     volumes:
       - ./infra/grafana/provisioning:/src:ro
       - skinora-grafana-provisioning:/out
+    secrets:
+      - telegram_bot_token
     command:
       - sh
       - -c
       - |
         set -e
+        if [ ! -f /run/secrets/telegram_bot_token ] || [ ! -r /run/secrets/telegram_bot_token ]; then
+          echo "TELEGRAM_BOT_TOKEN_UNREADABLE: /run/secrets/telegram_bot_token is not a readable file - create secrets/telegram_bot_token.txt (secrets/README.md) and remove the directory Docker made in its place" >&2
+          exit 1
+        fi
+        TELEGRAM_BOT_TOKEN="$$(tr -d '\r\n' < /run/secrets/telegram_bot_token)"
         rm -rf /out/* /out/.[!.]* 2>/dev/null || true
         cp -a /src/. /out/
         # Grafana logs an error for this directory when it is absent; harmless
@@ -663,7 +696,9 @@ services:
       - GF_SMTP_ENABLED=${GRAFANA_SMTP_ENABLED:-false}
       - GF_SMTP_HOST=${GRAFANA_SMTP_HOST:-smtp.resend.com:587}
       - GF_SMTP_USER=${GRAFANA_SMTP_USER:-resend}
-      - GF_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD:-}
+      # T171a — the password is the Docker secret grafana_smtp_password;
+      # Grafana reads <option>__FILE natively.
+      - GF_SMTP_PASSWORD__FILE=/run/secrets/grafana_smtp_password
       - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM_ADDRESS:-alerts@skinora.com}
       - GF_SMTP_FROM_NAME=Skinora Alerts
       - GF_SMTP_STARTTLS_POLICY=MandatoryStartTLS
@@ -672,6 +707,8 @@ services:
       - skinora-grafana-provisioning:/etc/grafana/provisioning:ro
       - skinora-grafana-data:/var/lib/grafana
       - ./scripts/grafana/first-boot.sh:/opt/skinora/first-boot.sh:ro
+    secrets:
+      - grafana_smtp_password
     depends_on:
       skinora-grafana-provisioning:
         condition: service_completed_successfully
@@ -743,10 +780,10 @@ volumes:
   # it only forgets the last 24 hours of refunds; keep it across restarts.
   skinora-tron-deposit-refunds:
 
-# Docker secrets — signing material only (05 §3.5). Files under ./secrets
-# (gitignored; secrets/README.md). A MISSING source file is not an error to
-# compose: Docker Desktop creates an empty DIRECTORY at that path instead, and
-# the service then refuses to start (SIGNING_SECRET_UNREADABLE /
+# Docker secrets (05 §3.5). Files under ./secrets (gitignored;
+# secrets/README.md). A MISSING source file is not an error to compose: Docker
+# Desktop creates an empty DIRECTORY at that path instead, and the service then
+# refuses to start (SIGNING_SECRET_UNREADABLE / SHARED_SECRET_UNREADABLE /
 # HD_WALLET_NOT_CONFIGURED) — create the file, delete the directory.
 #
 # T150 — the Ethereum service's (08 §3.7.2, K7). Only the "ethereum" profile
@@ -766,6 +803,38 @@ secrets:
     file: ./secrets/ethereum_hot_wallet_private_key.txt
   ethereum_fuel_wallet_private_key:
     file: ./secrets/ethereum_fuel_wallet_private_key.txt
+  # T171a — shared secrets (DEFERRED_BACKLOG SharedSecretsInPlainEnv). ONE file
+  # per secret, mounted into the backend AND the service at the other end, so
+  # the two ends cannot drift. Every file must exist (the backend mounts them
+  # all). Required (>= 32 characters, openssl rand -hex 32): jwt_secret,
+  # blockchain_webhook_secret, steam_sidecar_internal_key,
+  # blockchain_sidecar_internal_key. May be empty: the two Ethereum ones (empty
+  # = Ethereum off; when set >= 32 and different from TRON's), the notification
+  # channel ones (empty = channel "misconfigured", DEPLOY_RUNBOOK §P) and
+  # grafana_smtp_password. telegram_bot_token also feeds Grafana's render step:
+  # Grafana does not start on an EMPTY token (put any placeholder in dev).
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  blockchain_webhook_secret:
+    file: ./secrets/blockchain_webhook_secret.txt
+  ethereum_webhook_secret:
+    file: ./secrets/ethereum_webhook_secret.txt
+  steam_sidecar_internal_key:
+    file: ./secrets/steam_sidecar_internal_key.txt
+  blockchain_sidecar_internal_key:
+    file: ./secrets/blockchain_sidecar_internal_key.txt
+  ethereum_sidecar_internal_key:
+    file: ./secrets/ethereum_sidecar_internal_key.txt
+  resend_api_key:
+    file: ./secrets/resend_api_key.txt
+  resend_webhook_signing_secret:
+    file: ./secrets/resend_webhook_signing_secret.txt
+  telegram_bot_token:
+    file: ./secrets/telegram_bot_token.txt
+  telegram_webhook_secret_token:
+    file: ./secrets/telegram_webhook_secret_token.txt
+  grafana_smtp_password:
+    file: ./secrets/grafana_smtp_password.txt
 
 networks:
   skinora-network:
