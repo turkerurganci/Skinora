@@ -29,6 +29,7 @@ import { depositRefundPermitsTotal } from './metrics.js';
 import { TronResourceClient } from './tron/TronResourceClient.js';
 import { TrxPriceService } from './fee/TrxPriceService.js';
 import { FeeEstimationService } from './fee/FeeEstimationService.js';
+import { SolidBlockTracker } from './chain/SolidBlockTracker.js';
 
 // T161 — fail closed before anything is built or listens: without its internal
 // key (05 §3.4) the service does not start (config/internalKey.ts). The error
@@ -248,6 +249,22 @@ logger.info(
   'Payment monitoring: cadences and TronGrid daily request budget',
 );
 
+// T170 — is the TRON chain progressing? (tron-solid-block-stalled). Reads the
+// solid head every TRON_SOLID_BLOCK_POLL_INTERVAL_MS and publishes its age.
+const solidBlockTracker = new SolidBlockTracker({
+  client: tronGridClient,
+  pollIntervalMs: config.tronSolidBlockPollIntervalMs,
+  stallThresholdSeconds: config.tronSolidBlockStallSeconds,
+});
+solidBlockTracker.start();
+logger.info(
+  {
+    solidBlockPollIntervalMs: config.tronSolidBlockPollIntervalMs,
+    solidBlockStallSeconds: config.tronSolidBlockStallSeconds,
+  },
+  'Chain progress: TRON solid block tracker started',
+);
+
 // T172b — the deposit refund cap as the refund path holds it; an operator
 // reads this line after a restart instead of finding out at the first refund.
 logger.info(
@@ -297,6 +314,7 @@ async function shutdown(signal: string): Promise<void> {
   });
 
   // 2. Stop active monitors
+  solidBlockTracker.stop();
   await monitorRegistry.shutdown();
   await postCancelMonitorRegistry.shutdown();
 

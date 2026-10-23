@@ -151,6 +151,8 @@ export interface AdminHotWalletThresholdBreachedPayload {
   actual: number;
   blockNumber: number | null;
   detectedAt: string;
+  /** T170 — `TRON` | `ETHEREUM`: both networks' hot wallets are watched. */
+  network: string;
 }
 
 // ---------- Event name constants ----------

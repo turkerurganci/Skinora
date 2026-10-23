@@ -1,5 +1,6 @@
 import TronWeb from 'tronweb';
 import { logger } from '../logger.js';
+import { energyDelegationStrandedTotal } from '../metrics.js';
 import { SidecarError, SimulationRevertedError } from '../errors/SidecarError.js';
 import { TronDelegationClient } from '../tron/TronDelegationClient.js';
 import type {
@@ -598,6 +599,9 @@ export class EnergyDelegationService implements DelegationSource {
         amountSun,
       });
     } catch (undelegateErr) {
+      // T170 — counted, so the stranded stake reaches the operator
+      // (tron-energy-delegation-stranded), not only this log line.
+      energyDelegationStrandedTotal.inc();
       logger.warn(
         {
           err: (undelegateErr as Error).message,

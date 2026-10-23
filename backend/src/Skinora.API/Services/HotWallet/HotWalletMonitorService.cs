@@ -29,10 +29,11 @@ namespace Skinora.API.Services.HotWallet;
 /// unit) is compared against the USDT and USDC balances separately — the
 /// admin-tunable cap applies per stablecoin. <c>hot_wallet.trx_balance_minimum</c>
 /// (decimal, TRX unit) is the gas floor; below it the alert direction is
-/// <c>Lower</c>. The hot wallet address is deployment configuration shared
-/// with the signer (<see cref="IPlatformWalletAddressProvider"/>) — until
-/// <c>HOT_WALLET_ADDRESS</c> is set the job emits a warn log and exits
-/// cleanly.
+/// <c>Lower</c> (TRON only — T170). The hot wallet address is deployment
+/// configuration shared with the signer, per network
+/// (<see cref="IPlatformWalletAddressProvider"/>: <c>HOT_WALLET_ADDRESS</c>,
+/// <c>ETHEREUM_HOT_WALLET_ADDRESS</c>) — until a network's address is set the
+/// job emits a warn log and skips that network.
 /// </para>
 /// </summary>
 public interface IHotWalletMonitorService
@@ -46,18 +47,31 @@ public sealed record HotWalletMonitorOutcome(
     long? BlockNumber);
 
 /// <remarks>
-/// T148 — this monitor watches TRON's hot wallet (<see cref="MonitoredNetwork"/>):
-/// its service answers the balance, its hot address is the subject and its gas
-/// asset (TRX, in SUN — <see cref="BlockchainNetworkPolicy"/>) is the floor
-/// checked. Ethereum's hot and fuel wallet ETH floors are their own settings
-/// (<c>blockchain.ethereum.*_eth_balance_minimum</c>); the alarm that reads them
-/// arrives with the Ethereum service (T153, T158).
+/// <para>
+/// T170 — one pass per network that has a service (05 §3.3a, the
+/// <c>ReconciliationService</c> shape): each network's hot wallet is read from
+/// its own service and compared with <c>hot_wallet_limit</c> (USDT / USDC,
+/// 6 decimals on both networks — 4000 per network, T169). Before T170 only
+/// TRON was watched (DEFERRED_BACKLOG <c>EthereumHotWalletUsdtLimitUnmonitored</c>):
+/// USDT piling up in the Ethereum hot wallet above the limit reached nobody.
+/// </para>
+/// <para>
+/// The gas floor stays per network where its alarm already lives: TRON's TRX
+/// floor (<c>hot_wallet.trx_balance_minimum</c>, in SUN —
+/// <see cref="BlockchainNetworkPolicy"/>) is checked here; Ethereum's hot and
+/// fuel wallet ETH floors are watched by the Ethereum service itself
+/// (<c>ethereum-wallet-eth-low</c>, T153) and are not repeated here, so one
+/// low balance raises one alarm.
+/// </para>
+/// <para>
+/// A network whose service is down or whose hot address is unset aborts only
+/// its own pass. With a single checked network the outcome is that pass's;
+/// with several, counts are summed and <c>BlockNumber</c> is null (block
+/// heights of different chains do not compare).
+/// </para>
 /// </remarks>
 public sealed class HotWalletMonitorService : IHotWalletMonitorService
 {
-    /// <summary>The network whose hot wallet this monitor watches.</summary>
-    public const BlockchainNetwork MonitoredNetwork = BlockchainNetwork.TRON;
-
     public const string HotWalletLimitKey = "hot_wallet_limit";
     public const string TrxBalanceMinimumKey = "hot_wallet.trx_balance_minimum";
 
@@ -67,7 +81,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
     public const string TokenTrx = "TRX";
     private const int StablecoinDecimals = 6;
     // SUN → TRX: the network policy's gas-asset scale (T148), not a literal.
-    private static readonly int TrxDecimals = BlockchainNetworkPolicy.For(MonitoredNetwork).NativeAssetDecimals;
+    private static readonly int TrxDecimals = BlockchainNetworkPolicy.For(BlockchainNetwork.TRON).NativeAssetDecimals;
     private static readonly decimal StablecoinScale = (decimal)Math.Pow(10, StablecoinDecimals);
     private static readonly decimal TrxScale = (decimal)Math.Pow(10, TrxDecimals);
 
@@ -103,83 +117,115 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
         _logger = logger;
     }
 
+    /// <summary>Whether <paramref name="network"/>'s gas floor is checked by this monitor (TRON only — see remarks).</summary>
+    public static bool ChecksGasFloor(BlockchainNetwork network) => network == BlockchainNetwork.TRON;
+
     public async Task<HotWalletMonitorOutcome> RunAsync(CancellationToken cancellationToken)
     {
         var settings = await ReadSettingsAsync(cancellationToken);
-        if (settings.HotWalletAddress is null)
+        var outcomes = new List<HotWalletMonitorOutcome>();
+        foreach (var network in _services.ConfiguredNetworks)
+        {
+            outcomes.Add(await RunForNetworkAsync(network, settings, cancellationToken));
+        }
+
+        return outcomes.Count switch
+        {
+            0 => new HotWalletMonitorOutcome(false, 0, null),
+            1 => outcomes[0],
+            _ => new HotWalletMonitorOutcome(
+                outcomes.Any(o => o.HotWalletChecked),
+                outcomes.Sum(o => o.BreachCount),
+                null),
+        };
+    }
+
+    private async Task<HotWalletMonitorOutcome> RunForNetworkAsync(
+        BlockchainNetwork network,
+        HotWalletMonitorSettings settings,
+        CancellationToken cancellationToken)
+    {
+        // T170 — the attempt is reported before anything can fail, so a pass
+        // that never succeeds still ages into hot-wallet-monitor-stale.
+        _thresholds.ReportAttempt(network);
+
+        var hotWalletAddress = _walletAddresses.For(network).HotWalletAddress;
+        if (string.IsNullOrWhiteSpace(hotWalletAddress))
         {
             _logger.LogWarning(
-                "HotWalletMonitor skipping run: {Key} is unconfigured.",
-                EnvPlatformWalletAddressProvider.HotWalletConfigurationKey);
+                "HotWalletMonitor skipping {Network}: its hot wallet address ({Key}) is unconfigured.",
+                network, HotWalletKeyFor(network));
             return new HotWalletMonitorOutcome(false, 0, null);
         }
 
-        var snapshot = await _services.Sidecar(MonitoredNetwork).GetWalletBalancesAsync(
-            new[] { settings.HotWalletAddress }, cancellationToken);
+        var snapshot = await _services.Sidecar(network).GetWalletBalancesAsync(
+            new[] { hotWalletAddress }, cancellationToken);
         if (snapshot.Status != BlockchainSidecarStatus.Success || snapshot.Balances is null)
         {
             _logger.LogWarning(
-                "HotWalletMonitor aborted: sidecar returned {Status}.", snapshot.Status);
+                "HotWalletMonitor {Network} aborted: its service returned {Status}.", network, snapshot.Status);
             return new HotWalletMonitorOutcome(false, 0, snapshot.BlockNumber);
         }
 
         var balances = snapshot.Balances
             // Canonical comparison (06 §1.4, T145) — case-insensitive for an
             // EVM address, exact for TRON base58.
-            .FirstOrDefault(b => BlockchainAddress.AreEqual(b.Address, settings.HotWalletAddress));
+            .FirstOrDefault(b => BlockchainAddress.AreEqual(b.Address, hotWalletAddress));
         if (balances is null)
         {
             _logger.LogWarning(
-                "HotWalletMonitor snapshot missing address {Address}.",
-                settings.HotWalletAddress);
+                "HotWalletMonitor {Network} snapshot missing address {Address}.",
+                network, hotWalletAddress);
             return new HotWalletMonitorOutcome(false, 0, snapshot.BlockNumber);
         }
 
         var detectedAt = _clock.GetUtcNow().UtcDateTime;
         var breaches = 0;
 
-        var stablecoinLimitSet = settings.HotWalletLimit is > 0m;
+        // T165 — every threshold reported on every successful run (0 when
+        // within, or when no limit is set), so the alarm also resolves.
+        // T170 — with the balance and the threshold beside it, for the
+        // per-network panels.
+        var stablecoinLimit = settings.HotWalletLimit is > 0m ? settings.HotWalletLimit : null;
         foreach (var token in StablecoinTokens)
         {
-            // T165 — every threshold reported on every successful run (0 when
-            // within, or when no limit is set), so the alarm also resolves.
-            var over = stablecoinLimitSet && ReadStablecoinAmount(balances.Tokens, token) > settings.HotWalletLimit!.Value;
-            _thresholds.Report(MonitoredNetwork, token.ToString(), DirectionUpper, over);
-        }
+            var actual = ReadStablecoinAmount(balances.Tokens, token);
+            var over = stablecoinLimit is { } limit && actual > limit;
+            _thresholds.Report(network, token.ToString(), DirectionUpper, over);
+            _thresholds.ReportBalance(network, token.ToString(), actual);
+            _thresholds.ReportThreshold(network, token.ToString(), DirectionUpper, stablecoinLimit);
 
-        var trxFloorSet = settings.TrxMinimum is > 0m;
-        _thresholds.Report(MonitoredNetwork, TokenTrx, DirectionLower,
-            trxFloorSet && ReadTrxAmount(balances.Tokens) < settings.TrxMinimum!.Value);
-
-        if (settings.HotWalletLimit is { } stablecoinLimit && stablecoinLimit > 0m)
-        {
-            foreach (var token in StablecoinTokens)
+            if (over)
             {
-                var actual = ReadStablecoinAmount(balances.Tokens, token);
-                if (actual > stablecoinLimit)
-                {
-                    await RecordBreachAsync(
-                        tokenLabel: token.ToString(),
-                        direction: DirectionUpper,
-                        threshold: stablecoinLimit,
-                        actual: actual,
-                        blockNumber: snapshot.BlockNumber,
-                        detectedAt: detectedAt,
-                        cancellationToken: cancellationToken);
-                    breaches++;
-                }
+                await RecordBreachAsync(
+                    network: network,
+                    tokenLabel: token.ToString(),
+                    direction: DirectionUpper,
+                    threshold: stablecoinLimit!.Value,
+                    actual: actual,
+                    blockNumber: snapshot.BlockNumber,
+                    detectedAt: detectedAt,
+                    cancellationToken: cancellationToken);
+                breaches++;
             }
         }
 
-        if (settings.TrxMinimum is { } trxMinimum && trxMinimum > 0m)
+        if (ChecksGasFloor(network))
         {
+            var trxMinimum = settings.TrxMinimum is > 0m ? settings.TrxMinimum : null;
             var trxActual = ReadTrxAmount(balances.Tokens);
-            if (trxActual < trxMinimum)
+            var below = trxMinimum is { } floor && trxActual < floor;
+            _thresholds.Report(network, TokenTrx, DirectionLower, below);
+            _thresholds.ReportBalance(network, TokenTrx, trxActual);
+            _thresholds.ReportThreshold(network, TokenTrx, DirectionLower, trxMinimum);
+
+            if (below)
             {
                 await RecordBreachAsync(
+                    network: network,
                     tokenLabel: TokenTrx,
                     direction: DirectionLower,
-                    threshold: trxMinimum,
+                    threshold: trxMinimum!.Value,
                     actual: trxActual,
                     blockNumber: snapshot.BlockNumber,
                     detectedAt: detectedAt,
@@ -188,23 +234,30 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
             }
         }
 
+        _thresholds.ReportChecked(network);
+
         if (breaches == 0)
         {
             _logger.LogInformation(
-                "HotWalletMonitor run complete: hot wallet within configured thresholds (block {Block}).",
-                snapshot.BlockNumber);
+                "HotWalletMonitor {Network} run complete: hot wallet within configured thresholds (block {Block}).",
+                network, snapshot.BlockNumber);
         }
         else
         {
             _logger.LogWarning(
-                "HotWalletMonitor run complete with {BreachCount} threshold breach(es) (block {Block}).",
-                breaches, snapshot.BlockNumber);
+                "HotWalletMonitor {Network} run complete with {BreachCount} threshold breach(es) (block {Block}).",
+                network, breaches, snapshot.BlockNumber);
         }
 
         return new HotWalletMonitorOutcome(true, breaches, snapshot.BlockNumber);
     }
 
+    private static string HotWalletKeyFor(BlockchainNetwork network) => network == BlockchainNetwork.TRON
+        ? EnvPlatformWalletAddressProvider.HotWalletConfigurationKey
+        : EnvPlatformWalletAddressProvider.EthereumHotWalletConfigurationKey;
+
     private async Task RecordBreachAsync(
+        BlockchainNetwork network,
         string tokenLabel,
         string direction,
         decimal threshold,
@@ -215,6 +268,8 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
     {
         var payload = JsonSerializer.Serialize(new
         {
+            // T170 — the network the hot wallet belongs to (both are watched).
+            network = network.ToString(),
             token = tokenLabel,
             direction,
             threshold = threshold.ToString(CultureInfo.InvariantCulture),
@@ -237,8 +292,8 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
         await _db.SaveChangesAsync(cancellationToken);
 
         _logger.LogWarning(
-            "HotWalletMonitor breach token={Token} direction={Direction} threshold={Threshold} actual={Actual} block={Block}.",
-            tokenLabel, direction, threshold, actual, blockNumber);
+            "HotWalletMonitor breach network={Network} token={Token} direction={Direction} threshold={Threshold} actual={Actual} block={Block}.",
+            network, tokenLabel, direction, threshold, actual, blockNumber);
 
         await _realtime.PublishAdminHotWalletThresholdBreachedAsync(
             new NotificationRealtimePayloads.AdminHotWalletThresholdBreached(
@@ -247,7 +302,8 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
                 Threshold: threshold,
                 Actual: actual,
                 BlockNumber: blockNumber,
-                DetectedAt: detectedAt),
+                DetectedAt: detectedAt,
+                Network: network.ToString()),
             cancellationToken);
     }
 
@@ -261,9 +317,8 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
             .Select(s => new { s.Key, s.Value, s.IsConfigured })
             .ToListAsync(cancellationToken);
 
-        // The address is configuration, the two thresholds stay admin-tunable
-        // (05 §3.3, owner decision 2026-09-16).
-        var hotWalletAddress = _walletAddresses.For(MonitoredNetwork).HotWalletAddress;
+        // The addresses are configuration (per network, read in the pass), the
+        // two thresholds stay admin-tunable (05 §3.3, owner decision 2026-09-16).
         decimal? hotWalletLimit = null;
         decimal? trxMinimum = null;
         foreach (var row in rows)
@@ -283,7 +338,7 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
                 trxMinimum = trx;
             }
         }
-        return new HotWalletMonitorSettings(hotWalletAddress, hotWalletLimit, trxMinimum);
+        return new HotWalletMonitorSettings(hotWalletLimit, trxMinimum);
     }
 
     private static decimal ReadStablecoinAmount(
@@ -317,7 +372,6 @@ public sealed class HotWalletMonitorService : IHotWalletMonitorService
     }
 
     private sealed record HotWalletMonitorSettings(
-        string? HotWalletAddress,
         decimal? HotWalletLimit,
         decimal? TrxMinimum);
 }

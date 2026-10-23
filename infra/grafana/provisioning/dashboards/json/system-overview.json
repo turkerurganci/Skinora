@@ -1,36 +1,12 @@
 {
-  "__inputs": [],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "9.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    }
-  ],
   "annotations": {
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -39,7 +15,7 @@
       }
     ]
   },
-  "description": "Skinora platform system overview — CPU, memory, uptime, and network across all services",
+  "description": "Süreç CPU / bellek / çalışma süresi, kazınan hedefler, veritabanı boyutu. T170: iş adları (job) ve metrik adları gerçek olanlara çekildi; cAdvisor kurulu olmadığı için konteyner ağ paneli kaldırıldı.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -48,425 +24,415 @@
   "liveNow": false,
   "panels": [
     {
-      "datasource": "Prometheus",
-      "description": "CPU usage rate per service (process_cpu_seconds_total, 2m rate)",
+      "type": "timeseries",
+      "title": "CPU (servis başına)",
+      "description": "Süreç CPU saniyesi / sn.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "percentunit",
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "CPU cores",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
             "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
+            "fillOpacity": 10,
             "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "spanNulls": true
           },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 0.9 }
-            ]
-          },
-          "unit": "short"
+          "min": 0
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "id": 1,
       "options": {
         "legend": {
-          "calcs": ["mean", "max", "lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom"
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "desc"
+          "sort": "none"
         }
       },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "rate(process_cpu_seconds_total{job=\"skinora-backend\"}[2m])",
-          "interval": "",
-          "legendFormat": "Backend (.NET)",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": "backend"
         },
         {
-          "datasource": "Prometheus",
-          "expr": "rate(process_cpu_seconds_total{job=\"skinora-steam\"}[2m])",
-          "interval": "",
-          "legendFormat": "Steam Sidecar",
-          "refId": "B"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(skinora_steam_process_cpu_seconds_total[2m])",
+          "refId": "B",
+          "legendFormat": "steam"
         },
         {
-          "datasource": "Prometheus",
-          "expr": "rate(process_cpu_seconds_total{job=\"skinora-blockchain\"}[2m])",
-          "interval": "",
-          "legendFormat": "Blockchain Sidecar",
-          "refId": "C"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(skinora_blockchain_process_cpu_seconds_total[2m])",
+          "refId": "C",
+          "legendFormat": "tron"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(skinora_ethereum_process_cpu_seconds_total[2m])",
+          "refId": "D",
+          "legendFormat": "ethereum"
         }
       ],
-      "title": "CPU Usage per Service",
-      "type": "timeseries"
+      "id": 1,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
     },
     {
-      "datasource": "Prometheus",
-      "description": "Resident memory usage per service (process_resident_memory_bytes)",
+      "type": "timeseries",
+      "title": "Bellek (servis başına)",
+      "description": "Backend: working set; Node servisleri: resident memory.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "bytes",
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "Memory",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
             "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
+            "fillOpacity": 10,
             "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "spanNulls": true
           },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 268435456 },
-              { "color": "red", "value": 536870912 }
-            ]
-          },
-          "unit": "bytes"
+          "min": 0
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "id": 2,
       "options": {
         "legend": {
-          "calcs": ["mean", "max", "lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom"
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "desc"
+          "sort": "none"
         }
       },
       "targets": [
         {
-          "datasource": "Prometheus",
-          "expr": "process_resident_memory_bytes{job=\"skinora-backend\"}",
-          "interval": "",
-          "legendFormat": "Backend (.NET)",
-          "refId": "A"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "process_working_set_bytes{job=\"skinora-backend\"}",
+          "refId": "A",
+          "legendFormat": "backend"
         },
         {
-          "datasource": "Prometheus",
-          "expr": "process_resident_memory_bytes{job=\"skinora-steam\"}",
-          "interval": "",
-          "legendFormat": "Steam Sidecar",
-          "refId": "B"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "skinora_steam_process_resident_memory_bytes",
+          "refId": "B",
+          "legendFormat": "steam"
         },
         {
-          "datasource": "Prometheus",
-          "expr": "process_resident_memory_bytes{job=\"skinora-blockchain\"}",
-          "interval": "",
-          "legendFormat": "Blockchain Sidecar",
-          "refId": "C"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "skinora_blockchain_process_resident_memory_bytes",
+          "refId": "C",
+          "legendFormat": "tron"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "skinora_ethereum_process_resident_memory_bytes",
+          "refId": "D",
+          "legendFormat": "ethereum"
         }
       ],
-      "title": "Memory Usage per Service",
-      "type": "timeseries"
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
     },
     {
-      "datasource": "Prometheus",
-      "description": "How long each service process has been running (process_start_time_seconds)",
+      "type": "stat",
+      "title": "Çalışma süresi (son başlatmadan beri)",
+      "description": "Süreç yeniden başlatıldıysa sıfırlanır.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "s",
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 60 },
-              { "color": "green", "value": 300 }
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           },
-          "unit": "s"
+          "mappings": []
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 },
-      "id": 3,
       "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "orientation": "horizontal",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
         "textMode": "auto"
       },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "time() - process_start_time_seconds{job=\"skinora-backend\"}",
-          "interval": "",
-          "legendFormat": "Backend (.NET)",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": "backend"
         },
         {
-          "datasource": "Prometheus",
-          "expr": "time() - process_start_time_seconds{job=\"skinora-steam\"}",
-          "interval": "",
-          "legendFormat": "Steam Sidecar",
-          "refId": "B"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "time() - skinora_steam_process_start_time_seconds",
+          "refId": "B",
+          "legendFormat": "steam"
         },
         {
-          "datasource": "Prometheus",
-          "expr": "time() - process_start_time_seconds{job=\"skinora-blockchain\"}",
-          "interval": "",
-          "legendFormat": "Blockchain Sidecar",
-          "refId": "C"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "time() - skinora_blockchain_process_start_time_seconds",
+          "refId": "C",
+          "legendFormat": "tron"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "time() - skinora_ethereum_process_start_time_seconds",
+          "refId": "D",
+          "legendFormat": "ethereum"
         }
       ],
-      "title": "Service Uptime",
-      "type": "stat"
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
     },
     {
-      "datasource": "Prometheus",
-      "description": "Network bytes received per service (rate over 2m). Available when container/process network metrics are exposed.",
+      "type": "stat",
+      "title": "Kazınan hedefler",
+      "description": "Prometheus hedefleri (up).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "short",
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "axisLabel": "Bytes/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
             ]
           },
-          "unit": "Bps"
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                },
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                }
+              }
+            }
+          ]
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 8 },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "up",
+          "refId": "A",
+          "legendFormat": "{{job}}"
+        }
+      ],
       "id": 4,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "rate(container_network_receive_bytes_total{name=~\"skinora.*\"}[2m])",
-          "interval": "",
-          "legendFormat": "RX — {{name}}",
-          "refId": "A"
-        },
-        {
-          "datasource": "Prometheus",
-          "expr": "rate(container_network_transmit_bytes_total{name=~\"skinora.*\"}[2m])",
-          "interval": "",
-          "legendFormat": "TX — {{name}}",
-          "refId": "B"
-        }
-      ],
-      "title": "Network I/O (container_network_*)",
-      "type": "timeseries"
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
     },
     {
-      "datasource": "Prometheus",
-      "description": "Number of active HTTP requests currently being processed (ASP.NET Core: http_requests_in_progress, Node.js sidecars: custom gauge if exposed)",
+      "type": "timeseries",
+      "title": "Veritabanı veri dosyası ve Express sınırı",
+      "description": "db-data-size-warning (%70) / critical (%85).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "bytes",
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "Requests",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
             "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
+            "fillOpacity": 10,
             "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
+            "spanNulls": true
           },
-          "mappings": [],
-          "min": 0,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null }
-            ]
-          },
-          "unit": "short"
+          "min": 0
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
-      "id": 5,
       "options": {
         "legend": {
-          "calcs": ["mean", "max", "lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom"
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
-          "sort": "desc"
+          "sort": "none"
         }
       },
       "targets": [
         {
-          "datasource": "Prometheus",
-          "expr": "http_requests_in_progress{job=\"skinora-backend\"}",
-          "interval": "",
-          "legendFormat": "Backend — in-progress",
-          "refId": "A"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(skinora_backend_db_data_used_bytes)",
+          "refId": "A",
+          "legendFormat": "kullanılan"
         },
         {
-          "datasource": "Prometheus",
-          "expr": "skinora_steam_http_requests_in_progress",
-          "interval": "",
-          "legendFormat": "Steam — in-progress",
-          "refId": "B"
-        },
-        {
-          "datasource": "Prometheus",
-          "expr": "skinora_blockchain_http_requests_in_progress",
-          "interval": "",
-          "legendFormat": "Blockchain — in-progress",
-          "refId": "C"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(skinora_backend_db_data_limit_bytes)",
+          "refId": "B",
+          "legendFormat": "sınır"
         }
       ],
-      "title": "Active HTTP Requests",
-      "type": "timeseries"
+      "id": 5,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      }
     }
   ],
-  "refresh": "30s",
-  "schemaVersion": 36,
-  "style": "dark",
-  "tags": ["skinora", "system"],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "skinora",
+    "system"
+  ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Skinora \u2014 System Overview",
+  "title": "Skinora — System Overview",
   "uid": "skinora-system",
   "version": 1,
   "weekStart": ""

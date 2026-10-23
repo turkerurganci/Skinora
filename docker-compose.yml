@@ -342,6 +342,9 @@ services:
       # compares the measured TronGrid request rate with the plan's daily budget.
       - PAYMENT_HOLDING_POLLING_INTERVAL_MS=${PAYMENT_HOLDING_POLLING_INTERVAL_MS:-900000}
       - TRONGRID_DAILY_REQUEST_BUDGET=${TRONGRID_DAILY_REQUEST_BUDGET:-100000}
+      # T170 — chain progress (tron-solid-block-stalled, DEPLOY_RUNBOOK §P.7).
+      - TRON_SOLID_BLOCK_POLL_INTERVAL_MS=${TRON_SOLID_BLOCK_POLL_INTERVAL_MS:-60000}
+      - TRON_SOLID_BLOCK_STALL_SECONDS=${TRON_SOLID_BLOCK_STALL_SECONDS:-300}
       - MIN_CONFIRMATIONS=${MIN_CONFIRMATIONS:-20}
       # Sidecar-authoritative cadence/sweep knobs (DEPLOY_RUNBOOK §D). The
       # backend SystemSetting copies are for admin visibility only and do NOT

@@ -120,6 +120,69 @@ export function publishTronGridDailyRequestBudget(budget: number): number {
   return budget;
 }
 
+// ---- T170 — is the TRON chain progressing? ---------------------------------
+
+/** Number of the last solid (irreversible) TRON block the service read. */
+export const solidBlockNumber = getOrCreateGauge({
+  name: 'skinora_blockchain_tron_solid_block_number',
+  help: 'Number of the last solid TRON block read',
+});
+
+// Held on globalThis (not a module variable): under vitest's shared process a
+// later import of this file gets the gauge created by the first one, whose
+// collect() would otherwise read the first module instance's variable — the
+// same arrangement as the Ethereum service's finalized-age gauge.
+const SOLID_AGE_SOURCE = Symbol.for('skinora_blockchain_solid_age_source');
+type SolidAgeHolder = { [SOLID_AGE_SOURCE]?: () => number | null };
+
+/**
+ * Seconds since the last solid TRON block was produced — computed at scrape
+ * time from the block's own timestamp, so a service that can no longer read
+ * the head (TronGrid down, key refused) shows a growing age rather than a
+ * frozen one. Normal: ~60 s (19 blocks × 3 s behind the head). Alert
+ * `tron-solid-block-stalled` divides it by
+ * {@link solidBlockStallThresholdSeconds}.
+ */
+export const solidBlockAgeSeconds = getOrCreateGauge({
+  name: 'skinora_blockchain_tron_solid_block_age_seconds',
+  help: 'Seconds since the timestamp of the last solid TRON block read',
+  collect() {
+    const age = (globalThis as unknown as SolidAgeHolder)[SOLID_AGE_SOURCE]?.();
+    if (age !== null && age !== undefined) this.set(age);
+  },
+});
+
+/** Where the age gauge reads from at scrape time (the SolidBlockTracker). */
+export function setSolidBlockAgeSource(source: () => number | null): void {
+  (globalThis as unknown as SolidAgeHolder)[SOLID_AGE_SOURCE] = source;
+}
+
+/** TRON_SOLID_BLOCK_STALL_SECONDS, published so the alert divides by the service's own number. */
+export const solidBlockStallThresholdSeconds = getOrCreateGauge({
+  name: 'skinora_blockchain_tron_solid_block_stall_threshold_seconds',
+  help: 'Solid-block age above which the TRON chain counts as not progressing',
+});
+
+/** Reads of the solid head that failed (the last value is kept; the age grows). */
+export const solidBlockReadFailuresTotal = getOrCreateCounter({
+  name: 'skinora_blockchain_tron_solid_block_read_failures_total',
+  help: 'Reads of the current solid TRON block that failed',
+});
+
+/**
+ * T170 (DEFERRED_BACKLOG admin-alert-consumers) — an Energy delegation the
+ * signer could not take back after the deposit transfer ("stranded
+ * delegation"): the stake stays lent to a deposit address until an admin
+ * undelegates it by hand. Label-free, so the series exists at 0 from start-up
+ * and its first increment is visible to `increase()`. Alert
+ * `tron-energy-delegation-stranded`. Never moves while the hybrid stake is
+ * dormant (ENERGY_STAKING_ENABLED=false — the F8 default).
+ */
+export const energyDelegationStrandedTotal = getOrCreateCounter({
+  name: 'skinora_blockchain_energy_delegation_stranded_total',
+  help: 'Energy delegations the TRON service could not undelegate (stranded — admin action needed)',
+});
+
 export const transfersTotal = getOrCreateCounter({
   name: 'skinora_blockchain_transfers_total',
   help: 'Total blockchain transfers',

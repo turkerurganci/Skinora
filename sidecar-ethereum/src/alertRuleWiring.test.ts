@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { EthereumRpcClient } from './rpc/RpcClient.js';
 import {
   depositRefundLimitRefusalsTotal,
   monitorScanFailuresTotal,
@@ -41,6 +42,131 @@ function ruleBlock(uid: string): string {
   const next = text.indexOf('\n      - uid: ', start + 1);
   return text.slice(start, next < 0 ? undefined : next);
 }
+
+describe('T170 ethereum-rpc-provider-failing — wired to the RPC histogram the service exports', () => {
+  const block = ruleBlock('ethereum-rpc-provider-failing');
+
+  it('divides transport / chain-mismatch failures by all calls, per provider', async () => {
+    const name = (await rpcRequestDuration.get()).name;
+    expect(block).toContain(
+      `sum by (provider) (rate(${name}_count{outcome=~"transport|chain_mismatch"}[10m])) / sum by (provider) (rate(${name}_count[10m]))`,
+    );
+    // `rpc` (an answer about the request) and `limit` (split and retried) are not provider failures.
+    expect(block).not.toMatch(/outcome=~"[^"]*\b(rpc|limit)\b/);
+  });
+
+  /**
+   * The rule's own outcome filter, applied to what the real client records —
+   * nothing here writes a sample itself (T170 S4-1: a provider on another
+   * chain used to leave only its `eth_chainId` "ok" sample, so the ratio read
+   * 0/0 and the alarm never formed).
+   */
+  function ruleOutcomes(): RegExp {
+    const m = /outcome=~"([^"]+)"/.exec(block);
+    if (!m) throw new Error('rule has no outcome filter');
+    return new RegExp(`^(?:${m[1]})$`);
+  }
+
+  async function providerRatio(provider: string): Promise<number> {
+    const filter = ruleOutcomes();
+    const counts = (await rpcRequestDuration.get()).values.filter(
+      (v) =>
+        v.metricName === 'skinora_ethereum_rpc_request_duration_seconds_count' &&
+        v.labels.provider === provider,
+    );
+    const total = counts.reduce((s, v) => s + v.value, 0);
+    const failed = counts
+      .filter((v) => filter.test(String(v.labels.outcome)))
+      .reduce((s, v) => s + v.value, 0);
+    return total === 0 ? Number.NaN : failed / total;
+  }
+
+  function providerClient(
+    name: string,
+    answer: (method: string, id: number) => Response | Error,
+    now: () => number,
+  ): EthereumRpcClient {
+    const healthy = `${name}-healthy`;
+    const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { id: number; method: string };
+      const reply = (result: unknown) =>
+        new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result }), { status: 200 });
+      if (String(input).startsWith('https://healthy')) {
+        return reply(
+          body.method === 'eth_chainId'
+            ? '0xaa36a7'
+            : { number: '0x10', hash: '0xabc', timestamp: '0x65000000' },
+        );
+      }
+      const out = answer(body.method, body.id);
+      if (out instanceof Error) throw out;
+      return out;
+    }) as typeof fetch;
+    return new EthereumRpcClient({
+      providers: [
+        { name, url: 'https://broken.example/x', maxBlockRange: 10, maxAddressesPerQuery: 1000 },
+        {
+          name: healthy,
+          url: 'https://healthy.example/x',
+          maxBlockRange: 10,
+          maxAddressesPerQuery: 1000,
+        },
+      ],
+      chainId: 11155111,
+      timeoutMs: 1000,
+      failoverCooldownMs: 30_000,
+      fetchFn,
+      now,
+    });
+  }
+
+  it('a provider on another chain reads above the threshold through the real client', async () => {
+    let now = 1_000_000;
+    const rpc = providerClient(
+      't170-wrong-chain',
+      (method, id) =>
+        new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id,
+            result: method === 'eth_chainId' ? '0x1' : { number: '0x10' },
+          }),
+          { status: 200 },
+        ),
+      () => now,
+    );
+    // One call per expired cooldown for ten minutes — what the rule's window sees.
+    for (let i = 0; i < 20; i++) {
+      expect((await rpc.getBlockHeader('finalized')).provider).toBe('t170-wrong-chain-healthy');
+      now += 30_001;
+    }
+    expect(await providerRatio('t170-wrong-chain')).toBeGreaterThan(0.5);
+  });
+
+  it('a dead provider reads above the threshold through the real client', async () => {
+    let now = 2_000_000;
+    const rpc = providerClient(
+      't170-dead',
+      () => Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }),
+      () => now,
+    );
+    for (let i = 0; i < 5; i++) {
+      await rpc.getBlockHeader('finalized');
+      now += 30_001;
+    }
+    expect(await providerRatio('t170-dead')).toBeGreaterThan(0.5);
+  });
+
+  it('a healthy provider reads 0', async () => {
+    expect(await providerRatio('t170-dead-healthy')).toBe(0);
+  });
+
+  it('warns above half, held 10 minutes, as a money alarm', () => {
+    expect(block).toMatch(/type: gt\s+params: \[0\.5\]/);
+    expect(block).toMatch(/^ {8}for: 10m$/m);
+    expect(block).toMatch(/severity: warning\n\s+category: money/);
+  });
+});
 
 describe('ethereum-finalized-stalled — wired to the series the service exports', () => {
   const block = ruleBlock('ethereum-finalized-stalled');

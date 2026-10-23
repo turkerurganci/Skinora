@@ -69,8 +69,9 @@ groups:
             skinora_backend_outbound_awaiting_approval_oldest_seconds shows how long the
             oldest row has waited (DEPLOY_RUNBOOK §M).
 
-      # T77 monitor (TRON hot wallet; Ethereum: T170): before T165 a breach was
-      # an AuditLog row + a SignalR banner for whoever had the panel open.
+      # T77 monitor — T170: every network's hot wallet (TRON and Ethereum, label
+      # network). Before T165 a breach was an AuditLog row + a SignalR banner
+      # for whoever had the panel open.
       - uid: hot-wallet-threshold-breached
         title: Hot Wallet Beyond Its Threshold
         condition: C
@@ -112,10 +113,10 @@ groups:
             (T169: 4000 per network) — move the excess to cold storage (admin wallets
             screen, AD39; DEPLOY_RUNBOOK §A #18). direction=lower: the gas asset (TRX) is
             under hot_wallet.trx_balance_minimum — payouts and refunds will stall; top it
-            up. The alert resolves on the first monitor run within the threshold.
-            Ethereum's hot wallet USDT limit is not watched yet (DEFERRED_BACKLOG
-            EthereumHotWalletUsdtLimitUnmonitored, T170); its ETH floor is
-            ethereum-wallet-eth-low.
+            up (TRON only — Ethereum's ETH floor is ethereum-wallet-eth-low). The
+            alert resolves on the first monitor run within the threshold. Balance
+            and threshold per network: skinora_backend_hot_wallet_balance and
+            skinora_backend_hot_wallet_threshold (Networks dashboard).
 
       # T165 düzeltme turu — daily ledger reconciliation (05 §3.3 "admin'e
       # critical alert"): before this a ledger / chain mismatch was an AuditLog
@@ -2101,3 +2102,274 @@ groups:
             'false' sends; any other value, or a missing row (apply the
             migrations), pauses. The backend logs "Outgoing transfers are paused"
             every minute while it lasts.
+
+  # ===========================================================================
+  # T170 — per-network monitoring ("ağ başına alarmlar": the chain is not
+  # progressing, the provider fails, the hot wallet / fuel is off its limits).
+  # Its own group at the end so it does not touch the lines other branches
+  # append to above. Every rule here is a money alarm (category: money —
+  # Telegram + e-mail, DEPLOY_RUNBOOK §P.4). Coverage per network, with the
+  # rules that already existed, is in DEPLOY_RUNBOOK §P.7.
+  # ===========================================================================
+  - orgId: 1
+    name: Skinora Network Alerts
+    folder: Skinora Alerts
+    interval: 1m
+    rules:
+      # The backend's health probe (every minute) found a network's blockchain
+      # service unhealthy HealthProbe:FailureThreshold times in a row (3 = about
+      # 3 min): that network's payment timeouts are frozen and it is closed to
+      # new transactions (05 §3.3a). Before T170 this reached only the admin
+      # panel (PLATFORM_OUTAGE_DETECTED). Covers a service that is down, a
+      # TronGrid / Ethereum RPC that does not answer, and Ethereum finality that
+      # stopped (its /health is unhealthy then). A network without a configured
+      # service is not probed and has no series.
+      - uid: blockchain-service-degraded
+        title: Blockchain Service Degraded On A Network
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: max by (network) (skinora_backend_blockchain_service_degraded) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: critical
+          category: money
+        annotations:
+          summary: 'The {{ .Labels.network }} blockchain service is unhealthy — the network is closed to new transactions'
+          description: >-
+            The backend's health probe has found this network's blockchain service
+            unhealthy several times in a row (HealthProbe:FailureThreshold, 3 by
+            default, one probe a minute). Its active transactions' payment timeouts
+            are frozen and the network is not offered for new transactions; the
+            other network keeps running. Check the service's /health (its checks
+            name the cause: TronGrid / RPC provider unreachable, Ethereum finality
+            stalled), then skinora_backend_platform_component_up and the Networks
+            dashboard. The alert resolves when the probe sees it healthy again.
+
+      # TRON chain progress: the solid (irreversible) head the TRON service reads
+      # every minute stopped advancing, or the service cannot read it at all.
+      # The threshold is the service's own (TRON_SOLID_BLOCK_STALL_SECONDS, 300 s;
+      # normal age ~60 s = 19 blocks x 3 s). Before the first read the age counts
+      # from the service's start, so a service that never reaches the chain fires
+      # too. `or vector(0)`: no TRON service scraped, no series.
+      - uid: tron-solid-block-stalled
+        title: TRON Solid Block Not Progressing
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (max(skinora_blockchain_tron_solid_block_age_seconds) / max(skinora_blockchain_tron_solid_block_stall_threshold_seconds)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 2m
+        labels:
+          severity: critical
+          category: money
+        annotations:
+          summary: The TRON solid block is older than its stall threshold
+          description: >-
+            The last solid TRON block the TRON service read is older than
+            TRON_SOLID_BLOCK_STALL_SECONDS (300 s by default; normal is about 60 s).
+            Payments are confirmed against the solid head, so no TRON payment is
+            confirmed while it lasts. Either TronGrid does not answer (see
+            skinora_blockchain_tron_api_errors_total by error_type — network, http_429,
+            http_5xx — and skinora_blockchain_tron_solid_block_read_failures_total) or
+            the chain itself stalled (check tronscan.org). Ethereum is unaffected.
+
+      # Ethereum provider failing: one RPC provider answers most calls with a
+      # transport failure (connection, timeout, HTTP 429/5xx, -32005, wrong chain).
+      # The service fails over to the other provider, so payments keep flowing —
+      # but on one provider, and the next outage is total. JSON-RPC answers about
+      # the request (`rpc`, e.g. a revert) and plan-size refusals (`limit`, the
+      # log query is split) are not failures of the provider and are left out.
+      # 0.5 over 10 min, held 10 min (öneriyle kaydedildi — ⚠): a provider in
+      # cooldown is asked once per cooldown and fails every time (ratio ~1); a
+      # healthy one with an occasional 429 stays far below.
+      - uid: ethereum-rpc-provider-failing
+        title: Ethereum RPC Provider Failing
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (sum by (provider) (rate(skinora_ethereum_rpc_request_duration_seconds_count{outcome=~"transport|chain_mismatch"}[10m])) / sum by (provider) (rate(skinora_ethereum_rpc_request_duration_seconds_count[10m]))) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.5]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 10m
+        labels:
+          severity: warning
+          category: money
+        annotations:
+          summary: 'Ethereum RPC provider {{ .Labels.provider }} fails most of its calls'
+          description: >-
+            More than half of the calls to this Ethereum RPC provider failed at the
+            transport level over the last 10 minutes (timeouts, HTTP 429/5xx, rate
+            limit, wrong chain id). The Ethereum service fails over to the other
+            provider, so payments continue on one provider only. Check the
+            provider's status page and the plan's quota (Alchemy compute units /
+            Chainstack requests, DEPLOY_RUNBOOK §O row 12); if both fail,
+            ethereum-finalized-stalled and blockchain-service-degraded follow.
+
+      # The hot wallet monitor (every 15 min, hot_wallet.monitor_cron) has not
+      # read a network's hot wallet for two hours: its limit and floor alarms
+      # are blind (a monitor that stopped reading is a watchman that never
+      # fires). Seeded with the first attempt, so a pass that never succeeds
+      # (service down, address mismatch) ages into it too. 2 h = 8 missed runs
+      # at the default cron, 2 at an hourly one (öneriyle kaydedildi — ⚠).
+      - uid: hot-wallet-monitor-stale
+        title: Hot Wallet Not Checked On A Network
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (time() - max by (network) (skinora_backend_hot_wallet_last_check_timestamp_seconds)) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [7200]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: warning
+          category: money
+        annotations:
+          summary: 'The {{ .Labels.network }} hot wallet has not been checked for over two hours'
+          description: >-
+            The backend's hot wallet monitor has not read this network's hot wallet
+            balances for more than two hours, so hot-wallet-threshold-breached cannot
+            fire for it. Look at the backend log ("HotWalletMonitor <network> aborted /
+            skipping"): the network's service is down (see blockchain-service-degraded),
+            or the hot wallet address does not appear in its answer. Until it is fixed,
+            check the balance on the admin wallets screen (S22) by hand.
+
+      # TRON Energy delegation that could not be taken back after the deposit's
+      # transfer (DEFERRED_BACKLOG admin-alert-consumers — before T170 a log line
+      # only). The stake stays lent to the deposit until an admin undelegates it.
+      # Never fires while the hybrid stake is dormant (ENERGY_STAKING_ENABLED=false,
+      # the F8 default). Visible 6 h after the event; reminder every 4 h.
+      - uid: tron-energy-delegation-stranded
+        title: TRON Energy Delegation Stranded
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: sum(increase(skinora_blockchain_energy_delegation_stranded_total[6h])) or vector(0)
+              instant: true
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+              refId: C
+        for: 0s
+        labels:
+          severity: warning
+          category: money
+        annotations:
+          summary: A TRON Energy delegation could not be taken back (stranded)
+          description: >-
+            The TRON service delegated Energy from the stake account to a deposit for
+            a sweep or refund and could not undelegate it afterwards. The stake stays
+            lent to that deposit and is not available for the next transfer (they
+            burn TRX instead). Find the deposit in the TRON service log ("Energy
+            undelegate failed — stranded delegation") and undelegate it by hand from
+            the stake account (DEPLOY_RUNBOOK §C.2).

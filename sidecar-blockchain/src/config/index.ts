@@ -57,6 +57,19 @@ const TOKEN_CONTRACTS = {
  * here, which the delegation flow refuses at construction while a stake
  * account is configured (#325 validation).
  */
+/**
+ * T170 — a positive whole number from the environment, or the default. An
+ * unparsable or non-positive value falls back rather than publishing NaN (a
+ * NaN threshold makes the alert's division return nothing — a rule that never
+ * fires) or polling in a tight loop.
+ */
+export function positiveInt(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return raw !== undefined && raw.trim() !== '' && Number.isInteger(value) && value > 0
+    ? value
+    : fallback;
+}
+
 export function parseStakePermissionId(raw: string | undefined): number {
   const trimmed = (raw ?? '').trim();
   if (trimmed === '') return 2;
@@ -193,6 +206,14 @@ export const config = {
   tronGridMaxRetries: parseInt(process.env.TRONGRID_MAX_RETRIES || '3', 10),
   tronGridRetryBackoffBaseMs: parseInt(process.env.TRONGRID_RETRY_BACKOFF_BASE_MS || '250', 10),
   tronGridRetryBackoffCapMs: parseInt(process.env.TRONGRID_RETRY_BACKOFF_CAP_MS || '2000', 10),
+
+  // T170 — chain progress (SolidBlockTracker, alert tron-solid-block-stalled).
+  // One solid-head read per interval (60 s = 1,440 TronGrid requests a day).
+  // Stall threshold 300 s: the solid head normally trails the chain by ~60 s
+  // (19 blocks × 3 s); five times that is an outage, not a slow block
+  // (öneriyle kaydedildi — ⚠, DEPLOY_RUNBOOK §P.7).
+  tronSolidBlockPollIntervalMs: positiveInt(process.env.TRON_SOLID_BLOCK_POLL_INTERVAL_MS, 60000),
+  tronSolidBlockStallSeconds: positiveInt(process.env.TRON_SOLID_BLOCK_STALL_SECONDS, 300),
 
   // Outbound TRC-20 transfer fee cap (08 §3.3, WP10). Previously a hardcoded
   // 100 TRX magic number in TronTransferClient; now configurable so an

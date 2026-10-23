@@ -556,6 +556,14 @@ export class EthereumRpcClient {
         if (!(err instanceof RpcError)) throw err;
         // An answer about the request itself — the next provider would agree.
         if (err.kind === 'rpc') throw err;
+        // A provider on another chain is refused from the cached check without
+        // a request, so the request histogram would otherwise see it only once
+        // (its `eth_chainId`, outcome ok) and the provider-failing rule would
+        // read 0/0 for it. Every refused attempt is recorded as a failure of
+        // that provider (T170 S4-1).
+        if (err.kind === 'chain_mismatch') {
+          rpcRequestDuration.observe({ provider: ep.name, method, outcome: 'chain_mismatch' }, 0);
+        }
         failures.push(err);
         this.cooldownUntil.set(ep.name, this.now() + this.failoverCooldownMs);
         const next = ordered[i + 1];

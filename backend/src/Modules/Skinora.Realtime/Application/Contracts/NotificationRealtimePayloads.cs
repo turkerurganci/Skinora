@@ -80,7 +80,10 @@ public static class NotificationRealtimePayloads
     /// <c>hot_wallet.trx_balance_minimum</c> — admin should top up TRX
     /// reserves for gas. Best-effort like <c>AdminReconciliationMismatch</c>;
     /// the <c>HOT_WALLET_THRESHOLD_BREACHED</c> AuditLog row is the durable
-    /// record.
+    /// record. T170 — <c>Network</c> (<c>TRON</c> / <c>ETHEREUM</c>): both
+    /// networks' hot wallets are watched; the gas floor (<c>Lower</c>) is TRON's
+    /// only (Ethereum's ETH floor is the Ethereum service's own alarm). Added
+    /// last, so older clients that ignore it keep working.
     /// </summary>
     public sealed record AdminHotWalletThresholdBreached(
         string Token,
@@ -88,5 +91,6 @@ public static class NotificationRealtimePayloads
         decimal Threshold,
         decimal Actual,
         long? BlockNumber,
-        DateTime DetectedAt);
+        DateTime DetectedAt,
+        string Network);
 }

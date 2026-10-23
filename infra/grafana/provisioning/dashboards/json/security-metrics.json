@@ -1,48 +1,12 @@
 {
-  "__inputs": [],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "10.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "loki",
-      "name": "Loki",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "logs",
-      "name": "Logs",
-      "version": ""
-    }
-  ],
   "annotations": {
     "list": [
       {
         "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -51,247 +15,240 @@
       }
     ]
   },
-  "description": "Skinora security monitoring: authentication failures, rate limit hits, error log stream, and HTTP error rates by service.",
+  "description": "Kimlik doğrulama hataları, HTTP 4xx/5xx, hata logları.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
   "links": [],
+  "liveNow": false,
   "panels": [
     {
-      "collapsed": false,
-      "datasource": "Loki",
+      "type": "stat",
+      "title": "Kimlik doğrulama hataları",
+      "description": "Backend logunda \"authentication\" + \"failed\" geçen satırlar (seçili aralık).",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "short",
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           },
-          "unit": "short"
+          "mappings": []
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "id": 1,
       "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
         "reduceOptions": {
-          "calcs": ["lastNotNull"],
+          "calcs": [
+            "lastNotNull"
+          ],
           "fields": "",
           "values": false
         },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
         "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
-          "datasource": "Loki",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
           "expr": "sum(count_over_time({service=\"skinora-backend\"} |= \"authentication\" |= \"failed\" [$__range]))",
-          "legendFormat": "Auth Failures",
           "refId": "A"
         }
       ],
-      "title": "Authentication Failures",
-      "description": "Total authentication failure events from skinora-backend logs in selected time range.",
-      "type": "stat"
+      "id": 1,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      }
     },
     {
-      "datasource": "Prometheus",
+      "type": "timeseries",
+      "title": "HTTP 4xx / 5xx (backend)",
+      "description": "Backend durum kodu sınıfına göre.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
+          "unit": "reqps",
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "req/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
             "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
+            "fillOpacity": 10,
             "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": {
-              "mode": "line+area"
-            }
+            "spanNulls": true
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 10 },
-              { "color": "red", "value": 50 }
-            ]
-          },
-          "unit": "reqps"
+          "min": 0
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(http_requests_received_total{code=~\"4..\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "4xx"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(http_requests_received_total{code=~\"5..\"}[5m]))",
+          "refId": "B",
+          "legendFormat": "5xx"
+        }
+      ],
       "id": 2,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "targets": [
-        {
-          "datasource": "Prometheus",
-          "expr": "rate(skinora_steam_http_requests_total[$__rate_interval])",
-          "legendFormat": "{{method}} {{status_code}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Rate Limit Hits (Steam HTTP Request Rate)",
-      "description": "Per-second rate of Steam HTTP requests. Sustained high values indicate potential rate limiting pressure.",
-      "type": "timeseries"
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 8,
+        "y": 0
+      }
     },
     {
-      "datasource": "Loki",
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
+      "type": "timeseries",
+      "title": "Steam servisi istek hızı (durum koduna göre)",
+      "description": "Hız sınırı ve kötüye kullanım için.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 8 },
-      "id": 3,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": true,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
-      },
-      "targets": [
-        {
-          "datasource": "Loki",
-          "expr": "{service=~\".+\"} | json | level=\"error\"",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Error Log Stream",
-      "description": "Live stream of error-level log entries across all Skinora services.",
-      "type": "logs"
-    },
-    {
-      "datasource": "Prometheus",
       "fieldConfig": {
         "defaults": {
+          "unit": "reqps",
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "req/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
             "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
+            "fillOpacity": 10,
             "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": {
-              "mode": "line+area"
-            }
+            "spanNulls": true
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
-            ]
-          },
-          "unit": "reqps"
+          "min": 0
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 18 },
-      "id": 4,
       "options": {
         "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
       },
       "targets": [
         {
-          "datasource": "Prometheus",
-          "expr": "rate(http_requests_total{status_code=~\"4..\"}[$__rate_interval])",
-          "legendFormat": "4xx — {{service}} {{status_code}}",
-          "refId": "A"
-        },
-        {
-          "datasource": "Prometheus",
-          "expr": "rate(http_requests_total{status_code=~\"5..\"}[$__rate_interval])",
-          "legendFormat": "5xx — {{service}} {{status_code}}",
-          "refId": "B"
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (status_code) (rate(skinora_steam_http_requests_total[5m]))",
+          "refId": "A",
+          "legendFormat": "{{status_code}}"
         }
       ],
-      "title": "HTTP 4xx / 5xx by Service",
-      "description": "Per-second rate of HTTP 4xx client errors and 5xx server errors, broken down by service and status code.",
-      "type": "timeseries"
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Hata log akışı",
+      "description": "Tüm servislerde level=error.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service=~\".+\"} | json | level=\"error\"",
+          "refId": "A"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      }
     }
   ],
-  "refresh": "30s",
-  "schemaVersion": 38,
-  "tags": ["skinora", "security"],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "skinora",
+    "security"
+  ],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-6h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Skinora \u2014 Security Metrics",
+  "title": "Skinora — Security Metrics",
   "uid": "skinora-security",
   "version": 1,
   "weekStart": ""

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Time.Testing;
 using Skinora.API.Tests.Common;
 using Skinora.API.Services.HotWallet;
 using Skinora.API.Services.Reconciliation;
+using Skinora.Platform.Application.Wallets;
 using Skinora.Platform.Domain.Entities;
 using Skinora.Realtime.Application;
 using Skinora.Realtime.Application.Contracts;
@@ -249,20 +250,24 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
     public async Task RunAsync_EvmHotWallet_SnapshotInOtherLetterCase_IsStillMatched()
     {
         // Configured in EIP-55 form, echoed back lowercase: the same address.
-        _walletAddresses.HotWalletAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+        // T170 — on the network it belongs to (Ethereum), now that the monitor
+        // reads each network's own hot wallet.
+        var (sut, ethereum) = BuildWithEthereum(tronConfigured: false);
+        _walletAddresses.Pairs[BlockchainNetwork.ETHEREUM] = new PlatformWalletAddresses(
+            BlockchainNetwork.ETHEREUM, "0xdAC17F958D2ee523a2206206994597C13D831ec7", null);
         await UpsertSystemSettingAsync(HotWalletMonitorService.HotWalletLimitKey, "1000", "decimal");
 
-        _sidecar.QueueSnapshot(blockNumber: 300, addressTokens: new()
+        ethereum.QueueSnapshot(blockNumber: 300, addressTokens: new()
         {
             ["0xdac17f958d2ee523a2206206994597c13d831ec7"] = new Dictionary<string, string>
             {
                 ["USDT"] = "1500000000",
                 ["USDC"] = "0",
-                ["TRX"] = "2000000000",  // 2000 TRX — above the seeded 1500 floor (T169)
+                ["ETH"] = "1000000000000000000",
             },
         });
 
-        var outcome = await _sut.RunAsync(CancellationToken.None);
+        var outcome = await sut.RunAsync(CancellationToken.None);
 
         Assert.True(outcome.HotWalletChecked);
         Assert.Equal(1, outcome.BreachCount);
@@ -292,6 +297,162 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
         Assert.Equal(0, outcome.BreachCount);
     }
 
+    // ─── T170 — every network's hot wallet (EthereumHotWalletUsdtLimitUnmonitored) ──
+
+    private const string EthereumHotWalletAddress = "0x1111111111111111111111111111111111111111";
+
+    [Fact]
+    public async Task RunAsync_EthereumUsdtAboveLimit_EmitsUpperBreach_OnEthereum()
+    {
+        // T169: hot_wallet_limit = 4000 per network. Before T170 only TRON's
+        // hot wallet was read — USDT above the limit on Ethereum reached nobody.
+        var (sut, ethereum) = BuildWithEthereum(tronConfigured: false);
+        ConfigureEthereumHotWallet();
+        await UpsertSystemSettingAsync(HotWalletMonitorService.HotWalletLimitKey, "4000", "decimal");
+        await UpsertSystemSettingAsync(HotWalletMonitorService.TrxBalanceMinimumKey, "1500", "decimal");
+
+        ethereum.QueueSnapshot(blockNumber: 21_000_000, addressTokens: new()
+        {
+            [EthereumHotWalletAddress] = new Dictionary<string, string>
+            {
+                ["ETH"] = "10000000000000000",  // 0.01 ETH — the ETH floor is the Ethereum service's alarm
+                ["USDT"] = "4500000000",        // 4500 USDT > 4000
+                ["USDC"] = "0",
+            },
+        });
+
+        var outcome = await sut.RunAsync(CancellationToken.None);
+
+        Assert.True(outcome.HotWalletChecked);
+        Assert.Equal(1, outcome.BreachCount);
+        Assert.Equal(EthereumHotWalletAddress, Assert.Single(Assert.Single(ethereum.Calls)));
+        Assert.Empty(_sidecar.Calls);
+
+        // Upper limit for both stablecoins; no gas-floor line on Ethereum
+        // (TRX 1500 is TRON's; ETH has ethereum-wallet-eth-low).
+        Assert.Equal(
+            new[]
+            {
+                (BlockchainNetwork.ETHEREUM, "USDT", "Upper", true),
+                (BlockchainNetwork.ETHEREUM, "USDC", "Upper", false),
+            },
+            _thresholds.NetworkReports);
+        Assert.Equal(4500m, _thresholds.Balances[(BlockchainNetwork.ETHEREUM, "USDT")]);
+        Assert.Equal(4000m, _thresholds.Thresholds[(BlockchainNetwork.ETHEREUM, "USDT", "Upper")]);
+        Assert.DoesNotContain(_thresholds.Thresholds.Keys, k => k.Asset == HotWalletMonitorService.TokenTrx);
+        Assert.Equal(new[] { BlockchainNetwork.ETHEREUM }, _thresholds.Attempts);
+        Assert.Equal(new[] { BlockchainNetwork.ETHEREUM }, _thresholds.Checked);
+
+        var breach = Assert.Single(_publisher.Breaches);
+        Assert.Equal("ETHEREUM", breach.Network);
+        Assert.Equal("USDT", breach.Token);
+        Assert.Equal(HotWalletMonitorService.DirectionUpper, breach.Direction);
+        Assert.Equal(4000m, breach.Threshold);
+        Assert.Equal(4500m, breach.Actual);
+
+        var audit = Assert.Single(await LoadAuditLogsAsync());
+        using var json = JsonDocument.Parse(audit.NewValue!);
+        Assert.Equal("ETHEREUM", json.RootElement.GetProperty("network").GetString());
+        Assert.Equal("USDT", json.RootElement.GetProperty("token").GetString());
+    }
+
+    [Fact]
+    public async Task RunAsync_BothNetworks_EachReadFromItsOwnService_AndReportedOnItsOwnLabel()
+    {
+        var (sut, ethereum) = BuildWithEthereum(tronConfigured: true);
+        await ConfigureHotWalletAsync();
+        ConfigureEthereumHotWallet();
+        await UpsertSystemSettingAsync(HotWalletMonitorService.HotWalletLimitKey, "4000", "decimal");
+        await UpsertSystemSettingAsync(HotWalletMonitorService.TrxBalanceMinimumKey, "1500", "decimal");
+
+        _sidecar.QueueSnapshot(blockNumber: 500, addressTokens: new()
+        {
+            [HotWalletAddress] = new Dictionary<string, string>
+            {
+                ["USDT"] = "3999000000",   // 3999 — within
+                ["USDC"] = "0",
+                ["TRX"] = "1400000000",    // 1400 TRX < 1500 floor
+            },
+        });
+        ethereum.QueueSnapshot(blockNumber: 21_000_001, addressTokens: new()
+        {
+            [EthereumHotWalletAddress] = new Dictionary<string, string>
+            {
+                ["ETH"] = "0",
+                ["USDT"] = "4000000001",   // 4000.000001 > 4000
+                ["USDC"] = "0",
+            },
+        });
+
+        var outcome = await sut.RunAsync(CancellationToken.None);
+
+        Assert.True(outcome.HotWalletChecked);
+        Assert.Equal(2, outcome.BreachCount);
+        Assert.Null(outcome.BlockNumber); // two chains — heights do not compare
+        Assert.Single(_sidecar.Calls);
+        Assert.Single(ethereum.Calls);
+
+        Assert.Contains((BlockchainNetwork.TRON, "TRX", "Lower", true), _thresholds.NetworkReports);
+        Assert.Contains((BlockchainNetwork.TRON, "USDT", "Upper", false), _thresholds.NetworkReports);
+        Assert.Contains((BlockchainNetwork.ETHEREUM, "USDT", "Upper", true), _thresholds.NetworkReports);
+        Assert.DoesNotContain(_thresholds.NetworkReports, r => r.Network == BlockchainNetwork.ETHEREUM && r.Asset == "TRX");
+
+        Assert.Equal(2, _publisher.Breaches.Count);
+        Assert.Contains(_publisher.Breaches, b => b.Network == "TRON" && b.Token == "TRX");
+        Assert.Contains(_publisher.Breaches, b => b.Network == "ETHEREUM" && b.Token == "USDT");
+    }
+
+    [Fact]
+    public async Task RunAsync_EthereumServiceDown_TronIsStillChecked_AndEthereumReportsOnlyTheAttempt()
+    {
+        var (sut, ethereum) = BuildWithEthereum(tronConfigured: true);
+        await ConfigureHotWalletAsync();
+        ConfigureEthereumHotWallet();
+        await UpsertSystemSettingAsync(HotWalletMonitorService.HotWalletLimitKey, "4000", "decimal");
+
+        _sidecar.QueueSnapshot(blockNumber: 501, addressTokens: new()
+        {
+            [HotWalletAddress] = new Dictionary<string, string>
+            {
+                ["USDT"] = "5000000000",
+                ["USDC"] = "0",
+                ["TRX"] = "2000000000",
+            },
+        });
+        ethereum.QueueUnavailable();
+
+        var outcome = await sut.RunAsync(CancellationToken.None);
+
+        Assert.True(outcome.HotWalletChecked);
+        Assert.Equal(1, outcome.BreachCount);
+        Assert.Equal(new[] { BlockchainNetwork.TRON, BlockchainNetwork.ETHEREUM }, _thresholds.Attempts);
+        // Only TRON completed: Ethereum's last-check time stays at its first
+        // attempt and ages into hot-wallet-monitor-stale.
+        Assert.Equal(new[] { BlockchainNetwork.TRON }, _thresholds.Checked);
+        Assert.DoesNotContain(_thresholds.NetworkReports, r => r.Network == BlockchainNetwork.ETHEREUM);
+    }
+
+    [Fact]
+    public async Task RunAsync_EthereumHotAddressUnset_IsSkipped_WithoutCallingItsService()
+    {
+        var (sut, ethereum) = BuildWithEthereum(tronConfigured: false);
+        await UpsertSystemSettingAsync(HotWalletMonitorService.HotWalletLimitKey, "4000", "decimal");
+
+        var outcome = await sut.RunAsync(CancellationToken.None);
+
+        Assert.False(outcome.HotWalletChecked);
+        Assert.Empty(ethereum.Calls);
+        Assert.Equal(new[] { BlockchainNetwork.ETHEREUM }, _thresholds.Attempts);
+        Assert.Empty(_thresholds.Checked);
+    }
+
+    [Fact]
+    public void OnlyTron_ChecksAGasFloor()
+    {
+        Assert.True(HotWalletMonitorService.ChecksGasFloor(BlockchainNetwork.TRON));
+        Assert.False(HotWalletMonitorService.ChecksGasFloor(BlockchainNetwork.ETHEREUM));
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -302,6 +463,27 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
     {
         _walletAddresses.HotWalletAddress = HotWalletAddress;
         return Task.CompletedTask;
+    }
+
+    private void ConfigureEthereumHotWallet() =>
+        _walletAddresses.Pairs[BlockchainNetwork.ETHEREUM] = new PlatformWalletAddresses(
+            BlockchainNetwork.ETHEREUM, EthereumHotWalletAddress, null);
+
+    private (HotWalletMonitorService Sut, StubBalancesSidecarClient Ethereum) BuildWithEthereum(bool tronConfigured)
+    {
+        var ethereum = new StubBalancesSidecarClient();
+        var registry = new FakeBlockchainServiceRegistry();
+        if (tronConfigured) registry.With(BlockchainNetwork.TRON, sidecar: _sidecar);
+        registry.With(BlockchainNetwork.ETHEREUM, sidecar: ethereum);
+        var sut = new HotWalletMonitorService(
+            _db,
+            registry,
+            _publisher,
+            _walletAddresses,
+            _clock,
+            _thresholds,
+            NullLogger<HotWalletMonitorService>.Instance);
+        return (sut, ethereum);
     }
 
     private async Task UpsertSystemSettingAsync(string key, string value, string dataType)
@@ -435,12 +617,29 @@ public sealed class HotWalletMonitorServiceTests : IDisposable
 
     private sealed class RecordingThresholds : IHotWalletThresholdObserver
     {
+        /// <summary>TRON's reports (asset, direction, breached) — the pre-T170 shape the TRON tests assert.</summary>
         public List<(string Asset, string Direction, bool Breached)> Reports { get; } = [];
+
+        public List<(BlockchainNetwork Network, string Asset, string Direction, bool Breached)> NetworkReports { get; } = [];
+        public Dictionary<(BlockchainNetwork Network, string Asset), decimal> Balances { get; } = new();
+        public Dictionary<(BlockchainNetwork Network, string Asset, string Direction), decimal?> Thresholds { get; } = new();
+        public List<BlockchainNetwork> Attempts { get; } = [];
+        public List<BlockchainNetwork> Checked { get; } = [];
 
         public void Report(BlockchainNetwork network, string asset, string direction, bool breached)
         {
-            Assert.Equal(BlockchainNetwork.TRON, network);
-            Reports.Add((asset, direction, breached));
+            NetworkReports.Add((network, asset, direction, breached));
+            if (network == BlockchainNetwork.TRON) Reports.Add((asset, direction, breached));
         }
+
+        public void ReportBalance(BlockchainNetwork network, string asset, decimal balance) =>
+            Balances[(network, asset)] = balance;
+
+        public void ReportThreshold(BlockchainNetwork network, string asset, string direction, decimal? threshold) =>
+            Thresholds[(network, asset, direction)] = threshold;
+
+        public void ReportAttempt(BlockchainNetwork network) => Attempts.Add(network);
+
+        public void ReportChecked(BlockchainNetwork network) => Checked.Add(network);
     }
 }
