@@ -56,6 +56,12 @@ public sealed class NotificationAlertingProvisioningTests
         // T169a — refund held by the deposit refund daily limit (⚠ PARA;
         // classified when main was merged into T165)
         "deposit-refund-daily-limit-held",
+        // T170 — per-network monitoring (group "Skinora Network Alerts")
+        "blockchain-service-degraded",
+        "tron-solid-block-stalled",
+        "ethereum-rpc-provider-failing",
+        "hot-wallet-monitor-stale",
+        "tron-energy-delegation-stranded",
     ];
 
     /// <summary>
@@ -90,7 +96,7 @@ public sealed class NotificationAlertingProvisioningTests
         Assert.Equal(all.Count, all.Distinct().Count());
         Assert.Empty(MoneyRules.Intersect(NonMoneyRules));
         Assert.Equal(all.ToHashSet(), MoneyRules.Concat(NonMoneyRules).ToHashSet());
-        Assert.Equal(28, MoneyRules.Length);
+        Assert.Equal(33, MoneyRules.Length);
     }
 
     [Theory]
@@ -197,6 +203,88 @@ public sealed class NotificationAlertingProvisioningTests
         var block = RuleBlock("hot-wallet-threshold-breached");
         Assert.Contains($"max by (network, asset, direction) ({PrometheusHotWalletThresholdObserver.Breached.Name}) or vector(0)", block);
         Assert.Matches(@"type: gt\s+params: \[0\]", block);
+    }
+
+    [Fact]
+    public void HotWalletGauges_ArePerNetwork_ForEthereumToo()
+    {
+        // T170 — EthereumHotWalletUsdtLimitUnmonitored: the same series carry
+        // Ethereum's hot wallet, with the balance and the limit beside the flag.
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero));
+        var observer = new PrometheusHotWalletThresholdObserver(clock);
+        observer.Report(BlockchainNetwork.ETHEREUM, "USDT", HotWalletMonitorService.DirectionUpper, breached: true);
+        observer.ReportBalance(BlockchainNetwork.ETHEREUM, "USDT", 4500m);
+        observer.ReportThreshold(BlockchainNetwork.ETHEREUM, "USDT", HotWalletMonitorService.DirectionUpper, 4000m);
+
+        Assert.Equal(1, PrometheusHotWalletThresholdObserver.Breached.WithLabels("ETHEREUM", "USDT", "upper").Value);
+        Assert.Equal(4500, PrometheusHotWalletThresholdObserver.Balance.WithLabels("ETHEREUM", "USDT").Value);
+        Assert.Equal(4000, PrometheusHotWalletThresholdObserver.Threshold.WithLabels("ETHEREUM", "USDT", "upper").Value);
+        Assert.Equal("skinora_backend_hot_wallet_balance", PrometheusHotWalletThresholdObserver.Balance.Name);
+        Assert.Equal("skinora_backend_hot_wallet_threshold", PrometheusHotWalletThresholdObserver.Threshold.Name);
+
+        observer.ReportThreshold(BlockchainNetwork.ETHEREUM, "USDT", HotWalletMonitorService.DirectionUpper, null);
+        Assert.DoesNotContain(
+            PrometheusHotWalletThresholdObserver.Threshold.GetAllLabelValues(),
+            l => l.SequenceEqual(new[] { "ETHEREUM", "USDT", "upper" }));
+        observer.Report(BlockchainNetwork.ETHEREUM, "USDT", HotWalletMonitorService.DirectionUpper, breached: false);
+    }
+
+    [Fact]
+    public void HotWalletMonitorStaleRule_ReadsTheLastCheckTimestamp_SeededByTheFirstAttempt()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero));
+        var observer = new PrometheusHotWalletThresholdObserver(clock);
+        var label = BlockchainNetwork.ETHEREUM.ToString();
+
+        // The first attempt seeds the series; a later failed attempt does not
+        // move it (the age keeps growing), a completed check does.
+        observer.ReportAttempt(BlockchainNetwork.ETHEREUM);
+        var seeded = PrometheusHotWalletThresholdObserver.LastCheck.WithLabels(label).Value;
+        Assert.True(seeded > 0);
+        clock.Advance(TimeSpan.FromHours(3));
+        observer.ReportAttempt(BlockchainNetwork.ETHEREUM);
+        Assert.Equal(seeded, PrometheusHotWalletThresholdObserver.LastCheck.WithLabels(label).Value);
+        observer.ReportChecked(BlockchainNetwork.ETHEREUM);
+        Assert.Equal(clock.GetUtcNow().ToUnixTimeSeconds(), PrometheusHotWalletThresholdObserver.LastCheck.WithLabels(label).Value);
+
+        var block = RuleBlock("hot-wallet-monitor-stale");
+        Assert.Contains($"(time() - max by (network) ({PrometheusHotWalletThresholdObserver.LastCheck.Name})) or vector(0)", block);
+        Assert.Matches(@"type: gt\s+params: \[7200\]", block);
+        Assert.Contains("category: money", block);
+    }
+
+    [Fact]
+    public void BlockchainServiceDegradedRule_ReadsTheProbeOutageState_PerNetwork()
+    {
+        // T170 — the probe's debounced outage reached only the admin panel.
+        PlatformHealthMetrics.Publish(PlatformComponents.BlockchainEthereum, healthy: false, inOutage: true);
+        Assert.Equal(1, PlatformHealthMetrics.BlockchainServiceDegraded.WithLabels("ETHEREUM").Value);
+        Assert.Equal(0, PlatformHealthMetrics.ComponentUp.WithLabels(PlatformComponents.BlockchainEthereum).Value);
+        PlatformHealthMetrics.Publish(PlatformComponents.BlockchainEthereum, healthy: true, inOutage: false);
+        Assert.Equal(0, PlatformHealthMetrics.BlockchainServiceDegraded.WithLabels("ETHEREUM").Value);
+        Assert.Equal(1, PlatformHealthMetrics.ComponentUp.WithLabels(PlatformComponents.BlockchainEthereum).Value);
+
+        // Steam has an up series but no network outage series.
+        PlatformHealthMetrics.Publish(PlatformComponents.Steam, healthy: true, inOutage: false);
+        Assert.DoesNotContain(
+            PlatformHealthMetrics.BlockchainServiceDegraded.GetAllLabelValues(),
+            l => l.Single() == PlatformComponents.Steam);
+
+        var block = RuleBlock("blockchain-service-degraded");
+        Assert.Contains($"max by (network) ({PlatformHealthMetrics.BlockchainServiceDegraded.Name}) or vector(0)", block);
+        Assert.Matches(@"type: gt\s+params: \[0\]", block);
+        Assert.Contains("severity: critical", block);
+    }
+
+    [Fact]
+    public void NetworkAlertGroup_HasNoDollarSign()
+    {
+        // Grafana's provisioning interpolates $NAME — the T170 group must not
+        // carry one (a PromQL regex anchor would be eaten).
+        var text = Read("rules.yml");
+        var start = text.IndexOf("    name: Skinora Network Alerts", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        Assert.DoesNotContain("$", text[start..]);
     }
 
     [Fact]

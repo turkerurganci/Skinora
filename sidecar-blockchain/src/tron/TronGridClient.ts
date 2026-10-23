@@ -250,17 +250,29 @@ export class TronGridClient {
    * faked by a single witness producing a reorg-able block on the full node.
    */
   async getNowSolidBlock(): Promise<number> {
+    return (await this.getNowSolidBlockHeader()).number;
+  }
+
+  /**
+   * T170 — the current solid block's number AND its production time (the
+   * header's `timestamp`, epoch ms). The solid-block tracker publishes the
+   * block's age from it: a node that stops answering, or a chain whose solid
+   * head stops advancing, shows as a growing age (`tron-solid-block-stalled`).
+   */
+  async getNowSolidBlockHeader(): Promise<{ number: number; timestampMs: number | null }> {
     const url = `${this.solidityUrl}/walletsolidity/getnowblock`;
-    const json = await this.postJson<{ block_header?: { raw_data?: { number?: number } } }>(
-      url,
-      {},
-      'walletsolidity.getnowblock',
-    );
+    const json = await this.postJson<{
+      block_header?: { raw_data?: { number?: number; timestamp?: number } };
+    }>(url, {}, 'walletsolidity.getnowblock');
     const block = json.block_header?.raw_data?.number;
     if (typeof block !== 'number' || !Number.isFinite(block)) {
       throw new Error('TronGrid getnowblock returned no block number');
     }
-    return block;
+    const timestamp = json.block_header?.raw_data?.timestamp;
+    return {
+      number: block,
+      timestampMs: typeof timestamp === 'number' && Number.isFinite(timestamp) ? timestamp : null,
+    };
   }
 
   /**
@@ -440,7 +452,17 @@ export class TronGridClient {
         headers['TRON-PRO-API-KEY'] = apiKey;
       }
 
-      const response = await this.fetchFn(url, { ...init, headers });
+      let response: Response;
+      try {
+        response = await this.fetchFn(url, { ...init, headers });
+      } catch (err) {
+        // T170 — a request that never got an answer (DNS, connection refused,
+        // TLS, reset) is a provider failure too. Before T170 only HTTP
+        // statuses were counted, so an unreachable TronGrid left
+        // tron-api-errors-high at zero. Not retried here: the caller re-polls.
+        tronApiErrorsTotal.inc({ endpoint: endpointLabel, error_type: 'network' });
+        throw err;
+      }
       if (response.ok) {
         return response;
       }

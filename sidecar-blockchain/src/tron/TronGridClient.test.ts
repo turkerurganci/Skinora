@@ -6,6 +6,7 @@ import {
   TronGridRateLimitError,
   extractTransferLogEntries,
 } from './TronGridClient.js';
+import { tronApiErrorsTotal } from '../metrics.js';
 
 /** Skip real backoff timers in tests. */
 const noSleep = async (): Promise<void> => {};
@@ -151,6 +152,40 @@ describe('TronGridClient.getNowSolidBlock()', () => {
     const { mock } = buildFetchMock([{ status: 200, body: { not: 'expected' } }]);
     const client = new TronGridClient('https://full', 'https://solid', '', mock);
     await expect(client.getNowSolidBlock()).rejects.toThrow(/no block number/);
+  });
+
+  it('T170 — getNowSolidBlockHeader also returns the block timestamp (ms)', async () => {
+    const { mock } = buildFetchMock([
+      {
+        status: 200,
+        body: { block_header: { raw_data: { number: 82_000_001, timestamp: 1_760_000_000_000 } } },
+      },
+    ]);
+    const client = new TronGridClient('https://full', 'https://solid', '', mock);
+    expect(await client.getNowSolidBlockHeader()).toEqual({
+      number: 82_000_001,
+      timestampMs: 1_760_000_000_000,
+    });
+  });
+
+  it('T170 — a request that gets no answer counts as error_type="network" (tron-api-errors-high)', async () => {
+    const before =
+      (await tronApiErrorsTotal.get()).values.find(
+        (v) =>
+          v.labels.endpoint === 'walletsolidity.getnowblock' && v.labels.error_type === 'network',
+      )?.value ?? 0;
+    const failing = (async () => {
+      throw new TypeError('fetch failed');
+    }) as unknown as typeof fetch;
+    const client = new TronGridClient('https://full', 'https://solid', '', failing);
+
+    await expect(client.getNowSolidBlock()).rejects.toThrow(/fetch failed/);
+
+    const after = (await tronApiErrorsTotal.get()).values.find(
+      (v) =>
+        v.labels.endpoint === 'walletsolidity.getnowblock' && v.labels.error_type === 'network',
+    )?.value;
+    expect(after).toBe(before + 1);
   });
 });
 

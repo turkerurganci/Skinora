@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import TronWeb from 'tronweb';
 import { EnergyDelegationService } from './EnergyDelegationService.js';
 import { SimulationRevertedError } from '../errors/SidecarError.js';
+import { energyDelegationStrandedTotal } from '../metrics.js';
 
 /**
  * 08 §3.3 hybrid flow against a fake chain that behaves like the node measured
@@ -576,10 +577,14 @@ describe('delegate path — the stake covers the whole transfer', () => {
       undelegateThrows: true,
     });
 
+    const strandedBefore = (await energyDelegationStrandedTotal.get()).values[0]?.value ?? 0;
+
     const outcome = await chain.run();
 
     expect(outcome.action.txHash).toBe(chain.firstBroadcast('transfer').hash);
     expect(outcome.mode).toBe('delegated');
+    // T170 — the stranded stake is counted (tron-energy-delegation-stranded).
+    expect((await energyDelegationStrandedTotal.get()).values[0]?.value).toBe(strandedBefore + 1);
   });
 
   it('reclaims once the transfer can no longer land, even if no block ever shows it', async () => {

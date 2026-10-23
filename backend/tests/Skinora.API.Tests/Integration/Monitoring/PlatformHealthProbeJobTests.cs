@@ -230,12 +230,19 @@ public class PlatformHealthProbeJobTests : IntegrationTestBase
         Assert.Equal(PlatformComponents.BlockchainTron, alert.Component);
         Assert.True(_state.IsInOutage(PlatformComponents.BlockchainTron));
         Assert.False(_state.IsInOutage(PlatformComponents.BlockchainEthereum));
+        // T170 — the outage also reaches Grafana (blockchain-service-degraded), per network.
+        Assert.Equal(1, PlatformHealthMetrics.BlockchainServiceDegraded.WithLabels("TRON").Value);
+        Assert.Equal(0, PlatformHealthMetrics.BlockchainServiceDegraded.WithLabels("ETHEREUM").Value);
+        Assert.Equal(0, PlatformHealthMetrics.ComponentUp.WithLabels(PlatformComponents.BlockchainTron).Value);
+        Assert.Equal(1, PlatformHealthMetrics.ComponentUp.WithLabels(PlatformComponents.BlockchainEthereum).Value);
 
         // TRON recovers → resume TRON only.
         _health.BlockchainHealthy = true;
         await sut.ProbeAsync();
         Assert.Equal(("Resume", TimeoutFreezeReason.BLOCKCHAIN_DEGRADATION), _freeze.Calls[1]);
         Assert.Equal([BlockchainNetwork.TRON, BlockchainNetwork.TRON], _freeze.Networks);
+        Assert.Equal(0, PlatformHealthMetrics.BlockchainServiceDegraded.WithLabels("TRON").Value);
+        Assert.Equal(1, PlatformHealthMetrics.ComponentUp.WithLabels(PlatformComponents.BlockchainTron).Value);
     }
 
     [Fact]

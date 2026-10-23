@@ -41,6 +41,31 @@ function ruleBlock(uid: string): string {
   return text.slice(start, next < 0 ? undefined : next);
 }
 
+describe('T170 ethereum-rpc-provider-failing — wired to the RPC histogram the service exports', () => {
+  const block = ruleBlock('ethereum-rpc-provider-failing');
+
+  it('divides transport / chain-mismatch failures by all calls, per provider', async () => {
+    const name = (await rpcRequestDuration.get()).name;
+    expect(block).toContain(
+      `sum by (provider) (rate(${name}_count{outcome=~"transport|chain_mismatch"}[10m])) / sum by (provider) (rate(${name}_count[10m]))`,
+    );
+    // `rpc` (an answer about the request) and `limit` (split and retried) are not provider failures.
+    expect(block).not.toMatch(/outcome=~"[^"]*\b(rpc|limit)\b/);
+  });
+
+  it('the outcome labels it filters on are the ones the client records', async () => {
+    rpcRequestDuration.labels({ provider: 'p', method: 'm', outcome: 'transport' }).observe(0.1);
+    const outcomes = (await rpcRequestDuration.get()).values.map((v) => v.labels.outcome);
+    expect(outcomes).toContain('transport');
+  });
+
+  it('warns above half, held 10 minutes, as a money alarm', () => {
+    expect(block).toMatch(/type: gt\s+params: \[0\.5\]/);
+    expect(block).toMatch(/for: 10m/);
+    expect(block).toMatch(/severity: warning\n\s+category: money/);
+  });
+});
+
 describe('ethereum-finalized-stalled — wired to the series the service exports', () => {
   const block = ruleBlock('ethereum-finalized-stalled');
   const expr = /^\s+expr: (.+)$/m.exec(block)?.[1] ?? '';

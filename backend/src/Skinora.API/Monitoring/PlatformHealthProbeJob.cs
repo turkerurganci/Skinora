@@ -88,6 +88,7 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
     public async Task ProbeAsync()
     {
         var applied = new List<(string Component, HealthTransition Transition)>();
+        var probed = new List<(string Component, bool Healthy)>();
 
         foreach (var component in PlatformComponents.All)
         {
@@ -95,6 +96,7 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
             if (healthy is null) continue; // not configured → not monitored
 
             var transition = _state.Record(component, healthy.Value, _options.FailureThreshold);
+            probed.Add((component, healthy.Value));
             if (transition == HealthTransition.None) continue;
 
             var status = transition == HealthTransition.Degraded ? "DEGRADED" : "RECOVERED";
@@ -154,11 +156,12 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
                 component, status, consecutiveFailures, frozenOrResumed);
         }
 
-        if (applied.Count == 0) return;
-
         try
         {
-            await _db.SaveChangesAsync(CancellationToken.None);
+            if (applied.Count > 0)
+            {
+                await _db.SaveChangesAsync(CancellationToken.None);
+            }
         }
         catch (Exception ex)
         {
@@ -176,6 +179,15 @@ public sealed class PlatformHealthProbeJob : IPlatformHealthProbeJob
                 "Platform health probe could not persist {Count} outage transition(s) — "
                 + "reverted in-memory state for re-detection on the next run.",
                 applied.Count);
+        }
+        finally
+        {
+            // T170 — published after a possible revert, so the outage gauge
+            // follows the state the freeze and the network gate read.
+            foreach (var (component, healthy) in probed)
+            {
+                PlatformHealthMetrics.Publish(component, healthy, _state.IsInOutage(component));
+            }
         }
     }
 
