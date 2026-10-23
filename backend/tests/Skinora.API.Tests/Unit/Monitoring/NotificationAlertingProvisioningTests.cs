@@ -56,6 +56,10 @@ public sealed class NotificationAlertingProvisioningTests
         // T169a — refund held by the deposit refund daily limit (⚠ PARA;
         // classified when main was merged into T165)
         "deposit-refund-daily-limit-held",
+        // T172b — the signer refused a deposit refund over its own 24 h cap
+        // (⚠ PARA; classified when main T165 was merged into T172b)
+        "tron-deposit-refund-limit-refused",
+        "ethereum-deposit-refund-limit-refused",
     ];
 
     /// <summary>
@@ -90,7 +94,7 @@ public sealed class NotificationAlertingProvisioningTests
         Assert.Equal(all.Count, all.Distinct().Count());
         Assert.Empty(MoneyRules.Intersect(NonMoneyRules));
         Assert.Equal(all.ToHashSet(), MoneyRules.Concat(NonMoneyRules).ToHashSet());
-        Assert.Equal(28, MoneyRules.Length);
+        Assert.Equal(30, MoneyRules.Length);
     }
 
     [Theory]

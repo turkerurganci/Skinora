@@ -28,7 +28,10 @@ writeFileSync(files.seed, MNEMONIC + '\n');
 writeFileSync(files.hot, keys.deriveSigner(30).privateKey.slice(2) + '\n');
 writeFileSync(files.fuel, keys.deriveSigner(31).privateKey.slice(2) + '\n');
 
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+// A started service may still be writing into its journal directory (permit
+// store, write probe) while the tree is removed; retry instead of failing the
+// run on ENOTEMPTY (CI run 40007951627).
+afterAll(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
 
 /** The host's environment minus anything this service reads, so only the test's values count. */
 function withoutEthereumVariables(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {

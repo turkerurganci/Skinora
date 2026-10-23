@@ -124,6 +124,7 @@ function build(fuel: Partial<FuelDeps> | null = {}) {
       tokenContracts: [USDT, USDC],
       maxSingleTransferUnits: 5_000_000_000n,
       maxDailyOutflowUnits: 20_000_000_000n,
+      maxDailyDepositRefundUnits: 1_000_000_000_000n,
       now,
     }),
     wallet,

@@ -80,6 +80,8 @@ export interface EthereumServiceConfig {
     readonly maxSingleTransferUnits: bigint | null;
     /** Raw USDT units; null = not configured → payouts refused (fail closed). */
     readonly maxDailyOutflowUnits: bigint | null;
+    /** T172b — raw USDT units; null = not configured → deposit refunds wait (fail closed). */
+    readonly maxDailyDepositRefundUnits: bigint | null;
     /** Fuel caps in wei (T153 sends fuel; the signer enforces them); null = fuel refused. */
     readonly fuelMaxSingleWei: bigint | null;
     readonly fuelMaxDailyWei: bigint | null;
@@ -389,6 +391,13 @@ export function loadConfig(
       journalDir: value(env, 'ETHEREUM_TX_JOURNAL_DIR') || DEFAULT_TX_JOURNAL_DIR,
       maxSingleTransferUnits: limit(env, 'ETHEREUM_MAX_SINGLE_TRANSFER_USDT', TOKEN_DECIMALS),
       maxDailyOutflowUnits: limit(env, 'ETHEREUM_MAX_DAILY_OUTFLOW_USDT', TOKEN_DECIMALS),
+      // T172b — the signer's 24-hour cap on refunds leaving deposits (proje
+      // sahibi kararı 2026-10-23). Unset = every deposit refund waits.
+      maxDailyDepositRefundUnits: limit(
+        env,
+        'ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT',
+        TOKEN_DECIMALS,
+      ),
       fuelMaxSingleWei: limit(env, 'ETHEREUM_FUEL_MAX_SINGLE_ETH', 18),
       fuelMaxDailyWei: limit(env, 'ETHEREUM_FUEL_MAX_DAILY_ETH', 18),
       waitAlarmSeconds: positiveInt(env, 'ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS', 10_800),

@@ -131,6 +131,14 @@ export const config = {
   coldWalletAddress: process.env.COLD_WALLET_ADDRESS || '',
   maxSingleTransferUsdt: process.env.MAX_SINGLE_TRANSFER_USDT || '',
   maxDailyOutflowUsdt: process.env.MAX_DAILY_OUTFLOW_USDT || '',
+  // T172b (proje sahibi kararı 2026-10-23) — refunds leave a deposit, not the
+  // hot wallet, so the cap above never saw them: the signer's own 24-hour cap
+  // on them, decimal USDT (USDC 1:1). Fail-closed like the two above — unset
+  // or malformed and no deposit refund is signed (it waits). Its ledger lives
+  // on the service's volume so a restart cannot reset the window
+  // (transfer/DepositRefundLimit.ts); unset dir = no ledger = refunds wait.
+  depositRefundDailyLimitUsdt: process.env.DEPOSIT_REFUND_DAILY_LIMIT_USDT || '',
+  depositRefundLedgerDir: process.env.DEPOSIT_REFUND_LEDGER_DIR || '',
 
   // Dedicated stake account (05 §3.3, owner decision 2026-09-17). The frozen
   // TRX lives here and its owner key stays offline; the hot wallet's key is

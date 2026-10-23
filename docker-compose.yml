@@ -310,6 +310,13 @@ services:
       - COLD_WALLET_ADDRESS=${COLD_WALLET_ADDRESS:-}
       - MAX_SINGLE_TRANSFER_USDT=${MAX_SINGLE_TRANSFER_USDT:-}
       - MAX_DAILY_OUTFLOW_USDT=${MAX_DAILY_OUTFLOW_USDT:-}
+      # T172b (proje sahibi kararı 2026-10-23) — the signer's own 24-hour cap
+      # on refunds leaving deposits (decimal USDT, USDC 1:1; 08 §3.3a). Fail-
+      # closed: unset or malformed → every deposit refund waits (503 deferred,
+      # the backend keeps the row PENDING). Its ledger lives on the volume
+      # below so a restart cannot reset the window.
+      - DEPOSIT_REFUND_DAILY_LIMIT_USDT=${DEPOSIT_REFUND_DAILY_LIMIT_USDT:-}
+      - DEPOSIT_REFUND_LEDGER_DIR=/var/lib/skinora-tron/deposit-refunds
       # Stake account the Energy delegation is owned by (08 §3.3). Only the
       # ADDRESS travels — its owner key is offline and never reaches a container.
       # Only this service reads it; unset = the hot wallet holds its own stake.
@@ -339,6 +346,10 @@ services:
       - POST_CANCEL_CADENCE_30D_MS=${POST_CANCEL_CADENCE_30D_MS:-3600000}
       - SWEEP_TRX_FALLBACK_SUN=${SWEEP_TRX_FALLBACK_SUN:-15000000}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
+    # T172b — the deposit refund ledger must outlive the container: a restart
+    # (or an image rebuild) keeps the last 24 hours counted (DEPLOY_RUNBOOK §D).
+    volumes:
+      - skinora-tron-deposit-refunds:/var/lib/skinora-tron/deposit-refunds
     # T163 — mounted at /run/secrets/<name>; the service reads them from there
     # (sidecar-blockchain/src/config/signingSecrets.ts). Offline backup and
     # restore drill: DEPLOY_RUNBOOK §L, scripts/wallet-backup/.
@@ -413,6 +424,9 @@ services:
       # (DEPLOY_RUNBOOK §D). The fee cap itself comes from the backend setting.
       - ETHEREUM_MAX_SINGLE_TRANSFER_USDT=${ETHEREUM_MAX_SINGLE_TRANSFER_USDT:-}
       - ETHEREUM_MAX_DAILY_OUTFLOW_USDT=${ETHEREUM_MAX_DAILY_OUTFLOW_USDT:-}
+      # T172b — the signer's 24-hour cap on refunds the deposit key signs
+      # (counted from the journal). Unset → every deposit refund waits.
+      - ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT=${ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT:-}
       - ETHEREUM_FUEL_MAX_SINGLE_ETH=${ETHEREUM_FUEL_MAX_SINGLE_ETH:-}
       - ETHEREUM_FUEL_MAX_DAILY_ETH=${ETHEREUM_FUEL_MAX_DAILY_ETH:-}
       - ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS=${ETHEREUM_FEE_CAP_WAIT_ALARM_SECONDS:-10800}
@@ -717,6 +731,9 @@ volumes:
   # T152 — the Ethereum service's journal of signed transactions. Back it up
   # with the database; never delete it while a send is pending (DEPLOY_RUNBOOK §D).
   skinora-ethereum-tx-journal:
+  # T172b — the TRON service's ledger of deposit refunds (24-hour cap). Losing
+  # it only forgets the last 24 hours of refunds; keep it across restarts.
+  skinora-tron-deposit-refunds:
 
 # Docker secrets — signing material only (05 §3.5). Files under ./secrets
 # (gitignored; secrets/README.md). A MISSING source file is not an error to

@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { tronApiRequestDuration, tronGridDailyRequestBudget } from './metrics.js';
+import {
+  depositRefundLimitRefusalsTotal,
+  tronApiRequestDuration,
+  tronGridDailyRequestBudget,
+} from './metrics.js';
 
 /**
  * T139-ActiveMonitorQuotaAlarm — the tron-quota-projection rule divides two
@@ -42,5 +46,17 @@ describe('tron-quota-projection — wired to the series the sidecar exports', ()
   it('warns at 80% of the budget', () => {
     expect(block).toMatch(/type: gt\s+params: \[0\.8\]/);
     expect(block).toMatch(/severity: warning/);
+  });
+});
+
+describe('tron-deposit-refund-limit-refused (T172b) — wired to the series the sidecar exports', () => {
+  it('fires on any refusal in the last hour, as critical, at once', async () => {
+    const block = ruleBlock('tron-deposit-refund-limit-refused');
+    const expr = /^\s+expr: (.+)$/m.exec(block)?.[1] ?? '';
+    const { name } = await depositRefundLimitRefusalsTotal.get();
+    expect(expr).toBe(`sum(increase(${name}[1h])) or vector(0)`);
+    expect(block).toMatch(/type: gt\s+params: \[0\]/);
+    expect(block).toMatch(/for: 0m/);
+    expect(block).toMatch(/severity: critical/);
   });
 });

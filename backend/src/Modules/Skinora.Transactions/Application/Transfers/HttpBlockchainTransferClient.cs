@@ -56,6 +56,26 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
     /// </summary>
     public const string UnverifiedContractRet = "UNKNOWN";
 
+    /// <summary>
+    /// T172b (proje sahibi kararı 2026-10-23, ⚠ PARA) — the codes with which a
+    /// signing service refuses a refund under its OWN 24-hour deposit refund
+    /// cap (TRON <c>DEPOSIT_REFUND_DAILY_LIMIT_USDT</c>, Ethereum
+    /// <c>ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT</c>). Nothing was signed;
+    /// both services send them as 503 <c>deferred: true</c>. They are read as
+    /// a wait even without the flag (a 400 from a drifted service): a FAILED
+    /// refund invites a manual re-open under a new id — exactly the outflow the
+    /// cap exists to stop — while a waiting row stays visible (the services'
+    /// <c>*-deposit-refund-limit-refused</c> alarms, the backend's
+    /// <c>outbound-transfer-stuck</c>).
+    /// </summary>
+    public static readonly IReadOnlySet<string> SignerDepositRefundLimitCodes =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "DEPOSIT_REFUND_DAILY_LIMIT_EXCEEDED",
+            "DEPOSIT_REFUND_LIMIT_NOT_CONFIGURED",
+            "DEPOSIT_REFUND_LEDGER_UNAVAILABLE",
+        };
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly BlockchainNetworkPolicy _policy;
@@ -152,15 +172,25 @@ public sealed class HttpBlockchainTransferClient : IBlockchainTransferClient
             // T152 — "not now, nothing signed" (fee above the cap, no ETH price,
             // no gas on the sender — 08 §3.7.7). Keyed on the body's flag, not
             // on the status code, so no other 5xx can be mistaken for a wait.
-            if (error?.Deferred == true)
+            var signerCapRefusal = error?.Error is { } refusalCode
+                && SignerDepositRefundLimitCodes.Contains(refusalCode);
+            if (signerCapRefusal)
+            {
+                // The backend's own limit (T169a) should have held this refund
+                // first; the signer disagreeing is worth an operator's look.
+                _logger.LogError(
+                    "Blockchain sidecar refused deposit refund {BlockchainTransactionId} ({Type}) under its own 24-hour deposit refund cap: {Code} — {Message}. Nothing signed; the row waits (PENDING, no retry spent).",
+                    request.BlockchainTransactionId, request.Type, error!.Error, error.Message);
+            }
+            if (error?.Deferred == true || signerCapRefusal)
             {
                 _logger.LogInformation(
                     "Blockchain sidecar deferred broadcast for {BlockchainTransactionId} ({Type}): {Code} — {Message} (waiting since {WaitingSince})",
-                    request.BlockchainTransactionId, request.Type, error.Error, error.Message, error.WaitingSince);
+                    request.BlockchainTransactionId, request.Type, error!.Error, error.Message, error.WaitingSince);
                 return new TransferBroadcastResult(
                     TransferBroadcastStatus.Deferred,
                     null,
-                    error.Error ?? "DEFERRED",
+                    error!.Error ?? "DEFERRED",
                     error.WaitingSince is null ? error.Message : $"{error.Message} (waiting since {error.WaitingSince})");
             }
 
