@@ -78,7 +78,7 @@ Grafana render adımı (`t171a-render` projesi, `.env.example` ile): dosya yokke
 | Komut | Sonuç |
 |---|---|
 | `dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName~SharedSecretFiles\|FullyQualifiedName~DiagnosticsEnvironmentGateTests"` | 33/33 |
-| `dotnet test tests/Skinora.API.Tests` (tam, LocalDB) | __APITESTS__ |
+| `dotnet test tests/Skinora.API.Tests` (tam, LocalDB) | 1164/1164 |
 | `sidecar-blockchain: npx vitest run` | 41 dosya, 813/813 (+ `WebhookClient.test.ts` 3/3 sonradan) |
 | `sidecar-ethereum: npx vitest run` | 37 dosya, 949/949 |
 | `sidecar-steam: npx vitest run` | 13 dosya, 178/178 |
@@ -102,7 +102,7 @@ Bekliyor (yönetici düzeni: CI'ı yönetici izler).
 ## Commit & PR
 
 - Dal: `task/T171a-ortak-sirlar-secret` (origin/main `51faec90`'dan)
-- PR: #__PR__
+- PR: #381
 - Commit'ler: `53f305de` backend · `b8d79d86` TRON · `8ab3109d` Ethereum + Steam · `118511ab` compose + testler · `4a07662e` belgeler + WebhookClient testi · rapor/status commit'i
 - CI: yönetici izliyor (task.md Bitiş Kapısı — yönetici düzeni istisnası)
 
