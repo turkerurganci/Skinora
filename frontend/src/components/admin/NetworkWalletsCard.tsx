@@ -8,8 +8,8 @@ import type { NetworkWallets, PlatformWallet } from "@/lib/api/admin";
 import { tDynamic } from "@/lib/i18n/dynamicKey";
 import { networkLabel } from "@/lib/utils/blockchain";
 import { formatDateTime } from "@/lib/utils/format";
-import { BlockchainNetwork } from "@/types/enums";
 import { ColdTransferForm } from "./ColdTransferForm";
+import { closureNetwork } from "./ClosureModals";
 import { OutboundClosurePanel } from "./OutboundClosurePanel";
 
 const TH = "px-3 py-2";
@@ -378,7 +378,8 @@ export function NetworkWalletsCard({ data }: NetworkWalletsCardProps) {
         )}
       </div>
 
-      {data.network === BlockchainNetwork.ETHEREUM && <OutboundClosurePanel />}
+      {/* T172a — both networks: TRON after a database restore (DEPLOY_RUNBOOK §N.8). */}
+      <OutboundClosurePanel network={closureNetwork(data.network)} />
     </section>
   );
 }

@@ -10,9 +10,9 @@ using Skinora.Shared.Models;
 namespace Skinora.API.Controllers;
 
 /// <summary>
-/// AD33–AD37 — the two-person tool that closes an Ethereum outbound row with
-/// the hash of a transaction already on chain (T157, 07 §9.32; DEPLOY_RUNBOOK
-/// §D adım 7.4). ⚠ PARA. Every action needs <c>MANAGE_SETTINGS</c> — the
+/// AD33–AD37 — the two-person tool that closes an outbound row with the hash
+/// of a transaction already on chain (T157, 07 §9.32; DEPLOY_RUNBOOK §D adım
+/// 7.4; T172a — TRON and the post-restore FAILED row, DEPLOY_RUNBOOK §N.8). ⚠ PARA. Every action needs <c>MANAGE_SETTINGS</c> — the
 /// permission the other wallet operations (AD39) already use; a dedicated
 /// wallet permission would be a catalog change (07 §9.11, 04 §8.8) and is left
 /// as a refinement. The proposer and the approver are told apart by the
@@ -36,16 +36,19 @@ public sealed class AdminOutboundClosuresController : ControllerBase
     [HttpGet("candidates")]
     [Authorize(Policy = PolicyManageSettings)]
     [RateLimit("admin-read")]
-    public async Task<IActionResult> Candidates(CancellationToken cancellationToken) =>
-        Ok(await _service.ListCandidatesAsync(cancellationToken));
+    public async Task<IActionResult> Candidates(
+        [FromQuery] BlockchainNetwork? network, CancellationToken cancellationToken) =>
+        Ok(await _service.ListCandidatesAsync(network, cancellationToken));
 
     /// <summary>AD34 — <c>GET /admin/wallets/outbound-closures</c>.</summary>
     [HttpGet("")]
     [Authorize(Policy = PolicyManageSettings)]
     [RateLimit("admin-read")]
     public async Task<IActionResult> List(
-        [FromQuery] OutboundRowClosureStatus? status, CancellationToken cancellationToken) =>
-        Ok(await _service.ListAsync(status, cancellationToken));
+        [FromQuery] OutboundRowClosureStatus? status,
+        [FromQuery] BlockchainNetwork? network,
+        CancellationToken cancellationToken) =>
+        Ok(await _service.ListAsync(status, network, cancellationToken));
 
     /// <summary>AD35 — <c>POST /admin/wallets/outbound-closures</c> (propose).</summary>
     [HttpPost("")]
@@ -102,7 +105,6 @@ public sealed class AdminOutboundClosuresController : ControllerBase
             ClosureError.SelfApproval => (StatusCodes.Status403Forbidden, "SELF_APPROVAL_FORBIDDEN"),
             ClosureError.RowNotFound => (StatusCodes.Status404NotFound, "ROW_NOT_FOUND"),
             ClosureError.ClosureNotFound => (StatusCodes.Status404NotFound, "CLOSURE_NOT_FOUND"),
-            ClosureError.RowNotEthereum => (StatusCodes.Status422UnprocessableEntity, "ROW_NOT_ETHEREUM"),
             ClosureError.RowNotOutbound => (StatusCodes.Status422UnprocessableEntity, "ROW_NOT_OUTBOUND"),
             ClosureError.HashNotSuccessful => (StatusCodes.Status422UnprocessableEntity, "HASH_NOT_SUCCESSFUL"),
             ClosureError.HashNotFound => (StatusCodes.Status422UnprocessableEntity, "HASH_NOT_FOUND"),

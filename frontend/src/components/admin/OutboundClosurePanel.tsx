@@ -20,11 +20,11 @@ import {
   ChainTokenNote,
   ProposeClosureModal,
   RejectClosureModal,
+  closureNetwork,
   movedToken,
 } from "./ClosureModals";
 
 const STATUSES: readonly OutboundClosureStatus[] = ["PROPOSED", "APPROVED", "REJECTED"];
-const EXPLORER = networkMeta(BlockchainNetwork.ETHEREUM).explorerName;
 
 const STATUS_TONE: Record<OutboundClosureStatus, string> = {
   PROPOSED: "bg-amber-100 text-amber-800",
@@ -35,22 +35,25 @@ const STATUS_TONE: Record<OutboundClosureStatus, string> = {
 function CandidatesTable({
   candidates,
   onPropose,
+  networkName,
 }: {
   candidates: readonly OutboundClosureCandidate[];
   onPropose: (c: OutboundClosureCandidate) => void;
+  networkName: string;
 }) {
   const t = useTranslations("adminWallets.closures.candidates");
+  const tr = useTranslations("adminWallets.closures.row");
   const tType = useTranslations("adminWallets.outboundType");
   const locale = useLocale();
 
   if (candidates.length === 0) {
-    return <p className="text-sm text-gray-500">{t("empty")}</p>;
+    return <p className="text-sm text-gray-500">{t("empty", { network: networkName })}</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table
         className="w-full table-auto border-collapse text-left text-sm"
-        aria-label={t("ariaLabel")}
+        aria-label={t("ariaLabel", { network: networkName })}
       >
         <thead>
           <tr className="border-b border-gray-200 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -80,7 +83,17 @@ function CandidatesTable({
               key={c.blockchainTransactionId}
               className="border-b border-gray-100 last:border-b-0"
             >
-              <td className="px-3 py-2">{tDynamic(tType, c.type, c.type)}</td>
+              <td className="px-3 py-2">
+                {tDynamic(tType, c.type, c.type)}
+                {c.rowStatus === "FAILED" && (
+                  <p
+                    data-testid={`restored-failed-${c.blockchainTransactionId}`}
+                    className="text-xs font-medium text-amber-800"
+                  >
+                    {tr("restoredFailed")}
+                  </p>
+                )}
+              </td>
               <td className="px-3 py-2 tabular-nums">
                 {c.amount} {movedToken(c)}
                 <ChainTokenNote row={c} />
@@ -125,6 +138,8 @@ function ClosureCard({
   const t = useTranslations("adminWallets.closures");
   const tType = useTranslations("adminWallets.outboundType");
   const locale = useLocale();
+  const network = closureNetwork(closure.network);
+  const explorer = networkMeta(network).explorerName;
   const open = closure.status === "PROPOSED";
   // Until the current admin is known, treat the proposal as theirs: showing an
   // Approve button that the server will refuse is worse than a brief delay.
@@ -159,13 +174,13 @@ function ClosureCard({
           <dd className="break-all font-mono text-gray-900">
             {closure.txHash}{" "}
             <a
-              href={explorerTxUrl(BlockchainNetwork.ETHEREUM, closure.txHash)}
+              href={explorerTxUrl(network, closure.txHash)}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={t("approve.explorer", { explorer: EXPLORER })}
+              aria-label={t("approve.explorer", { explorer })}
               className="font-sans text-blue-600 hover:underline"
             >
-              {EXPLORER}
+              {explorer}
             </a>
           </dd>
         </div>
@@ -229,11 +244,17 @@ function ClosureCard({
 }
 
 /**
- * Two-person closure tool for stuck Ethereum outbound rows (T157). It never
- * sends money: it only binds an on-chain hash to a row once a second admin has
- * confirmed it by retyping the hash.
+ * Two-person closure tool for one network's outbound rows that already went
+ * out on chain (T157 — Ethereum journal loss; T172a — TRON, and the row a
+ * database restore left behind, DEPLOY_RUNBOOK §N.8). It never sends money:
+ * it only binds an on-chain hash to a row once a second admin has confirmed it
+ * by retyping the hash.
  */
-export function OutboundClosurePanel() {
+export function OutboundClosurePanel({
+  network = BlockchainNetwork.ETHEREUM,
+}: {
+  network?: BlockchainNetwork;
+}) {
   const t = useTranslations("adminWallets.closures");
   const tAll = useTranslations("adminWallets");
   const [status, setStatus] = useState<OutboundClosureStatus | "">("PROPOSED");
@@ -244,33 +265,42 @@ export function OutboundClosurePanel() {
     withdraw: boolean;
   } | null>(null);
 
-  const candidates = useOutboundClosureCandidates();
-  const closures = useOutboundClosures(status === "" ? undefined : status);
+  const networkName = networkMeta(network).name;
+  const headingId = `closure-panel-heading-${network}`;
+  const candidates = useOutboundClosureCandidates(network);
+  const closures = useOutboundClosures(network, status === "" ? undefined : status);
   // Shared ["auth","me"] query (AdminGuard / sidebar prime it): no extra request.
   const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: getMe });
 
   return (
     <section
-      aria-labelledby="closure-panel-heading"
+      aria-labelledby={headingId}
       data-testid="closure-panel"
+      data-network={network}
       className="flex flex-col gap-4 rounded-lg border border-amber-300 bg-amber-50/40 p-4"
     >
       <div>
-        <h4 id="closure-panel-heading" className="text-sm font-semibold text-gray-900">
-          {t("heading")}
+        <h4 id={headingId} className="text-sm font-semibold text-gray-900">
+          {t("heading", { network: networkName })}
         </h4>
         <p className="text-xs text-gray-600">{t("intro")}</p>
         <p className="mt-1 text-xs font-semibold text-amber-800">{t("noMoney")}</p>
       </div>
 
       <div className="flex flex-col gap-2">
-        <h5 className="text-sm font-medium text-gray-800">{t("candidates.heading")}</h5>
+        <h5 className="text-sm font-medium text-gray-800">
+          {t("candidates.heading", { network: networkName })}
+        </h5>
         {candidates.isError ? (
           <ErrorState message={tAll("loadError")} onRetry={() => candidates.refetch()} />
         ) : candidates.isLoading ? (
           <Skeleton className="h-12" />
         ) : (
-          <CandidatesTable candidates={candidates.data ?? []} onPropose={setProposing} />
+          <CandidatesTable
+            candidates={candidates.data ?? []}
+            onPropose={setProposing}
+            networkName={networkName}
+          />
         )}
       </div>
 

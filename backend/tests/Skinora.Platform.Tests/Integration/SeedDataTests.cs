@@ -96,10 +96,12 @@ public class SeedDataTests : IntegrationTestBase
         // + 2 T169 rows (seed indices 79–80: TRON's own minimum price and the
         //   outbound.auto_send_enabled payout/refund launch gate).
         // + 2 T169a rows (seed indices 81–82: the per-network deposit refund
-        //   daily limit, 100 each).
+        //   daily limit, 100 each)
+        // + 1 T172a outbound.dispatch_paused (seed index 83: the dispatcher's
+        //   stop switch for the post-restore window, DEPLOY_RUNBOOK §N.8).
         var rows = await Context.Set<SystemSetting>().ToListAsync();
-        Assert.Equal(79, rows.Count);
-        Assert.Equal(79, rows.Select(r => r.Key).Distinct().Count());
+        Assert.Equal(80, rows.Count);
+        Assert.Equal(80, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
@@ -178,6 +180,9 @@ public class SeedDataTests : IntegrationTestBase
             // T169 — the payout/refund launch gate ships CONFIGURED false for the
             // T125/T129 reason: it must not be flippable from a deploy variable.
             "outbound.auto_send_enabled",
+            // T172a — the dispatcher's stop switch ships CONFIGURED false for the
+            // same reason: it is turned on by an operator, never by a deploy variable.
+            "outbound.dispatch_paused",
             // T129 — the settlement window ships with its documented default
             // (8 days = Steam's 7-day reversal window + one day of margin), so
             // a deploy that configures nothing is still protected.

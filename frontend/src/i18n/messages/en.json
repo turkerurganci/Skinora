@@ -2265,13 +2265,13 @@
       "successTx": "Transaction"
     },
     "closures": {
-      "heading": "Outbound row closure (two-person)",
-      "intro": "Use this only when the Ethereum signing service lost its journal and a payment already went out on-chain while its row still shows pending. One admin proposes the on-chain transaction hash; a different admin approves it by typing the hash again. This tool never sends money.",
+      "heading": "Outbound row closure on {network} (two-person)",
+      "intro": "Use this only when a payment already went out on-chain while its row still shows pending — after the Ethereum signing service lost its journal, or after a database restore (TRON or Ethereum; DEPLOY_RUNBOOK §N.8). One admin proposes the on-chain transaction hash; a different admin approves it by typing the hash again, and the system checks it against the row on the chain. This tool never sends money.",
       "noMoney": "This tool sends no money.",
       "candidates": {
-        "heading": "Open Ethereum outbound rows",
-        "empty": "No open Ethereum outbound rows.",
-        "ariaLabel": "Open Ethereum outbound rows",
+        "heading": "Open outbound rows on {network}",
+        "empty": "No open outbound rows on {network}.",
+        "ariaLabel": "Open outbound rows on {network}",
         "columns": {
           "type": "Type",
           "amount": "Amount",
@@ -2308,7 +2308,8 @@
         "ownProposal": "You proposed this closure. A different admin must approve it.",
         "rowStatus": "Row status",
         "tokenDiffers": "The transaction expected {expected}; this row moves {actual} on chain (wrong-token refund).",
-        "tokenUnresolved": "The token this row moves on chain cannot be determined; the tool cannot close it."
+        "tokenUnresolved": "The token this row moves on chain cannot be determined; the tool cannot close it.",
+        "restoredFailed": "Closed by hand after a restore (POST_RESTORE_DUPLICATE). Approving brings this same row back to the real payment, so the books count it again."
       },
       "actions": {
         "approve": "Approve",
@@ -2321,7 +2322,10 @@
         "row": "Row: {type}, {amount} {token} to {to}",
         "hash": "On-chain transaction hash",
         "hashHelp": "0x followed by 64 hexadecimal characters.",
+        "hashHelpTron": "The TRON transaction id: 64 hexadecimal characters, no 0x (as Tronscan shows it).",
         "hashInvalid": "Enter a valid transaction hash (0x + 64 hex characters).",
+        "hashInvalidTron": "Enter a valid TRON transaction id (64 hex characters, no 0x).",
+        "restoredFailed": "Closed by hand after a restore (POST_RESTORE_DUPLICATE). Approving brings this same row back to the real payment, so the books count it again.",
         "explorer": "Open this hash on {explorer}",
         "reason": "Reason",
         "reasonHelp": "Which nonce/account, and what you matched on the chain (at least 20 characters).",

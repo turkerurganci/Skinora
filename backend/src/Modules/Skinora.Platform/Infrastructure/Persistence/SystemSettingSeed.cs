@@ -256,6 +256,12 @@ public static class SystemSettingSeed
         // admin can change it, the env cannot hydrate it.
         Default     (81, "blockchain.tron.deposit_refund_daily_limit_usdt",     "decimal", "Limit",   "100",          "TRON'da depozit adreslerinden yapılan iadelerin herhangi bir 24 saatte gönderebileceği en çok tutar (USDT). Aşacak iade beklemede kalır (FAILED olmaz, deneme hakkı harcanmaz), admin'e alarm gider; pencerede yer açılınca ya da admin AD42 ile serbest bırakınca gider. Sıcak cüzdandan çıkan iadeler sayılmaz. 100 = proje sahibi kararı 2026-10-21 (T169a)."),
         Default     (82, "blockchain.ethereum.deposit_refund_daily_limit_usdt", "decimal", "Limit",   "100",          "Ethereum'da depozit adreslerinden (sweep'ten önce) yapılan iadelerin herhangi bir 24 saatte gönderebileceği en çok tutar (USDT). Aşacak iade beklemede kalır (FAILED olmaz, deneme hakkı harcanmaz), admin'e alarm gider; pencerede yer açılınca ya da admin AD42 ile serbest bırakınca gider. Sweep sonrası sıcak cüzdandan çıkan iadeler sayılmaz. 100 = proje sahibi kararı 2026-10-21 (T169a)."),
+
+        // T172a — the dispatcher's stop switch (DEPLOY_RUNBOOK §N.8). Seeded
+        // FALSE (normal operation) and, like the gates above, not
+        // env-bootstrappable: an operator turns it on by SQL before the backend
+        // starts after a restore, or from the admin UI (audited).
+        Default     (83, "outbound.dispatch_paused",                      "bool",    "Settlement",   "false",        "Giden transfer gönderimi DURDURULSUN mu (T172a — DEPLOY_RUNBOOK §N.8). true iken gönderim işi HİÇBİR satırı göndermez (ödeme, iade, sweep, her ağ): satır PENDING kalır, deneme hakkı harcanmaz, FAILED olmaz; onay işi ve izleme sürer. Geri yüklemeden sonra imza servisleri kapatma aracının (AD33–AD37) zincir okuması için açıkken kullanılır. Normalde false."),
     ];
 
     private static SystemSetting Unconfigured(

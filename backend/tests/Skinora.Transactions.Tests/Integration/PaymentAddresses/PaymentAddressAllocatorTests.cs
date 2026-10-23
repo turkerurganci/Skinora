@@ -350,8 +350,93 @@ public class PaymentAddressAllocatorTests : IntegrationTestBase
         Assert.Equal(BlockchainNetwork.TRON, row.Network);
     }
 
-    private PaymentAddressAllocator BuildSut() =>
-        new(Context, FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar), NullLogger<PaymentAddressAllocator>.Instance);
+    // ---------- T172a — index floor after a database restore (⚠ PARA) ----------
+
+    [Fact]
+    public async Task T172a_Floor_Above_The_Current_Max_Starts_There_And_Counts_On_From_It()
+    {
+        // A restored database knows indices 0..4; the old copy had handed out up
+        // to 40. With the floor at 41 the next deposits are 41, 42 — never one
+        // of the addresses given out after the backup.
+        for (var i = 0; i <= 4; i++)
+        {
+            var old = await SeedTransactionAsync(TransactionStatus.COMPLETED);
+            await SeedPaymentAddressAsync(old.Id, index: i, address: StubBlockchainSidecarClient.DeterministicAddress(i));
+        }
+        var t1 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var t2 = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = "41" } });
+
+        var r1 = await sut.AllocateAsync(t1.Id, CancellationToken.None);
+        var r2 = await sut.AllocateAsync(t2.Id, CancellationToken.None);
+
+        Assert.Equal(41, r1.HdWalletIndex);
+        Assert.Equal(42, r2.HdWalletIndex);
+        Assert.Equal(new[] { 41, 42 }, _sidecar.Calls.Select(c => c.Index));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    [InlineData(7)]
+    public async Task T172a_Floor_At_Or_Below_The_Current_Max_Cannot_Reuse_An_Index(int floor)
+    {
+        // Indices 0..7 are taken. A floor that is too small (stale, mistyped)
+        // changes nothing: the next index is still MAX + 1 = 8.
+        for (var i = 0; i <= 7; i++)
+        {
+            var old = await SeedTransactionAsync(TransactionStatus.COMPLETED);
+            await SeedPaymentAddressAsync(old.Id, index: i, address: StubBlockchainSidecarClient.DeterministicAddress(i));
+        }
+        var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = floor.ToString(System.Globalization.CultureInfo.InvariantCulture) } });
+
+        var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
+
+        Assert.Equal(PaymentAddressAllocationStatus.Created, result.Status);
+        Assert.Equal(8, result.HdWalletIndex);
+        await using var verify = CreateContext();
+        var indices = await verify.Set<PaymentAddress>().IgnoreQueryFilters()
+            .Where(p => p.Network == BlockchainNetwork.TRON).Select(p => p.HdWalletIndex).ToListAsync();
+        Assert.Equal(indices.Count, indices.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task T172a_Floor_Counts_Soft_Deleted_Rows_Too()
+    {
+        // A soft-deleted deposit still owns its index (08 §3.2): the floor rule
+        // reads MAX across it, so a floor below it does not reuse it.
+        var old = await SeedTransactionAsync(TransactionStatus.COMPLETED);
+        await SeedPaymentAddressAsync(old.Id, index: 20, address: StubBlockchainSidecarClient.DeterministicAddress(20));
+        await using (var ctx = CreateContext())
+        {
+            var row = await ctx.Set<PaymentAddress>().IgnoreQueryFilters().SingleAsync(p => p.HdWalletIndex == 20);
+            row.IsDeleted = true;
+            row.DeletedAt = DateTime.UtcNow;
+            await ctx.SaveChangesAsync();
+        }
+        var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+
+        var result = await BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["TRON"] = "5" } })
+            .AllocateAsync(target.Id, CancellationToken.None);
+
+        Assert.Equal(21, result.HdWalletIndex);
+    }
+
+    [Fact]
+    public async Task T172a_Floor_Applies_Only_To_Its_Own_Network()
+    {
+        var target = await SeedTransactionAsync(TransactionStatus.ACCEPTED);
+        var sut = BuildSut(new PaymentAddressIndexFloorOptions { MinimumNextIndex = { ["ETHEREUM"] = "500" } });
+
+        var result = await sut.AllocateAsync(target.Id, CancellationToken.None);
+
+        Assert.Equal(0, result.HdWalletIndex);
+    }
+
+    private PaymentAddressAllocator BuildSut(PaymentAddressIndexFloorOptions? floor = null) =>
+        new(Context, FakeBlockchainServiceRegistry.ForTron(sidecar: _sidecar), NullLogger<PaymentAddressAllocator>.Instance,
+            floor is null ? null : Microsoft.Extensions.Options.Options.Create(floor));
 
     private async Task<Transaction> SeedTransactionAsync(
         TransactionStatus status, decimal totalAmount = 100.00m,

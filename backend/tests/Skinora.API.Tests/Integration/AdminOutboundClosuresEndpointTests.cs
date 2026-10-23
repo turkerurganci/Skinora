@@ -114,7 +114,6 @@ public class AdminOutboundClosuresEndpointTests : IClassFixture<AdminWalletsEndp
     [InlineData(ClosureError.SelfApproval, HttpStatusCode.Forbidden, "SELF_APPROVAL_FORBIDDEN")]
     [InlineData(ClosureError.RowNotFound, HttpStatusCode.NotFound, "ROW_NOT_FOUND")]
     [InlineData(ClosureError.ClosureNotFound, HttpStatusCode.NotFound, "CLOSURE_NOT_FOUND")]
-    [InlineData(ClosureError.RowNotEthereum, HttpStatusCode.UnprocessableEntity, "ROW_NOT_ETHEREUM")]
     [InlineData(ClosureError.RowNotOutbound, HttpStatusCode.UnprocessableEntity, "ROW_NOT_OUTBOUND")]
     [InlineData(ClosureError.HashNotSuccessful, HttpStatusCode.UnprocessableEntity, "HASH_NOT_SUCCESSFUL")]
     [InlineData(ClosureError.HashNotFound, HttpStatusCode.UnprocessableEntity, "HASH_NOT_FOUND")]
@@ -167,6 +166,26 @@ public class AdminOutboundClosuresEndpointTests : IClassFixture<AdminWalletsEndp
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(Base + "/outbound-closures")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(Base + "/outbound-closures/candidates")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(Base + "/outbound-closures?status=PROPOSED")).StatusCode);
+    }
+
+    /// <summary>T172a — both lists take the network filter (one panel per network).</summary>
+    [Fact]
+    public async Task Lists_PassTheNetworkFilterThrough()
+    {
+        var admin = await _factory.CreateUserAsync();
+        var client = BuildClient(admin.Id, admin.SteamId, ["MANAGE_SETTINGS"]);
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(Base + "/outbound-closures/candidates?network=TRON")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(Base + "/outbound-closures?status=PROPOSED&network=TRON")).StatusCode);
+
+        Assert.Equal(2, _factory.ClosureFake.Calls.Count);
+        var (candidates, _, candidateArgs) = _factory.ClosureFake.Calls[0];
+        Assert.Equal("candidates", candidates);
+        Assert.Equal(BlockchainNetwork.TRON, candidateArgs[0]);
+        var (list, _, listArgs) = _factory.ClosureFake.Calls[1];
+        Assert.Equal("list", list);
+        Assert.Equal(OutboundRowClosureStatus.PROPOSED, listArgs[0]);
+        Assert.Equal(BlockchainNetwork.TRON, listArgs[1]);
     }
 
     private static Task<HttpResponseMessage> Send(HttpClient client, string method, string url) =>

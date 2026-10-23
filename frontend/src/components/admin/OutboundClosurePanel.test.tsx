@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { ApiError } from "@/lib/api/client";
 import { OutboundClosurePanel } from "./OutboundClosurePanel";
+import { BlockchainNetwork } from "@/types/enums";
 import { HASH_A, HASH_B, candidate, closure, renderWithProviders } from "./walletTestUtils";
 
 /**
@@ -31,14 +32,107 @@ afterEach(() => {
 function setup({
   candidates = [],
   closures = [],
+  network,
 }: {
   candidates?: ReturnType<typeof candidate>[];
   closures?: ReturnType<typeof closure>[];
+  network?: BlockchainNetwork;
 } = {}) {
   api.listOutboundClosureCandidates.mockResolvedValue(candidates);
   api.listOutboundClosures.mockResolvedValue(closures);
-  renderWithProviders(<OutboundClosurePanel />);
+  renderWithProviders(
+    network ? <OutboundClosurePanel network={network} /> : <OutboundClosurePanel />,
+  );
 }
+
+// T172a — a TRON transaction id: 64 hex, no 0x.
+const TRON_ID = "c".repeat(64);
+const TRON_SELLER = "TNPeeaaFB7K9cmo4uQpcU32zGK8G1NYqeL";
+
+describe("OutboundClosurePanel — TRON and the restore case (T172a)", () => {
+  it("asks for its own network's rows and names the network", async () => {
+    setup({ network: BlockchainNetwork.TRON });
+
+    expect(await screen.findByText("No open outbound rows on TRON.")).toBeInTheDocument();
+    expect(api.listOutboundClosureCandidates).toHaveBeenCalledWith("TRON");
+    expect(api.listOutboundClosures).toHaveBeenCalledWith("PROPOSED", "TRON");
+    expect(
+      screen.getByRole("heading", { name: "Outbound row closure on TRON (two-person)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("takes a TRON id (no 0x), refuses an Ethereum-shaped hash, and links Tronscan", async () => {
+    api.proposeOutboundClosure.mockResolvedValue(closure({ network: "TRON", txHash: TRON_ID }));
+    setup({
+      network: BlockchainNetwork.TRON,
+      candidates: [candidate({ network: "TRON", fromAddress: "", toAddress: TRON_SELLER })],
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Propose closure" }));
+    const dialog = await screen.findByRole("dialog", { name: "Propose closure" });
+    expect(within(dialog).getByText(/64 hexadecimal characters, no 0x/)).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText("On-chain transaction hash"), {
+      target: { value: HASH_A },
+    });
+    const reason = "Hot wallet sent this payout after the backup; Tronscan shows it.";
+    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: reason } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Propose closure" }));
+    expect(within(dialog).getByText(/Enter a valid TRON transaction id/)).toBeInTheDocument();
+    expect(api.proposeOutboundClosure).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByLabelText("On-chain transaction hash"), {
+      target: { value: TRON_ID },
+    });
+    expect(within(dialog).getByRole("link")).toHaveAttribute(
+      "href",
+      expect.stringContaining(`tronscan.org/#/transaction/${TRON_ID}`),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Propose closure" }));
+    await waitFor(() =>
+      expect(api.proposeOutboundClosure).toHaveBeenCalledWith({
+        blockchainTransactionId: "row-1",
+        txHash: TRON_ID,
+        reason,
+      }),
+    );
+  });
+
+  it("marks a row closed by hand after a restore (FAILED POST_RESTORE_DUPLICATE)", async () => {
+    setup({
+      network: BlockchainNetwork.TRON,
+      candidates: [
+        candidate({ network: "TRON", rowStatus: "FAILED", toAddress: TRON_SELLER }),
+        candidate({ blockchainTransactionId: "row-2", network: "TRON", toAddress: TRON_SELLER }),
+      ],
+    });
+
+    expect(await screen.findByTestId("restored-failed-row-1")).toHaveTextContent(
+      /POST_RESTORE_DUPLICATE/,
+    );
+    expect(screen.queryByTestId("restored-failed-row-2")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Propose closure" })[0]);
+    const dialog = await screen.findByRole("dialog", { name: "Propose closure" });
+    expect(within(dialog).getByTestId("restored-failed-note")).toHaveTextContent(
+      /same row back to the real payment/,
+    );
+  });
+
+  it("approving a TRON closure links its id on Tronscan", async () => {
+    setup({
+      network: BlockchainNetwork.TRON,
+      closures: [closure({ network: "TRON", txHash: TRON_ID, toAddress: TRON_SELLER })],
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog", { name: "Approve closure" });
+    expect(within(dialog).getByRole("link")).toHaveAttribute(
+      "href",
+      expect.stringContaining(`tronscan.org/#/transaction/${TRON_ID}`),
+    );
+  });
+});
 
 describe("OutboundClosurePanel — propose", () => {
   it("lists open rows and marks one that already has a live closure", async () => {
@@ -199,7 +293,7 @@ describe("OutboundClosurePanel — approve", () => {
     expect(within(mine).getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
     expect(within(mine).getByText(/different admin must approve/i)).toBeInTheDocument();
     // The default filter is PROPOSED.
-    expect(api.listOutboundClosures).toHaveBeenCalledWith("PROPOSED");
+    expect(api.listOutboundClosures).toHaveBeenCalledWith("PROPOSED", "ETHEREUM");
   });
 
   it("refuses to submit until the typed hash equals the proposal, then sends the typed hash", async () => {

@@ -2265,13 +2265,13 @@
       "successTx": "İşlem"
     },
     "closures": {
-      "heading": "Giden satır kapatma (iki kişilik)",
-      "intro": "Bunu yalnızca Ethereum imzalama servisi kayıt defterini kaybettiğinde ve bir ödeme zincirde çoktan çıkmışken satırı hâlâ bekliyor görünüyorsa kullanın. Bir yönetici zincirdeki işlem hash'ini önerir; farklı bir yönetici hash'i yeniden yazarak onaylar. Bu araç asla para göndermez.",
+      "heading": "{network} giden satır kapatma (iki kişilik)",
+      "intro": "Bunu yalnızca bir ödeme zincirde çoktan çıkmışken satırı hâlâ bekliyor görünüyorsa kullanın — Ethereum imzalama servisi kayıt defterini kaybettiğinde ya da veritabanı geri yüklendikten sonra (TRON veya Ethereum; DEPLOY_RUNBOOK §N.8). Bir yönetici zincirdeki işlem hash'ini önerir; farklı bir yönetici hash'i yeniden yazarak onaylar ve sistem onu zincirde satırla karşılaştırır. Bu araç asla para göndermez.",
       "noMoney": "Bu araç para göndermez.",
       "candidates": {
-        "heading": "Açık Ethereum giden satırları",
-        "empty": "Açık Ethereum giden satırı yok.",
-        "ariaLabel": "Açık Ethereum giden satırları",
+        "heading": "{network} açık giden satırlar",
+        "empty": "{network} üzerinde açık giden satır yok.",
+        "ariaLabel": "{network} açık giden satırlar",
         "columns": {
           "type": "Tür",
           "amount": "Tutar",
@@ -2308,7 +2308,8 @@
         "ownProposal": "Bu kapatmayı siz önerdiniz. Farklı bir yönetici onaylamalı.",
         "rowStatus": "Satır durumu",
         "tokenDiffers": "İşlemin beklediği token {expected}; bu satır zincirde {actual} taşır (yanlış token iadesi).",
-        "tokenUnresolved": "Bu satırın zincirde taşıdığı token belirlenemiyor; araç bu satırı kapatamaz."
+        "tokenUnresolved": "Bu satırın zincirde taşıdığı token belirlenemiyor; araç bu satırı kapatamaz.",
+        "restoredFailed": "Geri yüklemeden sonra elle kapatıldı (POST_RESTORE_DUPLICATE). Onay bu aynı satırı gerçek ödemeye geri getirir; defterler onu yeniden sayar."
       },
       "actions": {
         "approve": "Onayla",
@@ -2321,7 +2322,10 @@
         "row": "Satır: {type}, {amount} {token}, alıcı {to}",
         "hash": "Zincirdeki işlem hash'i",
         "hashHelp": "0x ve ardından 64 onaltılık karakter.",
+        "hashHelpTron": "TRON işlem kimliği: 64 onaltılık karakter, 0x yok (Tronscan'deki gibi).",
         "hashInvalid": "Geçerli bir işlem hash'i girin (0x + 64 onaltılık karakter).",
+        "hashInvalidTron": "Geçerli bir TRON işlem kimliği girin (64 onaltılık karakter, 0x yok).",
+        "restoredFailed": "Geri yüklemeden sonra elle kapatıldı (POST_RESTORE_DUPLICATE). Onay bu aynı satırı gerçek ödemeye geri getirir; defterler onu yeniden sayar.",
         "explorer": "Bu hash'i {explorer} üzerinde aç",
         "reason": "Gerekçe",
         "reasonHelp": "Hangi nonce/hesap ve zincirde neyle eşleştirdiniz (en az 20 karakter).",

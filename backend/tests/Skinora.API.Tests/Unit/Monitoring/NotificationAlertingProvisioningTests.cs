@@ -62,6 +62,9 @@ public sealed class NotificationAlertingProvisioningTests
         "ethereum-rpc-provider-failing",
         "hot-wallet-monitor-stale",
         "tron-energy-delegation-stranded",
+        // T172a doğrulama S4-4 — the dispatcher's stop switch left on (⚠ PARA;
+        // classified when main (T165) was merged into T172a)
+        "outbound-dispatch-paused",
         // T172b — the signer refused a deposit refund over its own 24 h cap
         // (⚠ PARA; classified when main T165 was merged into T172b)
         "tron-deposit-refund-limit-refused",
@@ -100,7 +103,7 @@ public sealed class NotificationAlertingProvisioningTests
         Assert.Equal(all.Count, all.Distinct().Count());
         Assert.Empty(MoneyRules.Intersect(NonMoneyRules));
         Assert.Equal(all.ToHashSet(), MoneyRules.Concat(NonMoneyRules).ToHashSet());
-        Assert.Equal(35, MoneyRules.Length);
+        Assert.Equal(36, MoneyRules.Length);
     }
 
     [Theory]
