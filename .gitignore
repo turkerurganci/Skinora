@@ -60,6 +60,10 @@ secrets/*
 *.maFile
 *.mafile
 
+# Database backups (T164, DEPLOY_RUNBOOK §N) — personal data and secrets in
+# clear; written by skinora-db-backup into backups/db and backups/trial/db.
+backups/
+
 # Logs
 *.log
 logs/
