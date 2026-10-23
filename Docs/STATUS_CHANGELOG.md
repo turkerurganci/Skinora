@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-23 — T165 ✓ Tamamlandı (bildirim kanalları ve dış alarm; ilk doğrulama FAIL S3 ⚠ PARA + S1 ⚠ GÜVENLİK, yeniden doğrulama PASS 3 × S4 ⚠ PARA — kapanışta hepsi kapandı: Grafana sağlığı heartbeat'te, ilk açılış korumasının log ayarı sabit, eksik deposit adresi "çözüldü" demez; main `fcc94d8d` (T169a #376) dala birleştirildi, T169a iade tavanı kuralı para alarmı (28); 50 aktif / 168 çözülmüş; T165_REPORT.md, PR #375) · Değişiklik geçmişi: [STATUS_CHANGELOG.md](STATUS_CHANGELOG.md)
+
 **Önceki güncelleme:** 2026-10-23 — T169a ✓ Tamamlandı (iade kesintisi = platformun tam zincir harcaması, TRON yedeği 2,80; depozitten iadeye ağ başına 24 saatte 100 $ tavanı + AD42; doğrulama PASS 7 × S4, hepsi kapandı; sahip kararı: admin onayı tavanı aşma izni sayılmaz; main `792f8ed2` dala birleştirildi, 50 aktif / 168 çözülmüş; T169a_REPORT.md, PR #376) **Merge teyidi (T165 kapanışında işlendi):** T169a (#376) main `fcc94d8d` → CI `39995712182` ✓, Docker Publish `39995711969` ✓.
 
 **Önceki güncelleme:** 2026-10-23 — T165 ⏳ düzeltme turu bitti, yeniden doğrulama bekliyor (mutabakat uyuşmazlığı Telegram + e-posta + admin bildirimi; Grafana ilk açılış koruması; main 792f8ed2 birleştirildi; T165_REPORT.md, PR #375) Sonra bağımsız yeniden doğrulama ✓ PASS (HEAD `869198a9`, 3 × S4 ⚠ PARA) → kapanış.

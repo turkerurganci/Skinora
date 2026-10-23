@@ -1,6 +1,6 @@
 # Skinora — Technical Architecture
 
-**Versiyon: v3.37** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T165: §9.3 para alarmı (Telegram + e-posta, mutabakat uyuşmazlığı dahil), §9.5 dış izleme (Grafana sağlığı dahil) ve açık sağlık ucu. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
+**Versiyon: v3.38** | **Bağımlılıklar:** `01_PROJECT_VISION.md`, `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T170: §9.2 ağ başına metrikler ve panolar, §9.3 ağ başına alarmlar, §9.5 ölçülen erişilebilirlik. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#05_technical_architecturemd)
 
 > **v3.1 (T118):** §4.2 geçiş tablosuna `ACCEPTED | seller_cancel | CANCELLED_SELLER` satırı geri eklendi. Satır v2.0'da vardı, v3.0 yazımında sehven düştü; kod, `POST /transactions/:id/cancel` ucu ve 07 §7.7 iptal yetkisi tablosu bu geçişi kesintisiz uyguluyordu. Davranış değişikliği yoktur — 05 ↔ 07 tutarsızlığı kapatıldı. **Doğrulamada eklendi:** §4.2 admin-iptal notundaki emekli `TRADE_OFFER_SENT_TO_BUYER` adı `PAYMENT_RECEIVED` ile değiştirildi (tablonun zaten söylediği sınır; yalnız adlandırma düzeltmesi).
 
@@ -958,6 +958,9 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 | İş metrikleri | Aktif işlem sayısı, tamamlanma oranı, ortalama işlem süresi, günlük hacim |
 | Entegrasyon | Steam API yanıt süresi/hata oranı, Tron node yanıt süresi, email delivery oranı |
 | Güvenlik | OpenID/callback/refresh başarısızlıkları, abuse throttling tetik sayısı, rate limit hit sayısı, flag'lenen işlem sayısı |
+| Ağ başına (T170) | Zincir ilerlemesi (TRON solid blok yaşı, Ethereum finalized yaşı), sağlayıcı hataları (TronGrid hata türleri, Ethereum RPC sağlayıcı başına hata oranı), sıcak cüzdan bakiyesi + limiti (her ağ), yakıt (TRX / ETH) + tabanı, giden kuyruk, mutabakat, servis sağlığı (backend probu) |
+
+**Panolar (T170):** Grafana provisioning'deki altı pano (`infra/grafana/provisioning/dashboards/json/`). Ağ başına izleme **Skinora — Networks (TRON + Ethereum)** panosundadır: ağ seçimi, her ağ için ayrı satır, her alarm değeri servisin yayımladığı eşikle yan yana. Pano ve alarm sorgularının gerçek metrik adlarına bağlı olduğunu `scripts/grafana/dashboard-metrics.test.mjs` sınar (yanlış ad = boş panel). İş metrikleri (aktif işlem, tamamlanma oranı, günlük hacim) backend'de yayımlanmıyor — DEFERRED_BACKLOG `BusinessMetricsNotPublished`.
 
 ### 9.3 Alerting
 
@@ -972,6 +975,8 @@ State geçişi → Outbox (DB) → Hangfire Dispatcher → Notification Consumer
 | Critical | Servis down, DB bağlantısı koptu, blockchain/Steam erişilemiyor | Anında Telegram + Email |
 | Warning | Hata oranı yükseldi, yanıt süresi arttı, disk %80+, job queue birikiyor | Telegram |
 | Info | Günlük özet, deployment tamamlandı | Sadece log |
+
+**Ağ başına alarmlar (T170):** her ağ için ayrı ayrı — ağın servisi sağlıksız (`blockchain-service-degraded`), zincir ilerlemiyor (TRON `tron-solid-block-stalled`, Ethereum `ethereum-finalized-stalled`), sağlayıcı hatası (TRON `tron-api-errors-high` / kota kuralları, Ethereum `ethereum-rpc-provider-failing`), sıcak cüzdan limiti (`hot-wallet-threshold-breached`, iki ağ), yakıt (TRON TRX tabanı, Ethereum `ethereum-wallet-eth-low`), bakiye izleyicisi kör (`hot-wallet-monitor-stale`). Hepsi para alarmıdır; kapsam tablosu ve üretim eşikleri DEPLOY_RUNBOOK §P.7.
 
 Para ile ilgili backend admin bildirimleri ayrıca her admin'in panel gelen kutusuna ve admin'in kendi bağladığı e-posta / Telegram kanalına gider (05 §7). Kanal sağlayıcısı seçili ama sırrı eksik olan kanal kapalı gibi davranır ve `notification-channel-misconfigured` alarmı verir (T165).
 
@@ -991,6 +996,7 @@ Para ile ilgili backend admin bildirimleri ayrıca her admin'in panel gelen kutu
 | Dış monitoring (T165) | **Healthchecks.io** heartbeat — bu makineden dakikada bir ping (`skinora-heartbeat`, ping yalnız site **ve Grafana** sağlıklıyken — para alarmları Grafana'dan çıkar; T165 kapanış); ping durursa e-posta + Telegram. **UptimeRobot** — dışarıdan `https://<alan-adı>/api/health` (tünel/DNS yolu). İkisi de ücretsiz plan; seçim ve kurulum DEPLOY_RUNBOOK §P.5 |
 | Herkese açık sağlık ucu (T165) | `/api/health` (nginx `/health`'i de buna yönlendirir) — yalnız `{"status": …}`, DB + Redis; kontrol adı / hata metni yok |
 | İç monitoring | **Uptime Kuma** (self-hosted, aynı makine — makine düşünce o da düşer) ve ayrıntılı `/health` (yalnız compose ağı içinden) — DB, Redis bağlantılarını kontrol eder |
+| Ölçülen erişilebilirlik (T170) | Networks panosu: Prometheus'un servisleri kazıyabildiği oran (`up`, 30 gün) ve backend sağlık probunun Steam / her ağın servisini sağlıklı bulduğu oran (`skinora_backend_platform_component_up`, 30 gün). T166'da kaldırılan sabit "%99,9"un yerine geçen ölçüm budur; açılış sayfasına geri konmadı (makine içi ölçüm — DEPLOY_RUNBOOK §P.7) |
 
 ### 9.6 Maliyet
 

@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.25** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T165: §5.6 kanal `available` alanı, U7/U9/U10/U15 için 409 `CHANNEL_UNAVAILABLE`. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.26** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T170: `AdminHotWalletThresholdBreached` yüküne `network` alanı (iki ağın sıcak cüzdanı izleniyor). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -2804,7 +2804,7 @@ Bakiyeler her ağın **kendi servisinden** (Ethereum `finalized`, TRON solidity)
 }
 ```
 
-> **T166:** `platformUptimePercent` kaldırıldı. Ölçüm değil, yapılandırma sabitiydi (`Platform:UptimePercent = 99.9`) ve açılış sayfası onu ölçülmüş bir değer gibi gösteriyordu. Gerçek bir değer heartbeat geçmişi gerektirir (06 §3.23) ve izleme işine (F9 T170) aittir.
+> **T166:** `platformUptimePercent` kaldırıldı. Ölçüm değil, yapılandırma sabitiydi (`Platform:UptimePercent = 99.9`) ve açılış sayfası onu ölçülmüş bir değer gibi gösteriyordu. Gerçek bir değer heartbeat geçmişi gerektirir (06 §3.23) ve izleme işine (F9 T170) aittir. **T170:** ölçüm Grafana Networks panosundadır (servis ve bileşen erişilebilirliği, 30 gün); API'ye geri eklenmedi (DEPLOY_RUNBOOK §P.7).
 
 ### 10.2 P2 — `GET /platform/maintenance`
 
@@ -2932,7 +2932,7 @@ Frontend sayfa yüklemesinde P2'yi çağırır. Anlık değişiklikler RT2 ile p
 | Event | Payload | Tetikleyici |
 |-------|---------|-------------|
 | `AdminReconciliationMismatch` | `{ scope, address, token, expected, actual, delta, blockNumber, detectedAt }` | Günlük mutabakat zincir↔ledger uyuşmazlığı tespit etti (T76) |
-| `AdminHotWalletThresholdBreached` | `{ token, direction, threshold, actual, blockNumber, detectedAt }` | Hot wallet bakiyesi eşik aştı/altına düştü (T77) |
+| `AdminHotWalletThresholdBreached` | `{ token, direction, threshold, actual, blockNumber, detectedAt, network }` | Hot wallet bakiyesi eşik aştı/altına düştü (T77). T170: `network` (`TRON` / `ETHEREUM`) — her ağın sıcak cüzdanı izlenir; `direction: Lower` (gaz tabanı) yalnız TRON'da (TRX) |
 
 ---
 

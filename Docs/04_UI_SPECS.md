@@ -1,6 +1,6 @@
 # Skinora — UI Specifications
 
-**Versiyon: v4.15** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T169a: S22 "Günlük iade tavanı" bölümü; alıcının iade özetinde "Ağ ücreti (iadenin zincir maliyeti)". · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
+**Versiyon: v4.16** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T170: S01 uptime notu — ölçüm Grafana Networks panosunda, açılış sayfasına geri konmadı. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#04_ui_specsmd)
 
 ---
 
@@ -559,7 +559,7 @@ Filtreleme çubuğu. Admin ekranlarında (S13, S15) ve dashboard'da kullanılır
 3. **Güven Göstergeleri**
    - Toplam tamamlanan işlem sayısı
    - Otomatik doğrulama vurgusu
-   - *(T166 — "Platform çalışma süresi (uptime)" göstergesi kaldırıldı: ölçülmüş bir değer değil, sabit bir "%99,9" yazısıydı. Gerçek ölçüm F9 T170 izleme işinde.)*
+   - *(T166 — "Platform çalışma süresi (uptime)" göstergesi kaldırıldı: ölçülmüş bir değer değil, sabit bir "%99,9" yazısıydı. Gerçek ölçüm F9 T170 izleme işinde. T170: ölçüm Grafana Networks panosunda (servis + bileşen erişilebilirliği, 30 gün); makine içi ölçüm olduğu için açılış sayfasına geri konmadı — DEPLOY_RUNBOOK §P.7.)*
 
 4. **Footer**
    - Terms of Service linki

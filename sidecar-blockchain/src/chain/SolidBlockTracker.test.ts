@@ -17,7 +17,9 @@ describe('SolidBlockTracker (T170 — tron-solid-block-stalled)', () => {
   it('publishes the solid block number, the stall threshold, and its age from the block timestamp', async () => {
     let now = 1_800_000_000_000;
     const tracker = new SolidBlockTracker({
-      client: { getNowSolidBlockHeader: async () => ({ number: 70_000_000, timestampMs: now - 57_000 }) },
+      client: {
+        getNowSolidBlockHeader: async () => ({ number: 70_000_000, timestampMs: now - 57_000 }),
+      },
       pollIntervalMs: 60_000,
       stallThresholdSeconds: 300,
       now: () => now,
