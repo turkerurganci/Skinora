@@ -1,6 +1,6 @@
 # T165 — Bildirim kanalları ve dış alarm
 
-**Faz:** F9 | **Durum:** ⏳ Devam ediyor (düzeltme turu bitti, yeniden doğrulama bekliyor) | **Tarih:** 2026-10-23
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — ilk doğrulama ✗ FAIL (HEAD `f568396b`: 1 × S3 ⚠ PARA, 1 × S1 ⚠ GÜVENLİK, 6 × S4 — bkz. "Düzeltme turu"), yeniden doğrulama ✓ PASS (HEAD `869198a9`: 3 × S4, üçü ⚠ PARA — bkz. "Kapanış") | **Tarih:** 2026-10-23
 
 ---
 
@@ -27,7 +27,7 @@
 - **Backend test:** yeni `Shared.Tests/Unit/Notifications/NotificationChannelAvailabilityTests.cs`, `API.Tests/Integration/PublicHealthEndpointTests.cs`, `API.Tests/Unit/Notifications/TelegramTransportRegistrationTests.cs`, `API.Tests/Unit/Monitoring/NotificationAlertingProvisioningTests.cs`; değişen `ResendEmailClientTests`, `TelegramBotClientTests`, `AdminAlertNotificationConsumerTests`, `NotificationDispatcherTests`, `AccountSettingsEndpointTests`, `HotWalletMonitorServiceTests`, `OutgoingTransferDispatchJobTests`.
 - **Frontend:** `lib/api/settings.ts`, `components/settings/LinkedAccountsSection.tsx`, `NotificationPreferencesSection.tsx`, yeni `NotificationChannelAvailability.test.tsx`, `i18n/messages/{en,tr,es,zh}.json` (+2 anahtar).
 - **Altyapı:** `infra/grafana/provisioning/alerting/{contactpoints,policies,rules}.yml`, `docker-compose.yml`, `docker-compose.trial.yml`, `.env.example`, `nginx/nginx.conf`, yeni `scripts/heartbeat/heartbeat.sh` + `heartbeat.test.mjs`, `scripts/compose-exposure.test.mjs`, `.github/workflows/ci.yml`.
-- **Belgeler:** `DEPLOY_RUNBOOK.md` §P, `INTEGRATION_RUNBOOKS/{RESEND,TELEGRAM,DISCORD}_SETUP.md`, `05` v3.35, `07` v4.24, `DOC_CHANGELOG.md`, `DEFERRED_BACKLOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`.
+- **Belgeler:** `DEPLOY_RUNBOOK.md` §P, `INTEGRATION_RUNBOOKS/{RESEND,TELEGRAM,DISCORD}_SETUP.md`, `05` v3.37 (dalda v3.35; kapanışta main T169a ile yeniden numaralandı), `07` v4.25 (dalda v4.24), `DOC_CHANGELOG.md`, `DEFERRED_BACKLOG.md`, `IMPLEMENTATION_STATUS.md`, `STATUS_CHANGELOG.md`, `.claude/memory/MEMORY.md`.
 
 ## Kabul Kriterleri Kontrolü
 
@@ -71,7 +71,7 @@ Doğrulama raporu: S1 1 · S3 1 · S4 6. Her bulgu → yapılan → kanıt.
 **Yapılan.** Sıcak cüzdan eşiğiyle aynı desen, iki bağımsız yol:
 - **Metrik + Grafana para kuralı:** `IReconciliationRunObserver.ReportMismatches(network, scope, n)` → `skinora_backend_reconciliation_mismatches{network,scope}` (`PrometheusReconciliationRunObserver`). Tur, yalnız gerçekten karşılaştırdığı kapsamı raporlar: deposit her tamamlanan turda (aktif depozit yoksa 0), sıcak/soğuk cüzdan yalnız adresi ayarlı ve anlık görüntüde varsa; yarıda kalan tur ya da karşılaştırılmayan kapsam **hiçbir şey** raporlamaz — kontrol edilmemiş cüzdan "dengede" okunmaz, son değer kalır. Yeni kural `reconciliation-mismatch` (T165 grubunda, `max by (network, scope) (…) or vector(0) > 0`, `for: 0s`, **critical, `category: money`** → `money-alarm`: Telegram + e-posta); aynı kapsamın sonraki dengeli turu 0 yazar → "çözüldü". Özet: `Reconciliation: TRON HotWallet does not match the chain (2 mismatch(es))`.
 - **Mevcut admin bildirim yolu:** tur başına (ağ, ≥1 uyuşmazlık) bir `ReconciliationMismatchAdminAlertEvent` outbox'a → yeni `ReconciliationMismatchAdminNotificationConsumer` (WP8 admin-broadcast) → yeni **`ADMIN_RECONCILIATION_MISMATCH`** (NotificationType sona eklendi, 29 değer; şablon 4 dilde; e-posta kategorisi Account; hedef `null` — ağ başına) her admin'in gelen kutusuna **ve** bağladığı e-posta/Telegram'a. İşleme bağlı `ADMIN_PAYMENT_FAILURE` kullanılamadı (şablonu `{TransactionId}` ister). Tüketici **para gözlemcisi olmadan** kuruldu: operatör yolu kendi metriği ve "çözüldü"lü kuralı; gözlemci verilse aynı uyuşmazlık bir de `admin-money-alarm-raised` olarak gelirdi (`MoneyAlarmCategory_IsExactlyTheMoneyConsumers` bunu sabitler). Uyuşmazlık sürdükçe her günlük tur yeni admin bildirimi üretir (hatırlatma).
-- Belgeler: 05 §3.3 + §9.3, 06 §2.13 (v6.38), 07 §8.1, DEPLOY_RUNBOOK §P.4.
+- Belgeler: 05 §3.3 + §9.3, 06 §2.13 (v6.39; dalda v6.38), 07 §8.1, DEPLOY_RUNBOOK §P.4.
 
 **Kanıt.**
 - `ReconciliationServiceTests` +5: `T165_Mismatch_IsReportedPerScope_AndRaisesOneAdminEvent`, `T165_BalancedRound_ReportsZeroForEveryComparedScope_SoTheAlarmResolves_AndRaisesNoEvent`, `T165_ScopeNotCompared_ReportsNothing_SoAnUncheckedWalletNeverReadsBalanced`, `T165_AbortedRound_ReportsNoMismatchCount_AndNoEvent`, `T165_EthereumMismatch_CarriesItsNetwork`.
@@ -173,7 +173,7 @@ Testler: `scripts/grafana/first-boot.test.mjs` 4/4 (sahte `/run.sh`: boş volume
 
 ### Düzeltme turu kararları (öneriyle kaydedildi — ⚠)
 
-17. **⚠ PARA — Uyuşmazlık ölçümü kapsam başına, karşılaştırılmayan kapsam raporlanmaz** (yarıda kalan tur / adresi ayarsız cüzdan alarmı çözmez).
+17. **⚠ PARA — Uyuşmazlık ölçümü kapsam başına, karşılaştırılmayan kapsam raporlanmaz** (yarıda kalan tur / adresi ayarsız cüzdan alarmı çözmez). *Kapanışta düzeltildi (yeniden doğrulama Y2):* deposit kapsamında anlık görüntüde eksik adres varken bu cümle doğru değildi, kapsam 0 raporlanıyordu. Artık eksik adres varken geri kalanı dengeliyse deposit kapsamı raporlanmaz.
 18. **⚠ PARA — `reconciliation-mismatch` critical** (05 §3.3 "critical alert"), `for: 0s`.
 19. **⚠ PARA — Yeni `ADMIN_RECONCILIATION_MISMATCH`** (admin gelen kutusu + kanalları), tüketici para gözlemcisiz (çift bildirim olmasın); her uyuşmazlıklı günlük turda yeniden.
 20. **⚠ PARA — Aynı türde ikinci para olayı ayrı operatör bildirimi üretmez** (Bulgu 6).
@@ -187,11 +187,57 @@ Testler: `scripts/grafana/first-boot.test.mjs` 4/4 (sahte `/run.sh`: boş volume
 
 ## Doğrulama
 
-| Alan | Sonuç |
+| Tur | HEAD | Verdict | Bulgular | Sonuç |
+|---|---|---|---|---|
+| 1. doğrulama (bağımsız alt ajan) | `f568396b` | ✗ FAIL | 8 — S3: 1 (⚠ PARA, mutabakat uyuşmazlığı yalnız panelde) · S1: 1 (⚠ GÜVENLİK, Grafana ilk açılışta `example@email.com`) · S4: 6 | "Düzeltme turu": sekizi de ele alındı |
+| Yeniden doğrulama (bağımsız alt ajan, Opus high) | `869198a9` | ✓ PASS | 3 — S4: 3, üçü ⚠ PARA (Y1 Grafana izlenmiyor + koruma bir log satırına bağlı, Y2 eksik deposit adresi, Y3 main T169a birleştirmesi) | Önceki 8 bulgu kapandı. S3 (Telegram + e-posta, "çözüldü" dahil) ve S1 (korumalı 0, korumasız kontrol 3 e-posta) canlı ölçüldü. **Bozma 29/29**, kabul kriterleri ✓. Üç S4 kapanışta kapandı, bkz. "Kapanış" |
+
+Kaynak raporlar (yerel, repo dışında): `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T165_VALIDATION.md` (1. tur) ve `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T165_REVALIDATION.md` (yeniden doğrulama).
+
+## Kapanış (2026-10-23 — yeniden doğrulama ✓ PASS sonrası)
+
+**Y3 — main birleştirmesi (⚠ PARA).** `origin/main` `fcc94d8d` (T169a #376), merge commit `eb3a6c5e` ile alındı. Kod otomatik birleşti. 9 belgede çakışma vardı:
+- MEMORY ve BYPASS_LOG: iki tarafın satırları korundu.
+- 05 **v3.37**, 06 **v6.39**, 07 **v4.25**: T169a v3.35/v3.36, v6.38 ve v4.24'ü aldığı için T165 bir üstüne çıktı; DOC_CHANGELOG'daki T165 girdileri yeniden numaralandı.
+- DEPLOY_RUNBOOK başlığı birleştirildi, bölüm sırasına §P eklendi.
+- IMPLEMENTATION_STATUS / STATUS_CHANGELOG: main'in T169a satırları korundu.
+- DEFERRED_BACKLOG otomatik birleşti. T165 yalnız bir satırın metnini değiştiriyor; sayı main'deki **50 aktif / 168 çözülmüş**, yeni satır yok.
+
+Para sınıflandırması:
+- T169a'nın `deposit-refund-daily-limit-held` kuralına `category: money` eklendi (**28 para kuralı**).
+- Yeni `NonMoneyRules` listesi ve `EveryRule_IsClassified_AsMoneyOrNotMoney` testi: rules.yml'deki her kural (40) ya para ya para dışı listesinde olmalı. Başka daldan etiketsiz gelen bir kural artık CI'ı kırar.
+- `DepositRefundLimitHeldAdminNotificationConsumer` bilinçli olarak **para dışı** (gözlemcisiz). Kendi göstergesi ve para kuralı var; gözlemci aynı beklemeyi `admin-money-alarm-raised` olarak ikinci kez duyururdu (`ReconciliationMismatch` ile aynı gerekçe).
+- Runbook §P.4 tablosu ve "yeni para alarmı eklemek" paragrafı güncellendi.
+- Bozma: etiket silinince 2 test kırıldı (`MoneyRule_CarriesTheMoneyCategory`, `OnlyTheListedRules_AreMoneyRules`).
+
+**Y1 — Grafana'nın kendisi izlenmiyordu, koruma bir log satırına bağlıydı (⚠ PARA).**
+1. Deneme yayını heartbeat'inde `HEARTBEAT_CHECK_URLS`'e `http://skinora-grafana:3000/api/health` eklendi (konteyner ağı adresi; Grafana dışarıya yalnız 127.0.0.1'de açık). Grafana düşerse ya da ilk açılış koruması onu açmazsa ping durur, Healthchecks sahibe haber verir. compose-exposure testi bu kontrolü ister. `.env.example` notu, runbook §P.5 (+ P.6 adım 7a) ve 05 §9.5 güncellendi.
+2. `first-boot.sh` korumalı açılışta kendi log ayarını sabitler: `GF_LOG_LEVEL=info`, `GF_LOG_MODE=console`, `GF_LOG_CONSOLE_LEVEL=info`, `GF_LOG_CONSOLE_FORMAT=text`, `GF_LOG_FILTERS=provisioning.alerting:info`. Operatörün `GF_LOG_*` ayarı normal açılışta geçerli kalır.
+   - **Neden yalnız test değil, sabitleme:** test yalnız repodaki ayarı korur; operatörün `.env`'ine ya da elle eklenen değişkene bakamaz. Sabitleme, Grafana hangi ayarla açılırsa açılsın korumayı çalıştırır. Sabitlemeyi de bir test zorluyor.
+   - Testler: `first-boot.test.mjs` +2. Birincisi: warn/file/json/filtre altında koruma tamamlanır, normal açılış operatörün ayarını alır. İkincisi kontrol testi: sahte Grafana o ayarda satırı gerçekten gizler.
+   - Bozma: sabitlemenin üç parçasından her biri silinince test kırıldı (3/3).
+   - **Canlı ölçüm:** gerçek `grafana/grafana:11.3.0`, boş veri, `GF_LOG_LEVEL=warn GF_LOG_CONSOLE_FORMAT=json GF_LOG_FILTERS=provisioning.alerting:error`. Faz 1 metin satırını yazdı (`level=info msg="finished to provision alerting"`), işaret yazıldı, faz 2 operatörün json/warn ayarıyla açıldı, `/api/health` 200 (`database: ok`). Konteyner kaldırıldı.
+3. Sürüm: compose testi imajı `grafana/grafana:11.3.0`'a sabitler. Betik başlığı ve runbook "yükseltmeden önce log satırını yeniden ölç" der.
+
+**Y2 — anlık görüntüde eksik deposit adresi (⚠ PARA).**
+- `ReconciliationService`: eksik adres varken geri kalan deposit adresleri dengeliyse deposit kapsamı **raporlanmaz**. Önceki değer kalır, yanlış "çözüldü" çıkmaz.
+- Uyuşmazlık bulunduysa yine raporlanır; pozitif bir sayı alarmı ancak ateşte tutabilir.
+- Eksik adres sayısı uyarı olarak loglanır.
+- İki test eklendi: eksik + dengeli → rapor yok, olay yok; eksik + uyuşmazlık → 1 raporlanır, olay var.
+- Bozma: koşul kaldırılınca ilk test kırıldı.
+- `IReconciliationRunObserver` yorumu ve karar 17 güncellendi.
+- Kapsam dışı: `MaxDepositAddressesPerRun` kesmesi hep aynı (en eski) adresleri seçer. Kesilen adreslerde uyuşmazlık hiç ölçülmediği için yanlış "çözüldü" üretemez; olduğu gibi bırakıldı.
+
+**Kapanış testleri.**
+
+| Tür | Sonuç |
 |---|---|
-| Doğrulama durumu | 1. tur ✗ FAIL (HEAD `f568396b`, bağımsız doğrulama alt ajanı) → düzeltme turu bitti, yeniden doğrulama bekliyor |
-| Bulgu sayısı | S1 1 · S2 0 · S3 1 · S4 6 (⚠ PARA: 1, 4 · ⚠ GÜVENLİK: 2) |
-| Düzeltme gerekli mi | Evet — hepsi bu turda ele alındı (aşağıda "Düzeltme turu") |
+| Backend build (Release) | ✓ 0 hata |
+| Backend unit (tümü) | ✓ 2501/2501 (11 assembly; main T169a testleri dahil) |
+| LocalDB integration (Reconciliation, MoneyAlarmComposition, AdminAlertNotificationConsumer, DepositRefund, AdminOutboundApprovals, AccountSettingsEndpoint, NotificationDispatcher, HotWalletMonitor, ChannelHandlerRegistration) | ✓ API 69/69 + Notifications 9/9 |
+| Betikler | ✓ 27/27 (first-boot 6, compose-exposure 14, heartbeat 7) |
+
+**Kapanışta açık kalan:** yok. Gerçek hesaplarla uçtan uca gönderim T171/T172'de (değişmedi).
 
 ## Altyapı Değişiklikleri
 
@@ -205,6 +251,7 @@ Testler: `scripts/grafana/first-boot.test.mjs` 4/4 (sahte `/run.sh`: boş volume
 
 - Branch: `task/T165-bildirim-kanallari`
 - Commit: `2751c55e` — kod/altyapı/test; `c064ee91` — belgeler; `58d6569c` + bu commit — rapor, status, memory
+- Kapanış: `eb3a6c5e` (main `fcc94d8d` merge + T169a para sınıflandırması), `b4b3e4d9` (Y1/Y2 kod + test), ardından kapanış kayıt commit'i
 - PR: [#375](https://github.com/turkerurganci/Skinora/pull/375)
 - CI: run `39863197815` (HEAD `c064ee91`); son HEAD'in run'ı PR'da
 
@@ -218,7 +265,7 @@ Testler: `scripts/grafana/first-boot.test.mjs` 4/4 (sahte `/run.sh`: boş volume
 | `reconciliation-mismatch` (düzeltme turu: günlük mutabakat defter ↔ zincir uyuşmazlığı, ağ + kapsam) | critical | Telegram + e-posta (dengeli turda "çözüldü"); ayrıca `ADMIN_RECONCILIATION_MISMATCH` → panel + admin'in kendi kanalları |
 | `blockchain-sidecar-down`, `ethereum-finalized-stalled`, `ethereum-deposit-balance-mismatch`, `ethereum-usdt-status`, `ethereum-nonce-conflict`, `ethereum-journal-behind-chain`, `ethereum-journal-ack-ahead-of-chain`, `ethereum-monitor-scan-failing`, `ethereum-webhook-signature-refused`, `ethereum-transfer-status-unverified`, `ethereum-gas-estimate-abnormal`, `tron-quota-rejections` | critical | Telegram + e-posta |
 | `tron-api-errors-high`, `tron-quota-projection`, `ethereum-deposit-native-eth`, `ethereum-reconciliation-stale`, `ethereum-transfer-wait`, `ethereum-wallet-eth-low` (yakıt), `outbound-transfer-stuck`, `ethereum-rpc-latency-high`, `outbound-transfer-backlog`, `reconciliation-network-failed`, `gas-fee-fallback-charged` (kesinti yedeği) | warning | Telegram + e-posta |
-| T169a günlük iade tavanı (paralel dal) | — | Kuralına `category: money` yazması yeter; backend olayıysa `IAdminMoneyAlarmObserver` kurucusu |
+| `deposit-refund-daily-limit-held` (T169a; kapanışta main birleştirilirken etiketlendi) | warning | Telegram + e-posta; ayrıca `ADMIN_PAYMENT_FAILURE` → panel + admin kanalları (tüketici gözlemcisiz) |
 | Para dışı: `notification-channel-misconfigured`, `notification-delivery-exhausted` | warning | Telegram (4 sa) |
 
 ## Kararlar (öneriyle kaydedildi — ⚠)
@@ -269,7 +316,7 @@ Testler: `scripts/grafana/first-boot.test.mjs` 4/4 (sahte `/run.sh`: boş volume
 - **Webhook'lar alan adı + tünel ister** (T162): Resend olayları ve Telegram `/start` bağlantısı o zamana kadar çalışmaz; e-posta gönderimi ve Grafana Telegram alarmı webhook'suz çalışır.
 - **Telegram sohbet kimliği** `getUpdates` ile webhook kurulmadan **önce** alınmalı (§P.3; sonra 409).
 - Bildirim sırları ve `HEARTBEAT_URL` env'de (`docker inspect` gösterir) — T171.
-- T169a (paralel dal) kuralına `category: money` eklemezse para kanalına gitmez; `OnlyTheListedRules_AreMoneyRules` testi birleştirmede bunu yakalar (liste güncellenmeli).
+- ~~T169a (paralel dal) kuralına `category: money` eklemezse para kanalına gitmez; `OnlyTheListedRules_AreMoneyRules` testi birleştirmede bunu yakalar.~~ Bu yanlıştı: test yalnız etiketli kuralları karşılaştırıyordu (yeniden doğrulama Y3). Kapanışta kural etiketlendi; `EveryRule_IsClassified_AsMoneyOrNotMoney` artık her kuralın bilinçli sınıflandırılmasını zorlar.
 
 ## Notlar
 
