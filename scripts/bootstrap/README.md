@@ -24,9 +24,13 @@ Container içindeki `sqlcmd` ile (ekstra araç kurmadan):
 # T171b — sa parolası konteynerin kendi secret dosyasından okunur ve sqlcmd'ye
 # SQLCMDPASSWORD ile verilir: ne komut satırına ne host'un ekranına girer.
 MSYS_NO_PATHCONV=1 docker exec -i skinora-db bash -c \
-  'SQLCMDPASSWORD="$(cat /run/secrets/mssql_sa_password)" exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d Skinora -v SteamId="$0" -i /dev/stdin' \
+  'SQLCMDPASSWORD="$(cat /run/secrets/mssql_sa_password)" exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -I -d Skinora -v SteamId="$0" -i /dev/stdin' \
   "76561198000000000" < scripts/bootstrap/01-super-admin.sql
 ```
+
+`-I` (QUOTED_IDENTIFIER ON) zorunludur: script filtreli indeksi olan tablolara yazar;
+onsuz SQL Server `Msg 1934 … QUOTED_IDENTIFIER` ile durur ve işlem geri alınır
+(hiçbir şey yazılmaz). Deneme yayınının ilk kurulumunda ölçüldü (2026-10-24).
 
 PowerShell'de aynı komut `docker exec -i skinora-db bash -c '...' "<steamid64>"`
 biçiminde, `Get-Content scripts/bootstrap/01-super-admin.sql | docker exec -i ...`

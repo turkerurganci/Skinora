@@ -1222,8 +1222,11 @@ groups:
               to: 0
             datasourceUid: prometheus
             model:
+              # code!="101": a SignalR WebSocket upgrade (/hubs/*) is recorded with the
+              # whole connection lifetime (minutes), not a response time. On low traffic
+              # it alone pushed p95 to ~28 s (trial stack, 2026-10-24) — false alarm.
               expr: |
-                histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+                histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{code!="101"}[5m])) by (le))
               instant: true
               refId: A
           - refId: C

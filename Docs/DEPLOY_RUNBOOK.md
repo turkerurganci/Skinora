@@ -1018,7 +1018,9 @@ curl -s http://127.0.0.1:8090/nginx-health                              # ok
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/health   # 200
 
 # 7) Süper admin — önce tarayıcıdan Steam ile bir kez giriş (Users satırı oluşsun)
-sa_sqlcmd -d Skinora -v SteamId="<steamid64>" -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
+#    -I zorunlu: onsuz Msg 1934 (QUOTED_IDENTIFIER) ve işlem geri alınır (2026-10-24 ölçüldü)
+sa_sqlcmd -b -I -d Skinora -v SteamId="<steamid64>" -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
+#    Sonra tarayıcıda çıkış + giriş; panel ana başlıkta bağlantısız: /tr/admin/dashboard
 ```
 
 **Ölçülen iki tuzak (2026-10-21, adım 4):**
