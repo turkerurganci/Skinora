@@ -450,4 +450,77 @@ describe('TRON service startup — the TronGrid key from the file reaches TronGr
     },
     TEST_TIMEOUT,
   );
+
+  // T171b validation S4-4 (T5/T7): the transfer client (status read, and the
+  // TronWeb instance that signs and broadcasts) and the closure tool's chain
+  // check are built separately in index.ts — each must get the file key too.
+  // Each request is keyed by the txid in its body, so the background
+  // TronGrid polling cannot stand in for the call under test.
+  it(
+    'TronTransferClient + TransferVerifier: the file key on the status read and on /verify',
+    async () => {
+      const STATUS_TX = 'a1'.repeat(32);
+      const VERIFY_TX = 'b2'.repeat(32);
+      const keyByTx = new Map<string, string>();
+      const server = createHttpServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk: Buffer) => (body += chunk.toString()));
+        req.on('end', () => {
+          const key = req.headers['tron-pro-api-key'];
+          if (req.url?.includes('gettransactioninfobyid')) {
+            try {
+              const value = (JSON.parse(body) as { value?: string }).value;
+              if (value) keyByTx.set(value, typeof key === 'string' ? key : '');
+            } catch {
+              // Not a JSON body — not one of ours.
+            }
+          }
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify(
+              req.url?.includes('gettransactioninfobyid')
+                ? {}
+                : { block_header: { raw_data: { number: 1, timestamp: Date.now() } } },
+            ),
+          );
+        });
+      });
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', () => done()));
+      const address = server.address();
+      const node = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+      const port = await freePort();
+      const run = launch(
+        productionEnv({
+          PORT: String(port),
+          TRON_FULL_NODE_URL: node,
+          TRON_SOLIDITY_URL: node,
+          // Any well-formed TRON address: the verifier refuses a request without a contract.
+          TRON_USDT_CONTRACT: HOT_ADDRESS,
+        }),
+        'Blockchain sidecar listening',
+      );
+      try {
+        expect(await withTimeout(run.line, WAIT), run.output()).toBeDefined();
+        const base = `http://127.0.0.1:${port}`;
+        const headers = { 'content-type': 'application/json', 'x-internal-key': INTERNAL_KEY };
+
+        await fetch(`${base}/api/transfer/status/${STATUS_TX}`, { headers });
+        const vr = await fetch(`${base}/api/transfer/verify`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ txHash: VERIFY_TX, token: 'USDT', to: HOT_ADDRESS, amount: '1' }),
+        });
+
+        expect(keyByTx.get(STATUS_TX), `status read: ${run.output()}`).toBe(TRONGRID_KEY);
+        const vrBody = await vr.text();
+        expect(keyByTx.get(VERIFY_TX), `verify ${vr.status} ${vrBody}`).toBe(TRONGRID_KEY);
+      } finally {
+        run.child.kill();
+        await run.exited;
+        server.close();
+      }
+      expectNoSecret(run.output());
+    },
+    TEST_TIMEOUT,
+  );
 });

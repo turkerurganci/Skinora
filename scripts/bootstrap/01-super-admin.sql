@@ -17,11 +17,16 @@
 -- SONRASINDA: cikis yapip TEKRAR giris yapin. Rol JWT'ye token uretimi aninda
 -- islenir; mevcut access token'da super_admin claim'i olmaz.
 --
--- Calistirma (SteamID64'unuzu verin):
---   docker exec -i skinora-db /opt/mssql-tools18/bin/sqlcmd \
---     -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Skinora \
---     -v SteamId="76561198000000000" \
---     -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
+-- Calistirma (SteamID64'unuzu verin): komutun tamami scripts/bootstrap/README.md
+-- "Calistirma" bolumunde. Ozeti (T171b, DEPLOY_RUNBOOK §L.9):
+--   * docker exec -i skinora-db bash -c '<sqlcmd ...>' "<steamid64>" < bu dosya
+--   * sa parolasi konteynerin kendi secret dosyasindan
+--     (/run/secrets/mssql_sa_password) okunur ve sqlcmd'ye SQLCMDPASSWORD
+--     ortam degiskeniyle verilir; -P KULLANILMAZ (parola komut satirina girer).
+--   * sqlcmd bayraklari: -S localhost -U sa -C -d Skinora -v SteamId=... -i /dev/stdin
+--   * MSSQL_SA_PASSWORD degiskeni artik yoktur.
+-- (Komut burada yazili degil: sqlcmd bu dosyadaki dolar-parantez kaliplarini
+-- yorum satirinda da degisken sayabilir.)
 --
 -- Idempotent: tekrar calistirmak guvenlidir.
 -- =============================================================================

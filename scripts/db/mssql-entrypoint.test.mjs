@@ -5,6 +5,8 @@
 // Docs/TASK_REPORTS/T171b_REPORT.md. This suite pins the guard's decisions:
 //   * no start on a variable, a missing / empty / unreadable file, a CR or
 //     surrounding blanks (the fail-closed rule; SQL Server itself starts),
+//   * no start on a password SQL Server's policy refuses (CREDENTIAL_WEAK —
+//     SQL Server itself exits 255 on an empty volume, S4-1),
 //   * the password never reaches argv or the output,
 //   * the healthcheck hands it to sqlcmd through SQLCMDPASSWORD only.
 // Needs bash (CI: ubuntu; locally Git Bash).
@@ -90,6 +92,14 @@ describe("mssql-entrypoint.sh (T171b)", { skip: !HAS_BASH && "bash not available
     assert.ok(logOf("sqlcmd").includes(`SQLCMDPASSWORD=${PASSWORD} `), "the CR does not reach sqlcmd");
   });
 
+  test("the sa password policy: exactly three classes and 8 characters pass, each three-of-four set passes", () => {
+    for (const pw of ["Abcdefg1", "abcdefg1!", "ABCDEFG1!", "Abcdefg!"]) {
+      writeFileSync(join(work, "mssql_sa_password"), pw + "\n");
+      const r = run(["--check"]);
+      assert.equal(r.code, 0, `${pw}: ${r.out}`);
+    }
+  });
+
   test("--healthcheck: sqlcmd gets the password through SQLCMDPASSWORD, never argv", () => {
     const r = run(["--healthcheck"]);
 
@@ -163,6 +173,48 @@ describe("mssql-entrypoint.sh (T171b)", { skip: !HAS_BASH && "bash not available
         return {};
       },
       /CREDENTIAL_INVALID/,
+    ],
+    [
+      "an `openssl rand -hex` value (lower case + digits only, SQL Server exits 255 on it — S4-1)",
+      () => {
+        writeFileSync(join(work, "mssql_sa_password"), "3f9a0c7e5b1d2468ace013579bdf2468ace013579bdf2468ace013579bdf24\n");
+        return {};
+      },
+      /CREDENTIAL_WEAK/,
+    ],
+    [
+      "two character classes only (upper + lower)",
+      () => {
+        writeFileSync(join(work, "mssql_sa_password"), "FakeOnlyLettersHere\n");
+        return {};
+      },
+      /CREDENTIAL_WEAK/,
+    ],
+    [
+      "three classes but shorter than 8",
+      () => {
+        writeFileSync(join(work, "mssql_sa_password"), "Ab1!xyz\n");
+        return {};
+      },
+      /CREDENTIAL_WEAK/,
+    ],
+    [
+      "longer than 128",
+      () => {
+        writeFileSync(join(work, "mssql_sa_password"), "Aa1!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
+        return {};
+      },
+      /CREDENTIAL_WEAK/,
+    ],
+    [
+      "a file that passes -f / -r but cannot be read (Docker Desktop mount point, measured — S4-4 D8)",
+      () => {
+        const probe = join(work, "failing-cat");
+        writeFileSync(probe, "#!/usr/bin/env bash\nexit 1\n");
+        chmodSync(probe, 0o755);
+        return { MSSQL_READ_PROBE: slash(probe) };
+      },
+      /CREDENTIAL_UNREADABLE/,
     ],
   ];
 

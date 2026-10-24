@@ -137,6 +137,40 @@ describe('loadProviderCredentials (T171b)', () => {
     },
   );
 
+  it.each([
+    ['no file', {}],
+    [
+      'an empty file (the reader returns null for blank)',
+      { [DEFAULT_CREDENTIAL_PATHS.redisPassword]: null },
+    ],
+  ])(
+    'REDIS_URL set + %s outside development: stops, does not connect without a password (S4-3)',
+    (_label, files) => {
+      for (const nodeEnv of ['production', 'staging', '', undefined]) {
+        const err = refusal(() =>
+          loadProviderCredentials(
+            { NODE_ENV: nodeEnv, REDIS_URL: 'redis://skinora-redis:6379' },
+            reader({ [DEFAULT_CREDENTIAL_PATHS.steamApiKey]: STEAM_KEY, ...files }),
+          ),
+        );
+        expect(err.code).toBe('CREDENTIAL_MISSING');
+        expect(err.message).toContain(DEFAULT_CREDENTIAL_PATHS.redisPassword);
+      }
+    },
+  );
+
+  it.each(['development', 'test'])(
+    'REDIS_URL set + no password file in %s: a local Redis without auth is allowed',
+    (nodeEnv) => {
+      const loaded = loadProviderCredentials(
+        { NODE_ENV: nodeEnv, REDIS_URL: 'redis://localhost:6379' },
+        reader({}),
+      );
+      expect(loaded.redisUrl).toBe('redis://localhost:6379');
+      expect(loaded.sources.redisPassword).toBe('none');
+    },
+  );
+
   it('refuses a REDIS_URL that is not a redis URL, without echoing it', () => {
     const err = refusal(() =>
       loadProviderCredentials(

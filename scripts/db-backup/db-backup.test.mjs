@@ -147,6 +147,16 @@ describe("db-backup.sh (T164)", () => {
         assert.ok(!line.includes(PASSWORD), `password in argv: ${line}`);
       }
     });
+
+    // T171b validation S4-4 (B4): Git Bash's openssl on Windows writes CRLF;
+    // SQL Server drops the trailing CR, so sqlcmd must get the password without it.
+    test("a trailing CRLF in the password file is dropped before sqlcmd", () => {
+      writeFileSync(join(work, "mssql_sa_password"), PASSWORD + "\r\n");
+      run(["tick"]);
+      const pwLines = calls().split("\n").filter((l) => l.startsWith("PW "));
+      assert.ok(pwLines.length > 0, "sqlcmd ran");
+      for (const line of pwLines) assert.equal(line, `PW ${PASSWORD}`, "no CR reaches SQLCMDPASSWORD");
+    });
   });
 
   describe("scheduler tick", () => {

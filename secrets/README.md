@@ -170,7 +170,7 @@ bağlantı dizeleri parola taşımaz (`DB_CONNECTION_STRING`,
 
 | Dosya | Kim okur | Zorunlu mu |
 |---|---|---|
-| `secrets/mssql_sa_password.txt` | SQL Server (`MSSQL_SA_PASSWORD_FILE`, önünde `scripts/db/mssql-entrypoint.sh`), yedek konteyneri, backend | **Evet**, boş olamaz. Tek satır; sonda bir LF ya da CRLF olabilir, içinde CR ya da baş/son boşluk olamaz. SQL Server parola kuralı: büyük/küçük harf, rakam, sembolden üçü ve ≥ 8 karakter |
+| `secrets/mssql_sa_password.txt` | SQL Server (`MSSQL_SA_PASSWORD_FILE`, önünde `scripts/db/mssql-entrypoint.sh`), yedek konteyneri, backend | **Evet**, boş olamaz. Tek satır; sonda bir LF ya da CRLF olabilir, içinde CR ya da baş/son boşluk olamaz. SQL Server parola kuralı: büyük/küçük harf, rakam, sembolden üçü ve 8–128 karakter — `openssl rand -hex` **tek başına uymaz** (yalnız küçük harf + rakam); giriş betiği böyle bir dosyada SQL Server'ı başlatmaz (`CREDENTIAL_WEAK`). Üretim / deneme: `printf '%sAa1!\n' "$(openssl rand -hex 24 \| tr -d '\r')" > secrets/mssql_sa_password.txt` |
 | `secrets/redis_password.txt` | Redis (`scripts/redis/redis-entrypoint.sh`), backend, Steam servisi | **Evet**, boş olamaz; yalnız `A-Z a-z 0-9 . _ ~ + = -` (bağlantı dizesine ve `redis://` adresine kaçışsız girer) |
 | `secrets/grafana_admin_password.txt` | Grafana (`GF_SECURITY_ADMIN_PASSWORD__FILE`) | **Evet**, boş olamaz ve **CR içeremez** (Grafana CR'yi parolanın parçası sayar — ölçüldü). Boş volume'ün **ilk** açılışında uygulanır |
 | `secrets/steam_api_key.txt` | backend (OpenID profili) + Steam servisi | Dosya **evet**; boş = trade-hold probu 503, profil yer tutucu |
@@ -237,7 +237,12 @@ grep -nE '[Pp](assword|wd)=|redis://:' .env
   sonra bir kez:
   `docker compose -f docker-compose.yml exec skinora-grafana sh -c 'grafana cli admin reset-admin-password "$(cat /run/secrets/grafana_admin_password)"'`.
 
-Deneme yayını için aynısını `secrets/trial/` ve `.env.trial` ile yapın.
+Deneme yayını için aynısını `secrets/trial/` ve `.env.trial` ile yapın. Deneme yayınında ve üretimde parolalar **yeni** üretilir (DEPLOY_RUNBOOK §L.9); sa parolası için `openssl rand -hex` tek başına SQL Server kuralına uymaz (`CREDENTIAL_WEAK`):
+
+```bash
+umask 077
+[ -s secrets/trial/mssql_sa_password.txt ] || printf '%sAa1!\n' "$(openssl rand -hex 24 | tr -d '\r')" > secrets/trial/mssql_sa_password.txt
+```
 
 ### Ethereum servisi (T150 — yalnız `ethereum` compose profiliyle)
 

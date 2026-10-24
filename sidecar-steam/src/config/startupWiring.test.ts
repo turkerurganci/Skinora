@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 /**
@@ -29,6 +31,8 @@ const files = {
   none: join(dir, 'none'),
   steamApiKey: join(dir, 'steam_api_key'),
   redisPassword: join(dir, 'redis_password'),
+  blank: join(dir, 'blank'),
+  fakeSteamPreload: join(dir, 'fake-steam-webapi.mjs'),
 };
 /** T171b — the Steam Web API key and the Redis password come from files too. */
 const STEAM_KEY = 'TESTSTEAMKEY'.padEnd(32, '7');
@@ -37,16 +41,55 @@ writeFileSync(files.key, FILE_KEY);
 writeFileSync(files.steamApiKey, STEAM_KEY + '\n');
 writeFileSync(files.redisPassword, REDIS_PASSWORD + '\n');
 writeFileSync(files.short, 'test-short-key');
+writeFileSync(files.blank, '\n');
+// Loaded with --import into the service (NODE_OPTIONS): answers Steam Web API
+// calls itself and records the x-webapi-key header to FAKE_STEAM_RECORD.
+writeFileSync(
+  files.fakeSteamPreload,
+  [
+    "import { appendFileSync } from 'node:fs';",
+    'const record = process.env.FAKE_STEAM_RECORD;',
+    'const real = globalThis.fetch;',
+    'globalThis.fetch = async (input, init) => {',
+    "  const url = typeof input === 'string' ? input : String(input.url ?? input);",
+    "  if (record && url.startsWith('https://api.steampowered.com/')) {",
+    "    appendFileSync(record, (new Headers(init?.headers).get('x-webapi-key') ?? '') + '\\n');",
+    "    return new Response('{}', { status: 503 });",
+    '  }',
+    '  return real(input, init);',
+    '};',
+    '',
+  ].join('\n'),
+);
 mkdirSync(files.directory);
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+function freePort(): Promise<number> {
+  return new Promise((done, fail) => {
+    const server = createServer();
+    server.once('error', fail);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      server.close(() => done(typeof address === 'object' && address ? address.port : 0));
+    });
+  });
+}
 
 interface Startup {
   line?: Record<string, unknown>;
   exitCode?: number | null;
   output: string;
+  hookError?: unknown;
 }
 
-function start(env: Record<string, string>): Promise<Startup> {
+/**
+ * Starts the entry point and resolves once it listens (or exits). `whileListening`
+ * runs against the live process before it is stopped (S4-4 wiring checks).
+ */
+function start(
+  env: Record<string, string>,
+  whileListening?: () => Promise<void>,
+): Promise<Startup> {
   return new Promise((done) => {
     const child = spawn(process.execPath, [TSX_CLI, 'src/index.ts'], {
       cwd: SIDECAR_ROOT,
@@ -75,12 +118,22 @@ function start(env: Record<string, string>): Promise<Startup> {
       done(result);
     };
     const timer = setTimeout(() => finish({ output }), 20_000);
+    let listening = false;
     child.stdout.on('data', (chunk: Buffer) => {
       output += chunk.toString();
       for (const raw of output.split('\n')) {
         if (!raw.includes(LISTENING)) continue;
         try {
-          finish({ line: JSON.parse(raw) as Record<string, unknown>, output });
+          const line = JSON.parse(raw) as Record<string, unknown>;
+          if (!whileListening) {
+            finish({ line, output });
+          } else if (!listening) {
+            listening = true;
+            void whileListening().then(
+              () => finish({ line, output }),
+              (err: unknown) => finish({ line, output, hookError: err }),
+            );
+          }
         } catch {
           // The line has not fully arrived yet.
         }
@@ -208,6 +261,17 @@ describe('sidecar startup — provider credentials come from their secret files 
       { STEAM_API_KEY_FILE: files.directory },
       'CREDENTIAL_UNREADABLE',
     ],
+    // S4-3 — REDIS_URL set, no password: stop instead of a NOAUTH cache.
+    [
+      'a Redis URL and no Redis password file',
+      { REDIS_PASSWORD_FILE: files.none },
+      'CREDENTIAL_MISSING',
+    ],
+    [
+      'a Redis URL and an empty Redis password file',
+      { REDIS_PASSWORD_FILE: files.blank },
+      'CREDENTIAL_MISSING',
+    ],
   ])(
     'refuses to start with %s',
     async (_label, env, code) => {
@@ -221,4 +285,61 @@ describe('sidecar startup — provider credentials come from their secret files 
     },
     30_000,
   );
+
+  // T171b validation S4-4 (S5/S6): index.ts hands the loaded values on to the
+  // trade-hold service and the Redis client. A preload stands in for the Steam
+  // Web API (records the x-webapi-key header it was called with) and a TCP
+  // listener for Redis (records what the client sends — AUTH comes first).
+  it('the file key reaches the Steam Web API call and the file password reaches Redis', async () => {
+    const received: Buffer[] = [];
+    const redis = createServer((socket) => {
+      socket.on('error', () => {});
+      socket.on('data', (chunk: Buffer) => {
+        received.push(chunk);
+        socket.write('+OK\r\n');
+      });
+    });
+    await new Promise<void>((done) => redis.listen(0, '127.0.0.1', () => done()));
+    const redisAddress = redis.address();
+    const redisPort = typeof redisAddress === 'object' && redisAddress ? redisAddress.port : 0;
+    const httpPort = await freePort();
+    const record = join(dir, 'steam-webapi-keys');
+    const wire = () => Buffer.concat(received).toString('latin1');
+    // RESP on the wire; ioredis sends the command name in lower case.
+    const authed = () => /\r\nauth\r\n/i.test(wire());
+
+    try {
+      const startup = await start(
+        {
+          ...production,
+          PORT: String(httpPort),
+          REDIS_URL: `redis://127.0.0.1:${redisPort}`,
+          FAKE_STEAM_RECORD: record,
+          NODE_OPTIONS:
+            `${process.env.NODE_OPTIONS ?? ''} --import=${pathToFileURL(files.fakeSteamPreload).href}`.trim(),
+        },
+        async () => {
+          await fetch(
+            `http://127.0.0.1:${httpPort}/api/trade-hold/76561198000000123?accessToken=tok123`,
+            { headers: { 'X-Internal-Key': FILE_KEY } },
+          );
+          const deadline = Date.now() + 10_000;
+          while (!authed() && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 100));
+          }
+        },
+      );
+
+      expect(startup.hookError, startup.output).toBeUndefined();
+      expect(startup.line, startup.output).toBeDefined();
+      const keys = existsSync(record) ? readFileSync(record, 'utf8').split('\n') : [];
+      expect(keys, 'x-webapi-key the Steam call carried').toContain(STEAM_KEY);
+      expect(authed(), 'the Redis client authenticates').toBe(true);
+      expect(wire(), 'with the file password').toContain(REDIS_PASSWORD);
+      expect(startup.output).not.toContain(STEAM_KEY);
+      expect(startup.output).not.toContain(REDIS_PASSWORD);
+    } finally {
+      redis.close();
+    }
+  }, 40_000);
 });

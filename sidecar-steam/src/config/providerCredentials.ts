@@ -50,7 +50,9 @@ export type CredentialErrorCode =
   | 'CREDENTIAL_IN_ENV'
   | 'CREDENTIAL_AMBIGUOUS'
   | 'CREDENTIAL_UNREADABLE'
-  | 'CREDENTIAL_INVALID';
+  | 'CREDENTIAL_INVALID'
+  /** REDIS_URL set but no Redis password outside development (T171b validation S4-3). */
+  | 'CREDENTIAL_MISSING';
 
 export class CredentialError extends Error {
   constructor(
@@ -156,7 +158,22 @@ function loadRedisUrl(
     );
   }
   if (inUrl) return { value: raw, source: 'env' };
-  if (fromFile === null) return { value: raw, source: 'none' };
+  if (fromFile === null) {
+    // A Redis URL with no password anywhere. Outside development that is a
+    // missing mandatory secret (skinora-redis always requires one; the backend
+    // stops on the same file): stop, rather than run a cache that fails every
+    // call with NOAUTH. Development / test may point at a local Redis without auth.
+    if (!envSecretsAllowed(env.NODE_ENV)) {
+      throw new CredentialError(
+        'CREDENTIAL_MISSING',
+        `REDIS_URL is set but the Redis password file (${path}) is missing or empty. ` +
+          `Outside development (NODE_ENV=development|test) the Steam service does not ` +
+          `connect to Redis without its password — create the redis_password secret ` +
+          `file (secrets/README.md), or leave REDIS_URL empty for the in-memory cache.`,
+      );
+    }
+    return { value: raw, source: 'none' };
+  }
   if (!REDIS_PASSWORD_CHARACTERS.test(fromFile)) {
     throw new CredentialError(
       'CREDENTIAL_INVALID',

@@ -27,6 +27,12 @@
 #                          SQL Server drops a trailing LF or CRLF — Git Bash's
 #                          openssl writes CRLF on Windows — and that is all
 #                          this script allows too)
+#   CREDENTIAL_WEAK        the password breaks SQL Server's sa password policy
+#                          (8-128 characters, three of: upper case, lower case,
+#                          digit, symbol). Measured: on an EMPTY volume SQL
+#                          Server exits 255 with "not complex enough" — a
+#                          `openssl rand -hex` value (lower case + digits only)
+#                          never passes. Refused here first, with a code word.
 #
 # The value is never printed. Then the image's own entrypoint runs unchanged
 # (launch_sqlservr.sh "$@", compose passes /opt/mssql/bin/sqlservr).
@@ -42,6 +48,9 @@ set -euo pipefail
 
 LAUNCH="${MSSQL_LAUNCH:-/opt/mssql/bin/launch_sqlservr.sh}"
 SQLCMD="${SQLCMD:-/opt/mssql-tools18/bin/sqlcmd}"
+# The one-shot read probe below (a seam for the test, which needs a file that
+# passes -f / -r and still cannot be read).
+READ_PROBE="${MSSQL_READ_PROBE:-cat}"
 
 fail() {
   printf '%s: %s\n' "$1" "$2" >&2
@@ -61,7 +70,7 @@ read_password() {
   [ -f "$file" ] || fail CREDENTIAL_MISSING "$file does not exist - create the mssql_sa_password secret file (secrets/README.md)"
   # Docker Desktop, missing source file, `compose run`: the mount point passes
   # -f yet every read fails with an I/O error (measured, T171b) — so read once.
-  cat "$file" >/dev/null 2>&1 || fail CREDENTIAL_UNREADABLE "$file cannot be read - create the mssql_sa_password secret file (secrets/README.md) and remove what Docker made in its place"
+  "$READ_PROBE" "$file" >/dev/null 2>&1 || fail CREDENTIAL_UNREADABLE "$file cannot be read - create the mssql_sa_password secret file (secrets/README.md) and remove what Docker made in its place"
   local value crs last
   # CRs are counted on the raw bytes (some shells — MSYS — drop them from
   # $(...)). One CR is allowed: the one of a trailing CRLF (SQL Server drops
@@ -79,6 +88,16 @@ read_password() {
   [ -n "${value//[[:space:]]/}" ] || fail CREDENTIAL_MISSING "$file is empty - the database does not start without its sa password"
   if [ "$value" != "${value#[[:space:]]}" ] || [ "$value" != "${value%[[:space:]]}" ] || [[ "$value" == *$'\n'* ]]; then
     fail CREDENTIAL_INVALID "$file must hold the password alone on one line, without surrounding blanks"
+  fi
+  # SQL Server's sa password policy (character classes in the C locale).
+  local classes=0
+  local LC_ALL=C
+  [[ "$value" == *[[:upper:]]* ]] && classes=$((classes + 1))
+  [[ "$value" == *[[:lower:]]* ]] && classes=$((classes + 1))
+  [[ "$value" == *[[:digit:]]* ]] && classes=$((classes + 1))
+  [[ "$value" == *[^[:alnum:]]* ]] && classes=$((classes + 1))
+  if [ "${#value}" -lt 8 ] || [ "${#value}" -gt 128 ] || [ "$classes" -lt 3 ]; then
+    fail CREDENTIAL_WEAK "$file breaks SQL Server's sa password policy (8-128 characters, three of: upper case, lower case, digit, symbol) - SQL Server would not initialise; generate it as secrets/README.md shows (openssl rand -hex alone never passes)"
   fi
   printf '%s' "$value"
 }
