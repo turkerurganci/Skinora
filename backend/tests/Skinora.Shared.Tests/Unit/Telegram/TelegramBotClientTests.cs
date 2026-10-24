@@ -186,7 +186,7 @@ public class TelegramBotClientTests
 
         await sut.SetWebhookAsync(
             new TelegramSetWebhookRequest(
-                Url: "https://skinora.com/api/v1/webhooks/telegram",
+                Url: "https://getskinora.com/api/v1/webhooks/telegram",
                 SecretToken: "test-webhook_SECRET_123",
                 MaxConnections: 40,
                 AllowedUpdates: null,
@@ -195,7 +195,7 @@ public class TelegramBotClientTests
 
         using var json = System.Text.Json.JsonDocument.Parse(Assert.Single(handler.Requests).body);
         var root = json.RootElement;
-        Assert.Equal("https://skinora.com/api/v1/webhooks/telegram", root.GetProperty("url").GetString());
+        Assert.Equal("https://getskinora.com/api/v1/webhooks/telegram", root.GetProperty("url").GetString());
         Assert.Equal("test-webhook_SECRET_123", root.GetProperty("secret_token").GetString());
         Assert.Equal(40, root.GetProperty("max_connections").GetInt32());
         Assert.Equal(["message"], root.GetProperty("allowed_updates").EnumerateArray().Select(e => e.GetString()));

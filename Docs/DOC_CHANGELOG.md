@@ -114,6 +114,8 @@
 
 ## 07_API_DESIGN.md
 
+2026-10-24 (**T162 — alan adı (v4.28):** §1 temel URL `https://getskinora.com/api/v1/` (proje sahibi kararı 2026-10-24: `skinora.com` alınamadı; marka Skinora kalır, yalnız dağıtım adresi değişti).)
+
 2026-10-23 (**T170 (v4.27; main T172a v4.26 ile çakıştı):** §11.2 `AdminHotWalletThresholdBreached` yüküne `network` alanı (eklemeli; iki ağın sıcak cüzdanı izleniyor, `Lower` yalnız TRON); §10.1 T166 notuna uptime ölçümünün yeri (Networks panosu, API'ye geri eklenmedi).)
 
 2026-10-23 (**T172a — §9.32 iki ağ ve geri yükleme (v4.26, ⚠ PARA):** bölüm başına not: AD33/AD34 `?network=` süzgeci, kayıt ve adaylarda `network`, adayda `rowStatus`; kapatılabilir satır `PENDING` ya da `POST_RESTORE_DUPLICATE` notlu `FAILED` (aynı satır üzerinde `FAILED → DETECTED`); `txHash` biçimi ağa göre (TRON 64 hex öneksiz); TRON zincir denetimi (`status` ≥ 20 onay + yeni `POST /api/transfer/verify`); gönderen çözümü gönderim işinin kuralıyla ve onayda satıra yazılır; `ROW_NOT_ETHEREUM` kaldırıldı; onay kaydı `network`, `rowStatus`, `rowError` taşır. **Düzeltme turu:** aday listesi notu SQL'de de harf duyarlı eşler (onay ve öneriyle aynı; doğrulama S4-5); main birleştirmesiyle sürüm v4.24 → v4.26 (main T169a v4.24 ve T165 v4.25 ile çakıştı).)
@@ -148,6 +150,8 @@
 
 ## 08_INTEGRATION_SPEC.md
 
+2026-10-24 (**T162 — alan adı (v3.50):** §2.1 Steam OpenID `return_to`/`realm`, §6 Resend gönderen adresi ve üretim alan adı, §7 Telegram webhook URL'si `getskinora.com` (proje sahibi kararı 2026-10-24: `skinora.com` alınamadı; marka Skinora kalır).)
+
 2026-10-23 (**T172a — TRON zincir kanıtı ve gönderim durdurma (v3.49, ⚠ PARA; main'deki T172b v3.48'in üstüne):** §3.7.6 "Admin aracı" (b) sonuna: TRON servisi aynı `POST /api/transfer/verify` sözleşmesini sunar (`sidecar-blockchain/contracts/transfer-verify/`; solidity `gettransactioninfobyid`, `SUCCESS` değilse `REVERTED`, token kontratının tam üç konulu `Transfer` log'u alıcıya/gönderenden/tam tutarda; başka kimliğe cevap ya da HTTP hatası 502); TRON durum okuması beklenti taşımaz. §3.3b tablosuna "Durdurma anahtarı" satırı: `outbound.dispatch_paused`. **Düzeltme turu:** §3.3b durdurma satırı yoksa da durur (S4-2, öneriyle kaydedildi — ⚠ PARA), `skinora_backend_outbound_dispatch_paused` göstergesi + 30 dk alarmı (S4-4), kapsam dışı: Ethereum keeper'ının zaten imzalı işlemleri yeniden yayınlaması (S4-3); main birleştirmesiyle sürüm v3.46 → v3.48.)
 
 2026-10-23 (**T172b kapanışı — doğrulama S4-3 (v3.48 içinde):** §3.3a "Depozitten iade 24 saatlik tavanı" satırına: pencereden çıkan giriş yalnız sayımdan düşer, defter dosyasından 7 gün sonra silinir — saatin ileri sıçrayıp düzelmesi sayılmış girişleri kaybettirmez; ileri tarihli giriş gerçek saat onu geçene kadar sayılır.)
@@ -180,6 +184,8 @@
 2026-10-17 (**T141 — çok ağlı ödeme** (11 §F8 K1–K3): §2.2 ve §4 — **yalnız USDT**, ağlar **TRON + Ethereum**, satıcı kabul ettiği ağları seçer, para aynı ağda kalır; ağ ücreti dağılımı (K8); §3.2 ve §6 — Ethereum kapsamdan çıktı, Arbitrum/Avalanche açılış sonrası ayrı karar.) · 2026-10-02 (**§4** — eşzamanlı ödeme izleme kapasitesi satırı (TronGrid bütçesi, `T139-ActiveMonitorQuotaAlarm`)) · 2026-08-08
 
 ## 11_IMPLEMENTATION_PLAN.md
+
+2026-10-24 (**T162 — HTTPS + alan adı (`plan/11_F9.md` v1.32):** alan adı `getskinora.com` (`skinora.com` alınamadı; marka Skinora kalır — proje sahibi kararı 2026-10-24); F9 kararlar notu, deneme yayını notu, T162 başlığı ve T168 destek alan adı buna göre; deneme yayınının önünde Cloudflare Access (yalnız sahip).)
 
 2026-10-24 (**T171b — üçüncü taraf kimlik bilgileri Docker secret (`plan/11_F9.md` v1.31, ⚠ GÜVENLİK):** T171a'dan sonra yeni görev "T171b: Üçüncü taraf kimlik bilgileri Docker secret" — DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv` sırları kurulum gününden önce dosyaya (proje sahibi kararı 2026-10-24, modal).)
 
@@ -219,6 +225,8 @@
 2026-08-25 (**`Doc12PreP2PStale`** — doküman v3.0 P2P akışına hizalandı. Bu dosya F7 boyunca hiç güncellenmemiş ve **kaldırılmış** kavramları normatif metin olarak taşımaya devam etmişti: `ITEM_ESCROWED` ×11, `TRADE_OFFER_SENT_TO_SELLER` ×9, `TRADE_OFFER_SENT_TO_BUYER` ×6, platform bot'ları ×13 — buna karşılık `SELLER_CONFIRMED`, `DELIVERY_EXPECTED`, `PAYMENT_WINDOW_OPEN` ve "mutabakat" **sıfır** kez. Diğer dokümanlarda aynı statüler yalnız *"v3.0'da kaldırıldı"* tarihsel notu olarak geçerken burada hâlâ **doğrulama kuralıydı**. Güncellenen bölümler: §1.2 kapsam · §3.5 entegrasyon kapsamı · §4.2–§4.6 VAL matrisleri · §7.1 kanıt örneği · §12.1 state geçiş matrisi · §12.2 özel durumlar · §13.1/§13.3/§13.4/§13.5 ek kontroller. Davranış değişikliği yok — protokol koda ve 02/03/06/07'ye hizalandı; state geçişleri `TransactionStateMachine`'den birebir okundu.)
 
 ## DEPLOY_RUNBOOK.md
+
+2026-10-24 (**T162 — tünel, alan adı, HTTPS:** §K.5 yeniden yazıldı: tünel `getskinora.com` → `skinora-reverse-proxy:80`; **§K.5.1** gerçek istemci IP'si (nginx `real_ip` `CF-Connecting-IP` yalnız bağlayıcının sabit adresi `172.30.161.250`'den; dinamik aralık `.0/25`; `X-Forwarded-Proto` ve `CF-IPCountry` aynı kurala bağlı, düz http → 301 https; `TRIAL_NETWORK_SUBNET` kalktı); **§K.5.2** Cloudflare Access (uygulama `skinora-trial`, `ev-ip` bypass + `sahip` allow, One-time PIN; ev IP'si değişince panel ve API ile güncelleme; ileride Telegram/Resend webhook yolları için yol bazlı bypass — yalnız belge); **§K.5.3** ölçüm. §B geo satırı ve OpenID satırı, §K giriş, §K.1 ağ satırı, §K.4 `.env.trial` notu, §K.6 (b), §P Resend alan adı güncellendi.)
 
 2026-10-24 (**T171b — üçüncü taraf kimlik bilgileri Docker secret (⚠ GÜVENLİK):** §L.9 başlığı genişledi + yeni alt bölüm "Üçüncü taraf kimlik bilgileri (T171b)" (dosya tablosu; SQL Server — imajın ölçülen `MSSQL_SA_PASSWORD_FILE` desteği + `scripts/db/mssql-entrypoint.sh` denetimi, Redis — giriş betiği + tmpfs, Grafana — `__FILE` + `first-boot.sh` denetimi ve seçim gerekçeleri; doğrulama; kurulum günü altı adımı; geliştirme ortamından geçiş; döndürme; sınırlar); §0 L satırı; §B DB/Redis bağlantı dizesi parolasız, parola/anahtar satırları dosyaya; §G.0, §G.2 adım 1 ve 3, Grafana `curl` örneği; §K.1 Grafana satırı, §K.2 CI satırı, §K.3, §K.4 adım 1/2/4/7 (`sa_sqlcmd` — parola konteynerin secret dosyasından, `SQLCMDPASSWORD`); §L.8; §N.6 `sqlq`; §O yeni #12b.)
 

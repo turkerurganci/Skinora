@@ -158,6 +158,9 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
         assert.equal(def.container_name, undefined, `${name} keeps a fixed container_name — it would collide with the dev stack`);
       }
       assert.deepEqual(model.networks["skinora-network"].ipam?.config?.map((c) => c.subnet), ["172.30.161.0/24"]);
+      // T162 — dynamic addresses only from the lower half: the connector's
+      // fixed address (below) can never be handed to another container.
+      assert.deepEqual(model.networks["skinora-network"].ipam?.config?.map((c) => c.ip_range), ["172.30.161.0/25"]);
       const trialDir = join(ROOT, "secrets", "trial") + sep;
       for (const [name, def] of Object.entries(model.secrets)) {
         assert.ok(resolve(def.file).startsWith(trialDir), `${name} must come from secrets/trial/, got ${def.file}`);
@@ -185,6 +188,23 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       const preflight = model.services["skinora-tunnel-preflight"];
       assert.deepEqual(preflight.secrets.map((s) => s.source), ["cloudflare_tunnel_token"]);
       assert.match(preflight.command.join(" "), /exit 1/);
+    });
+
+    test("T162: the tunnel connector has the one fixed address nginx.conf trusts, outside the dynamic range", () => {
+      const conf = readFileSync(join(ROOT, "nginx", "nginx.conf"), "utf8");
+      const realIp = [...conf.matchAll(/^\s*set_real_ip_from\s+([^;\s]+)\s*;/gm)].map((m) => m[1]);
+      const connector = model.services["skinora-cloudflared"].networks["skinora-network"]?.ipv4_address;
+      assert.equal(connector, "172.30.161.250");
+      assert.deepEqual(realIp, [connector], "nginx set_real_ip_from must name exactly the connector's compose address");
+      const geoLine = new RegExp(String.raw`^\s*${connector.replaceAll(".", String.raw`\.`)}/32\s+1\s*;`, "m");
+      assert.match(conf, geoLine, "the geo map trusts the same /32");
+      // Outside 172.30.161.0/25 (the ip_range): last octet >= 128.
+      assert.ok(Number(connector.split(".").pop()) >= 128, "the fixed address must lie outside the dynamic ip_range");
+      // Nothing else on the network may hold a fixed address: one connector.
+      for (const [name, def] of Object.entries(model.services)) {
+        if (name === "skinora-cloudflared") continue;
+        assert.equal(def.networks?.["skinora-network"]?.ipv4_address, undefined, `${name} has a fixed address`);
+      }
     });
 
     test("T165: production notification channels — e-mail + Telegram real, Discord off, Grafana SMTP on", () => {

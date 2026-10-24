@@ -282,7 +282,7 @@ korumayı sürdürür.
 |---|---|---|
 | `secrets/trial/tron_hd_mnemonic.txt`, `secrets/trial/tron_hot_wallet_private_key.txt` (T163) | Yukarıdaki iki TRON dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve sıcak cüzdan (aynı gerekçe: aynı depozit adresleri, aynı imzacı) | **Her zaman** (servis her stack'te); boş olabilir, kurallar yukarıdaki gibi |
 | `secrets/trial/ethereum_hd_mnemonic.txt`, `secrets/trial/ethereum_hot_wallet_private_key.txt`, `secrets/trial/ethereum_fuel_wallet_private_key.txt` | Yukarıdaki üç Ethereum dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve anahtarlar (iki veritabanı aynı tohumdan aynı indeksleri türetir ve aynı depozit adreslerini izler; iki imzacı aynı Ethereum hesabının nonce'unu yarıştırır) | Yalnız `--profile ethereum` ile, kurallar yukarıdaki gibi |
-| `secrets/trial/cloudflare_tunnel_token.txt` | Cloudflare Tunnel token'ı — tek satır, tırnaksız (Cloudflare Zero Trust → Networks → Tunnels) | Yalnız `--profile tunnel` ile. **Boşsa tünel açılmaz:** `skinora-tunnel-preflight` `TUNNEL_TOKEN_MISSING` ile çıkar ve cloudflared başlatılmaz. T162'ye kadar boş dosya olarak durabilir |
+| `secrets/trial/cloudflare_tunnel_token.txt` | Cloudflare Tunnel token'ı — tek satır, tırnaksız (Cloudflare Zero Trust → Networks → Tunnels) | Yalnız `--profile tunnel` ile. **Boşsa tünel açılmaz:** `skinora-tunnel-preflight` `TUNNEL_TOKEN_MISSING` ile çıkar ve cloudflared başlatılmaz. T162'den beri dolu (tünel `skinora-trial`, `getskinora.com` → `http://skinora-reverse-proxy:80`, DEPLOY_RUNBOOK §K.5) |
 | `secrets/trial/` altında on bir ortak sır dosyası (T171a — `jwt_secret.txt`, `blockchain_webhook_secret.txt`, `ethereum_webhook_secret.txt`, `steam_sidecar_internal_key.txt`, `blockchain_sidecar_internal_key.txt`, `ethereum_sidecar_internal_key.txt`, `resend_api_key.txt`, `resend_webhook_signing_secret.txt`, `telegram_bot_token.txt`, `telegram_webhook_secret_token.txt`, `grafana_smtp_password.txt`) | Yukarıdaki "Ortak sırlar" dosyalarının deneme yayını kopyası — **hepsi yeni** değer (geliştirmenin JWT anahtarıyla imzalanmış bir token deneme yayınında geçmesin) | **Her zaman**; kurallar yukarıdaki gibi. Deneme yayını Production'dır: dört zorunlu dosya eksik/boş/kısaysa backend açılmaz |
 | `secrets/trial/` altında üçüncü taraf kimlik bilgileri (T171b — `mssql_sa_password.txt`, `redis_password.txt`, `grafana_admin_password.txt`, `steam_api_key.txt`, `tron_api_key.txt`, `tron_api_key_secondary.txt`, `ethereum_rpc_primary_url.txt`, `ethereum_rpc_backup_url.txt`) | Yukarıdaki "Üçüncü taraf kimlik bilgileri"nin deneme yayını kopyası — üç parola **yeni** değer | **Her zaman** (RPC adresleri yalnız `--profile ethereum` ile); kurallar yukarıdaki gibi. Grafana yönetici parolası boşsa Grafana açılmaz |
 | `secrets/trial/heartbeat_url.txt` (T171a) | Healthchecks.io ping URL'si (`https://hc-ping.com/<uuid>`) — dış izleme (DEPLOY_RUNBOOK §P.5) | **Her zaman**; boş = heartbeat konteyneri boşta bekler (`HEARTBEAT_DISABLED`). Yerinde dizin varsa çıkar (`HEARTBEAT_URL_UNREADABLE`) |
@@ -290,7 +290,7 @@ korumayı sürdürür.
 ```bash
 umask 077
 mkdir -p secrets/trial
-: > secrets/trial/cloudflare_tunnel_token.txt    # T162'de token yazılır
+: > secrets/trial/cloudflare_tunnel_token.txt    # token DEPLOY_RUNBOOK §K.5 adım 2
 : > secrets/trial/tron_hd_mnemonic.txt           # T163 — deneme yayınının kendi TRON tohumu
 : > secrets/trial/tron_hot_wallet_private_key.txt
 ```

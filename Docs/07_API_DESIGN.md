@@ -1,6 +1,6 @@
 # Skinora — API Design
 
-**Versiyon: v4.27** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-23 — T170: `AdminHotWalletThresholdBreached` yüküne `network` alanı (iki ağın sıcak cüzdanı izleniyor). · T172a — §9.32 kapatma aracı TRON ve geri yükleme sonrası FAILED satır, ağ süzgeci (⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
+**Versiyon: v4.28** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `04_UI_SPECS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `10_MVP_SCOPE.md` | **Son güncelleme:** 2026-10-24 — T162: üretim adresi `getskinora.com` (skinora.com alınamadı; marka Skinora). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#07_api_designmd)
 
 ---
 
@@ -44,7 +44,7 @@ Bu doküman, Skinora platformunun frontend-backend API iletişimini tanımlar. T
 ### 1.2 Base URL
 
 ```
-https://skinora.com/api/v1/
+https://getskinora.com/api/v1/
 ```
 
 Versioning: URL prefix tabanlı (05 §2.2).

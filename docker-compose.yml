@@ -84,7 +84,7 @@ services:
       # 172.20.0.0/16 = bu compose dosyasının skinora-network alt ağı.
       - ReverseProxy__KnownNetworks__0=${REVERSE_PROXY_KNOWN_NETWORK:-172.20.0.0/16}
       - ReverseProxy__ForwardLimit=${REVERSE_PROXY_FORWARD_LIMIT:-1}
-      # Steam OpenID 2.0 — appsettings.json defaults point at https://skinora.com;
+      # Steam OpenID 2.0 — appsettings.json defaults point at https://getskinora.com;
       # without these overrides real Steam login redirects to a dead domain.
       - SteamOpenId__Realm=${STEAM_OPENID_REALM}
       - SteamOpenId__ReturnToUrl=${STEAM_OPENID_RETURN_TO}
@@ -147,7 +147,7 @@ services:
       # telegram_bot_token, telegram_webhook_secret_token). telegram_bot_token
       # is the same bot Grafana alerts through (skinora-grafana-provisioning).
       - Resend__Provider=${RESEND_PROVIDER:-logging}
-      - Resend__FromAddress=${RESEND_FROM_ADDRESS:-Skinora <noreply@skinora.com>}
+      - Resend__FromAddress=${RESEND_FROM_ADDRESS:-Skinora <noreply@getskinora.com>}
       - Telegram__Provider=${TELEGRAM_PROVIDER:-logging}
       - Telegram__BotUsername=${TELEGRAM_BOT_USERNAME:-SkinoraBot}
       - Telegram__BotUrl=https://t.me/${TELEGRAM_BOT_USERNAME:-SkinoraBot}
@@ -759,7 +759,7 @@ services:
       # the start in first-boot.sh (GRAFANA_SMTP_PASSWORD_UNREADABLE) — Grafana
       # itself would start with an empty password. An empty file is allowed.
       - GF_SMTP_PASSWORD__FILE=/run/secrets/grafana_smtp_password
-      - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM_ADDRESS:-alerts@skinora.com}
+      - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM_ADDRESS:-alerts@getskinora.com}
       - GF_SMTP_FROM_NAME=Skinora Alerts
       - GF_SMTP_STARTTLS_POLICY=MandatoryStartTLS
     volumes:

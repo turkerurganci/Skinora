@@ -144,7 +144,7 @@ public sealed class ResendEmailClientTests
         Assert.Equal("49a3999c-0ce1-4ea6-ab68-afcd6dc2e794", result.MessageId);
         using var json = System.Text.Json.JsonDocument.Parse(body!);
         var root = json.RootElement;
-        Assert.Equal("Skinora <noreply@skinora.com>", root.GetProperty("from").GetString());
+        Assert.Equal("Skinora <noreply@getskinora.com>", root.GetProperty("from").GetString());
         Assert.Equal(System.Text.Json.JsonValueKind.Array, root.GetProperty("to").ValueKind);
         Assert.Equal("Ödeme alındı", root.GetProperty("subject").GetString());
         Assert.Equal("<p>x</p>", root.GetProperty("html").GetString());
@@ -208,7 +208,7 @@ public sealed class ResendEmailClientTests
         var settings = new ResendSettings
         {
             ApiKey = string.Empty,
-            FromAddress = "Skinora <noreply@skinora.com>",
+            FromAddress = "Skinora <noreply@getskinora.com>",
         };
 
         var handler = new StubHttpMessageHandler(_ => BuildResponse(HttpStatusCode.OK, "{}"));
@@ -227,7 +227,7 @@ public sealed class ResendEmailClientTests
         {
             ApiKey = "re_test_key",
             BaseUrl = "https://api.resend.com",
-            FromAddress = "Skinora <noreply@skinora.com>",
+            FromAddress = "Skinora <noreply@getskinora.com>",
             TimeoutSeconds = 10,
         };
 

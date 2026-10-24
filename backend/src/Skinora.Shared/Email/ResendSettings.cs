@@ -55,7 +55,7 @@ public sealed class ResendSettings
     /// domain (DKIM/SPF/DMARC per 08 §4.2). Accepts the
     /// <c>"Display Name &lt;mailbox@domain&gt;"</c> RFC 5322 format.
     /// </summary>
-    public string FromAddress { get; set; } = "Skinora <noreply@skinora.com>";
+    public string FromAddress { get; set; } = "Skinora <noreply@getskinora.com>";
 
     /// <summary>
     /// Per-request HTTP timeout. Resend's send latency is sub-second in

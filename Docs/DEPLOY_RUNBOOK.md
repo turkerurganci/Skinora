@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-24 — T171b: §L.9'a üçüncü taraf kimlik bilgileri (DB/Redis/Grafana parolaları, Steam/TronGrid anahtarları, Ethereum RPC URL'leri — Docker secret; SQL Server/Grafana imajın `*_FILE` desteği + denetim, Redis giriş betiği; kurulum günü, geçiş, döndürme); §B/§G/§K/§N.6/§O sırları dosyaya çekildi. Önceki: T171a §L.9 ortak sırlar. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-24 — T162: §K.5 tünel + `getskinora.com` + HTTPS, gerçek istemci IP'si, Cloudflare Access (ev IP'si, webhook bypass), ölçüm. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (78 satır — T172a sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -72,14 +72,14 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `REDIS_CONNECTION_STRING` | backend | Redis (distributed lock, cache). **T171b — parolasız** (`skinora-redis:6379`); parola `secrets/redis_password.txt` (§L.9) |
 | ~~`MSSQL_SA_PASSWORD`~~ / ~~`REDIS_PASSWORD`~~ / ~~`GRAFANA_ADMIN_PASSWORD`~~ → `secrets/mssql_sa_password.txt`, `secrets/redis_password.txt`, `secrets/grafana_admin_password.txt` | veritabanı + yedek + backend · Redis + backend + Steam servisi · Grafana | **T171b — Docker secret (§L.9)**; üçü de zorunlu ve boş olamaz. SQL Server ve Grafana dosyayı kendisi okur (`*_FILE`), önlerindeki betik dosyayı denetler; Redis parolası giriş betiğiyle tmpfs'teki yapılandırma dosyasına yazılır — komut satırına girmez |
 | `REVERSE_PROXY_KNOWN_NETWORK` | backend | **Reverse proxy arkasında ZORUNLU (F3a).** Backend istemci IP'sini yalnız bu ağdan gelen `X-Forwarded-For` başlığına güvenerek çözer. Boş bırakılırsa forwarded header **hiç işlenmez** ve `RemoteIpAddress` proxy'nin IP'si olarak kalır → `auth` rate limit izolasyonu, geo-block ve VPN sinyali **sessizce etkisiz** olur. Compose varsayılanı `172.20.0.0/16` (skinora-network). **Üretimde yalnız reverse proxy'nin bulunduğu ağ/adres yazılmalıdır** — geniş aralık güveni sulandırır |
-| nginx `geo $skinora_trusted_edge` (`nginx/nginx.conf`, env değil) | reverse-proxy | **Ülke başlığı güveni (T166).** Geo-block'un ülkesi deneme yayınında Cloudflare'in `CF-IPCountry` başlığından gelir (Cloudflare Tunnel → nginx → backend, sahip kararı 2026-10-21). nginx bu değeri backend'e `X-Country-Code` olarak **yalnız kendi TCP eşi tünel bağlayıcısıysa** (bu `geo` listesindeki adres) taşır; başka her eşte başlığı **boş** gönderir, yani istemcinin yazdığı `X-Country-Code`/`CF-IPCountry` backend'e hiç ulaşmaz. Backend de başlığa yalnız kendi eşi `REVERSE_PROXY_KNOWN_NETWORK` içindeyse (yani nginx'ten gelmişse) inanır. Varsayılan liste compose ağı `172.20.0.0/16` (`docker-compose.yml` `skinora-network` için `ipam` ile bu alt ağı **sabitler**; başka alt ağ atanırsa güven boşa düşer ve geo-block sessizce açık kalır, bu yüzden alt ağı değiştirirseniz nginx `geo` ve `REVERSE_PROXY_KNOWN_NETWORK`'ü de birlikte değiştirin), **ağ geçidi `172.20.0.1` hariç** — Docker'ın userland proxy'sinde (Docker Desktop, localhost) yayımlanmış porta gelen istek nginx'e ağ geçidi adresinden ulaşır, bu ölçüldü (T166). **T162'de** listeyi cloudflared container'ının adresine daraltın. Liste hiçbir şeyle eşleşmezse ülke backend'in IP tabanlı (MaxMind) çözümüne düşer — "eksik bilgi", "yanlış güven" değil |
+| nginx `geo $skinora_trusted_edge` (`nginx/nginx.conf`, env değil) | reverse-proxy | **Ülke başlığı güveni (T166).** Geo-block'un ülkesi deneme yayınında Cloudflare'in `CF-IPCountry` başlığından gelir (Cloudflare Tunnel → nginx → backend, sahip kararı 2026-10-21). nginx bu değeri backend'e `X-Country-Code` olarak **yalnız kendi TCP eşi tünel bağlayıcısıysa** (bu `geo` listesindeki adres) taşır; başka her eşte başlığı **boş** gönderir, yani istemcinin yazdığı `X-Country-Code`/`CF-IPCountry` backend'e hiç ulaşmaz. Backend de başlığa yalnız kendi eşi `REVERSE_PROXY_KNOWN_NETWORK` içindeyse (yani nginx'ten gelmişse) inanır. Varsayılan liste compose ağı `172.20.0.0/16` (`docker-compose.yml` `skinora-network` için `ipam` ile bu alt ağı **sabitler**; başka alt ağ atanırsa güven boşa düşer ve geo-block sessizce açık kalır, bu yüzden alt ağı değiştirirseniz nginx `geo` ve `REVERSE_PROXY_KNOWN_NETWORK`'ü de birlikte değiştirin), **ağ geçidi `172.20.0.1` hariç** — Docker'ın userland proxy'sinde (Docker Desktop, localhost) yayımlanmış porta gelen istek nginx'e ağ geçidi adresinden ulaşır, bu ölçüldü (T166). **T162'den beri** liste yalnız tünel bağlayıcısının sabit adresi `172.30.161.250/32`'dir ve `$realip_remote_addr` (soket adresi) ile okunur; geliştirme ağında hiçbir eş eşleşmez (§K.5.1). Liste hiçbir şeyle eşleşmezse ülke backend'in IP tabanlı (MaxMind) çözümüne düşer — "eksik bilgi", "yanlış güven" değil |
 | `REVERSE_PROXY_FORWARD_LIMIT` | backend | Zincirdeki proxy sayısı, varsayılan `1` (tek nginx). Önünde CDN varsa artırın. **Olduğundan büyük vermek istemcinin zincire sahte girdi eklemesine izin verir** — ölçüldü: `ForwardLimit=1` ile nginx üzerinden sahte `X-Forwarded-For` gönderen istemci kendi kovasından kaçamıyor |
 | ~~`JWT_SECRET`~~ → `secrets/jwt_secret.txt` (≥32 char) | backend | Access/refresh token imzası. **T171a — env değil, Docker secret dosyası (§L.9)**; Development dışında `Jwt__Secret` değişkeni backend'i durdurur (`SHARED_SECRET_IN_ENV`) |
 | `JWT_ISSUER` / `JWT_AUDIENCE` | backend | Token issuer/audience |
 | ~~`WEBHOOK_SECRET`~~ → `secrets/blockchain_webhook_secret.txt` (≥32 char) | backend + **blockchain** sidecar (aynı dosya) | Sidecar→backend HMAC-SHA256 webhook imzası (05 §3.4). Steam sidecar webhook göndermez (T133) — kalan tek imzalı yüzey blockchain'dir. **T171a — Docker secret (§L.9)**; TRON servisi bu sır olmadan ya da kısa sırla açılmaz (`WEBHOOK_SECRET_MISSING` / `_TOO_SHORT`) |
 | ~~`INTERNAL_KEY`~~ (+ ~~`STEAM_SIDECAR_INTERNAL_KEY`~~ / ~~`BLOCKCHAIN_SIDECAR_INTERNAL_KEY`~~) → `secrets/steam_sidecar_internal_key.txt`, `secrets/blockchain_sidecar_internal_key.txt` | backend + sidecar'lar (sidecar başına tek dosya) | **T171a — Docker secret (§L.9), env yolu üretimde kapalı.** Backend↔sidecar internal API `X-Internal-Key` auth. **T161 — fail-closed: Steam ve TRON servisi iç anahtar boşsa ya da 32 karakterden kısaysa AÇILMAZ** (`INTERNAL_KEY_MISSING` / `INTERNAL_KEY_TOO_SHORT`, Ethereum servisiyle aynı kural). T161 öncesi boş anahtar "dev modu" sayılıp kimlik doğrulaması atlanıyordu — servisin portuna ulaşan herkes `/api` uçlarını çağırabiliyordu. Üretim: `openssl rand -hex 32`, servis başına ayrı değer |
 | ~~`STEAM_API_KEY`~~ → `secrets/steam_api_key.txt` | steam sidecar + backend (aynı dosya) | Steam Web API (envanter + trade-hold probu) + OpenID profil adı/avatar (`SteamOpenId:WebApiKey`; boşsa login çalışır ama profil placeholder'a düşer). **Steam sidecar'ın tek credential'ı budur** — bot hesabı gerekmez (T133, 08 §9.1). **T171b — Docker secret (§L.9)**; üretimde değişken servisleri durdurur (`CREDENTIAL_IN_ENV`) |
-| `STEAM_OPENID_REALM` / `_RETURN_TO` / `_REVERIFY_RETURN_TO` / `_FRONTEND_CALLBACK` | backend | Steam OpenID 2.0 (08 §2.1). **`appsettings.json` default'u `https://skinora.com`** — override edilmezse gerçek login ölü bir domaine yönlenir |
+| `STEAM_OPENID_REALM` / `_RETURN_TO` / `_REVERIFY_RETURN_TO` / `_FRONTEND_CALLBACK` | backend | Steam OpenID 2.0 (08 §2.1). **`appsettings.json` default'u `https://getskinora.com`** (deneme yayınında `.env.trial` aynı değeri yazar, §K.5) — override edilmezse gerçek login ölü bir domaine yönlenir |
 | `PUBLIC_ORIGIN` | backend | Tarayıcıya bakan tek origin → `Cors__AllowedOrigins__0` |
 | `STEAM_SIDECAR_REDIS_URL` | steam sidecar | Envanter cache (08 §2.3); boşsa in-memory fallback. **T171b — parolasız** (`redis://skinora-redis:6379`); servis `secrets/redis_password.txt`'i ekler, üretimde URL'deki parola `CREDENTIAL_IN_ENV` |
 | `STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE` | steam sidecar | Steam Community envanter ucunun kuyruk tavanı, istek/dakika (08 §2.6, T120). Web API kuyruğundan **ayrı**. Boş/geçersiz → **10/dk** (tahmini 10-20/dk/IP aralığının muhafazakâr ucu; aşım IP bloğuyla cezalandırılır). Her teslimat doğrulaması **iki** okuma harcadığı için (satıcı + alıcı) bu değer aynı zamanda eşzamanlı doğrulama tavanıdır (10 §4). Yalnız proxy havuzu arkasında veya T122 gerçek limiti ölçtükten sonra yükseltilir. Değişiklik sidecar restart gerektirir |
@@ -911,7 +911,7 @@ Servis hiçbir gas miktarını sabit varsaymaz (yönetici kararı, ⚠ PARA; 08 
 
 ## K. Deneme yayını — bu PC, Docker Desktop + Cloudflare Tunnel (T161)
 
-> **Bağlam (proje sahibi kararı, 2026-10-21).** Kiralık sunucu yok. Deneme yayını proje sahibinin bilgisayarında, **mevcut Docker Desktop** ve **Cloudflare Tunnel** ile yapılır; yalnız test ağları (TRON Nile + Ethereum Sepolia). **Modemde port açılmaz** — dış trafik yalnız tünelden gelir: cloudflared Cloudflare'a **dışarı doğru** bağlanır ve isteği compose iç ağından edge'e (`skinora-reverse-proxy:80`) iletir. Alan adı `skinora.com` henüz alınmadı; tünelin gerçekten bağlanması T162'dir. Gerçek ağ (mainnet) için sunucu kararı sonra verilir — aynı compose orada da çalışır (§K.6).
+> **Bağlam (proje sahibi kararı, 2026-10-21).** Kiralık sunucu yok. Deneme yayını proje sahibinin bilgisayarında, **mevcut Docker Desktop** ve **Cloudflare Tunnel** ile yapılır; yalnız test ağları (TRON Nile + Ethereum Sepolia). **Modemde port açılmaz** — dış trafik yalnız tünelden gelir: cloudflared Cloudflare'a **dışarı doğru** bağlanır ve isteği compose iç ağından edge'e (`skinora-reverse-proxy:80`) iletir. Alan adı **`getskinora.com`** (T162, 2026-10-24; `skinora.com` alınamadı); tünel ve Cloudflare Access §K.5. Gerçek ağ (mainnet) için sunucu kararı sonra verilir — aynı compose orada da çalışır (§K.6).
 >
 > Deneme yayını, geliştirme stack'inin (`-f docker-compose.yml`, proje `escrow`) **yanında** çalışır ve ona dokunmaz: ayrı proje adı, ayrı container'lar, ayrı ağ, ayrı volume'ler, ayrı `.env.trial`, ayrı `secrets/trial/`.
 
@@ -922,7 +922,7 @@ Servis hiçbir gas miktarını sabit varsaymaz (yönetici kararı, ⚠ PARA; 08 
 | Compose projesi | dizin adı (`escrow`) | **`skinora-trial`** (overlay'deki `name:`; `-p` verilirse o geçer) |
 | Container adları | sabit (`skinora-backend` …) | projeden türer (`skinora-trial-skinora-backend-1` …) — çakışmaz |
 | Volume'ler | `escrow_skinora-db-data` … | `skinora-trial_skinora-db-data` … — **ayrı veritabanı** |
-| Ağ | otomatik alt ağ | **`172.30.161.0/24`** (`TRIAL_NETWORK_SUBNET`); backend'in `X-Forwarded-For` güveni (`ReverseProxy__KnownNetworks__0`) bu aralığa sabitlenir |
+| Ağ | otomatik alt ağ | **`172.30.161.0/24`** (sabit, değişkensiz — T162; dinamik aralık `.0/25`, tünel bağlayıcısı `172.30.161.250`); backend'in `X-Forwarded-For`/`-Proto` güveni (`ReverseProxy__KnownNetworks__0`) bu aralığa sabitlenir |
 | Değerler | `.env` | **`.env.trial`** (`--env-file`; `.env.*` gitignored). İçinde **`SKINORA_TRIAL_STACK=1`** işareti zorunludur: yoksa overlay render bile etmez (§K.4) |
 | Docker secret'lar | `secrets/` | **`secrets/trial/`** ([`secrets/README.md`](../secrets/README.md)) |
 | Host portları | hepsi `127.0.0.1` (§K.2) | iç servis portu **yok**; yalnız operatör için `127.0.0.1:8090` (edge), `127.0.0.1:3011` (Grafana), `127.0.0.1:3012` (Uptime Kuma) |
@@ -966,14 +966,13 @@ echo 'SKINORA_TRIAL_STACK=1' >> .env.trial     # zorunlu işaret; .env.example'a
 #    TRON_NETWORK=nile, TRON_USDT_CONTRACT=<Nile>, TRONSCAN_TX_BASE_URL=https://nile.tronscan.org/#/transaction/
 #    ETHEREUM_NETWORK=sepolia, ETHERSCAN_TX_BASE_URL=https://sepolia.etherscan.io/tx/
 #    (T171b — DB/Redis/Grafana parolaları ve sağlayıcı anahtarları .env.trial'a YAZILMAZ: adım 2)
-#    PUBLIC_ORIGIN ve STEAM_OPENID_* → T162'ye kadar http://localhost:8090,
-#    T162'de https://skinora.com (tünelin public hostname'i)
+#    PUBLIC_ORIGIN ve STEAM_OPENID_* → https://getskinora.com (tünelin public hostname'i, §K.5 adım 6)
 #    ASPNETCORE_ENVIRONMENT / NODE_ENV yazılsa da overlay Production'a zorlar.
 #    NGINX_* deneme yayınında etkisizdir (portlar overlay'den gelir).
 
 # 2) Sırlar — dosya olarak taşınanlar
 umask 077; mkdir -p secrets/trial
-: > secrets/trial/cloudflare_tunnel_token.txt          # T162'de token yazılır
+: > secrets/trial/cloudflare_tunnel_token.txt          # token §K.5 adım 2 (boşsa tünel açılmaz)
 : > secrets/trial/tron_hd_mnemonic.txt; : > secrets/trial/tron_hot_wallet_private_key.txt   # T163 — HER ZAMAN gerekir; testnet tohumu/anahtarı yazılır
 #    --profile ethereum için: secrets/trial/ethereum_*.txt (secrets/README.md)
 #    T171a — ortak sırlar (HER ZAMAN; deneme yayını Production: eksik/kısa → backend açılmaz, §L.9)
@@ -1026,17 +1025,77 @@ sa_sqlcmd -d Skinora -v SteamId="<steamid64>" -i /dev/stdin < scripts/bootstrap/
 - **BOM:** `dotnet ef migrations script` dosyayı UTF-8 **BOM**'la yazar; `sqlcmd -i /dev/stdin` (stdin'den okuma) BOM'u tanımaz ve ilk satırda `Incorrect syntax near ''` ile durur. Dosyayı `docker compose cp` ile container'a kopyalayıp `-i <dosya>` ile okutmak BOM'u doğru işler. (`01-super-admin.sql` BOM'suzdur; stdin yolu onun için çalışır.)
 - **`QUOTED_IDENTIFIER`:** `sqlcmd` bu ayarı varsayılan olarak **kapalı** açar; filtreli indeksler `CREATE INDEX failed because the following SET options have incorrect settings: 'QUOTED_IDENTIFIER'` ile reddedilir. `-I` bayrağı zorunludur. Betik idempotenttir — yarıda kalırsa düzeltilip yeniden koşulur (her migration kendi transaction'ında).
 
-### K.5 Tünel (T162'de bağlanır)
+### K.5 Tünel, alan adı ve HTTPS (T162)
 
-1. **Cloudflare'da:** Zero Trust → Networks → Tunnels → *Create a tunnel* (Cloudflared). Kurulum ekranındaki **token**'ı kopyalayın — `cloudflared service install` komutunu **çalıştırmayın** (Windows servisi değil, compose içindeki container kullanılır).
+**Durum (2026-10-24):** alan adı **`getskinora.com`** (Cloudflare'de; `skinora.com` alınamadı — marka Skinora kalır, yalnız dağıtım adresi değişti). Tünel `skinora-trial` Cloudflare'de hazır; public hostname `getskinora.com` → **`http://skinora-reverse-proxy:80`** (DNS CNAME tünele). Token `secrets/trial/cloudflare_tunnel_token.txt`'de. Önünde **Cloudflare Access** var (§K.5.2) — tünel açıkken bile dışarıdan gelen herkes önce giriş ekranına düşer.
+
+1. **Tünel (yeniden kurulurken):** Zero Trust → Networks → Tunnels → *Create a tunnel* (Cloudflared). Kurulum ekranındaki **token**'ı kopyalayın — `cloudflared service install` komutunu **çalıştırmayın** (Windows servisi değil, compose içindeki container kullanılır).
 2. **Token'ı dosyaya yazın** (tek satır, tırnaksız): `secrets/trial/cloudflare_tunnel_token.txt`. Token env değişkeni olarak taşınmaz (`docker inspect` göstermesin diye); cloudflared onu `TUNNEL_TOKEN_FILE` ile Docker secret'tan okur.
-3. **Public hostname:** tünelin *Public Hostname* sekmesinde `skinora.com` (gerekirse `www`) → Service **`http://skinora-reverse-proxy:80`**. Container adı değil **servis adı** yazılır — deneme yayınında container adları projeden türer.
-4. **Başlatın:** `$TRIAL --profile tunnel up -d --wait`. Önce `skinora-tunnel-preflight` koşar; token dosyası boşsa `TUNNEL_TOKEN_MISSING` yazıp **1** ile çıkar ve cloudflared **hiç başlatılmaz** (fail-closed — boş token'la yeniden başlama döngüsüne girmez). Token doluysa `$TRIAL --profile tunnel logs skinora-cloudflared` içinde `Registered tunnel connection` satırları görünür.
+3. **Public hostname:** `getskinora.com` → Service **`http://skinora-reverse-proxy:80`**. Container adı değil **servis adı** yazılır — deneme yayınında container adları projeden türer. `www` tanımlı değil (gerekirse aynı servise ikinci hostname + Access uygulamasına ikinci alan adı).
+4. **Başlatın:** `$TRIAL --profile tunnel up -d --wait`. Önce `skinora-tunnel-preflight` koşar; token dosyası boşsa `TUNNEL_TOKEN_MISSING` yazıp **1** ile çıkar ve cloudflared **hiç başlatılmaz** (fail-closed). Token doluysa `$TRIAL --profile tunnel logs skinora-cloudflared` içinde dört `Registered tunnel connection` satırı görünür. **Durdurma:** `$TRIAL --profile tunnel stop skinora-cloudflared` (yığın açık kalır, site Cloudflare'den `530` döner).
 5. **cloudflared host'ta port açmaz.** Kendi metrik ucu container içindedir; yayımlanmaz.
+6. **`.env.trial`:** `PUBLIC_ORIGIN=https://getskinora.com` ve dört `STEAM_OPENID_*` → `https://getskinora.com` (realm), `…/api/v1/auth/steam/callback`, `…/api/v1/auth/steam/re-verify/callback`, `…/auth/callback`. Steam `return_to` doğrulaması tam metin eşitliğidir; adres yanlışsa giriş `openid.return_to mismatch` ile düşer.
 
-**T162'ye kalanlar (bu görevde bilerek yapılmadı):**
-- **Gerçek istemci IP'si.** Tünel arkasında nginx'in gördüğü adres cloudflared container'ıdır; `X-Forwarded-For`'un son halkası o olur ve `ForwardLimit=1` ile backend **her kullanıcıyı aynı IP** görür → `auth` rate limit kovası tek kovaya düşer, geo-block ve VPN sinyali etkisizleşir. T162: nginx'te `real_ip_header CF-Connecting-IP;` + `set_real_ip_from 172.30.161.0/24;` (yalnız cloudflared'in ağı), ardından §B `REVERSE_PROXY_*` ölçümünün tünel üzerinden tekrarı.
-- **`https` şeması.** TLS Cloudflare kenarında biter; cloudflared → nginx düz HTTP'dir ve nginx `X-Forwarded-Proto $scheme` = `http` gönderir. Oturum çerezinin `Secure` bayrağı ve OpenID `return_to` doğrulaması gerçek alan adında `https` görmelidir (T162 kabul kriteri).
+#### K.5.1 Gerçek istemci IP'si ve `https` şeması (nasıl çalışıyor)
+
+- **Sertifika:** TLS Cloudflare kenarında biter; sertifikayı Cloudflare alır ve **kendisi yeniler** (ölçüm: Let's Encrypt, `getskinora.com` + `*.getskinora.com`, 90 gün). Bizim tarafta sertifika dosyası yoktur; cloudflared → nginx düz HTTP'dir, compose ağının içinde.
+- **Bağlayıcının sabit adresi:** `docker-compose.trial.yml` cloudflared'ı **`172.30.161.250`**'ye sabitler; ağın dinamik aralığı `172.30.161.0/25`'tir (`ip_range`), yani bu adres başka bir container'a verilemez. Ağ ve adres **değişkensiz**dir (eski `TRIAL_NETWORK_SUBNET` kalktı): nginx yapılandırması değişken okuyamaz, alt ağ tek başına kayarsa istemci IP'si sessizce kaybolurdu. Adresi değiştirmek `nginx/nginx.conf` ile **aynı commit'te** yapılır; `scripts/compose-exposure.test.mjs` ikisi ayrışırsa CI'ı kırar.
+- **nginx (`nginx/nginx.conf`):** `set_real_ip_from 172.30.161.250` + `real_ip_header CF-Connecting-IP` — `$remote_addr` yalnız bağlayıcıdan gelen istekte Cloudflare'in yazdığı ziyaretçi IP'si olur. Başka her eşin (yerel `127.0.0.1:8090` operatör portu — Docker Desktop'ta ağ geçidi `172.30.161.1`'den gelir —, başka bir container) `CF-Connecting-IP`'si yok sayılır. Aynı kural `CF-IPCountry` (`$skinora_trusted_edge`, T166; artık `$realip_remote_addr` ile, yani **soket** adresine göre) ve `X-Forwarded-Proto` için geçerlidir: backend'e giden şema bağlayıcıdan gelen istekte Cloudflare'inki (`https`), diğerlerinde nginx'in kendi `$scheme`'i (`http`). Cloudflare'den düz `http` ile gelen istek nginx'te `301 → https://<host><yol>` alır. Davranış `scripts/nginx/edge-realip.test.mjs`'te gerçek nginx imajıyla sınanır.
+- **Backend:** `ReverseProxy__KnownNetworks__0=172.30.161.0/24`, `ForwardLimit=1` — `X-Forwarded-For`'un son halkası (nginx'in yazdığı ziyaretçi IP'si) `RemoteIpAddress`, `X-Forwarded-Proto` `Request.Scheme` olur. Rate limit kovası (`skinora:ratelimit:auth:ip:<ip>`), geo-block ve VPN sinyali böylece ziyaretçiye göre çalışır.
+- **Geliştirme stack'i** (`172.20.0.0/16`) bu adresi içermez: orada hiçbir başlığa güvenilmez — "eksik bilgi", "yanlış güven" değil.
+- **Cloudflare'in kendi koruması:** istemcinin kendisi `CF-Connecting-IP` gönderirse Cloudflare isteği kenarda **403** ile reddeder (ölçüldü); sahte `X-Forwarded-For` ise kovaya etki etmez (son halka gerçek IP).
+
+#### K.5.2 Cloudflare Access (deneme yayını kapısı)
+
+Deneme yayını herkese açık değildir. Access uygulaması tünelin önünde durur; kimlik doğrulamasız istek uygulamaya (nginx'e) **hiç ulaşmaz**.
+
+| Öğe | Değer |
+|---|---|
+| Uygulama | `skinora-trial` (self-hosted), alan adı `getskinora.com` (tüm yollar), oturum 24 sa — id `c4ce39b7-cae7-4f7b-a026-847909d3dd01` |
+| Politika 1 — `ev-ip` | **Bypass**, kaynak IP `81.214.103.181/32` (bu PC'nin evdeki genel IP'si). Bu IP'den gelen istek giriş ekranı görmez. Yeniden kullanılabilir politika, id `632baa07-a637-411b-a76b-17d6eed92d01` |
+| Politika 2 — `sahip` | **Allow**, sahibin e-posta adresleri; giriş yöntemi **One-time PIN** (e-postaya kod) |
+| Kurulum | Yönetici, API ile (2026-10-24). Panelde: Zero Trust → Access → Applications → `skinora-trial` |
+
+**Kurulum (yeniden gerekirse, panelden):** Zero Trust → Settings → Authentication → *One-time PIN* ekli olmalı. Access → Applications → *Add an application* → Self-hosted → ad `skinora-trial`, alan adı `getskinora.com`, oturum 24 sa → politikalar: (1) `ev-ip` Action **Bypass**, Include → *IP ranges* → `<ev IP>/32`; (2) `sahip` Action **Allow**, Include → *Emails* → sahip adresleri. Bypass, Allow'dan önce gelir.
+
+**Ev IP'si değişince (`ev-ip` güncelleme).** Ev bağlantısının genel IP'si sabit değilse (modem yeniden başlaması, operatör) bu PC'den açılan site de giriş ekranına düşer; site yine çalışır, yalnız bypass bozulur. Yeni IP: `curl -s https://api.ipify.org`.
+- **Panel:** Zero Trust → Access → Policies → `ev-ip` → Include → IP ranges → yeni `<ip>/32` (eskisini silin) → Save.
+- **API** (Access: Apps and Policies Edit yetkili token; token **ekrana/geçmişe yazılmaz**, dosyadan okunur):
+  ```bash
+  T="$(tr -d '\r\n' < secrets/cloudflare_api_token.txt)"
+  ACC="<hesap id>"   # panel → hesap ana sayfası; ya da zones?name=getskinora.com cevabındaki account.id
+  NEW_IP="$(curl -s https://api.ipify.org)"
+  curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$ACC/access/policies/632baa07-a637-411b-a76b-17d6eed92d01" \
+    -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+    -d "{\"name\":\"ev-ip\",\"decision\":\"bypass\",\"include\":[{\"ip\":{\"ip\":\"$NEW_IP/32\"}}]}" | grep -o '"success":[a-z]*'
+  ```
+  Beklenen `"success":true`. PUT listenin tamamını değiştirir; eski IP kalmaz — eski adres başka bir aboneye geçmiş olabilir, kalması bir açıktır.
+- **Doğrulama:** bu PC'den `curl -s -o /dev/null -w '%{http_code}\n' https://getskinora.com/nginx-health` → `200`; Access'e düşüyorsa `302` (`*.cloudflareaccess.com`).
+
+**İleride: webhook yolları için bypass (yalnız belge — henüz oluşturulmadı).** Access, insan olmayan çağrıları da giriş ekranına çevirir. Dış servislerin bize çağrı yaptığı uçlar açıldığında (§P) her biri için **yol bazlı bypass** gerekir; yoksa çağrı `302 → cloudflareaccess.com` alır ve servis teslimatı "başarısız" sayar:
+- **Telegram:** `getskinora.com/api/v1/webhooks/telegram` — bypass, kaynak IP'leri Telegram'ın yayımladığı aralıklarla (`149.154.160.0/20`, `91.108.4.0/22`) sınırlı; uçta ayrıca `X-Telegram-Bot-Api-Secret-Token` doğrulanır.
+- **Resend:** `getskinora.com/api/v1/webhooks/resend` — Resend sabit IP yayımlamaz; yol bazlı **Everyone** bypass, uçta Svix imzası (`resend_webhook_signing_secret`) doğrulanır.
+- **Nasıl:** Access → Applications → *Add* → Self-hosted, alan adı `getskinora.com`, **path** `api/v1/webhooks/telegram` (ayrı uygulama; daha özel yol önceliklidir) → tek politika Action **Bypass**. Yalnız webhook yolu açılır — `/api/` geneli değil. Sonra sağlayıcının test çağrısıyla `2xx` görülür.
+- **Steam OpenID dönüşü** (`/api/v1/auth/steam/callback`) bypass **gerektirmez**: tarayıcı yönlendirmesidir, Access çerezini taşıyan kullanıcının kendisi gelir.
+- Deneme yayını herkese açılırken (pilot) Access uygulaması kaldırılır ya da politikası değişir — karar sahibin (T175).
+
+#### K.5.3 T162 ölçümü (2026-10-24, bu PC)
+
+Yığın §K.4 ile sıfırdan kuruldu (yeni sırlar, testnet cüzdan dosyaları boş, Steam/TronGrid anahtarı geliştirmeden kopya; migration 65/65). Grafana ölçümde kapalıydı: deneme yayınının `telegram_bot_token.txt`'i boş ve boş token Grafana'yı açmaz (§L.9, §P — sahip adımı).
+
+| Kontrol | Komut | Sonuç |
+|---|---|---|
+| Tünel | `$TRIAL --profile tunnel up -d …` · logs | 4 × `Registered tunnel connection` (fra03, ist03, ist07, fra10) |
+| **Dış erişim (Access)** | dış bir getirici üzerinden (`r.jina.ai`) `https://getskinora.com/?p=<rastgele>` ve `/api/health?q=<rastgele>` | ikisi de **`<takım>.cloudflareaccess.com` "Log in to skinora-trial"** (e-posta kodu); nginx access log'unda bu istekler **yok** — uygulamaya ulaşmadı |
+| Sertifika | `openssl s_client -connect getskinora.com:443 -servername getskinora.com` | `CN=getskinora.com`, SAN `getskinora.com, *.getskinora.com`, Let's Encrypt, `Verify return code: 0 (ok)` |
+| İstemci IP'si (nginx) | bu PC'den istek → nginx access log | `81.214.103.181` (bağlayıcının adresi değil) |
+| İstemci IP'si (backend) | Redis `--scan --pattern '*ip:*'` | `skinora:ratelimit:auth:ip:81.214.103.181` |
+| Sahte başlık | tünelden `-H 'CF-Connecting-IP: 1.2.3.4'` · `-H 'X-Forwarded-For: 1.2.3.4'` · yerel `127.0.0.1:8090`'a ikisi + `X-Forwarded-Proto: https` | Cloudflare **403** · kova yine `81.214.103.181` · yerelde log `172.30.161.1`, kova `ip:172.30.161.1` |
+| Şema + Steam | `curl -D - 'https://getskinora.com/api/v1/auth/steam?returnUrl=%2Fen%2Fdashboard'` | `302` Steam; `openid.return_to=https://getskinora.com/api/v1/auth/steam/callback`, `openid.realm=https://getskinora.com`; `Set-Cookie: skinora_oid_rt=…; path=/api/v1/auth; secure; samesite=lax; httponly` (Domain özniteliği yok → çerez yalnız `getskinora.com`'a bağlı) |
+| Düz http | `curl 'http://getskinora.com/api/v1/auth/steam?returnUrl=%2F'` | `301 → https://getskinora.com/…` (nginx'in kuralı — access log'da `301`) |
+| Tünel kapalı | `stop skinora-cloudflared` sonrası | `530` |
+
+**Bu ölçümün söylemediği:** backend'in `https` gördüğü canlıda doğrudan okunmadı (istek log'u şemayı yazmıyor); gösteren: Steam'e giden `return_to`/çerez, nginx testi (bağlayıcıdan `X-Forwarded-Proto: https`) ve backend entegrasyon testi (`ForwardedProto_IsBelievedOnlyFromTheTrustedProxy`). Steam ile tarayıcıdan tam giriş yapılmadı — **sahip adımı:** tarayıcıda `https://getskinora.com` → *Sign in with Steam* → dönüşte giriş yapılmış olmalı; geliştirici araçları → Application → Cookies → `https://getskinora.com` altında `refreshToken` (`Secure`, `HttpOnly`, yol `/api/v1/auth`).
 
 ### K.6 Gelecekteki Linux sunucu (gerçek ağ — karar sonra)
 
@@ -1045,7 +1104,7 @@ Aynı `docker-compose.yml` çalışır; iki seçenek:
 | Seçenek | Nasıl | Host güvenlik duvarı |
 |---|---|---|
 | **(a) Tünel (önerilen)** | Bu bölümün aynısı: overlay ya da eşdeğer bir üretim overlay'i, cloudflared dışarı bağlanır | Gelen trafikte **yalnız SSH** (tercihen yalnız yönetici IP'sinden); 80/443 bile açılmaz |
-| **(b) Doğrudan 80/443** | `.env`'de `NGINX_BIND_ADDRESS=0.0.0.0`; sertifika nginx'te (T162 kapsamı) | Gelen trafikte 22 + 80 + 443; geri kalan her şey `deny` |
+| **(b) Doğrudan 80/443** | `.env`'de `NGINX_BIND_ADDRESS=0.0.0.0`; sertifika nginx'te (tünelsiz seçenek — bugün yapılandırılmadı; T162 tünel yolunu kurdu) | Gelen trafikte 22 + 80 + 443; geri kalan her şey `deny` |
 
 **⚠ Docker, ufw'yu atlar.** Docker yayımlanan portlar için kendi iptables zincirlerini (`DOCKER`, `DOCKER-USER`) ufw'nun `INPUT` kurallarından **önce** işler; `0.0.0.0`'a yayımlanmış bir port, `ufw deny` olsa bile internetten açılır. Bu yüzden taban dosya iç portları `127.0.0.1`'e bağlar ve bunun için bir ayar sunmaz. Ek kısıt gerekiyorsa ufw değil `DOCKER-USER` zinciri kullanılır.
 
@@ -1749,7 +1808,7 @@ Sırlar T171a'dan beri Docker secret **dosyasıdır** (§L.9): `secrets/trial/re
 Ayrıntı ve DNS tablosu: [RESEND_SETUP.md](INTEGRATION_RUNBOOKS/RESEND_SETUP.md). Sıra:
 
 1. resend.com'da hesap aç (ücretsiz plan: ayda 3.000, **günde 100** e-posta, 1 webhook ucu — resend.com/pricing, 2026-10-23).
-2. **Domains → Add domain** → alan adı (`skinora.com`). Verilen DKIM/SPF/Return-Path kayıtlarını Cloudflare DNS'e ekle, "Verify" yeşil olana kadar bekle (RESEND_SETUP §2).
+2. **Domains → Add domain** → alan adı (`getskinora.com`). Verilen DKIM/SPF/Return-Path kayıtlarını Cloudflare DNS'e ekle, "Verify" yeşil olana kadar bekle (RESEND_SETUP §2).
 3. **API Keys → Create** → izin **Sending access**, alan adına kısıtlı → backend anahtarı → `secrets/trial/resend_api_key.txt` (`re_…`, tek satır).
 4. **API Keys → Create** (ikinci, yine Sending access) → **Grafana** anahtarı → `secrets/trial/grafana_smtp_password.txt` (`re_…`). Ayrı anahtar: biri sızarsa ya da iptal edilirse diğer yol çalışmaya devam eder (öneriyle kaydedildi — ⚠ GÜVENLİK).
 5. **Webhooks → Add endpoint** → `https://<alan-adı>/api/v1/webhooks/resend`, olaylar `email.bounced`, `email.complained`, `email.delivery_delayed`, `email.failed`, `email.suppressed` → signing secret → `secrets/trial/resend_webhook_signing_secret.txt` (`whsec_…`, önek dahil).

@@ -8,10 +8,10 @@
 
 ## 1. Resend Hesap Yapılandırması
 
-1. **Domain ekle:** Resend dashboard → *Domains* → *Add domain* → `skinora.com` (veya operasyon ekibinin sahip olduğu domain).
+1. **Domain ekle:** Resend dashboard → *Domains* → *Add domain* → `getskinora.com` (veya operasyon ekibinin sahip olduğu domain).
 2. **Region:** US (varsayılan) — domain doğrulaması bölge bağımsız.
 3. **API Key oluştur:** *API Keys* → *Create API key* → Permission `Sending access` (sadece email gönderim, full access değil) → kopyala (sadece bir kez gösterilir).
-4. **Webhook endpoint kaydet:** *Webhooks* → *Add endpoint* → URL `https://skinora.com/api/v1/webhooks/resend` → events: `email.bounced`, `email.delivery_delayed`, `email.complained`, `email.failed`, `email.suppressed` → kaydet → *Signing secret* göründüğünde kopyala (`whsec_…` formatında, sadece bir kez gösterilir).
+4. **Webhook endpoint kaydet:** *Webhooks* → *Add endpoint* → URL `https://getskinora.com/api/v1/webhooks/resend` → events: `email.bounced`, `email.delivery_delayed`, `email.complained`, `email.failed`, `email.suppressed` → kaydet → *Signing secret* göründüğünde kopyala (`whsec_…` formatında, sadece bir kez gösterilir).
 
 ---
 
@@ -21,20 +21,20 @@ Resend domain ekledikten sonra dashboard'da dört kayıt üretir. Bunları DNS s
 
 | Kayıt | Tür | Host | Değer (örnek) | Notlar |
 |---|---|---|---|---|
-| **DKIM 1** | TXT veya CNAME | `resend._domainkey.skinora.com` | `resend._domainkey.skinora.com.dkim.resend.com` (CNAME) veya `p=MIGfMA0GCSqGSIb3DQEBAQUA…` (TXT) | Resend hangi formatı verirse onu kullan; her ikisi de geçerli. |
-| **DKIM 2** | TXT veya CNAME | `resend2._domainkey.skinora.com` | dashboard'daki ikinci kayıt | Yedek imzalama anahtarı; eksikse "1 of 2 records" uyarısı gelir. |
-| **SPF** | TXT | `skinora.com` (root) | `v=spf1 include:amazonses.com ~all` | Mevcut SPF kaydı varsa `include:amazonses.com` parçasını **ekleyerek** güncelle; **yeni satır açma** (RFC 7208 — bir domain için en fazla bir SPF TXT). |
-| **DMARC** | TXT | `_dmarc.skinora.com` | `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@skinora.com; adkim=s; aspf=s` | MVP'de `p=quarantine` yeterli; tam mainstream sonrası `p=reject`'e geçilir. `rua` mailbox'ı operasyon ekibinin izlediği bir adres olmalı. |
-| **Return-Path** | CNAME | `bounce.skinora.com` (veya dashboard'un istediği subdomain) | `feedback-smtp.us-east-1.amazonses.com` | "Custom Return-Path" özelliği; bounce yönetimi için zorunlu. |
+| **DKIM 1** | TXT veya CNAME | `resend._domainkey.getskinora.com` | `resend._domainkey.getskinora.com.dkim.resend.com` (CNAME) veya `p=MIGfMA0GCSqGSIb3DQEBAQUA…` (TXT) | Resend hangi formatı verirse onu kullan; her ikisi de geçerli. |
+| **DKIM 2** | TXT veya CNAME | `resend2._domainkey.getskinora.com` | dashboard'daki ikinci kayıt | Yedek imzalama anahtarı; eksikse "1 of 2 records" uyarısı gelir. |
+| **SPF** | TXT | `getskinora.com` (root) | `v=spf1 include:amazonses.com ~all` | Mevcut SPF kaydı varsa `include:amazonses.com` parçasını **ekleyerek** güncelle; **yeni satır açma** (RFC 7208 — bir domain için en fazla bir SPF TXT). |
+| **DMARC** | TXT | `_dmarc.getskinora.com` | `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@getskinora.com; adkim=s; aspf=s` | MVP'de `p=quarantine` yeterli; tam mainstream sonrası `p=reject`'e geçilir. `rua` mailbox'ı operasyon ekibinin izlediği bir adres olmalı. |
+| **Return-Path** | CNAME | `bounce.getskinora.com` (veya dashboard'un istediği subdomain) | `feedback-smtp.us-east-1.amazonses.com` | "Custom Return-Path" özelliği; bounce yönetimi için zorunlu. |
 
 **Doğrulama:**
 - Resend dashboard'da *Verify DNS* → tüm dört kayıt yeşil ✓ olana kadar tekrarla (DNS propagation 5 dk–1 sa arası).
 - CLI ile manuel:
   ```bash
-  dig +short txt resend._domainkey.skinora.com
-  dig +short txt skinora.com
-  dig +short txt _dmarc.skinora.com
-  dig +short cname bounce.skinora.com
+  dig +short txt resend._domainkey.getskinora.com
+  dig +short txt getskinora.com
+  dig +short txt _dmarc.getskinora.com
+  dig +short cname bounce.getskinora.com
   ```
 - DKIM/SPF/DMARC sağlamlığını dışarıdan: [https://www.mail-tester.com/](https://www.mail-tester.com/) → test mailbox'a sandbox gönderimi → skor 9/10+.
 
@@ -46,7 +46,7 @@ Resend domain ekledikten sonra dashboard'da dört kayıt üretir. Bunları DNS s
 |---|---|---|---|
 | Resend API key | Resend dashboard (§1.3) | `Resend__ApiKey` | Production: Docker Secrets / vault. Staging: `.env.staging`. Dev: stub mode (`Resend__Provider=logging`). |
 | Webhook signing secret | Resend dashboard (§1.4) | `Resend__WebhookSigningSecret` | `whsec_…` formatı **birebir** korunur (prefix dahil). Verifier prefix'i `whsec_` ile başlamayan değerleri reddeder. |
-| From address | Sabit konfigürasyon | `Resend__FromAddress` | `Skinora <noreply@skinora.com>` formatı. Verified domain'in mailbox'ı olmalı. |
+| From address | Sabit konfigürasyon | `Resend__FromAddress` | `Skinora <noreply@getskinora.com>` formatı. Verified domain'in mailbox'ı olmalı. |
 | Provider switch | App config | `Resend__Provider` | `logging` (default, test/dev/CI) veya `resend` (staging/production). |
 
 **Compose / `.env` adları (T165):** backend `docker-compose.yml` üzerinden alır — `RESEND_PROVIDER` → `Resend__Provider`, `RESEND_API_KEY` → `Resend__ApiKey`, `RESEND_WEBHOOK_SIGNING_SECRET` → `Resend__WebhookSigningSecret`, `RESEND_FROM_ADDRESS` → `Resend__FromAddress`. Deneme yayını overlay'i `Resend__Provider=resend`'i zorlar; anahtar boş / yer tutucu / biçimi yanlışsa (`re_…`, `whsec_…` önekleri denetlenir) kanal **`misconfigured`** olur: kapalı gibi davranır, açılış logunda eksik anahtarın adı yazar, `notification-channel-misconfigured` alarmı çalar (DEPLOY_RUNBOOK §P.1). Grafana'nın alarm e-postası için **ayrı** bir Sending access anahtarı `GRAFANA_SMTP_PASSWORD` olarak Resend SMTP'ye (`smtp.resend.com:587`, STARTTLS, kullanıcı `resend`) verilir (DEPLOY_RUNBOOK §P.2).
