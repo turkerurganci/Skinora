@@ -123,7 +123,7 @@ Yerel prettier'ın bütün dosyalarda verdiği uyarılar `core.autocrlf` CRLF ar
 ## Commit & PR
 
 - Dal: `task/T171b-ucuncu-taraf-sirlar` (origin/main `b2a0a285`'ten)
-- PR: PR_NO
+- PR: #383
 - Commit'ler: `2ae05dc8` plan/status · `928d23bc` backend · `ee162568` sidecar'lar · `6f549cff` compose + betikler + testler + runbook · `373338b4` ölçüm düzeltmeleri · belgeler/rapor commit'i
 - CI: yönetici izliyor (task.md Bitiş Kapısı — yönetici düzeni istisnası)
 
