@@ -1,6 +1,6 @@
 # T171b — Üçüncü taraf kimlik bilgileri Docker secret (⚠ GÜVENLİK)
 
-**Faz:** F9 | **Durum:** ⏳ Yapım bitti — doğrulama bekliyor | **Tarih:** 2026-10-24
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — doğrulama PASS (6 × S4, hepsi kapanışta kapandı) | **Tarih:** 2026-10-24
 
 Kaynak: proje sahibi kararı (2026-10-24, modal) — DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv` satırındaki sırlar **kurulum gününden (T171) önce** env yerine Docker secret dosyasından okunur. Desen T171a (`SharedSecretFiles`, sidecar `sharedSecrets.ts`, DEPLOY_RUNBOOK §L.9).
 
@@ -103,11 +103,11 @@ Betikle (bir satır bozulur, onu yakalaması gereken testler koşulur, dosya ger
 |---|---|
 | `dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName~ThirdPartyCredentialFiles"` | 45/45 (birim + host) |
 | `dotnet test tests/Skinora.API.Tests --filter "…ThirdPartyCredentialFiles\|…SharedSecretFiles\|…DiagnosticsEnvironmentGateTests"` | 82/82 |
-| `dotnet test tests/Skinora.API.Tests` (tam, LocalDB) | **1213/1213** (T171a sonrası 1168; +45) |
-| `sidecar-blockchain: npx vitest run` | 43 dosya, 836/836 |
+| `dotnet test tests/Skinora.API.Tests` (tam, LocalDB) | Yapımdaki koşuda 1213/1213 (T171a sonrası 1168; +45). **Düzeltme (doğrulama S4-6):** doğrulamada aynı komut **1207/1213** verdi — 6 `HangfireTests` düştü (InMemory dispatcher disposed / 500). Bu **sıra bağımlı** ve T171b'den önce de var: main kodunda `HangfireTests` + `SharedSecretFilesHostTests` birlikte koşunca aynı 6 test düşüyor, `HangfireTests` tek başına 16/16. T171b aynı deseni kullanan ikinci bir host test sınıfı (`ThirdPartyCredentialFilesHostTests`) eklediği için düşme olasılığı artar; dal CI'ında Integration yeşil. Yerel tam koşu sonucu bu yüzden test sırasına göre 1207–1213 arasıdır |
+| `sidecar-blockchain: npx vitest run` | 43 dosya, 836/836 (kapanışta 837/837) |
 | `sidecar-ethereum: npx vitest run` | 37 dosya, 961/961 |
-| `sidecar-steam: npx vitest run` | 14 dosya, 203/203 |
-| `node --test "scripts/**/*.test.mjs"` (CI'nın kalıbı) | 222/222 (compose-secrets 22, mssql-entrypoint + redis-entrypoint + db-backup + first-boot 106) |
+| `sidecar-steam: npx vitest run` | 14 dosya, 203/203 (kapanışta 210/210) |
+| `node --test "scripts/**/*.test.mjs"` (CI'nın kalıbı) | 222/222 (compose-secrets 22, mssql-entrypoint + redis-entrypoint + db-backup + first-boot 106; kapanışta 234/234) |
 | `tsc --noEmit` (üç sidecar), `eslint` (değişen dosyalar), `prettier --check --end-of-line auto` (üç sidecar `src`), `dotnet format --verify-no-changes` (değişen backend dosyaları) | temiz |
 | `docker compose config` — taban (`--profile ethereum`), deneme (`--profile ethereum --profile tunnel`), e2e | temiz |
 
@@ -147,6 +147,31 @@ Yerel prettier'ın bütün dosyalarda verdiği uyarılar `core.autocrlf` CRLF ar
 - Linux sunucuda SQL Server (uid 10001) ve Grafana (uid 472) secret dosyasını okuyabilmeli — `chmod 444` (DEPLOY_RUNBOOK §L.9 kurulum adımı 3); okuyamazlarsa açılmazlar.
 - Veritabanı ve Grafana yönetici parolası yalnız boş volume'ün ilk açılışında uygulanır; döndürme `ALTER LOGIN` / `grafana cli admin reset-admin-password` ister (§L.9 "Döndürme").
 - ⚪ `MssqlSaPasswordFileUnpinned` (K1).
+
+## Doğrulama
+
+**Bağımsız doğrulama — ✓ PASS, HEAD `c0d210ee`, 2026-10-24T03:13Z.** Kaynak rapor: `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T171b_VALIDATION.md`.
+
+- **Sonuç:** 8 kabul kriterinin 8'i ✓, **6 × S4** (ikisi ⚠ GÜVENLİK), S1/S2/S3 yok. Kod incelemesi + yerel testler + Docker'da ayrı projede (`t171bval`) canlı ölçüm: DB, Redis, Grafana, Production backend ve yedek konteyneri dosyadaki parolayla açıldı; inspect / log / `compose config` / argv / environ içinde değer 0; geçiş talimatı eski `.env` ve var olan volume'lerle denendi, veri kaybı yok. Dal CI'ı (run `40053104089`) yeşil.
+- **Bozma:** doğrulayıcının 73 bozmasından 72'si etkin (1 eşdeğer), **65'i yakalandı**; yaşayan 7'nin 6'sı test boşluğu (S5, S6, T5, T7, B4, D8 → S4-4), 1'i platform (R3, Windows'ta mod denetimi atlanır).
+- **Süreç notu (doğrulayıcıdan):** doğrulayıcı filtreli `docker volume prune` koşup etiketsiz anonim volume'leri sildi; adlı volume'ler (`escrow_*`) etkilenmedi. Kapanışta toplu silme yapılmadı.
+
+## Kapanış
+
+**Main birleştirmesi:** `git fetch origin` sonrası `origin/main` = `b2a0a285`, dalda zaten var — birleştirme gerekmedi. DEFERRED_BACKLOG değişmedi (47 aktif / 174 çözülmüş).
+
+| # | Bulgu | Kapanış | Bozma |
+|---|---|---|---|
+| S4-1 ⚠ GÜVENLİK | `mssql_sa_password` için `openssl rand -hex` önerisi SQL Server parola kuralını hiçbir zaman karşılamıyordu (boş volume'de exit 255) | `scripts/db/mssql-entrypoint.sh`: dosyadaki parola SQL Server sa kuralını (8–128 karakter; büyük harf / küçük harf / rakam / sembolden üçü, C yerel ayarında) karşılamıyorsa `CREDENTIAL_WEAK` ile exit 1 — SQL Server başlatılmaz (başlatma ve yoklama yolu). DEPLOY_RUNBOOK §L.9 kurulum adımı 1, deneme yayını "Yeni sırlar" satırı ve deneme kurulum bloğu, `secrets/README.md` tablo satırı + deneme bloğu: `printf '%sAa1!\n' "$(openssl rand -hex 24 \| tr -d '\r')"`. Aynı yerlerde Redis/Grafana komutlarına `tr -d '\r'` (Grafana CR'yi reddeder — Git Bash CRLF yazar). Önerilen komutun çıktısı `--check`'ten geçti, hex çıktısı `CREDENTIAL_WEAK` aldı. +5 ret testi (hex, iki küme, < 8, > 128) × başlatma/yoklama + kabul testi (dört üçlü küme) | Küme eşiği 3 → 2: 4 test kırıldı; alt sınır 8 → 7: 2; üst sınır 128 → 200: 2; sembol kümesi `[@]`'e daraltıldı: 1 → **hepsi yakalandı** |
+| S4-2 | Runbook'taki Grafana sıfırlama komutunda `$(cat …)` host'ta açılıyordu | §L.9 geçiş paragrafı `secrets/README.md:238` biçiminde: `exec skinora-grafana sh -c 'grafana cli admin reset-admin-password "$(cat /run/secrets/grafana_admin_password)"'`; tek tırnağın neden şart olduğu yazıldı | — (belge) |
+| S4-3 ⚠ GÜVENLİK | Steam servisi `REDIS_URL` doluyken parola dosyası yok/boşsa parolasız bağlanıyordu | `sidecar-steam/src/config/providerCredentials.ts`: `NODE_ENV` `development`/`test` değilken URL'de ve dosyada parola yoksa `CREDENTIAL_MISSING` ile açılış durur (backend'in aynı dosyadaki zorunluluğuyla aynı); geliştirme/test'te yerel parolasız Redis serbest. Birim: dosya yok / boş × production, staging, boş, tanımsız `NODE_ENV` → ret; development/test → kabul. Süreç: dosya yok ve boş dosyayla gerçek giriş noktası açılmıyor | Ret dalı `if (false)`: 4 test kırıldı (2 birim + 2 süreç) → **yakalandı** |
+| S4-4 | Giriş noktası bağlantıları ve iki betik satırı testsizdi | **Steam** süreç testi: gerçek `index.ts` Production'da açılır; `--import` ile yüklenen bir ön modül Steam Web API çağrısını cevaplar ve `x-webapi-key` başlığını kaydeder, sahte bir TCP dinleyici Redis'in yerini alır. `/api/trade-hold` çağrısında başlık = dosyadaki anahtar; Redis istemcisi ilk komut olarak dosyadaki parolayla `AUTH` gönderir. **TRON** süreç testi: sahte düğüm isteği gövdedeki txid ile ayırır; `/api/transfer/status/:tx` (`TronTransferClient`) ve `/api/transfer/verify` (`TransferVerifier`) isteklerinde `TRON-PRO-API-KEY` = dosyadaki anahtar. **db-backup:** CRLF'li parola dosyasında sqlcmd'ye giden `SQLCMDPASSWORD` satırı tam olarak parola (CR yok). **mssql:** okuma denemesi `MSSQL_READ_PROBE` ile değiştirilebilir (test için; varsayılan `cat`); `-f`/`-r` geçen ama okunamayan dosya → `CREDENTIAL_UNREADABLE`, SQL Server başlatılmaz | S5 (`process.env.STEAM_API_KEY`) → **yakalandı**; S6 (ham `process.env.REDIS_URL`) → **yakalandı**; T5 (`TronTransferClient`'a `''`) → **yakalandı**; T7 (`TransferVerifier`'a `''`) → **yakalandı**; D8 (okuma denemesi silindi) → **yakalandı** (2 test); B4 (`tr -d '\r'` yerine `cat`) → **Linux'ta yakalandı** (`node:22-alpine` + bash konteynerinde ölçüldü), bu PC'de **yaşıyor**: Git Bash'in `$(...)`'ı CR'yi kendisi atıyor (platform kaynaklı, R3 gibi; CI Linux) |
+| S4-5 | `01-super-admin.sql` başlığı `-P "$MSSQL_SA_PASSWORD"` örneğini taşıyordu | Başlık yeni düzeni anlatır (sa parolası konteynerin secret dosyasından, `SQLCMDPASSWORD` ile; `-P` yok; değişken artık yok) ve tam komut için `scripts/bootstrap/README.md`'yi gösterir. Komut başlığa yazılmadı: sqlcmd `$(…)` kalıbını yorum satırında da değişken sayabilir | — (belge) |
+| S4-6 | Rapordaki tam API.Tests sayısı (1213/1213) | "Test Sonuçları" satırı düzeltildi: doğrulamada 1207/1213, 6 `HangfireTests` sıra bağımlı, main'de de tekrarlanıyor (T171b kaynaklı değil; T171b ikinci bir host test sınıfı eklediği için olasılık artar) | — (rapor) |
+
+**Kapanış testleri:** `sidecar-steam` vitest 210/210 (+7), `tsc --noEmit` + `eslint src/` temiz · `sidecar-blockchain` vitest 837/837 (+1), `tsc --noEmit` + `eslint` (değişen dosya) temiz · `node --test` (scripts, CI kalıbı) 234/234 (+12: mssql 26 → 37, db-backup 31 → 32) · değişen TS dosyaları LF ve prettier temiz (yerel diğer uyarılar `core.autocrlf` artifaktı). Backend ve Ethereum servisine dokunulmadı.
+
+**Kapanış commit'i:** `801386d4` (S4-1…S4-5) + kayıt commit'i. Pre-commit sır koruması TRON test başlığındaki küçük harfli uzun kelime dizisini mnemonic sandı; başlık yeniden yazıldı, bypass gerekmedi.
 
 ## Notlar
 
