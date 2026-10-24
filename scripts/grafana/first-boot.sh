@@ -51,6 +51,31 @@ LOG="${TMPDIR:-/tmp}/skinora-grafana-first-boot.log"
 # shared secret (SHARED_SECRET_UNREADABLE, TELEGRAM_BOT_TOKEN_UNREADABLE): do
 # not start. Anything but an explicit "off" value counts as on. An EMPTY file
 # is still allowed (= e-mail not configured yet, DEPLOY_RUNBOOK §L.9 / §P).
+# T171b (DEFERRED_BACKLOG ThirdPartyCredentialsInPlainEnv, ⚠ GÜVENLİK) — the
+# admin password is the Docker secret grafana_admin_password, read by Grafana
+# itself through GF_SECURITY_ADMIN_PASSWORD__FILE. Grafana does not stop when
+# that file is missing (Docker's directory) or empty: it would come up with
+# its built-in admin/admin on an empty data volume — and the admin password is
+# only applied on that first start. So: no variable, a readable, non-empty
+# file, or no start. The value is never printed.
+if [ -n "${GF_SECURITY_ADMIN_PASSWORD:-}" ]; then
+  echo "CREDENTIAL_IN_ENV: GF_SECURITY_ADMIN_PASSWORD is set as an environment variable - the Grafana admin password is read only from its Docker secret file (GF_SECURITY_ADMIN_PASSWORD__FILE, DEPLOY_RUNBOOK L.9)" >&2
+  exit 1
+fi
+admin_password_file="${GF_SECURITY_ADMIN_PASSWORD__FILE:-}"
+if [ -z "$admin_password_file" ]; then
+  echo "CREDENTIAL_MISSING: GF_SECURITY_ADMIN_PASSWORD__FILE is not set - mount the grafana_admin_password secret (secrets/README.md)" >&2
+  exit 1
+fi
+if [ -e "$admin_password_file" ] && { [ ! -f "$admin_password_file" ] || [ ! -r "$admin_password_file" ]; }; then
+  echo "CREDENTIAL_UNREADABLE: $admin_password_file is not a readable file - create the grafana_admin_password secret file (secrets/README.md) and remove the directory Docker made in its place" >&2
+  exit 1
+fi
+if [ ! -f "$admin_password_file" ] || ! grep -q '[^[:space:]]' "$admin_password_file"; then
+  echo "CREDENTIAL_MISSING: $admin_password_file is missing or empty - Grafana does not start without its admin password (an empty one would leave admin/admin)" >&2
+  exit 1
+fi
+
 smtp_enabled=$(printf '%s' "${GF_SMTP_ENABLED:-false}" | tr 'A-Z' 'a-z')
 case "$smtp_enabled" in
   ""|0|f|false|n|no|off) ;;

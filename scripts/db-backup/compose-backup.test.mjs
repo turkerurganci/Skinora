@@ -83,7 +83,13 @@ describe("database backup wiring (T164)", { skip: !HAS_DOCKER && "docker compose
     assert.equal(svc.restart, "unless-stopped", "must come back with Docker Desktop after a reboot");
     assert.equal(svc.depends_on["skinora-db"].condition, "service_healthy");
     assert.equal(svc.ports, undefined, "the backup container publishes nothing");
-    assert.equal(svc.environment.MSSQL_SA_PASSWORD, model.services["skinora-db"].environment.MSSQL_SA_PASSWORD);
+    // T171b — the server and the backup container read the SAME secret file; no variable.
+    for (const name of ["skinora-db", "skinora-db-backup"]) {
+      const s = model.services[name];
+      assert.equal(s.environment.MSSQL_SA_PASSWORD, undefined, `${name} must not carry the password as a variable`);
+      assert.equal(s.environment.MSSQL_SA_PASSWORD_FILE, "/run/secrets/mssql_sa_password");
+      assert.deepEqual((s.secrets ?? []).map((x) => x.source), ["mssql_sa_password"]);
+    }
     assert.equal(svc.environment.DB_BACKUP_SERVER, "skinora-db");
     // The T164 proposal (⚠): full 24 h, log 15 min, 14 days.
     assert.equal(svc.environment.DB_BACKUP_FULL_INTERVAL_HOURS, "24");

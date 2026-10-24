@@ -24,9 +24,12 @@
 #     ports stay for the operator on this machine: the edge (local smoke test),
 #     Grafana and Uptime Kuma (admin UIs). Nothing binds a LAN address.
 #   * Production mode forced (ASPNETCORE_ENVIRONMENT / NODE_ENV) whatever
-#     .env.trial says, and Grafana refuses to start on a missing admin password.
+#     .env.trial says, and Grafana refuses to start on a missing admin password
+#     (T171b: secrets/trial/grafana_admin_password.txt; first-boot.sh).
 #   * T171a — every Docker secret, the shared ones included, from
-#     ./secrets/trial/ (never the development files).
+#     ./secrets/trial/ (never the development files). T171b — the
+#     third-party credentials too (database / Redis / Grafana admin
+#     passwords, Steam / TronGrid keys, Ethereum RPC URLs).
 #   * The Cloudflare tunnel (profile "tunnel"): cloudflared dials OUT to
 #     Cloudflare and forwards to the edge over the compose network. It does not
 #     start without its token (skinora-tunnel-preflight below).
@@ -47,7 +50,10 @@ name: skinora-trial
 # seed, keys and DB password. SKINORA_TRIAL_STACK is defined ONLY in .env.trial
 # (DEPLOY_RUNBOOK K.4 adds it), never in .env.example, so the development
 # file cannot satisfy it and the render fails. (An extension field: it reaches
-# no container.)
+# no container.) Since T171b the passwords themselves are files under
+# secrets/trial/, so a forgotten --env-file can no longer pick up the
+# development DB password — the guard still keeps the development addresses,
+# ports and settings out.
 x-skinora-trial-guard: ${SKINORA_TRIAL_STACK:?SKINORA_TRIAL_STACK is not set - the trial overlay needs --env-file .env.trial (append SKINORA_TRIAL_STACK=1 to .env.trial, DEPLOY_RUNBOOK K.4); without it the DEVELOPMENT .env would be used}
 
 services:
@@ -144,8 +150,10 @@ services:
     ports: !override
       - "127.0.0.1:${TRIAL_GRAFANA_PORT:-3011}:3000"
     environment:
-      # No `admin` fallback on a deployment the internet can find.
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env.trial}
+      # No `admin` fallback on a deployment the internet can find: T171b —
+      # the admin password is secrets/trial/grafana_admin_password.txt (the
+      # base file's GF_SECURITY_ADMIN_PASSWORD__FILE); first-boot.sh refuses
+      # to start when it is missing or empty (CREDENTIAL_MISSING).
       # T165 — e-mail alerts through Resend SMTP (base file: host, user,
       # STARTTLS). Only the password (a sending-only Resend key) is needed —
       # T171a: secrets/trial/grafana_smtp_password.txt; while it is empty the e-mail integrations fail at send time and
@@ -296,3 +304,20 @@ secrets:
     file: ./secrets/trial/grafana_smtp_password.txt
   heartbeat_url:
     file: ./secrets/trial/heartbeat_url.txt
+  # T171b — the trial's own third-party credentials.
+  mssql_sa_password:
+    file: ./secrets/trial/mssql_sa_password.txt
+  redis_password:
+    file: ./secrets/trial/redis_password.txt
+  grafana_admin_password:
+    file: ./secrets/trial/grafana_admin_password.txt
+  steam_api_key:
+    file: ./secrets/trial/steam_api_key.txt
+  tron_api_key:
+    file: ./secrets/trial/tron_api_key.txt
+  tron_api_key_secondary:
+    file: ./secrets/trial/tron_api_key_secondary.txt
+  ethereum_rpc_primary_url:
+    file: ./secrets/trial/ethereum_rpc_primary_url.txt
+  ethereum_rpc_backup_url:
+    file: ./secrets/trial/ethereum_rpc_backup_url.txt

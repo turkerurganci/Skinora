@@ -20,15 +20,17 @@ verilir, bu yüzden repo'da izlenir.
 Container içindeki `sqlcmd` ile (ekstra araç kurmadan):
 
 ```bash
-# Süper admin — ÖNCE Steam ile bir kez giriş yapın (Users satırı oluşsun)
-docker exec -i skinora-db /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Skinora \
-  -v SteamId="76561198000000000" \
-  -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
+# Süper admin — ÖNCE Steam ile bir kez giriş yapın (Users satırı oluşsun).
+# T171b — sa parolası konteynerin kendi secret dosyasından okunur ve sqlcmd'ye
+# SQLCMDPASSWORD ile verilir: ne komut satırına ne host'un ekranına girer.
+MSYS_NO_PATHCONV=1 docker exec -i skinora-db bash -c \
+  'SQLCMDPASSWORD="$(cat /run/secrets/mssql_sa_password)" exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d Skinora -v SteamId="$0" -i /dev/stdin' \
+  "76561198000000000" < scripts/bootstrap/01-super-admin.sql
 ```
 
-PowerShell'de `$MSSQL_SA_PASSWORD` yerine `.env`'deki değeri doğrudan geçin veya
-`$env:MSSQL_SA_PASSWORD` kullanın.
+PowerShell'de aynı komut `docker exec -i skinora-db bash -c '...' "<steamid64>"`
+biçiminde, `Get-Content scripts/bootstrap/01-super-admin.sql | docker exec -i ...`
+ile çalışır. Parola `.env`'de değildir (T171b — `secrets/mssql_sa_password.txt`).
 
 Script **idempotent**'tir: tekrar çalıştırmak güvenlidir.
 

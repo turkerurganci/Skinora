@@ -76,7 +76,9 @@ function run(args, env = {}) {
     encoding: "utf8",
     env: {
       ...process.env,
-      MSSQL_SA_PASSWORD: PASSWORD, // a fake- placeholder, not a secret
+      // T171b — the password comes from its secret file (a fake- placeholder, not a secret).
+      MSSQL_SA_PASSWORD: "",
+      MSSQL_SA_PASSWORD_FILE: slash(join(work, "mssql_sa_password")),
       DB_BACKUP_DIR: slash(dir),
       DB_BACKUP_LOCK: slash(join(work, "lock")),
       SQLCMD: slash(join(work, "sqlcmd")),
@@ -105,21 +107,34 @@ describe("db-backup.sh (T164)", () => {
     chmodSync(join(work, "sqlcmd"), 0o755);
     writeFileSync(join(fake, "state"), "ONLINE\n");
     writeFileSync(join(fake, "recovery"), "FULL\n");
+    writeFileSync(join(work, "mssql_sa_password"), PASSWORD + "\n");
   });
 
   afterEach(() => rmSync(work, { recursive: true, force: true }));
 
   describe("configuration", () => {
     for (const [name, env, message] of [
-      ["no password", { MSSQL_SA_PASSWORD: "" }, /MSSQL_SA_PASSWORD is empty/],
+      ["an empty password file", { MSSQL_SA_PASSWORD_FILE: "EMPTY" }, /CREDENTIAL_MISSING: .* is empty/],
+      ["no password file", { MSSQL_SA_PASSWORD_FILE: "NONE" }, /CREDENTIAL_MISSING: .* does not exist/],
+      ["a directory at the password path", { MSSQL_SA_PASSWORD_FILE: "DIR" }, /CREDENTIAL_UNREADABLE/],
+      ["the password as a variable (T171b)", { MSSQL_SA_PASSWORD: PASSWORD }, /CREDENTIAL_IN_ENV/],
       ["retention shorter than the full interval", { DB_BACKUP_RETENTION_DAYS: "1", DB_BACKUP_FULL_INTERVAL_HOURS: "48" }, /shorter than/],
       ["zero retention", { DB_BACKUP_RETENTION_DAYS: "0" }, /RETENTION_DAYS/],
       ["a database name that is not an identifier", { DB_BACKUP_DATABASE: "Sk];DROP" }, /DB_BACKUP_DATABASE/],
     ]) {
       test(`refuses to start: ${name}`, () => {
-        const r = run(["tick"], env);
+        let envFor = env;
+        const special = { EMPTY: "empty_pw", NONE: "no_such_pw", DIR: "dir_pw" }[env.MSSQL_SA_PASSWORD_FILE];
+        if (special) {
+          const path = join(work, special);
+          if (special === "empty_pw") writeFileSync(path, "");
+          if (special === "dir_pw") mkdirSync(path);
+          envFor = { ...env, MSSQL_SA_PASSWORD_FILE: slash(path) };
+        }
+        const r = run(["tick"], envFor);
         assert.equal(r.code, 1, r.out);
         assert.match(r.out, message);
+        assert.ok(!r.out.includes(PASSWORD), "the password is never printed");
         assert.equal(files().length, 0);
       });
     }
