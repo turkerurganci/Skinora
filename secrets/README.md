@@ -9,7 +9,7 @@ Savunma katmanları:
 |---|---|---|
 | 1 | [`.gitignore`](../.gitignore) | `secrets/`, `.env`, `*.maFile` takip edilmez |
 | 2 | [`scripts/git-hooks/pre-commit`](../scripts/git-hooks/pre-commit) | `git add -f` ile zorlanan veya yanlış dosyaya yapıştırılan sırrı **commit anında** bloklar |
-| 3 | Servis izolasyonu | İmza sırları (tohumlar, cüzdan anahtarları) env değil **Docker secret** dosyasıdır ve her biri yalnız kendi ağının servisine bağlanır — TRON'unkiler yalnız blockchain sidecar'a (T163), Ethereum'unkiler yalnız Ethereum servisine (T150); backend hiçbirini görmez (F4 gate check garantisi). **Ortak sırlar** (JWT, webhook, iç anahtarlar, bildirim kanalı sırları) da Docker secret dosyasıdır ve yalnız backend'e + karşı uçtaki tek servise bağlanır (T171a) |
+| 3 | Servis izolasyonu | İmza sırları (tohumlar, cüzdan anahtarları) env değil **Docker secret** dosyasıdır ve her biri yalnız kendi ağının servisine bağlanır — TRON'unkiler yalnız blockchain sidecar'a (T163), Ethereum'unkiler yalnız Ethereum servisine (T150); backend hiçbirini görmez (F4 gate check garantisi). **Ortak sırlar** (JWT, webhook, iç anahtarlar, bildirim kanalı sırları) da Docker secret dosyasıdır ve yalnız backend'e + karşı uçtaki tek servise bağlanır (T171a). **Üçüncü taraf kimlik bilgileri** (DB/Redis/Grafana parolaları, Steam/TronGrid anahtarları, Ethereum RPC adresleri) da dosyadır, yalnız onları kullanan servislere (T171b) |
 
 Hook'ları kurmak için (yeni clone sonrası bir kez):
 
@@ -158,6 +158,87 @@ karakterdir) servisler açılmaz: yerine `openssl rand -hex 32` yazın. Deneme
 yayını için aynısını `secrets/trial/` ve `.env.trial` ile yapın; orada ayrıca
 `HEARTBEAT_URL` → `secrets/trial/heartbeat_url.txt`.
 
+### Üçüncü taraf kimlik bilgileri (T171b — her stack'te)
+
+Veritabanı ve Redis parolası, Grafana yönetici parolası, Steam / TronGrid API
+anahtarları ve Ethereum RPC adresleri de **Docker secret** dosyasıdır
+(DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`, proje sahibi kararı
+2026-10-24; DEPLOY_RUNBOOK §L.9 "Üçüncü taraf kimlik bilgileri"). Her dosya
+yalnız onu kullanan servislere bağlanır; `docker inspect`, komut satırı ve
+bağlantı dizeleri parola taşımaz (`DB_CONNECTION_STRING`,
+`REDIS_CONNECTION_STRING`, `STEAM_SIDECAR_REDIS_URL` artık **parolasız**).
+
+| Dosya | Kim okur | Zorunlu mu |
+|---|---|---|
+| `secrets/mssql_sa_password.txt` | SQL Server (`MSSQL_SA_PASSWORD_FILE`, önünde `scripts/db/mssql-entrypoint.sh`), yedek konteyneri, backend | **Evet**, boş olamaz. Tek satır; sonda bir LF ya da CRLF olabilir, içinde CR ya da baş/son boşluk olamaz. SQL Server parola kuralı: büyük/küçük harf, rakam, sembolden üçü ve ≥ 8 karakter |
+| `secrets/redis_password.txt` | Redis (`scripts/redis/redis-entrypoint.sh`), backend, Steam servisi | **Evet**, boş olamaz; yalnız `A-Z a-z 0-9 . _ ~ + = -` (bağlantı dizesine ve `redis://` adresine kaçışsız girer) |
+| `secrets/grafana_admin_password.txt` | Grafana (`GF_SECURITY_ADMIN_PASSWORD__FILE`) | **Evet**, boş olamaz ve **CR içeremez** (Grafana CR'yi parolanın parçası sayar — ölçüldü). Boş volume'ün **ilk** açılışında uygulanır |
+| `secrets/steam_api_key.txt` | backend (OpenID profili) + Steam servisi | Dosya **evet**; boş = trade-hold probu 503, profil yer tutucu |
+| `secrets/tron_api_key.txt` · `secrets/tron_api_key_secondary.txt` | TRON servisi | Dosya **evet**; boş = anahtarsız TronGrid (429) / yedek anahtar yok |
+| `secrets/ethereum_rpc_primary_url.txt` · `secrets/ethereum_rpc_backup_url.txt` | Ethereum servisi | Yalnız `--profile ethereum` ile; birincil zorunlu (`RPC_NOT_CONFIGURED`), yedek boş olabilir |
+| `secrets/discord_client_secret.txt` · `secrets/discord_bot_token.txt` | backend — **compose bağlamaz** | Discord kanalı üretimde kapalı. Açılırsa backend'in `secrets:` listesine eklenir (DEPLOY_RUNBOOK §L.9); değişken olarak verilirse backend açılmaz |
+
+**Kurallar ve hata kodları (her yerde aynı):** değişken → `CREDENTIAL_IN_ENV`
+(backend `Development` dışında; sidecar'lar `NODE_ENV` tam
+`development`/`test` değilken; SQL Server, Redis ve Grafana betikleri her
+zaman), eksik/boş zorunlu dosya → `CREDENTIAL_MISSING`, dosyanın yerinde dizin
+ya da okunamayan bağlama (Docker'ın eksik kaynak tuzağı) →
+`CREDENTIAL_UNREADABLE`, izinsiz karakter / satır sonu → `CREDENTIAL_INVALID`,
+dosya + değişken → `CREDENTIAL_AMBIGUOUS`. Değer hiçbir mesaja yazılmaz.
+
+**Windows notu (ölçüldü 2026-10-24):** Git Bash'in `openssl`'i dosyayı
+**CRLF** ile yazar. Backend, sidecar'lar, SQL Server ve Redis betiği sondaki
+CRLF'i atar; Grafana atmaz. Bu yüzden aşağıdaki komutlar `tr -d '\r'` ile
+yazar.
+
+**Geliştirme ortamı, sıfırdan (bir kez):**
+
+```bash
+umask 077
+gen() { openssl rand -hex "$1" | tr -d '\r'; }
+[ -s secrets/mssql_sa_password.txt ] || printf '%sAa1!\n' "$(gen 16)" > secrets/mssql_sa_password.txt
+[ -s secrets/redis_password.txt ] || gen 32 > secrets/redis_password.txt
+[ -s secrets/grafana_admin_password.txt ] || gen 24 > secrets/grafana_admin_password.txt
+for f in steam_api_key tron_api_key tron_api_key_secondary ethereum_rpc_primary_url ethereum_rpc_backup_url; do
+  [ -e "secrets/$f.txt" ] || : > "secrets/$f.txt"     # gerçek değerleri printf '%s\n' '<değer>' > ile yazın
+done
+```
+
+**Mevcut bir geliştirme `.env`'inden geçiş (bir kez).** Veritabanı ve Grafana
+volume'leri eski parolayı saklar — dosyaya `.env`'deki **aynı** değer yazılır
+(yenisi değil). Değerler ekrana yazdırılmaz; sonra `.env` temizlenir ve
+bağlantı dizelerinden parola çıkarılır:
+
+```bash
+umask 077
+val() { grep "^$1=" .env | tail -1 | cut -d= -f2- | tr -d '"\r'; }
+put() { if [ -n "$2" ]; then printf '%s\n' "$2" > "secrets/$1.txt"; else : > "secrets/$1.txt"; fi; }
+put mssql_sa_password      "$(val MSSQL_SA_PASSWORD)"
+put redis_password         "$(val REDIS_PASSWORD)"
+put grafana_admin_password "$(val GRAFANA_ADMIN_PASSWORD)"   # boşsa eski kurulum 'admin' ile açılmıştı — aşağıya bakın
+put steam_api_key          "$(val STEAM_API_KEY)"
+put tron_api_key           "$(val TRON_API_KEY)"
+put tron_api_key_secondary "$(val TRON_API_KEY_SECONDARY)"
+put ethereum_rpc_primary_url "$(val ETHEREUM_RPC_PRIMARY_URL)"
+put ethereum_rpc_backup_url  "$(val ETHEREUM_RPC_BACKUP_URL)"
+grep -vE '^(MSSQL_SA_PASSWORD|REDIS_PASSWORD|GRAFANA_ADMIN_PASSWORD|STEAM_API_KEY|TRON_API_KEY|TRON_API_KEY_SECONDARY|ETHEREUM_RPC_PRIMARY_URL|ETHEREUM_RPC_BACKUP_URL)=' .env > .env.new && mv .env.new .env
+sed -i -E 's/;[[:space:]]*(Password|Pwd)=[^;]*//I; s/,password=[^,]*//I; s#redis://:[^@]*@#redis://#' .env
+# Kontrol — yalnız UZUNLUKLAR, değer değil; ikinci komut BOŞ dönmeli:
+for f in mssql_sa_password redis_password grafana_admin_password; do printf '%s %s\n' "$(tr -d '\r\n' < secrets/$f.txt | wc -c)" "$f"; done
+grep -nE '[Pp](assword|wd)=|redis://:' .env
+```
+
+- **Redis parolası** karakter kuralına uymuyorsa (eski `.env.example`
+  yer tutucusu `YourRedisPassword123` uyar) Redis açılmaz
+  (`CREDENTIAL_INVALID`): yeni değer yazın — Redis verisi parolayla
+  şifrelenmediği için değiştirmek güvenlidir.
+- **Grafana** eski kurulumda `GRAFANA_ADMIN_PASSWORD` boşken `admin` ile
+  açıldıysa dosyaya yeni bir parola yazın (`gen 24 > …`) ve Grafana açıldıktan
+  sonra bir kez:
+  `docker compose -f docker-compose.yml exec skinora-grafana sh -c 'grafana cli admin reset-admin-password "$(cat /run/secrets/grafana_admin_password)"'`.
+
+Deneme yayını için aynısını `secrets/trial/` ve `.env.trial` ile yapın.
+
 ### Ethereum servisi (T150 — yalnız `ethereum` compose profiliyle)
 
 Ethereum servisi (`skinora-ethereum-sidecar`, 11 §F8 K7) tohumunu ve iki imza
@@ -198,6 +279,7 @@ korumayı sürdürür.
 | `secrets/trial/ethereum_hd_mnemonic.txt`, `secrets/trial/ethereum_hot_wallet_private_key.txt`, `secrets/trial/ethereum_fuel_wallet_private_key.txt` | Yukarıdaki üç Ethereum dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve anahtarlar (iki veritabanı aynı tohumdan aynı indeksleri türetir ve aynı depozit adreslerini izler; iki imzacı aynı Ethereum hesabının nonce'unu yarıştırır) | Yalnız `--profile ethereum` ile, kurallar yukarıdaki gibi |
 | `secrets/trial/cloudflare_tunnel_token.txt` | Cloudflare Tunnel token'ı — tek satır, tırnaksız (Cloudflare Zero Trust → Networks → Tunnels) | Yalnız `--profile tunnel` ile. **Boşsa tünel açılmaz:** `skinora-tunnel-preflight` `TUNNEL_TOKEN_MISSING` ile çıkar ve cloudflared başlatılmaz. T162'ye kadar boş dosya olarak durabilir |
 | `secrets/trial/` altında on bir ortak sır dosyası (T171a — `jwt_secret.txt`, `blockchain_webhook_secret.txt`, `ethereum_webhook_secret.txt`, `steam_sidecar_internal_key.txt`, `blockchain_sidecar_internal_key.txt`, `ethereum_sidecar_internal_key.txt`, `resend_api_key.txt`, `resend_webhook_signing_secret.txt`, `telegram_bot_token.txt`, `telegram_webhook_secret_token.txt`, `grafana_smtp_password.txt`) | Yukarıdaki "Ortak sırlar" dosyalarının deneme yayını kopyası — **hepsi yeni** değer (geliştirmenin JWT anahtarıyla imzalanmış bir token deneme yayınında geçmesin) | **Her zaman**; kurallar yukarıdaki gibi. Deneme yayını Production'dır: dört zorunlu dosya eksik/boş/kısaysa backend açılmaz |
+| `secrets/trial/` altında üçüncü taraf kimlik bilgileri (T171b — `mssql_sa_password.txt`, `redis_password.txt`, `grafana_admin_password.txt`, `steam_api_key.txt`, `tron_api_key.txt`, `tron_api_key_secondary.txt`, `ethereum_rpc_primary_url.txt`, `ethereum_rpc_backup_url.txt`) | Yukarıdaki "Üçüncü taraf kimlik bilgileri"nin deneme yayını kopyası — üç parola **yeni** değer | **Her zaman** (RPC adresleri yalnız `--profile ethereum` ile); kurallar yukarıdaki gibi. Grafana yönetici parolası boşsa Grafana açılmaz |
 | `secrets/trial/heartbeat_url.txt` (T171a) | Healthchecks.io ping URL'si (`https://hc-ping.com/<uuid>`) — dış izleme (DEPLOY_RUNBOOK §P.5) | **Her zaman**; boş = heartbeat konteyneri boşta bekler (`HEARTBEAT_DISABLED`). Yerinde dizin varsa çıkar (`HEARTBEAT_URL_UNREADABLE`) |
 
 ```bash
@@ -214,12 +296,12 @@ dizin) — okuyamazsa tünel açılmaz.
 
 ### Başka dosya
 
-**TRON, Ethereum, ortak sırlar ve deneme yayını dışında beklenen bir dosya yoktur (T133, T161, T163, T171a).** Tek beklenen dosya
+**TRON, Ethereum, ortak sırlar, üçüncü taraf kimlik bilgileri ve deneme yayını dışında beklenen bir dosya yoktur (T133, T161, T163, T171a, T171b).** Tek beklenen dosya
 `secrets/steam-bots.json` idi: Steam escrow bot'unun hesap adı, parolası ve iki
 Mobile Authenticator sırrı. Platform artık hiçbir Steam hesabı çalıştırmıyor ve
 trade offer göndermiyor (05 §3.2, 02 §2.1) — Steam sidecar'ın tek kimlik bilgisi
-`.env`'deki `STEAM_API_KEY`'dir ve o env olarak taşınır, dosya olarak değil
-(DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`).
+Steam Web API anahtarıdır ve T171b'den beri o da bu dizindedir
+(`secrets/steam_api_key.txt`, yukarıda).
 
 Dizin ve savunma katmanları **kaldırılmadı**: `.gitignore` + `pre-commit` kuralı
 buraya yanlışlıkla yapıştırılan herhangi bir sırrı bloklamaya devam eder, ve
@@ -239,19 +321,20 @@ ileride dosya olarak taşınması gereken bir sır çıkarsa yeri burasıdır.
 
 ---
 
-## `.env` (repo kökü) — dosya değil env olarak taşınan sırlar
+## `.env` (repo kökü) — artık sır taşımaz (T171b)
 
-`secrets/` dizininde durmayan ama yine de gizli olan her şey `.env`'dedir
-(`.env` gitignored; şablonu [`.env.example`](../.env.example)). Öne çıkanlar:
+T171b'den beri `.env`'de **sır kalmadı**: yalnız adresler, portlar, ayarlar ve
+parolasız bağlantı dizeleri (`.env` gitignored; şablonu
+[`.env.example`](../.env.example)). Taşınan eski değişkenler:
 
 | Anahtar | Kim kullanır | Not |
 |---|---|---|
 | ~~`HD_WALLET_MNEMONIC`~~ · ~~`HOT_WALLET_PRIVATE_KEY`~~ | — | **T163'ten beri `.env`'de değil:** `secrets/tron_hd_mnemonic.txt` / `secrets/tron_hot_wallet_private_key.txt` (yukarıda). T143 notu geçerli: 2026-10-18'den önce açılmış Nile depozitleri koddan erişilemez (DEPLOY_RUNBOOK §G.0b). Sıcak cüzdan tohumdan **türemez** |
-| `STEAM_API_KEY` | steam sidecar + backend | Envanter okuma + trade-hold probu + OpenID profil |
-| `TRON_API_KEY` / `_SECONDARY` | blockchain sidecar | TronGrid rate limit + failover |
+| ~~`STEAM_API_KEY`~~ | — | **T171b:** `secrets/steam_api_key.txt` (steam sidecar + backend) |
+| ~~`TRON_API_KEY`~~ / ~~`_SECONDARY`~~ | — | **T171b:** `secrets/tron_api_key.txt`, `secrets/tron_api_key_secondary.txt` |
 | ~~`JWT_SECRET`~~ · ~~`WEBHOOK_SECRET`~~ · ~~`BLOCKCHAIN_WEBHOOK_SECRET`~~ · ~~`INTERNAL_KEY`~~ · ~~`STEAM_/BLOCKCHAIN_/ETHEREUM_SIDECAR_INTERNAL_KEY`~~ · ~~`ETHEREUM_WEBHOOK_SECRET`~~ · ~~`RESEND_API_KEY`~~ · ~~`RESEND_WEBHOOK_SIGNING_SECRET`~~ · ~~`TELEGRAM_BOT_TOKEN`~~ · ~~`TELEGRAM_WEBHOOK_SECRET_TOKEN`~~ · ~~`GRAFANA_SMTP_PASSWORD`~~ · ~~`HEARTBEAT_URL`~~ | — | **T171a'dan beri `.env`'de değil:** yukarıdaki "Ortak sırlar" dosyaları. compose bu değişkenleri hiçbir konteynere geçmez; Development dışında servisler onları görürse açılmaz |
-| `MSSQL_SA_PASSWORD` / `DB_CONNECTION_STRING`, `REDIS_PASSWORD` / `REDIS_CONNECTION_STRING`, `GRAFANA_ADMIN_PASSWORD` | veritabanı, Redis, Grafana, backend | Hâlâ env (DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`, ⚠ GÜVENLİK — T171a kapsamı dışı) |
-| `ETHEREUM_RPC_PRIMARY_URL` / `ETHEREUM_RPC_BACKUP_URL` | Ethereum servisi | Sağlayıcı URL'leri API anahtarını taşır (Alchemy, Chainstack — 08 §3.7.1); servis log'larına yalnız sunucu adı yazılır |
+| ~~`MSSQL_SA_PASSWORD`~~ · ~~`REDIS_PASSWORD`~~ · ~~`GRAFANA_ADMIN_PASSWORD`~~ | — | **T171b:** `secrets/mssql_sa_password.txt`, `secrets/redis_password.txt`, `secrets/grafana_admin_password.txt`. `DB_CONNECTION_STRING` / `REDIS_CONNECTION_STRING` / `STEAM_SIDECAR_REDIS_URL` **parolasız** kalır; parolalı biçimleri Development dışında servisleri durdurur |
+| ~~`ETHEREUM_RPC_PRIMARY_URL`~~ / ~~`ETHEREUM_RPC_BACKUP_URL`~~ | — | **T171b:** `secrets/ethereum_rpc_primary_url.txt`, `secrets/ethereum_rpc_backup_url.txt` (URL'ler sağlayıcının API anahtarını taşır — 08 §3.7.1) |
 
 ---
 

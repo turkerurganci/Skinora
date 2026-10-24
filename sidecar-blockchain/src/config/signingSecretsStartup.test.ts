@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -408,6 +409,44 @@ describe('TRON service startup — refuses unsafe TronGrid keys, without echoing
       expect(refused.output).toContain(code);
       expect(refused.output).not.toContain('Signing secrets:');
       expectNoSecret(refused.output);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+describe('TRON service startup — the TronGrid key from the file reaches TronGrid (T171b)', () => {
+  it(
+    'the entry point hands the file key to the TronGrid client (header on the first solid-head read)',
+    async () => {
+      const seen: string[] = [];
+      const server = createHttpServer((req, res) => {
+        const key = req.headers['tron-pro-api-key'];
+        seen.push(typeof key === 'string' ? key : '');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({ block_header: { raw_data: { number: 1, timestamp: Date.now() } } }),
+        );
+      });
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', () => done()));
+      const address = server.address();
+      const node = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+      const run = launch(
+        productionEnv({ TRON_FULL_NODE_URL: node, TRON_SOLIDITY_URL: node }),
+        'Blockchain sidecar listening',
+      );
+      try {
+        expect(await withTimeout(run.line, WAIT), run.output()).toBeDefined();
+        const deadline = Date.now() + 20_000;
+        while (!seen.includes(TRONGRID_KEY) && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        expect(seen, run.output()).toContain(TRONGRID_KEY);
+      } finally {
+        run.child.kill();
+        await run.exited;
+        server.close();
+      }
+      expectNoSecret(run.output());
     },
     TEST_TIMEOUT,
   );
