@@ -83,6 +83,13 @@ describe("mssql-entrypoint.sh (T171b)", { skip: !HAS_BASH && "bash not available
     assert.equal(run(["--check"]).code, 0);
   });
 
+  test("a trailing CRLF (Git Bash openssl on Windows) is accepted and dropped, as SQL Server does (measured)", () => {
+    writeFileSync(join(work, "mssql_sa_password"), PASSWORD + "\r\n");
+    const r = run(["--healthcheck"]);
+    assert.equal(r.code, 0, r.out);
+    assert.ok(logOf("sqlcmd").includes(`SQLCMDPASSWORD=${PASSWORD} `), "the CR does not reach sqlcmd");
+  });
+
   test("--healthcheck: sqlcmd gets the password through SQLCMDPASSWORD, never argv", () => {
     const r = run(["--healthcheck"]);
 
@@ -126,9 +133,17 @@ describe("mssql-entrypoint.sh (T171b)", { skip: !HAS_BASH && "bash not available
       /CREDENTIAL_UNREADABLE/,
     ],
     [
-      "a Windows line ending",
+      "a CR inside the password",
       () => {
-        writeFileSync(join(work, "mssql_sa_password"), PASSWORD + "\r\n");
+        writeFileSync(join(work, "mssql_sa_password"), "Fake-T171b\rSa!Pass0123\n");
+        return {};
+      },
+      /CREDENTIAL_INVALID/,
+    ],
+    [
+      "two trailing CRLFs",
+      () => {
+        writeFileSync(join(work, "mssql_sa_password"), PASSWORD + "\r\n\r\n");
         return {};
       },
       /CREDENTIAL_INVALID/,

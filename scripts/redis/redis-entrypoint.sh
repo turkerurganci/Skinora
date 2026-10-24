@@ -19,7 +19,8 @@
 #                          would accept anyone on the network)
 #   CREDENTIAL_UNREADABLE  the path exists but is not a readable file
 #                          (Docker's directory for a missing source file)
-#   CREDENTIAL_INVALID     a character outside A-Z a-z 0-9 . _ ~ + = - — the
+#   CREDENTIAL_INVALID     a CR other than one trailing CRLF, or a character
+#                          outside A-Z a-z 0-9 . _ ~ + = - — the
 #                          password is also written into the backend's
 #                          connection string (comma-separated) and the Steam
 #                          service's redis:// URL; `openssl rand -hex 32` fits
@@ -51,17 +52,27 @@ check_file() {
     fail CREDENTIAL_UNREADABLE "$FILE exists but is not a readable file - create the redis_password secret file (secrets/README.md) and remove the directory Docker made in its place"
   fi
   [ -f "$FILE" ] || fail CREDENTIAL_MISSING "$FILE does not exist - create the redis_password secret file (secrets/README.md)"
+  # Docker Desktop, missing source file, `compose run`: the mount point passes
+  # -f yet every read fails with an I/O error (measured, T171b) — so read once.
+  cat "$FILE" >/dev/null 2>&1 || fail CREDENTIAL_UNREADABLE "$FILE cannot be read - create the redis_password secret file (secrets/README.md) and remove what Docker made in its place"
 }
 
 # Prints the password (stdout, for the caller to capture) after the checks.
 read_password() {
   check_file
-  # A CR is counted on the raw bytes: some shells (MSYS) drop it from $(...).
-  if [ "$(tr -cd '\r' <"$FILE" | wc -c | tr -d ' ')" -gt 0 ]; then
-    fail CREDENTIAL_INVALID "$FILE has a Windows line ending (CR) - save it with LF only (secrets/README.md)"
+  # CRs are counted on the raw bytes (some shells — MSYS — drop them from
+  # $(...)). One CR is allowed: the one of a trailing CRLF (Git Bash's openssl
+  # writes CRLF on Windows; the backend trims it too). Any other is refused.
+  crs="$(tr -cd '\r' <"$FILE" | wc -c | tr -d ' ')"
+  if [ "$crs" -gt 0 ]; then
+    last="$(tail -c 2 "$FILE" | od -An -tx1 | tr -d ' \n')"
+    case "$last" in
+      *0d0a | *0d) [ "$crs" -eq 1 ] || fail CREDENTIAL_INVALID "$FILE has a CR inside the password - one line, LF or CRLF only" ;;
+      *) fail CREDENTIAL_INVALID "$FILE has a CR inside the password - one line, LF or CRLF only" ;;
+    esac
   fi
-  # One line; a trailing LF (and only that) is dropped by $(...).
-  value="$(cat "$FILE")"
+  # One line; without the CR, and $(...) drops the trailing LF.
+  value="$(tr -d '\r' <"$FILE")"
   [ -n "$value" ] || fail CREDENTIAL_MISSING "$FILE is empty - Redis does not start without a password"
   case "$value" in
     *[!A-Za-z0-9._~+=-]*)

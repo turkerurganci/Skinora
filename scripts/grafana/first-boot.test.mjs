@@ -322,6 +322,26 @@ describe("grafana first-boot.sh — admin password file (T171b)", { skip: !HAS_S
       },
       /CREDENTIAL_UNREADABLE/,
     ],
+    [
+      // Measured on grafana/grafana:11.3.0: /run.sh keeps the CR, so the
+      // visible password would be refused (Git Bash openssl writes CRLF).
+      "a CRLF file",
+      (dir) => {
+        const path = join(dir, "crlf_admin");
+        writeFileSync(path, ADMIN_PASSWORD + "\r\n");
+        return { GF_SECURITY_ADMIN_PASSWORD__FILE: path };
+      },
+      /CREDENTIAL_INVALID/,
+    ],
+    [
+      "SMTP on and a CRLF SMTP password file",
+      (dir) => {
+        const path = join(dir, "crlf_smtp");
+        writeFileSync(path, "re_t171b_smtp_value\r\n");
+        return { GF_SMTP_ENABLED: "true", GF_SMTP_PASSWORD__FILE: path };
+      },
+      /CREDENTIAL_INVALID/,
+    ],
   ];
 
   for (const [i, [label, envOf, code]] of refusals.entries()) {

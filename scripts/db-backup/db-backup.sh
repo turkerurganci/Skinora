@@ -88,7 +88,11 @@ validate_config() {
     die "CREDENTIAL_UNREADABLE: $pw_file exists but is not a readable file (Docker's directory for a missing source file - secrets/README.md)"
   fi
   [ -f "$pw_file" ] || die "CREDENTIAL_MISSING: $pw_file does not exist (secrets/README.md)"
-  pw="$(cat "$pw_file")"
+  # Docker Desktop, missing source file, `compose run`: the mount point passes
+  # -f yet every read fails with an I/O error (measured, T171b) — so read once.
+  cat "$pw_file" >/dev/null 2>&1 || die "CREDENTIAL_UNREADABLE: $pw_file cannot be read (secrets/README.md)"
+  # A trailing CRLF (Git Bash openssl on Windows) is dropped, as SQL Server does.
+  pw="$(tr -d '\r' <"$pw_file")"
   [ -n "$pw" ] || die "CREDENTIAL_MISSING: $pw_file is empty"
   [ -d "$DIR" ] && [ -w "$DIR" ] || die "backup directory $DIR is missing or not writable (host bind mount)"
   # sqlcmd reads the password from the environment, never from argv (ps).

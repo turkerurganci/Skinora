@@ -42,15 +42,6 @@ TIMEOUT="${GRAFANA_FIRST_BOOT_TIMEOUT_SECONDS:-300}"
 MARKER="$DATA/.skinora-alerting-provisioned"
 LOG="${TMPDIR:-/tmp}/skinora-grafana-first-boot.log"
 
-# T171a (doğrulama S4-2, ⚠ GÜVENLİK — alarm yolu) — with SMTP on, the
-# password file must be a readable file. Grafana's own <option>__FILE reading
-# does not stop on a failed read: when the source secrets/…/
-# grafana_smtp_password.txt is missing, Docker creates a DIRECTORY at the mount
-# point and Grafana started with an empty SMTP password (measured), so every
-# e-mail alert failed only at send time. Same fail-closed rule as every other
-# shared secret (SHARED_SECRET_UNREADABLE, TELEGRAM_BOT_TOKEN_UNREADABLE): do
-# not start. Anything but an explicit "off" value counts as on. An EMPTY file
-# is still allowed (= e-mail not configured yet, DEPLOY_RUNBOOK §L.9 / §P).
 # T171b (DEFERRED_BACKLOG ThirdPartyCredentialsInPlainEnv, ⚠ GÜVENLİK) — the
 # admin password is the Docker secret grafana_admin_password, read by Grafana
 # itself through GF_SECURITY_ADMIN_PASSWORD__FILE. Grafana does not stop when
@@ -58,6 +49,14 @@ LOG="${TMPDIR:-/tmp}/skinora-grafana-first-boot.log"
 # its built-in admin/admin on an empty data volume — and the admin password is
 # only applied on that first start. So: no variable, a readable, non-empty
 # file, or no start. The value is never printed.
+#
+# A CR is refused too (CREDENTIAL_INVALID): the image's /run.sh reads the file
+# with $(< file), which drops trailing LFs but KEEPS a CR — measured on
+# grafana/grafana:11.3.0: a CRLF file (what Git Bash's openssl writes on
+# Windows) made "<password>\r" the admin password and the visible one was
+# refused (401). The same holds for the SMTP password (below).
+has_cr() { [ "$(tr -cd '\r' <"$1" | wc -c | tr -d ' ')" -gt 0 ]; }
+
 if [ -n "${GF_SECURITY_ADMIN_PASSWORD:-}" ]; then
   echo "CREDENTIAL_IN_ENV: GF_SECURITY_ADMIN_PASSWORD is set as an environment variable - the Grafana admin password is read only from its Docker secret file (GF_SECURITY_ADMIN_PASSWORD__FILE, DEPLOY_RUNBOOK L.9)" >&2
   exit 1
@@ -71,11 +70,32 @@ if [ -e "$admin_password_file" ] && { [ ! -f "$admin_password_file" ] || [ ! -r 
   echo "CREDENTIAL_UNREADABLE: $admin_password_file is not a readable file - create the grafana_admin_password secret file (secrets/README.md) and remove the directory Docker made in its place" >&2
   exit 1
 fi
+if [ -f "$admin_password_file" ] && ! cat "$admin_password_file" >/dev/null 2>&1; then
+  # Docker Desktop, missing source file: the mount point can pass -f yet every
+  # read fails with an I/O error (measured, T171b).
+  echo "CREDENTIAL_UNREADABLE: $admin_password_file cannot be read - create the grafana_admin_password secret file (secrets/README.md) and remove what Docker made in its place" >&2
+  exit 1
+fi
 if [ ! -f "$admin_password_file" ] || ! grep -q '[^[:space:]]' "$admin_password_file"; then
   echo "CREDENTIAL_MISSING: $admin_password_file is missing or empty - Grafana does not start without its admin password (an empty one would leave admin/admin)" >&2
   exit 1
 fi
+if has_cr "$admin_password_file"; then
+  echo "CREDENTIAL_INVALID: $admin_password_file has a Windows line ending (CR) - Grafana would keep it as part of the password; rewrite it with LF only (secrets/README.md)" >&2
+  exit 1
+fi
 
+# T171a (doğrulama S4-2, ⚠ GÜVENLİK — alarm yolu) — with SMTP on, the
+# password file must be a readable file. Grafana's own <option>__FILE reading
+# does not stop on a failed read: when the source secrets/…/
+# grafana_smtp_password.txt is missing, Docker creates a DIRECTORY at the mount
+# point and Grafana started with an empty SMTP password (measured), so every
+# e-mail alert failed only at send time. Same fail-closed rule as every other
+# shared secret (SHARED_SECRET_UNREADABLE, TELEGRAM_BOT_TOKEN_UNREADABLE): do
+# not start. Anything but an explicit "off" value counts as on. An EMPTY file
+# is still allowed (= e-mail not configured yet, DEPLOY_RUNBOOK §L.9 / §P).
+# T171b — and a CR in it is refused (CREDENTIAL_INVALID), see above: Resend
+# would reject "<key>\r" only at send time.
 smtp_enabled=$(printf '%s' "${GF_SMTP_ENABLED:-false}" | tr 'A-Z' 'a-z')
 case "$smtp_enabled" in
   ""|0|f|false|n|no|off) ;;
@@ -83,6 +103,10 @@ case "$smtp_enabled" in
     smtp_password_file="${GF_SMTP_PASSWORD__FILE:-}"
     if [ -n "$smtp_password_file" ] && { [ ! -f "$smtp_password_file" ] || [ ! -r "$smtp_password_file" ]; }; then
       echo "GRAFANA_SMTP_PASSWORD_UNREADABLE: $smtp_password_file is not a readable file while SMTP is on - create the grafana_smtp_password secret file (secrets/README.md) and remove the directory Docker made in its place" >&2
+      exit 1
+    fi
+    if [ -n "$smtp_password_file" ] && has_cr "$smtp_password_file"; then
+      echo "CREDENTIAL_INVALID: $smtp_password_file has a Windows line ending (CR) - Grafana would send it as part of the SMTP password; rewrite it with LF only (secrets/README.md)" >&2
       exit 1
     fi
     ;;

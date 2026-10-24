@@ -109,6 +109,13 @@ describe("redis-entrypoint.sh (T171b)", { skip: !HAS_SH && "sh not available" },
     }
   });
 
+  test("a trailing CRLF (Git Bash openssl on Windows) is accepted and dropped", () => {
+    writeFileSync(join(work, "redis_password"), PASSWORD + "\r\n");
+    const r = run(["--appendonly", "yes"]);
+    assert.equal(r.code, 0, r.out);
+    assert.equal(read(join("conf", "redis-auth.conf")), `requirepass "${PASSWORD}"\n`);
+  });
+
   test("--healthcheck: an error reply (wrong password) fails", () => {
     const r = run(["--healthcheck"], {}, "NOAUTH Authentication required.");
     assert.equal(r.code, 1, r.out);
@@ -140,7 +147,8 @@ describe("redis-entrypoint.sh (T171b)", { skip: !HAS_SH && "sh not available" },
       ["a backslash", "has\\backslash"],
       ["a blank", "has blank"],
       ["a slash", "has/slash"],
-      ["a Windows line ending", "pass\r"],
+      ["a CR inside", "pa\rss"],
+      ["two trailing CRLFs", "pass\r\n\r"],
       ["two lines", "one\ntwo"],
     ].map(([label, value]) => [
       `a password with ${label}`,

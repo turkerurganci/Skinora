@@ -21,9 +21,12 @@
 #   CREDENTIAL_IN_ENV      MSSQL_SA_PASSWORD / SA_PASSWORD set as a variable
 #   CREDENTIAL_MISSING     no MSSQL_SA_PASSWORD_FILE, no file, or a blank one
 #   CREDENTIAL_UNREADABLE  the path exists but is not a readable file
-#   CREDENTIAL_INVALID     a CR (Windows line ending) or surrounding blanks —
-#                          the backend trims them, SQL Server may not; save
-#                          the file with `printf '%s\n' … >` (secrets/README.md)
+#   CREDENTIAL_INVALID     more than one line, a CR anywhere but in the one
+#                          trailing line ending, or surrounding blanks — the
+#                          backend trims blanks, SQL Server may not (measured:
+#                          SQL Server drops a trailing LF or CRLF — Git Bash's
+#                          openssl writes CRLF on Windows — and that is all
+#                          this script allows too)
 #
 # The value is never printed. Then the image's own entrypoint runs unchanged
 # (launch_sqlservr.sh "$@", compose passes /opt/mssql/bin/sqlservr).
@@ -56,13 +59,23 @@ read_password() {
     fail CREDENTIAL_UNREADABLE "$file exists but is not a readable file - create the mssql_sa_password secret file (secrets/README.md) and remove the directory Docker made in its place"
   fi
   [ -f "$file" ] || fail CREDENTIAL_MISSING "$file does not exist - create the mssql_sa_password secret file (secrets/README.md)"
-  local value
-  # A CR is counted on the raw bytes: some shells (MSYS) drop it from $(...).
-  if [ "$(tr -cd '\r' <"$file" | wc -c | tr -d ' ')" -gt 0 ]; then
-    fail CREDENTIAL_INVALID "$file has a Windows line ending (CR) - save it with LF only (secrets/README.md)"
+  # Docker Desktop, missing source file, `compose run`: the mount point passes
+  # -f yet every read fails with an I/O error (measured, T171b) — so read once.
+  cat "$file" >/dev/null 2>&1 || fail CREDENTIAL_UNREADABLE "$file cannot be read - create the mssql_sa_password secret file (secrets/README.md) and remove what Docker made in its place"
+  local value crs last
+  # CRs are counted on the raw bytes (some shells — MSYS — drop them from
+  # $(...)). One CR is allowed: the one of a trailing CRLF (SQL Server drops
+  # it as well — measured). Any other is refused.
+  crs="$(tr -cd '\r' <"$file" | wc -c | tr -d ' ')"
+  if [ "$crs" -gt 0 ]; then
+    last="$(tail -c 2 "$file" | od -An -tx1 | tr -d ' \n')"
+    case "$last" in
+      *0d0a | *0d) [ "$crs" -eq 1 ] || fail CREDENTIAL_INVALID "$file has a CR inside the password - one line, LF or CRLF only" ;;
+      *) fail CREDENTIAL_INVALID "$file has a CR inside the password - one line, LF or CRLF only" ;;
+    esac
   fi
-  # $(...) drops trailing newlines; anything else is kept and judged below.
-  value="$(cat "$file")"
+  # Without the CR; $(...) drops trailing newlines; anything else is judged below.
+  value="$(tr -d '\r' <"$file")"
   [ -n "${value//[[:space:]]/}" ] || fail CREDENTIAL_MISSING "$file is empty - the database does not start without its sa password"
   if [ "$value" != "${value#[[:space:]]}" ] || [ "$value" != "${value%[[:space:]]}" ] || [[ "$value" == *$'\n'* ]]; then
     fail CREDENTIAL_INVALID "$file must hold the password alone on one line, without surrounding blanks"
