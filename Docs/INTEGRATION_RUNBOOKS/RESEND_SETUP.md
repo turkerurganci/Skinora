@@ -17,24 +17,25 @@
 
 ## 2. DNS Kayıtları (DKIM / SPF / DMARC / Return-Path)
 
-Resend domain ekledikten sonra dashboard'da dört kayıt üretir. Bunları DNS sağlayıcısında (Cloudflare / Route53 / Hetzner DNS) **birebir** ekleyin:
+Resend domain ekledikten sonra dashboard'da beş kayıt üretir. Bunları DNS sağlayıcısında (Cloudflare / Route53 / Hetzner DNS) **birebir** ekleyin:
 
 | Kayıt | Tür | Host | Değer (örnek) | Notlar |
 |---|---|---|---|---|
-| **DKIM 1** | TXT veya CNAME | `resend._domainkey.getskinora.com` | `resend._domainkey.getskinora.com.dkim.resend.com` (CNAME) veya `p=MIGfMA0GCSqGSIb3DQEBAQUA…` (TXT) | Resend hangi formatı verirse onu kullan; her ikisi de geçerli. |
-| **DKIM 2** | TXT veya CNAME | `resend2._domainkey.getskinora.com` | dashboard'daki ikinci kayıt | Yedek imzalama anahtarı; eksikse "1 of 2 records" uyarısı gelir. |
-| **SPF** | TXT | `getskinora.com` (root) | `v=spf1 include:amazonses.com ~all` | Mevcut SPF kaydı varsa `include:amazonses.com` parçasını **ekleyerek** güncelle; **yeni satır açma** (RFC 7208 — bir domain için en fazla bir SPF TXT). |
-| **DMARC** | TXT | `_dmarc.getskinora.com` | `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@getskinora.com; adkim=s; aspf=s` | MVP'de `p=quarantine` yeterli; tam mainstream sonrası `p=reject`'e geçilir. `rua` mailbox'ı operasyon ekibinin izlediği bir adres olmalı. |
-| **Return-Path** | CNAME | `bounce.getskinora.com` (veya dashboard'un istediği subdomain) | `feedback-smtp.us-east-1.amazonses.com` | "Custom Return-Path" özelliği; bounce yönetimi için zorunlu. |
+| **DKIM** | TXT | `resend._domainkey.getskinora.com` | `p=MIGfMA0GCSqGSIb3DQEBAQUA…` (dashboard'daki tam değer) | Resend'in getskinora.com için verdiği kayıt (2026-10-24, us-east-1, doğrulandı). |
+| **SPF** | TXT | `send.getskinora.com` | `v=spf1 include:amazonses.com ~all` | Kökte değil, `send` alt alanında (Return-Path alanıyla birlikte). Kökteki SPF'e dokunulmaz. |
+| **Return-Path (MX)** | MX | `send.getskinora.com` | `10 feedback-smtp.us-east-1.amazonses.com` | Bounce/şikâyet geri bildirimi; öncelik 10. |
+| **DMARC** | TXT | `_dmarc.getskinora.com` | `v=DMARC1; p=none;` | Başlangıçta izleme (`p=none`); tam mainstream öncesi `quarantine` / `reject`'e sıkılaştırılır. |
+| **Tıklama/açılış izleme** | CNAME | `rsend.getskinora.com` | `send.forge.rmta.net` | Cloudflare'de **proxy kapalı** (yalnız DNS, gri bulut). |
 
 **Doğrulama:**
-- Resend dashboard'da *Verify DNS* → tüm dört kayıt yeşil ✓ olana kadar tekrarla (DNS propagation 5 dk–1 sa arası).
+- Resend dashboard'da *Verify DNS* → tüm kayıtlar yeşil ✓ olana kadar tekrarla (DNS propagation 5 dk–1 sa arası).
 - CLI ile manuel:
   ```bash
   dig +short txt resend._domainkey.getskinora.com
-  dig +short txt getskinora.com
+  dig +short txt send.getskinora.com
+  dig +short mx send.getskinora.com
   dig +short txt _dmarc.getskinora.com
-  dig +short cname bounce.getskinora.com
+  dig +short cname rsend.getskinora.com
   ```
 - DKIM/SPF/DMARC sağlamlığını dışarıdan: [https://www.mail-tester.com/](https://www.mail-tester.com/) → test mailbox'a sandbox gönderimi → skor 9/10+.
 

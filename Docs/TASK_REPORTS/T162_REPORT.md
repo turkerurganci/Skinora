@@ -37,14 +37,14 @@ Kaynak: 11 T162 (`Docs/plan/11_F9.md`), DEPLOY_RUNBOOK §K.5 "T162'ye kalanlar".
 |---|---|---|---|
 | 1 | Alan adı alındı, tünel bağlandı (token `secrets/trial/`, hostname → `skinora-reverse-proxy:80`) | ✓ | `$TRIAL --profile tunnel up -d` → 4 × `Registered tunnel connection` (fra03, ist03, ist07, fra10); `https://getskinora.com/nginx-health` → `200` (bu PC); tünel durunca `530` |
 | 2 | Geçerli sertifika, yenileme otomatik (Cloudflare kenarı) | ✓ | `openssl s_client -connect getskinora.com:443 -servername getskinora.com` → `CN=getskinora.com`, SAN `getskinora.com, *.getskinora.com`, Let's Encrypt YE2, 2026-10-24 → 2027-01-22, `Verify return code: 0 (ok)`. Yenileme Cloudflare'in (Universal SSL) — bizde sertifika dosyası yok |
-| 3 | Gerçek istemci IP'si korunuyor (`CF-Connecting-IP` → nginx real_ip, yalnız cloudflared'den) | ✓ | nginx access log: tünelden gelen her istek `81.214.103.181`; Redis `skinora:ratelimit:auth:ip:81.214.103.181` (backend'in kovası). Sahte: tünelden `CF-Connecting-IP: 1.2.3.4` → Cloudflare **403**; `X-Forwarded-For: 1.2.3.4` → kova yine `81.214.103.181`; yerel `127.0.0.1:8090`'a `CF-Connecting-IP` + `X-Forwarded-For` → log `172.30.161.1`, kova `ip:172.30.161.1`. Test: `edge-realip.test.mjs` (başka container + yerel port başlıkları yok sayılır) |
+| 3 | Gerçek istemci IP'si korunuyor (`CF-Connecting-IP` → nginx real_ip, yalnız cloudflared'den) | ✓ | nginx access log: tünelden gelen her istek `<ev IP>`; Redis `skinora:ratelimit:auth:ip:<ev IP>` (backend'in kovası). Sahte: tünelden `CF-Connecting-IP: 1.2.3.4` → Cloudflare **403**; `X-Forwarded-For: 1.2.3.4` → kova yine `<ev IP>`; yerel `127.0.0.1:8090`'a `CF-Connecting-IP` + `X-Forwarded-For` → log `172.30.161.1`, kova `ip:172.30.161.1`. Test: `edge-realip.test.mjs` (başka container + yerel port başlıkları yok sayılır) |
 | 4 | Backend `https` şemasını görüyor | ✓ (dolaylı canlı + test) | Canlı: Steam'e giden `openid.return_to=https://getskinora.com/api/v1/auth/steam/callback`, `realm=https://getskinora.com`; düz http → nginx `301 https://getskinora.com/…`. nginx testi: bağlayıcıdan `X-Forwarded-Proto: https` backend'e `https` gider, başka eşten `http`. Backend testi: güvenilir eş + `https` → controller (302 Steam), başlıksız veya güvenilmeyen eş → `307 https` (HttpsRedirection şemayı http gördü). Bozma: `XForwardedProto` kaldırılınca test kırmızı. Backend istek log'u şemayı yazmadığı için canlıda doğrudan okunmadı |
 | 5 | Oturum çerezi gerçek alan adında çalışıyor | ✓ kısmi — tarayıcı adımı sahipte | `curl -D - 'https://getskinora.com/api/v1/auth/steam?returnUrl=%2Fen%2Fdashboard'` → `Set-Cookie: skinora_oid_rt=…; path=/api/v1/auth; secure; samesite=lax; httponly` (Domain yok → yalnız `getskinora.com`). `refreshToken` (Steam girişi sonrası) tarayıcı gerektirir — sahip adımı aşağıda |
-| — | Dış erişim Access'e düşüyor (görev talimatı) | ✓ | Dış getirici `r.jina.ai` → `https://getskinora.com/?p=2888014579` ve `/api/health?q=220910240` → **"Log in to skinora-trial" `shiny-bird-c918.cloudflareaccess.com`**; nginx log'unda bu iki istek **yok**. Access yapılandırması API'den okundu: uygulama `getskinora.com`, `ev-ip` bypass `81.214.103.181/32` (öncelik 1), `sahip` allow (2) |
+| — | Dış erişim Access'e düşüyor (görev talimatı) | ✓ | Dış getirici `r.jina.ai` → `https://getskinora.com/?p=2888014579` ve `/api/health?q=220910240` → **"Log in to skinora-trial" `shiny-bird-c918.cloudflareaccess.com`**; nginx log'unda bu iki istek **yok**. Access yapılandırması API'den okundu: uygulama `getskinora.com`, `ev-ip` bypass `<ev IP>/32` (öncelik 1), `sahip` allow (2) |
 | — | Runbook: Access, ev IP'si güncelleme, webhook bypass | ✓ | DEPLOY_RUNBOOK §K.5.2 |
 | — | CI testleri yeni duruma göre | ✓ | aşağıda |
 
-**Dış ölçüm notu (önemli):** ilk dış ölçüm görev talimatındaki gibi WebFetch ile yapıldı ve **uygulama sayfasını** döndürdü; tünel ~20 sn içinde durduruldu (16:37:28 UTC). nginx log'u isteğin `81.214.103.181`'den (`User-Agent: Claude-User (claude-code/…)`) geldiğini gösterdi: Claude Code'un WebFetch'i isteği **bu PC'den** atar, yani istek `ev-ip` bypass'ından geçti — dış erişim değil. Ölçüm gerçekten dışarıdan çıkan bir getiriciyle (`r.jina.ai`) tekrarlandı ve Access ekranı görüldü. Bu PC'den yapılan "dış" ölçüm bypass yüzünden hiçbir şey kanıtlamaz.
+**Dış ölçüm notu (önemli):** ilk dış ölçüm görev talimatındaki gibi WebFetch ile yapıldı ve **uygulama sayfasını** döndürdü; tünel ~20 sn içinde durduruldu (16:37:28 UTC). nginx log'u isteğin `<ev IP>`'den (`User-Agent: Claude-User (claude-code/…)`) geldiğini gösterdi: Claude Code'un WebFetch'i isteği **bu PC'den** atar, yani istek `ev-ip` bypass'ından geçti — dış erişim değil. Ölçüm gerçekten dışarıdan çıkan bir getiriciyle (`r.jina.ai`) tekrarlandı ve Access ekranı görüldü. Bu PC'den yapılan "dış" ölçüm bypass yüzünden hiçbir şey kanıtlamaz.
 
 ## Test Sonuçları
 
@@ -78,6 +78,10 @@ Kaynak: 11 T162 (`Docs/plan/11_F9.md`), DEPLOY_RUNBOOK §K.5 "T162'ye kalanlar".
 - Cloudflare'den düz `http` isteği nginx'te `301 https`'e çevrilir (Cloudflare "Always Use HTTPS" ayarına bağımlı kalmamak için). HSTS eklenmedi (alan adını bir yıl https'e kilitler; pilot öncesi karar).
 - Destek ve gönderen e-posta adresleri de `getskinora.com`'a alındı (alan adına bağlı dağıtım adresi sayıldı; e-posta alan adı doğrulaması o alan adına yapılacak).
 
+## Kapanış: S4-1..6
+
+- S4-1 ev IP'si repodan kalktı (`<ev IP>`; gerçek değer yalnız Cloudflare `ev-ip` politikasında). S4-2 sahte `CF-Connecting-IP` / şema / ülke testi `/hubs/` ve `/` yollarına genişledi (nginx bozulunca kırmızı oldu). S4-3 `docker-compose.yml` ağ açıklaması güncellendi. S4-4 STATUS'ta `getskinora.com`. S4-5 `plan/11_F9.md` satır sonları main'deki (CRLF) hâline döndü. S4-6 RESEND_SETUP DNS tablosu gerçek kayıtlarla.
+
 ## Sahibe kalan adımlar
 
 1. **Tarayıcıdan Steam girişi:** `$TRIAL --profile tunnel up -d --wait` (Grafana için önce `telegram_bot_token.txt` dolu olmalı, yoksa `--wait` Grafana'da hata verir — tünel yine açılır) → `https://getskinora.com` → *Sign in with Steam* → dönüşte giriş yapılmış olmalı; geliştirici araçları → Application → Cookies → `getskinora.com` altında `refreshToken` (`Secure`, `HttpOnly`, yol `/api/v1/auth`). Ardından §K.4 adım 7 (süper admin).
@@ -101,5 +105,5 @@ Kaynak: 11 T162 (`Docs/plan/11_F9.md`), DEPLOY_RUNBOOK §K.5 "T162'ye kalanlar".
   - Docker statik IP + `ip_range` dışı adres → compose render + canlı `docker network inspect` (`IPRange 172.30.161.0/25`, bağlayıcı `.250` ile tünel bağlandı).
   - Cloudflare `CF-Connecting-IP` / `X-Forwarded-Proto` gönderiyor → canlı: nginx log'unda gerçek IP, Steam `return_to` https, düz http'de nginx 301.
   - Access yapılandırması → API okuması (uygulama, iki politika, öncelikler).
-  - Claude Code WebFetch isteği bu PC'den atar → nginx log'u (`Claude-User` UA, `81.214.103.181`) — ölçüm yöntemi buna göre değişti.
+  - Claude Code WebFetch isteği bu PC'den atar → nginx log'u (`Claude-User` UA, `<ev IP>`) — ölçüm yöntemi buna göre değişti.
 - Cloudflare API anahtarı ve tünel token'ı hiçbir çıktıya yazdırılmadı; yalnız dosyadan okundu.

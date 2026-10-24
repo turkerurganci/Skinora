@@ -192,27 +192,31 @@ describe("nginx edge behind the Cloudflare tunnel (T162)", { skip: !HAS_DOCKER &
     assert.equal(r.location, "https://getskinora.com/api/v1/auth/steam?returnUrl=%2F");
   });
 
-  test("another container sending the same headers gets its own address, http and no country", () => {
-    const r = curlFrom(STRANGER, "/api/v1/auth/steam", "https");
-    assert.equal(r.status, 200, r.body);
-    const h = parse(r.body);
-    assert.equal(h.rip, STRANGER);
-    assert.equal(h.xff.split(/,\s*/).pop(), STRANGER);
-    assert.equal(h.proto, "http");
-    assert.equal(h.cc, "");
-  });
+  // Every location that forwards these headers must ignore them from a stranger:
+  // /api/ (backend), /hubs/ (backend, WebSocket) and / (frontend).
+  for (const path of ["/api/v1/auth/steam", "/hubs/notifications", "/"]) {
+    test(`another container sending the same headers to ${path} gets its own address, http and no country`, () => {
+      const r = curlFrom(STRANGER, path, "https");
+      assert.equal(r.status, 200, r.body);
+      const h = parse(r.body);
+      assert.equal(h.rip, STRANGER);
+      assert.equal(h.xff.split(/,\s*/).pop(), STRANGER);
+      assert.equal(h.proto, "http");
+      assert.equal(h.cc, "");
+    });
 
-  test("another container's forged X-Forwarded-Proto: http is not redirected (only the connector's is believed)", () => {
-    assert.equal(curlFrom(STRANGER, "/api/v1/auth/steam", "http").status, 200);
-  });
+    test(`another container's forged X-Forwarded-Proto: http to ${path} is not redirected (only the connector's is believed)`, () => {
+      assert.equal(curlFrom(STRANGER, path, "http").status, 200);
+    });
 
-  test("the loopback operator port (Docker gateway) cannot claim the visitor's IP, https or a country", async () => {
-    const r = await fromHostPort("/api/v1/auth/steam", "https");
-    assert.equal(r.status, 200, r.body);
-    const h = parse(r.body);
-    assert.notEqual(h.rip, VISITOR);
-    assert.equal(h.xff.split(/,\s*/).pop(), h.rip);
-    assert.equal(h.proto, "http");
-    assert.equal(h.cc, "");
-  });
+    test(`the loopback operator port (Docker gateway) cannot claim the visitor's IP, https or a country on ${path}`, async () => {
+      const r = await fromHostPort(path, "https");
+      assert.equal(r.status, 200, r.body);
+      const h = parse(r.body);
+      assert.notEqual(h.rip, VISITOR);
+      assert.equal(h.xff.split(/,\s*/).pop(), h.rip);
+      assert.equal(h.proto, "http");
+      assert.equal(h.cc, "");
+    });
+  }
 });

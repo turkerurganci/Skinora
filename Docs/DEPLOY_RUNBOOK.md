@@ -1052,7 +1052,7 @@ Deneme yayını herkese açık değildir. Access uygulaması tünelin önünde d
 | Öğe | Değer |
 |---|---|
 | Uygulama | `skinora-trial` (self-hosted), alan adı `getskinora.com` (tüm yollar), oturum 24 sa — id `c4ce39b7-cae7-4f7b-a026-847909d3dd01` |
-| Politika 1 — `ev-ip` | **Bypass**, kaynak IP `81.214.103.181/32` (bu PC'nin evdeki genel IP'si). Bu IP'den gelen istek giriş ekranı görmez. Yeniden kullanılabilir politika, id `632baa07-a637-411b-a76b-17d6eed92d01` |
+| Politika 1 — `ev-ip` | **Bypass**, kaynak IP `<ev IP>/32` (bu PC'nin evdeki genel IP'si). Bu IP'den gelen istek giriş ekranı görmez. Gerçek değer repoda yazılmaz (repo public; ev adresinin ifşası istenmez) — yalnız Cloudflare'de `ev-ip` politikasında tutulur. Güncel değer: `curl -s https://api.ipify.org`. Yeniden kullanılabilir politika, id `632baa07-a637-411b-a76b-17d6eed92d01` |
 | Politika 2 — `sahip` | **Allow**, sahibin e-posta adresleri; giriş yöntemi **One-time PIN** (e-postaya kod) |
 | Kurulum | Yönetici, API ile (2026-10-24). Panelde: Zero Trust → Access → Applications → `skinora-trial` |
 
@@ -1088,9 +1088,9 @@ Yığın §K.4 ile sıfırdan kuruldu (yeni sırlar, testnet cüzdan dosyaları 
 | Tünel | `$TRIAL --profile tunnel up -d …` · logs | 4 × `Registered tunnel connection` (fra03, ist03, ist07, fra10) |
 | **Dış erişim (Access)** | dış bir getirici üzerinden (`r.jina.ai`) `https://getskinora.com/?p=<rastgele>` ve `/api/health?q=<rastgele>` | ikisi de **`<takım>.cloudflareaccess.com` "Log in to skinora-trial"** (e-posta kodu); nginx access log'unda bu istekler **yok** — uygulamaya ulaşmadı |
 | Sertifika | `openssl s_client -connect getskinora.com:443 -servername getskinora.com` | `CN=getskinora.com`, SAN `getskinora.com, *.getskinora.com`, Let's Encrypt, `Verify return code: 0 (ok)` |
-| İstemci IP'si (nginx) | bu PC'den istek → nginx access log | `81.214.103.181` (bağlayıcının adresi değil) |
-| İstemci IP'si (backend) | Redis `--scan --pattern '*ip:*'` | `skinora:ratelimit:auth:ip:81.214.103.181` |
-| Sahte başlık | tünelden `-H 'CF-Connecting-IP: 1.2.3.4'` · `-H 'X-Forwarded-For: 1.2.3.4'` · yerel `127.0.0.1:8090`'a ikisi + `X-Forwarded-Proto: https` | Cloudflare **403** · kova yine `81.214.103.181` · yerelde log `172.30.161.1`, kova `ip:172.30.161.1` |
+| İstemci IP'si (nginx) | bu PC'den istek → nginx access log | `<ev IP>` (bağlayıcının adresi değil) |
+| İstemci IP'si (backend) | Redis `--scan --pattern '*ip:*'` | `skinora:ratelimit:auth:ip:<ev IP>` |
+| Sahte başlık | tünelden `-H 'CF-Connecting-IP: 1.2.3.4'` · `-H 'X-Forwarded-For: 1.2.3.4'` · yerel `127.0.0.1:8090`'a ikisi + `X-Forwarded-Proto: https` | Cloudflare **403** · kova yine `<ev IP>` · yerelde log `172.30.161.1`, kova `ip:172.30.161.1` |
 | Şema + Steam | `curl -D - 'https://getskinora.com/api/v1/auth/steam?returnUrl=%2Fen%2Fdashboard'` | `302` Steam; `openid.return_to=https://getskinora.com/api/v1/auth/steam/callback`, `openid.realm=https://getskinora.com`; `Set-Cookie: skinora_oid_rt=…; path=/api/v1/auth; secure; samesite=lax; httponly` (Domain özniteliği yok → çerez yalnız `getskinora.com`'a bağlı) |
 | Düz http | `curl 'http://getskinora.com/api/v1/auth/steam?returnUrl=%2F'` | `301 → https://getskinora.com/…` (nginx'in kuralı — access log'da `301`) |
 | Tünel kapalı | `stop skinora-cloudflared` sonrası | `530` |
