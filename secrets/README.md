@@ -85,7 +85,7 @@ isteğe bağlı olanlar boş olabilir.
 | `secrets/resend_api_key.txt` · `secrets/resend_webhook_signing_secret.txt` | backend (e-posta kanalı, T165) | Dosya **evet**; boş = kanal "misconfigured" (kapalı + alarm, DEPLOY_RUNBOOK §P) |
 | `secrets/telegram_bot_token.txt` | backend + Grafana render adımı | Dosya **evet**. **Boşsa Grafana açılmaz** (contact point doğrulaması) — geliştirmede herhangi bir yer tutucu yazın |
 | `secrets/telegram_webhook_secret_token.txt` | backend (Telegram webhook) | Dosya **evet**; boş = Telegram kanalı "misconfigured" |
-| `secrets/grafana_smtp_password.txt` | Grafana (`GF_SMTP_PASSWORD__FILE`) | Dosya **evet**; boş = Grafana e-posta alarmı gönderemez (Telegram gider) |
+| `secrets/grafana_smtp_password.txt` | Grafana (`GF_SMTP_PASSWORD__FILE`) | Dosya **evet**; boş = Grafana e-posta alarmı gönderemez (Telegram gider). SMTP açıkken (deneme yayını) dosya yoksa Docker yerine dizin açar ve Grafana açılmaz (`GRAFANA_SMTP_PASSWORD_UNREADABLE`) |
 
 Dört zorunlu sır ve dolu Ethereum sırları birbirinden **farklı** rastgele
 değerlerdir (`openssl rand -hex 32`). Değer dosyada tek satır, tırnaksız durur;

@@ -184,13 +184,21 @@ public static class SharedSecretFiles
     /// a readable file (Docker's directory for a missing source, a permission
     /// error) throws <see cref="SharedSecretUnreadableException"/>.
     /// </summary>
-    public static string? ReadSecretFile(string path)
+    public static string? ReadSecretFile(string path) => ReadSecretFile(path, File.ReadAllText);
+
+    /// <summary>
+    /// <see cref="ReadSecretFile(string)"/> with the file read supplied — the
+    /// seam that lets a test raise the permission / IO error a real mount can
+    /// produce (Linux <c>chmod 000</c>, a Windows sharing violation).
+    /// </summary>
+    public static string? ReadSecretFile(string path, Func<string, string> readAllText)
     {
+        ArgumentNullException.ThrowIfNull(readAllText);
         if (Directory.Exists(path)) throw new SharedSecretUnreadableException(path);
         string raw;
         try
         {
-            raw = File.ReadAllText(path);
+            raw = readAllText(path);
         }
         catch (FileNotFoundException)
         {

@@ -1,11 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Skinora.API.Configuration;
 using Skinora.API.Tests.Common;
@@ -54,6 +57,38 @@ public sealed class SharedSecretFilesHostTests : IClassFixture<HangfireBypassFac
         Assert.Equal(string.Empty, configuration["Resend:ApiKey"]);
         Assert.Equal(string.Empty, configuration["Telegram:BotToken"]);
         Assert.Equal(string.Empty, configuration["EthereumSidecar:InternalKey"]);
+    }
+
+    [Fact]
+    public void Production_Startup_Logs_Never_Carry_A_Secret_Value()
+    {
+        // Validation S4-1: the real startup log call in Program.cs (not only
+        // SharedSecretReport.Describe) must name sources, never values.
+        using var secrets = new SharedSecretTestDirectory();
+        var optional = new Dictionary<string, string>
+        {
+            ["jwt_previous_secret"] = "t171a-test-jwt-previous-secret-0123456789ab",
+            ["ethereum_webhook_secret"] = "t171a-test-eth-webhook-secret-0123456789abc",
+            ["ethereum_sidecar_internal_key"] = "t171a-test-eth-internal-key-0123456789abcde",
+            ["resend_api_key"] = "re_t171a_test_resend_api_key_0123456789",
+            ["resend_webhook_signing_secret"] = "whsec_t171a_test_resend_signing_0123456789",
+            ["telegram_bot_token"] = "123456789:t171a_test_telegram_bot_token_0123",
+            ["telegram_webhook_secret_token"] = "t171a_test_telegram_webhook_token_0123456789",
+        };
+        foreach (var (name, value) in optional) secrets.Write(name, value + "\n");
+        var sink = new CapturingLoggerProvider();
+        using var host = Host(secrets, "Production", b => b.ConfigureTestServices(services =>
+            services.AddSingleton<ILoggerFactory>(_ => LoggerFactory.Create(l =>
+                l.SetMinimumLevel(LogLevel.Trace).AddProvider(sink)))));
+
+        using var client = host.CreateClient();
+
+        var lines = sink.Snapshot();
+        var startup = Assert.Single(lines, l => l.Contains("Shared secrets loaded from", StringComparison.Ordinal));
+        Assert.Contains("Jwt:Secret=file", startup);
+        Assert.Contains("Telegram:BotToken=file", startup);
+        foreach (var value in SharedSecretTestDirectory.RequiredValues.Values.Concat(optional.Values))
+            Assert.DoesNotContain(lines, l => l.Contains(value, StringComparison.Ordinal));
     }
 
     [Theory]
@@ -134,6 +169,35 @@ public sealed class SharedSecretFilesHostTests : IClassFixture<HangfireBypassFac
         using var client = host.CreateClient();
 
         Assert.Equal(devSecret, host.Services.GetRequiredService<IOptions<JwtSettings>>().Value.Secret);
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        private readonly List<string> _lines = [];
+
+        public List<string> Snapshot()
+        {
+            lock (_lines) return [.. _lines];
+        }
+
+        public ILogger CreateLogger(string categoryName) => new Logger(this, categoryName);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(CapturingLoggerProvider owner, string category) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                lock (owner._lines) owner._lines.Add($"{category}: {formatter(state, exception)} {exception}");
+            }
+        }
     }
 
     private SharedSecretProblem AssertRefused(SharedSecretTestDirectory secrets, string environment) =>

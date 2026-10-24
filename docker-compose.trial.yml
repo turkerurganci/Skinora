@@ -149,7 +149,8 @@ services:
       # T165 — e-mail alerts through Resend SMTP (base file: host, user,
       # STARTTLS). Only the password (a sending-only Resend key) is needed —
       # T171a: secrets/trial/grafana_smtp_password.txt; while it is empty the e-mail integrations fail at send time and
-      # Telegram still delivers (DEPLOY_RUNBOOK §P).
+      # Telegram still delivers; when the FILE is missing Grafana does not start (first-boot.sh,
+      # GRAFANA_SMTP_PASSWORD_UNREADABLE) — DEPLOY_RUNBOOK §L.9 / §P.
       - GF_SMTP_ENABLED=true
 
   skinora-uptime-kuma:

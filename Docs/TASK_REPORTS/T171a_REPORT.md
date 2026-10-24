@@ -1,6 +1,6 @@
 # T171a — Ortak sırlar Docker secret (⚠ GÜVENLİK)
 
-**Faz:** F9 | **Durum:** ⏳ Yapım bitti — doğrulama bekliyor | **Tarih:** 2026-10-24
+**Faz:** F9 | **Durum:** ✓ Tamamlandı — doğrulama ⛔ BLOCKED yalnız CI dışı nedenle (içerik 4 × S4, hepsi kapanışta kapandı) | **Tarih:** 2026-10-24
 
 T171 (Kurulum günü) kabul kriterindeki "ortak sırlar env yerine secret dosyasından okunuyor" maddesinin **kod parçası**, kurulum gününden önce. Kaynak: DEFERRED_BACKLOG `SharedSecretsInPlainEnv` (T163 değerlendirmesi + T165 eki); desen T163'ün imza sırları (`T163_REPORT.md`, DEPLOY_RUNBOOK §L, `secrets/README.md`).
 
@@ -28,6 +28,7 @@ T171 (Kurulum günü) kabul kriterindeki "ortak sırlar env yerine secret dosyas
 - Ethereum: `src/config/sharedSecrets.ts` (yeni), `src/config/index.ts`, `src/index.ts`, `src/config/index.test.ts`, `src/config/startupWiring.test.ts`, `src/config/composeWiring.test.ts`.
 - Steam: `src/config/sharedSecrets.ts` (+test), `src/config/secretFile.ts` (yeni), `src/config/index.ts`, `src/config/internalKey.ts`, `src/index.ts`, `src/config/startupWiring.test.ts`.
 - Compose/altyapı: `docker-compose.yml`, `docker-compose.trial.yml`, `docker-compose.e2e.yml`, `.env.example`, `scripts/heartbeat/heartbeat.sh` (+test), `scripts/compose-secrets.test.mjs` (yeni), `scripts/compose-exposure.test.mjs`, `infra/grafana/provisioning/alerting/contactpoints.yml` (yorum), `.github/workflows/ci.yml` (filtre).
+- Kapanış: `scripts/grafana/first-boot.sh` (+test), `SharedSecretFiles.cs` (`ReadSecretFile` aşırı yüklemesi), iki backend test dosyası, `compose-secrets.test.mjs`, compose yorumları, `secrets/README.md`, DEPLOY_RUNBOOK §L.9.
 - Belgeler: yukarıdaki liste + `Docs/BYPASS_LOG.md` (pre-commit sır koruması: kod tanımlayıcıları ve `test-`/`e2e-` önekli sabit test değerleri yanlış pozitif — her commit gerekçeyle kayıtlı).
 
 ## Kabul Kriterleri Kontrolü
@@ -39,12 +40,12 @@ T171 (Kurulum günü) kabul kriterindeki "ortak sırlar env yerine secret dosyas
 | 2b | Production/Staging'de env yolu reddedilir | ✓ | `Every_Environment_But_Development_Closes_The_Variable_Path` (Production, Staging, `production`, `Developmentt`), komut satırı testi; sidecar süreç testleri `NODE_ENV=production` ile `SHARED_SECRET_IN_ENV`; konteyner ölçümü (b) |
 | 2c | Dosya yok/boş/kısa → açılış durur (≥ 32 korunur) | ✓ | Host testleri (Production: dört zorunlu dosya tek tek eksik, boş, 31 karakter, dizin), sidecar süreç testleri (TRON 7 durum, Ethereum 5, Steam 4) |
 | 2d | Sabit zamanlı karşılaştırma korunur | ✓ | Karşılaştırma koduna dokunulmadı (`WebhookSignatureMiddleware`, `TelegramWebhookSignatureMiddleware`, sidecar `internalKeyAuth`); yalnız değerin kaynağı değişti |
-| 2e | Sırlar log'a/yanıta sızmaz | ✓ | Hata mesajı / açılış satırı testleri değer içermediğini doğrular (backend 3 test, TRON/Ethereum/Steam süreç çıktıları); konteyner ölçümünde JWT değeri log'da 0 kez |
+| 2e | Sırlar log'a/yanıta sızmaz | ✓ | Backend: hata mesajı testleri ve `SharedSecretReport.Describe()` testi değer içermediğini doğrular; **gerçek açılış log çağrısı** (`Program.cs`) kapanışta eklenen host testiyle korunur (`Production_Startup_Logs_Never_Carry_A_Secret_Value`, on bir sırrın hepsi dosyada, bütün log satırları yakalanır — doğrulama S4-1). Sidecar'lar: TRON/Ethereum/Steam süreç çıktıları. Konteyner ölçümünde JWT değeri log'da 0 kez |
 | 3a | Compose (taban, deneme, e2e): yalnız gereken servislere | ✓ | `scripts/compose-secrets.test.mjs` — derlenmiş modelden tam servis→secret haritası, iki ucun aynı top-level secret'ı/dosyası, env'de sır yok, `/run/secrets/<ad>` hedefi, deneme `secrets/trial/`, e2e değerleri harness + fake ile aynı |
 | 3b | `.env.example`, deneme env şablonu, `secrets/README.md`, DEPLOY_RUNBOOK (T171 adımları + geçiş), 05 | ✓ | Deneme yayınının env şablonu `.env.example`'dır (DEPLOY_RUNBOOK §K.4 adım 1) — aynı dosya; §L.9 + §K.4 adım 2; 05 §3.5 |
 | 4a | Açılış testleri (yok/boş/kısa → açılmaz; Production'da env reddi; Development'ta env çalışır) | ✓ | Aşağıda "Test Sonuçları" |
-| 4b | Compose testleri | ✓ | `compose-secrets.test.mjs` 11 test |
-| 4c | Kritik satırları bozup yakalandığını say | ✓ | 30 bozma: **29 yakalandı**, 1 yaşadı (aşağıda) |
+| 4b | Compose testleri | ✓ | `compose-secrets.test.mjs` 12 test (yapımda; raporda önce yanlışlıkla 11 yazıyordu — doğrulama S4-4), kapanışta 13 (yasak değişken kalıbı testi) |
+| 4c | Kritik satırları bozup yakalandığını say | ✓ | Yapım: 30 bozma, **29 yakalandı**, 1 yaşadı (aşağıda). Doğrulama: 47 bozma, 42 yakalandı; yaşayan 5'in 4'ü kapanışta testle kapandı (B7, B9, B12, C7), C9 = yapımın C8'i |
 | 5 | Rapor, STATUS, backlog ✅ (sayaç dosyadan), MEMORY | ✓ | Bu dosya; backlog **47 aktif / 173 çözülmüş** (dosyanın `awk`'iyle; main 47/172 → `SharedSecretsInPlainEnv` ✅ + yeni 🟡 `ThirdPartyCredentialsInPlainEnv`); `.claude/memory/MEMORY.md` |
 
 ### Konteyner ölçümü (2026-10-24, bu PC, Docker Desktop + Compose v5.1.0)
@@ -63,7 +64,7 @@ Grafana render adımı (`t171a-render` projesi, `.env.example` ile): dosya yokke
 
 | # | Bozma | Sonuç |
 |---|---|---|
-| B1–B10 | Backend: env yolu her ortamda açık · env reddi kaldırıldı · uzunluk tabanı · zorunlu kontrolü · isteğe bağlı boşaltma · dizin kontrolü · değerlerin katmanlanmaması · komut satırının izlenmemesi · belirsizlik izni · `Program.cs` çağrısı | 10/10 yakalandı |
+| B1–B10 | Backend: env yolu her ortamda açık · env reddi kaldırıldı · uzunluk tabanı · zorunlu kontrolü · isteğe bağlı boşaltma · dizin kontrolü · değerlerin katmanlanmaması · komut satırının izlenmemesi · belirsizlik izni · `Program.cs` çağrısı | 10/10 yakalandı (log satırına değer yazdırma bu listede yoktu; doğrulamanın B7'si yaşadı → kapanışta testle kapandı) |
 | T1–T5 | TRON: env reddi · webhook yok izni · webhook kısa izni · okunamayanın yutulması · `configureWebhookSecret` çağrısının silinmesi | 5/5 (T5 ilk turda **yaşadı** → `WebhookClient.test.ts` eklendi, yeniden koşuda yakalandı) |
 | E1–E3 | Ethereum: env reddi · kısa webhook izni · webhook'un yeniden env'den okunması | 3/3 |
 | S1–S2 | Steam: env reddi · belirsizlik izni | 2/2 |
@@ -80,9 +81,9 @@ Grafana render adımı (`t171a-render` projesi, `.env.example` ile): dosya yokke
 | `dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName~SharedSecretFiles\|FullyQualifiedName~DiagnosticsEnvironmentGateTests"` | 33/33 |
 | `dotnet test tests/Skinora.API.Tests` (tam, LocalDB) | 1164/1164 |
 | `sidecar-blockchain: npx vitest run` | 41 dosya, 813/813 (+ `WebhookClient.test.ts` 3/3 sonradan) |
-| `sidecar-ethereum: npx vitest run` | 37 dosya, 949/949 |
+| `sidecar-ethereum: npx vitest run` | 37 dosya, 948/948 (raporda önce 949 yazıyordu; doğrulama aynı HEAD'de 948/948 saydı — S4-4) |
 | `sidecar-steam: npx vitest run` | 13 dosya, 178/178 |
-| `node --test scripts/compose-secrets.test.mjs scripts/compose-exposure.test.mjs` | 26/26 |
+| `node --test scripts/compose-secrets.test.mjs scripts/compose-exposure.test.mjs` | 26/26 (yapım; compose-secrets 12) |
 | `node --test scripts/heartbeat/heartbeat.test.mjs` | 11/11 |
 | `tsc --noEmit` (üç sidecar), `eslint` (değişen dosyalar), `prettier --check` (değişen dosyalar, LF) | temiz |
 | `docker compose -f docker-compose.e2e.yml config` / taban `--profile ethereum` render | temiz |
@@ -91,7 +92,26 @@ Yerel prettier'ın bütün dosyalarda verdiği uyarılar `core.autocrlf` CRLF ar
 
 ## Doğrulama
 
-Bekliyor (yönetici düzeni: CI'ı yönetici izler).
+**Bağımsız doğrulama — ⛔ BLOCKED (DEPENDENCY_MISMATCH), HEAD `2241e004`, 2026-10-23T23:18Z.** Kaynak rapor: `C:\Users\teknodeveloper\.claude\projects\c--projects-Escrow\f9-handoff\T171a_VALIDATION.md`.
+
+- **BLOCKED'ın tek nedeni CI dışı:** dal CI'ı (run `40032798689`) `1. Lint` > "Sidecar-ethereum npm audit (blocking — prod highs)" adımında düştü — mevcut bağımlılıkta yeni çıkan `body-parser <1.20.9` danışması (GHSA-27r3-jxmh-p828). T171a hiçbir `package*.json`'a dokunmuyor; Build/Unit/Integration/Contract/Migration/Docker işleri bu yüzden atlandı. Main'de chore #382 (`e83d0737`) ile düzeldi; dal kapanışta main ile birleştirildi.
+- **İçerik:** 10 kabul kriterinin 9'u ✓ (10. madde dal CI'ı), **4 × S4** (ikisi ⚠ GÜVENLİK); kod incelemesi + yerel testler + Docker'da canlı ölçüm (Production backend, Steam, render adımı, Grafana, heartbeat).
+- **Bozma:** doğrulayıcının 47 bozmasından **42'si yakalandı**, 5'i yaşadı (B7, B12 → S4-1; B9, C7 → S4-3; C9 = yapımın bilinen C8'i).
+
+## Kapanış
+
+**Main birleştirmesi:** `origin/main` `e83d0737` (T170 #379 zaten dalda; chore #382 body-parser) merge commit ile alındı — **çakışma yok**, gelen yalnız dört `package-lock.json`. DEFERRED_BACKLOG'a main'den değişiklik gelmedi, sayaç değişmedi (47 aktif / 173 çözülmüş).
+
+| # | Bulgu | Kapanış | Bozma |
+|---|---|---|---|
+| S4-1 ⚠ GÜVENLİK | Backend açılış log çağrısı testsizdi | Host testi `Production_Startup_Logs_Never_Carry_A_Secret_Value`: on bir sırrın hepsi dosyada, `ILoggerFactory` yakalayıcıyla değiştirilir; gerçek `Program.cs` açılışının **bütün** log satırlarında hiçbir değer geçmez ve "Shared secrets loaded" satırı `=file` kaynaklarını yazar. Belirsizlik testi artık iki değerin de mesajda olmadığını sınar | `Program.cs` log argümanına `+ app.Configuration["Jwt:Secret"]` (B7) → **yakalandı**; belirsizlik mesajına `+ fromFile` (B12) → **yakalandı** |
+| S4-2 ⚠ GÜVENLİK | SMTP parola dosyası yoksa Grafana boş parolayla açılıyordu | `scripts/grafana/first-boot.sh` (Grafana'nın giriş noktası): `GF_SMTP_ENABLED` açıkken (boş/`false`/`0`/`no`/`off`/`f`/`n` dışındaki her değer, büyük-küçük harf duyarsız) `GF_SMTP_PASSWORD__FILE` okunabilir bir dosya değilse `GRAFANA_SMTP_PASSWORD_UNREADABLE` ile exit 1 — Grafana hiç başlatılmaz. Boş dosya yine serbest (e-posta yapılandırılmamış, Telegram gider). SMTP kapalıyken (taban varsayılanı) dizin açılışı engellemez. `first-boot.test.mjs` +7 test; compose yorumları, §L.9 ve `secrets/README.md` tablo satırı | Kontrol kaldırıldı → 5 test kırıldı; `-f`/`-r` yerine yalnız `-e` → 4 kırıldı; `1`/`yes` kapalı sayıldı → 2 kırıldı; büyük-küçük harf dönüşümü kaldırıldı → **eşdeğer** (bilinmeyen değer zaten "açık" sayılır), sayılmadı |
+| S4-3 | İzin/IO hatası dalı testsiz; compose testi önekli adları görmüyordu | (a) `ReadSecretFile(path, readAllText)` aşırı yüklemesi; `UnauthorizedAccessException` ve `IOException` → `SharedSecretUnreadableException` testi + Production'da okunamayan isteğe bağlı dosya → `SHARED_SECRET_UNREADABLE` testi. (b) `compose-secrets.test.mjs` yasak değişken kalıbı `ASPNETCORE_`/`DOTNET_` önekini, büyük-küçük harf duyarsızlığını ve `:` ayırıcısını görür; kalıbın kendisi için ayrı test (13. test) | IO dalı `return null` (B9) → **yakalandı** (3 test); backend'e `ASPNETCORE_Jwt__Secret` (C7) → **yakalandı** (2 test) |
+| S4-4 | Rapor sayıları | Ethereum 949 → 948, compose 11 → 12, 2e iddiası ve bozma satırı düzeltildi | — |
+
+**Kapanış testleri:** `dotnet test tests/Skinora.API.Tests --filter "FullyQualifiedName~SharedSecretFiles"` 32/32 · tam API (LocalDB) 1168/1168 (yapımda 1164; +4 kapanış testi) · `node --test scripts/compose-secrets.test.mjs scripts/compose-exposure.test.mjs scripts/grafana/first-boot.test.mjs` 40/40 · `dotnet format --verify-no-changes` (değişen dosyalar) temiz.
+
+**Kalan (bilinen):** render adımının okunamaz-dosya koşulu (yapım C8 / doğrulama C9) yine yalnız Docker ölçümüyle sabit — davranış canlıda doğru. Dal CI'ını yönetici izler.
 
 ## Altyapı Değişiklikleri
 

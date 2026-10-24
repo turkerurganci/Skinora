@@ -42,6 +42,27 @@ TIMEOUT="${GRAFANA_FIRST_BOOT_TIMEOUT_SECONDS:-300}"
 MARKER="$DATA/.skinora-alerting-provisioned"
 LOG="${TMPDIR:-/tmp}/skinora-grafana-first-boot.log"
 
+# T171a (doğrulama S4-2, ⚠ GÜVENLİK — alarm yolu) — with SMTP on, the
+# password file must be a readable file. Grafana's own <option>__FILE reading
+# does not stop on a failed read: when the source secrets/…/
+# grafana_smtp_password.txt is missing, Docker creates a DIRECTORY at the mount
+# point and Grafana started with an empty SMTP password (measured), so every
+# e-mail alert failed only at send time. Same fail-closed rule as every other
+# shared secret (SHARED_SECRET_UNREADABLE, TELEGRAM_BOT_TOKEN_UNREADABLE): do
+# not start. Anything but an explicit "off" value counts as on. An EMPTY file
+# is still allowed (= e-mail not configured yet, DEPLOY_RUNBOOK §L.9 / §P).
+smtp_enabled=$(printf '%s' "${GF_SMTP_ENABLED:-false}" | tr 'A-Z' 'a-z')
+case "$smtp_enabled" in
+  ""|0|f|false|n|no|off) ;;
+  *)
+    smtp_password_file="${GF_SMTP_PASSWORD__FILE:-}"
+    if [ -n "$smtp_password_file" ] && { [ ! -f "$smtp_password_file" ] || [ ! -r "$smtp_password_file" ]; }; then
+      echo "GRAFANA_SMTP_PASSWORD_UNREADABLE: $smtp_password_file is not a readable file while SMTP is on - create the grafana_smtp_password secret file (secrets/README.md) and remove the directory Docker made in its place" >&2
+      exit 1
+    fi
+    ;;
+esac
+
 if [ ! -f "$MARKER" ]; then
   echo "skinora: first boot — provisioning alerting with rule execution off"
   : >"$LOG"

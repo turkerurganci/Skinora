@@ -142,13 +142,17 @@ public sealed class SharedSecretFilesTests : IDisposable
     [Fact]
     public void Development_File_And_Variable_Together_Is_Ambiguous()
     {
-        SetEnv("Jwt__Secret", "development-env-jwt-secret-0123456789abcdef");
+        const string envValue = "development-env-jwt-secret-0123456789abcdef";
+        SetEnv("Jwt__Secret", envValue);
         var configuration = Configuration();
 
         var ex = Assert.Throws<SharedSecretConfigurationException>(
             () => SharedSecretFiles.Apply(configuration, Env("Development")));
 
         Assert.Equal(SharedSecretErrorCodes.Ambiguous, Assert.Single(ex.Problems).Code);
+        // Neither of the two values is echoed (validation S4-1).
+        Assert.DoesNotContain(envValue, ex.Message);
+        Assert.DoesNotContain(SharedSecretTestDirectory.RequiredValues["jwt_secret"], ex.Message);
     }
 
     [Fact]
@@ -226,6 +230,42 @@ public sealed class SharedSecretFilesTests : IDisposable
             () => SharedSecretFiles.ReadSecretFile(_secrets.FilePath("a_directory")));
         _secrets.Write("padded", "\n  value-with-whitespace  \r\n");
         Assert.Equal("value-with-whitespace", SharedSecretFiles.ReadSecretFile(_secrets.FilePath("padded")));
+    }
+
+    [Theory]
+    [InlineData("permission")]
+    [InlineData("io")]
+    public void ReadSecretFile_A_Permission_Or_IO_Error_Is_Unreadable_Not_Missing(string kind)
+    {
+        // A file that exists but cannot be read (Linux chmod 000, a Windows
+        // sharing violation) must stop the start as UNREADABLE — never be
+        // taken for "not provisioned", which would blank an optional secret.
+        Exception failure = kind == "permission"
+            ? new UnauthorizedAccessException("denied")
+            : new IOException("sharing violation");
+
+        var ex = Assert.Throws<SharedSecretUnreadableException>(
+            () => SharedSecretFiles.ReadSecretFile(_secrets.FilePath("jwt_secret"), _ => throw failure));
+
+        Assert.Equal(_secrets.FilePath("jwt_secret"), ex.SecretPath);
+    }
+
+    [Fact]
+    public void Production_With_An_Unreadable_Optional_File_Does_Not_Start()
+    {
+        var configuration = Configuration();
+        var unreadable = _secrets.FilePath("telegram_bot_token");
+
+        var ex = Assert.Throws<SharedSecretConfigurationException>(() => SharedSecretFiles.Apply(
+            configuration,
+            Env("Production"),
+            path => SharedSecretFiles.ReadSecretFile(path, p => p == unreadable
+                ? throw new UnauthorizedAccessException("denied")
+                : File.ReadAllText(p))));
+
+        var problem = Assert.Single(ex.Problems);
+        Assert.Equal(SharedSecretErrorCodes.Unreadable, problem.Code);
+        Assert.Equal("Telegram:BotToken", problem.ConfigKey);
     }
 
     private ConfigurationManager Configuration(Dictionary<string, string?>? settings = null, string? directory = null)

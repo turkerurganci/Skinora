@@ -697,7 +697,10 @@ services:
       - GF_SMTP_HOST=${GRAFANA_SMTP_HOST:-smtp.resend.com:587}
       - GF_SMTP_USER=${GRAFANA_SMTP_USER:-resend}
       # T171a — the password is the Docker secret grafana_smtp_password;
-      # Grafana reads <option>__FILE natively.
+      # Grafana reads <option>__FILE natively. With SMTP on, a mount that is
+      # not a readable file (Docker's directory for a missing source) stops
+      # the start in first-boot.sh (GRAFANA_SMTP_PASSWORD_UNREADABLE) — Grafana
+      # itself would start with an empty password. An empty file is allowed.
       - GF_SMTP_PASSWORD__FILE=/run/secrets/grafana_smtp_password
       - GF_SMTP_FROM_ADDRESS=${GRAFANA_SMTP_FROM_ADDRESS:-alerts@skinora.com}
       - GF_SMTP_FROM_NAME=Skinora Alerts
@@ -811,7 +814,8 @@ secrets:
   # blockchain_sidecar_internal_key. May be empty: the two Ethereum ones (empty
   # = Ethereum off; when set >= 32 and different from TRON's), the notification
   # channel ones (empty = channel "misconfigured", DEPLOY_RUNBOOK §P) and
-  # grafana_smtp_password. telegram_bot_token also feeds Grafana's render step:
+  # grafana_smtp_password (a missing one stops Grafana while SMTP is on).
+  # telegram_bot_token also feeds Grafana's render step:
   # Grafana does not start on an EMPTY token (put any placeholder in dev).
   jwt_secret:
     file: ./secrets/jwt_secret.txt

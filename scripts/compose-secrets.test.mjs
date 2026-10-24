@@ -85,8 +85,14 @@ const PAIRS = [
 ];
 
 /** Environment names that would carry a shared secret (backend keys and sidecar variables). */
-const FORBIDDEN_ENV =
-  /^(Jwt__Secret|Jwt__PreviousSecret|Webhook__(Blockchain|Ethereum)SharedSecret|(Steam|Blockchain|Ethereum)Sidecar__InternalKey|Resend__(ApiKey|WebhookSigningSecret)|Telegram__(BotToken|WebhookSecretToken)|INTERNAL_KEY|WEBHOOK_SECRET|TELEGRAM_BOT_TOKEN|GF_SMTP_PASSWORD|HEARTBEAT_URL)$/;
+// .NET reads its configuration keys case-insensitively, with "__" or ":" as
+// the separator, and also under the ASPNETCORE_ / DOTNET_ prefixes (T171a
+// doğrulama S4-3: ASPNETCORE_Jwt__Secret reached the backend unseen by the
+// earlier, exact-name pattern; the backend refuses it at run time too).
+const DOTNET_SECRET_KEY =
+  /^(?:(?:ASPNETCORE|DOTNET)_)?(?:Jwt(?:__|:)(?:Secret|PreviousSecret)|Webhook(?:__|:)(?:Blockchain|Ethereum)SharedSecret|(?:Steam|Blockchain|Ethereum)Sidecar(?:__|:)InternalKey|Resend(?:__|:)(?:ApiKey|WebhookSigningSecret)|Telegram(?:__|:)(?:BotToken|WebhookSecretToken))$/i;
+const SIDECAR_SECRET_KEY = /^(INTERNAL_KEY|WEBHOOK_SECRET|TELEGRAM_BOT_TOKEN|GF_SMTP_PASSWORD|HEARTBEAT_URL)$/;
+const FORBIDDEN_ENV = { test: (key) => DOTNET_SECRET_KEY.test(key) || SIDECAR_SECRET_KEY.test(key) };
 
 let workDir;
 let stubEnv;
@@ -142,6 +148,22 @@ function sidecarPaths(dir) {
   const ts = readFileSync(join(ROOT, dir, "src/config/sharedSecrets.ts"), "utf8");
   return [...ts.matchAll(/'(\/run\/secrets\/[a-z_]+)'/g)].map((m) => m[1]).sort();
 }
+
+test("the forbidden-variable pattern sees every spelling .NET would read (T171a S4-3)", () => {
+  for (const key of [
+    "Jwt__Secret", "ASPNETCORE_Jwt__Secret", "DOTNET_Jwt__Secret", "JWT__SECRET", "Jwt:Secret",
+    "ASPNETCORE_Telegram__BotToken", "aspnetcore_steamsidecar__internalkey", "Webhook__EthereumSharedSecret",
+    "INTERNAL_KEY", "WEBHOOK_SECRET", "TELEGRAM_BOT_TOKEN", "GF_SMTP_PASSWORD", "HEARTBEAT_URL",
+  ]) {
+    assert.ok(FORBIDDEN_ENV.test(key), `${key} must count as a shared secret variable`);
+  }
+  for (const key of [
+    "Jwt__Issuer", "ASPNETCORE_ENVIRONMENT", "GF_SMTP_PASSWORD__FILE", "Telegram__ChatId",
+    "SteamSidecar__BaseUrl", "Resend__FromAddress", "Jwt__SecretX", "XJwt__Secret",
+  ]) {
+    assert.ok(!FORBIDDEN_ENV.test(key), `${key} is not a shared secret variable`);
+  }
+});
 
 describe("compose secret map (T171a)", { skip: !HAS_DOCKER && "docker compose not available" }, () => {
   before(() => {
