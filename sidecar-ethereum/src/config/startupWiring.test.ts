@@ -24,6 +24,13 @@ const files = {
   journal: join(dir, 'tx-journal'),
   internalKey: join(dir, 'ethereum_sidecar_internal_key'),
   webhookSecret: join(dir, 'ethereum_webhook_secret'),
+  rpcPrimaryUrl: join(dir, 'ethereum_rpc_primary_url'),
+  rpcBackupUrl: join(dir, 'ethereum_rpc_backup_url'),
+};
+/** T171b — production reads the RPC URLs (they carry the API key) from files. */
+const RPC = {
+  primary: 'http://127.0.0.1:9/test-rpc-key-in-file-path',
+  backup: 'http://127.0.0.1:9/test-rpc-backup-key-in-file',
 };
 const SHARED = {
   internalKey: 'test-eth-internal-key-'.padEnd(64, 'k'),
@@ -34,6 +41,8 @@ writeFileSync(files.seed, MNEMONIC + '\n');
 writeFileSync(files.hot, keys.deriveSigner(30).privateKey.slice(2) + '\n');
 writeFileSync(files.fuel, keys.deriveSigner(31).privateKey.slice(2) + '\n');
 writeFileSync(files.internalKey, SHARED.internalKey + '\n');
+writeFileSync(files.rpcPrimaryUrl, RPC.primary + '\n');
+writeFileSync(files.rpcBackupUrl, RPC.backup + '\n');
 writeFileSync(files.webhookSecret, SHARED.webhookSecret + '\n');
 
 // A started service may still be writing into its journal directory (permit
@@ -215,6 +224,11 @@ describe('Ethereum service startup — shared secrets from Docker secret files (
     INTERNAL_KEY: '',
     INTERNAL_KEY_FILE: files.internalKey,
     WEBHOOK_SECRET_FILE: files.webhookSecret,
+    // T171b — the RPC URLs are secret files in production too.
+    ETHEREUM_RPC_PRIMARY_URL: '',
+    ETHEREUM_RPC_BACKUP_URL: '',
+    ETHEREUM_RPC_PRIMARY_URL_FILE: files.rpcPrimaryUrl,
+    ETHEREUM_RPC_BACKUP_URL_FILE: files.rpcBackupUrl,
   };
 
   it('starts in production from the two files and logs their sources only', async () => {
@@ -258,6 +272,62 @@ describe('Ethereum service startup — shared secrets from Docker secret files (
       expect(startup.output).not.toContain(CONFIGURED);
       expect(startup.output).not.toContain(SHARED.internalKey);
       expect(startup.output).not.toContain('test-env-');
+    },
+    30_000,
+  );
+});
+
+/**
+ * T171b — in production the RPC URLs (they carry the provider's API key) come
+ * only from their Docker secret files (DEFERRED_BACKLOG
+ * `ThirdPartyCredentialsInPlainEnv`); a plain variable stops the service and
+ * neither the URL nor its key reaches the output.
+ */
+describe('Ethereum service startup — RPC URLs from Docker secret files (T171b)', () => {
+  const production = {
+    NODE_ENV: 'production',
+    INTERNAL_KEY: '',
+    INTERNAL_KEY_FILE: files.internalKey,
+    WEBHOOK_SECRET_FILE: files.webhookSecret,
+    ETHEREUM_RPC_PRIMARY_URL: '',
+    ETHEREUM_RPC_BACKUP_URL: '',
+    ETHEREUM_RPC_PRIMARY_URL_FILE: files.rpcPrimaryUrl,
+    ETHEREUM_RPC_BACKUP_URL_FILE: files.rpcBackupUrl,
+  };
+
+  it('starts in production from the files and names the providers without their URLs', async () => {
+    const startup = await start(production, CONFIGURED);
+    expect(startup.line, startup.output).toMatchObject({
+      rpcPrimaryUrlSource: 'file',
+      rpcBackupUrlSource: 'file',
+    });
+    expect(startup.output).not.toContain('test-rpc-');
+  }, 30_000);
+
+  it.each([
+    [
+      'the primary URL as a plain variable',
+      { ETHEREUM_RPC_PRIMARY_URL: RPC.primary },
+      'CREDENTIAL_IN_ENV',
+    ],
+    [
+      'the backup URL as a plain variable',
+      { ETHEREUM_RPC_BACKUP_URL: RPC.backup },
+      'CREDENTIAL_IN_ENV',
+    ],
+    ['no primary URL file', { ETHEREUM_RPC_PRIMARY_URL_FILE: files.missing }, 'RPC_NOT_CONFIGURED'],
+    [
+      'a directory where the primary URL file should be',
+      { ETHEREUM_RPC_PRIMARY_URL_FILE: dir },
+      'CREDENTIAL_UNREADABLE',
+    ],
+  ])(
+    '%s → exits non-zero with %s',
+    async (_label, env, code) => {
+      const startup = await start({ ...production, ...env }, REFUSED);
+      expect(startup.line, startup.output).toMatchObject({ code });
+      expect(startup.output).not.toContain(CONFIGURED);
+      expect(startup.output).not.toContain('test-rpc-');
     },
     30_000,
   );

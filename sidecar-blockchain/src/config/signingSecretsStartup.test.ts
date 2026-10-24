@@ -30,6 +30,9 @@ const TEST_TIMEOUT = WAIT + 30_000;
 const INTERNAL_KEY = 'test-internal-key-'.padEnd(64, 'k');
 /** T171a — the shared secrets come from files too (config/sharedSecrets.ts). */
 const WEBHOOK_SECRET = 'test-webhook-secret-'.padEnd(64, 'w');
+/** T171b — the TronGrid API keys come from files too (config/providerCredentials.ts). */
+const TRONGRID_KEY = 'test-trongrid-key-'.padEnd(36, 't');
+const TRONGRID_KEY_2 = 'test-trongrid-second-'.padEnd(36, 's');
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
 /** Valid words, failing BIP-39 checksum. */
 const BAD_MNEMONIC = `${'abandon '.repeat(11)}abandon`;
@@ -51,6 +54,8 @@ const files = {
   webhookSecret: join(dir, 'blockchain_webhook_secret'),
   shortWebhookSecret: join(dir, 'short_webhook_secret'),
   blank: join(dir, 'blank'),
+  tronApiKey: join(dir, 'tron_api_key'),
+  tronApiKeySecondary: join(dir, 'tron_api_key_secondary'),
 };
 writeFileSync(files.seed, MNEMONIC + '\n');
 writeFileSync(files.hot, HOT.privateKey + '\n');
@@ -59,6 +64,8 @@ writeFileSync(files.internalKey, INTERNAL_KEY + '\n');
 writeFileSync(files.webhookSecret, WEBHOOK_SECRET + '\n');
 writeFileSync(files.shortWebhookSecret, 'test-short-'.padEnd(31, 'w') + '\n');
 writeFileSync(files.blank, '\n');
+writeFileSync(files.tronApiKey, TRONGRID_KEY + '\n');
+writeFileSync(files.tronApiKeySecondary, TRONGRID_KEY_2 + '\n');
 mkdirSync(files.directory);
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -71,6 +78,9 @@ const FORBIDDEN_IN_OUTPUT = [
   HOT.privateKey,
   INTERNAL_KEY,
   WEBHOOK_SECRET,
+  TRONGRID_KEY,
+  TRONGRID_KEY_2,
+  'test-trongrid-',
   'test-short-',
 ];
 
@@ -83,7 +93,7 @@ function productionEnv(env: Record<string, string>): NodeJS.ProcessEnv {
   const inherited = Object.fromEntries(
     Object.entries(process.env).filter(
       ([name]) =>
-        !/^(HD_WALLET_|HOT_WALLET_|COLD_WALLET_|STAKE_ACCOUNT_|INTERNAL_KEY|WEBHOOK_SECRET|PORT$|NODE_ENV$)/.test(
+        !/^(HD_WALLET_|HOT_WALLET_|COLD_WALLET_|STAKE_ACCOUNT_|INTERNAL_KEY|WEBHOOK_SECRET|TRON_API_KEY|PORT$|NODE_ENV$)/.test(
           name,
         ),
     ),
@@ -100,6 +110,8 @@ function productionEnv(env: Record<string, string>): NodeJS.ProcessEnv {
     WEBHOOK_SECRET_FILE: files.webhookSecret,
     HD_WALLET_MNEMONIC_FILE: files.seed,
     HOT_WALLET_PRIVATE_KEY_FILE: files.hot,
+    TRON_API_KEY_FILE: files.tronApiKey,
+    TRON_API_KEY_SECONDARY_FILE: files.tronApiKeySecondary,
     HOT_WALLET_ADDRESS: HOT_ADDRESS,
     ...env,
   };
@@ -184,6 +196,8 @@ describe('TRON service startup — signing secrets from Docker secret files (T16
         hotWalletAddressFromKey: HOT_ADDRESS,
         internalKeySource: 'file',
         webhookSecretSource: 'file',
+        tronApiKeySource: 'file',
+        tronApiKeySecondarySource: 'file',
       });
       expectNoSecret(output);
     },
@@ -349,6 +363,42 @@ describe('TRON service startup — refuses unsafe shared secrets, without echoin
       label: 'a webhook secret shorter than 32 characters',
       code: 'WEBHOOK_SECRET_TOO_SHORT',
       env: { WEBHOOK_SECRET_FILE: files.shortWebhookSecret },
+    },
+  ])(
+    '$label → exits non-zero with $code',
+    async ({ env, code }) => {
+      const refused = await refusedWith(env);
+      expect(refused.code ?? 0, refused.output).toBeGreaterThan(0);
+      expect(refused.output).toContain(code);
+      expect(refused.output).not.toContain('Signing secrets:');
+      expectNoSecret(refused.output);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+/**
+ * T171b — the TronGrid API keys (DEFERRED_BACKLOG
+ * `ThirdPartyCredentialsInPlainEnv`): in production only their Docker secret
+ * files; a plain variable or an unreadable mount stops the service; never
+ * echoed. providerCredentials.test.ts covers the rules without a process.
+ */
+describe('TRON service startup — refuses unsafe TronGrid keys, without echoing them (T171b)', () => {
+  it.each<{ label: string; code: string; env: Record<string, string> }>([
+    {
+      label: 'the primary key as a plain variable',
+      code: 'CREDENTIAL_IN_ENV',
+      env: { TRON_API_KEY_FILE: files.none, TRON_API_KEY: TRONGRID_KEY },
+    },
+    {
+      label: 'the secondary key as a plain variable',
+      code: 'CREDENTIAL_IN_ENV',
+      env: { TRON_API_KEY_SECONDARY_FILE: files.none, TRON_API_KEY_SECONDARY: TRONGRID_KEY_2 },
+    },
+    {
+      label: 'a directory where the primary key file should be',
+      code: 'CREDENTIAL_UNREADABLE',
+      env: { TRON_API_KEY_FILE: files.directory },
     },
   ])(
     '$label → exits non-zero with $code',

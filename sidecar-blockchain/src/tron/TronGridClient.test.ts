@@ -4,6 +4,7 @@ import {
   TronGridClient,
   TronGridHttpError,
   TronGridRateLimitError,
+  configureTronApiKeys,
   extractTransferLogEntries,
 } from './TronGridClient.js';
 import { tronApiErrorsTotal } from '../metrics.js';
@@ -288,6 +289,35 @@ describe('TronGridClient resilience — 429/secondary-key failover + retry (WP10
       sleepFn: noSleep,
     });
     await expect(client.getNowSolidBlock()).rejects.toBeInstanceOf(TronGridRateLimitError);
+  });
+});
+
+describe('TronGridClient default keys (T171b — Docker secret files, configureTronApiKeys)', () => {
+  it('a client built without keys uses the keys the entry point handed over', async () => {
+    configureTronApiKeys('file-primary', 'file-secondary');
+    try {
+      const { mock, calls } = buildFetchMock([
+        { status: 429, body: {}, statusText: 'Too Many Requests' },
+        { status: 200, body: { block_header: { raw_data: { number: 7 } } } },
+      ]);
+      const client = new TronGridClient('https://full', 'https://solid', undefined, mock, {
+        sleepFn: noSleep,
+      });
+      expect(await client.getNowSolidBlock()).toBe(7);
+      expect(apiKeyOf(calls[0])).toBe('file-primary');
+      expect(apiKeyOf(calls[1])).toBe('file-secondary');
+    } finally {
+      configureTronApiKeys('', '');
+    }
+  });
+
+  it('is keyless until the entry point hands the keys over', async () => {
+    const { mock, calls } = buildFetchMock([
+      { status: 200, body: { block_header: { raw_data: { number: 8 } } } },
+    ]);
+    const client = new TronGridClient('https://full', 'https://solid', undefined, mock);
+    expect(await client.getNowSolidBlock()).toBe(8);
+    expect(apiKeyOf(calls[0])).toBeUndefined();
   });
 });
 

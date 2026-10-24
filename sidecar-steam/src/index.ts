@@ -3,6 +3,7 @@ import Redis from 'ioredis';
 import { config } from './config/index.js';
 import { InternalKeyError } from './config/internalKey.js';
 import { SharedSecretError, loadInternalKey } from './config/sharedSecrets.js';
+import { CredentialError, loadProviderCredentials } from './config/providerCredentials.js';
 import { logger } from './logger.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { buildRouter } from './api/routes.js';
@@ -54,6 +55,31 @@ function startupInternalKey(): string {
   }
 }
 
+// T171b — the Steam Web API key and the Redis password come from their Docker
+// secret files (config/providerCredentials.ts); outside NODE_ENV=development|test
+// a plain STEAM_API_KEY, or a password inside REDIS_URL, stops the service.
+// The startup line names the sources, never a value or the Redis URL.
+const providerCredentials = startupProviderCredentials();
+
+function startupProviderCredentials() {
+  try {
+    const loaded = loadProviderCredentials(process.env);
+    logger.info(
+      {
+        steamApiKeySource: loaded.sources.steamApiKey,
+        redisPasswordSource: loaded.sources.redisPassword,
+        redisCache: loaded.redisUrl !== '',
+      },
+      'Provider credentials: loaded (sources only — values are never logged)',
+    );
+    return loaded;
+  } catch (err) {
+    const code = err instanceof CredentialError ? err.code : 'STARTUP_FAILED';
+    logger.fatal({ code }, `Steam sidecar refused to start: ${code}`);
+    throw err;
+  }
+}
+
 // T133 — the sidecar is a READ-ONLY Steam proxy. It boots with no Steam
 // account of any kind: the bot pool, its credentials and the trade offer
 // send/monitor stack went with the custody layer (05 §3.2). Everything wired
@@ -78,7 +104,7 @@ const steamWebApiQueue = new RateLimitedQueue(
   1_000,
   observeQueueDepth('webapi'),
 );
-const tradeHoldService = new TradeHoldService(config.steamApiKey, steamWebApiQueue);
+const tradeHoldService = new TradeHoldService(providerCredentials.steamApiKey, steamWebApiQueue);
 
 // T120 — the Steam Community inventory endpoint gets its OWN queue (08 §2.6).
 // Its limit is far tighter than the Web API's and it is now on the critical
@@ -97,7 +123,7 @@ const steamCommunityQueue = new RateLimitedQueue(
 // Tek Redis bağlantısı iki önbelleğe de hizmet eder. İstemci bilerek bir
 // değişkene alındı: `new Redis(...)`'i her önbelleğin kendi üçlü ifadesinde
 // kurmak ikinci bir bağlantı açardı ve bunu kimse fark etmezdi.
-const redisClient = config.redisUrl ? new Redis(config.redisUrl) : null;
+const redisClient = providerCredentials.redisUrl ? new Redis(providerCredentials.redisUrl) : null;
 const inventoryCache: InventoryCache = redisClient
   ? new RedisInventoryCache(redisClient)
   : new InMemoryInventoryCache();

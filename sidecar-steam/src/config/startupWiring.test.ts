@@ -27,8 +27,15 @@ const files = {
   short: join(dir, 'short'),
   directory: join(dir, 'made-by-docker'),
   none: join(dir, 'none'),
+  steamApiKey: join(dir, 'steam_api_key'),
+  redisPassword: join(dir, 'redis_password'),
 };
+/** T171b — the Steam Web API key and the Redis password come from files too. */
+const STEAM_KEY = 'TESTSTEAMKEY'.padEnd(32, '7');
+const REDIS_PASSWORD = 'test-redis-password-'.padEnd(40, 'r');
 writeFileSync(files.key, FILE_KEY);
+writeFileSync(files.steamApiKey, STEAM_KEY + '\n');
+writeFileSync(files.redisPassword, REDIS_PASSWORD + '\n');
 writeFileSync(files.short, 'test-short-key');
 mkdirSync(files.directory);
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -52,6 +59,8 @@ function start(env: Record<string, string>): Promise<Startup> {
         LOKI_URL: 'http://127.0.0.1:9',
         REDIS_URL: '',
         STEAM_API_KEY: '',
+        STEAM_API_KEY_FILE: files.none,
+        REDIS_PASSWORD_FILE: files.none,
         INTERNAL_KEY: 'test-internal-key-'.padEnd(64, 'k'),
         ...env,
       },
@@ -151,6 +160,64 @@ describe('sidecar startup — the internal key comes from its secret file in pro
       expect(startup.output).not.toContain(FILE_KEY);
       expect(startup.output).not.toContain('test-env-key-');
       expect(startup.output).not.toContain('test-short-key');
+    },
+    30_000,
+  );
+});
+
+/**
+ * T171b — the Steam Web API key and the Redis password (DEFERRED_BACKLOG
+ * `ThirdPartyCredentialsInPlainEnv`): in production only from their Docker
+ * secret files; the Redis URL carries no password; never echoed.
+ */
+describe('sidecar startup — provider credentials come from their secret files in production (T171b)', () => {
+  const production = {
+    NODE_ENV: 'production',
+    INTERNAL_KEY: '',
+    INTERNAL_KEY_FILE: files.key,
+    STEAM_API_KEY_FILE: files.steamApiKey,
+    REDIS_PASSWORD_FILE: files.redisPassword,
+    // A closed port: the cache never connects, the process still listens.
+    REDIS_URL: 'redis://127.0.0.1:9',
+  };
+
+  it('starts from the files and logs the sources only', async () => {
+    const startup = await start(production);
+
+    expect(startup.line, startup.output).toBeDefined();
+    expect(startup.output).toContain('"steamApiKeySource":"file"');
+    expect(startup.output).toContain('"redisPasswordSource":"file"');
+    expect(startup.output).not.toContain(STEAM_KEY);
+    expect(startup.output).not.toContain(REDIS_PASSWORD);
+  }, 30_000);
+
+  it.each([
+    ['the Steam key as a plain variable', { STEAM_API_KEY: STEAM_KEY }, 'CREDENTIAL_IN_ENV'],
+    [
+      'a Redis URL that carries the password',
+      { REDIS_PASSWORD_FILE: files.none, REDIS_URL: `redis://:${REDIS_PASSWORD}@127.0.0.1:9` },
+      'CREDENTIAL_IN_ENV',
+    ],
+    [
+      'a directory where the Redis password file should be',
+      { REDIS_PASSWORD_FILE: files.directory },
+      'CREDENTIAL_UNREADABLE',
+    ],
+    [
+      'a directory where the Steam key file should be',
+      { STEAM_API_KEY_FILE: files.directory },
+      'CREDENTIAL_UNREADABLE',
+    ],
+  ])(
+    'refuses to start with %s',
+    async (_label, env, code) => {
+      const startup = await start({ ...production, ...env });
+
+      expect(startup.line, startup.output).toBeUndefined();
+      expect(startup.exitCode ?? 0).toBeGreaterThan(0);
+      expect(startup.output).toContain(code);
+      expect(startup.output).not.toContain(STEAM_KEY);
+      expect(startup.output).not.toContain(REDIS_PASSWORD);
     },
     30_000,
   );
