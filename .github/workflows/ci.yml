@@ -173,6 +173,9 @@ jobs:
               - 'docker-compose.e2e.yml'
               - 'backend/src/Skinora.API/Configuration/SharedSecretFiles.cs'
               - 'sidecar-*/src/config/sharedSecrets.ts'
+              # T171b — and the third-party credential files they read.
+              - 'backend/src/Skinora.API/Configuration/ThirdPartyCredentialFiles.cs'
+              - 'sidecar-*/src/config/providerCredentials.ts'
               - 'e2e/src/config.ts'
               - '.env.example'
               - '.github/workflows/**'

@@ -13,6 +13,10 @@
 //     the sidecars read (config/sharedSecrets.ts) are the mounted names.
 //   * The trial overlay takes every secret from secrets/trial/; the e2e stack
 //     (Production backend) mounts its fixed test values at the same paths.
+//   * T171b — the third-party credentials too (database / Redis / Grafana
+//     admin passwords, Steam / TronGrid keys, Ethereum RPC URLs): each only
+//     where it is used, no service gets one as a variable, no connection
+//     string or redis:// URL carries a password, and no command line does.
 //
 // Needs the docker CLI with Compose >= 2.24. Without it the suite is skipped
 // locally and FAILS in CI (process.env.CI) — same rule as compose-exposure.
@@ -43,16 +47,21 @@ const EXPECTED = {
     "ethereum_sidecar_internal_key",
     "ethereum_webhook_secret",
     "jwt_secret",
+    "mssql_sa_password",
+    "redis_password",
     "resend_api_key",
     "resend_webhook_signing_secret",
+    "steam_api_key",
     "steam_sidecar_internal_key",
     "telegram_bot_token",
     "telegram_webhook_secret_token",
   ],
-  "skinora-steam-sidecar": ["steam_sidecar_internal_key"],
+  "skinora-steam-sidecar": ["redis_password", "steam_api_key", "steam_sidecar_internal_key"],
   "skinora-blockchain-sidecar": [
     "blockchain_sidecar_internal_key",
     "blockchain_webhook_secret",
+    "tron_api_key",
+    "tron_api_key_secondary",
     "tron_hd_mnemonic",
     "tron_hot_wallet_private_key",
   ],
@@ -60,11 +69,29 @@ const EXPECTED = {
     "ethereum_fuel_wallet_private_key",
     "ethereum_hd_mnemonic",
     "ethereum_hot_wallet_private_key",
+    "ethereum_rpc_backup_url",
+    "ethereum_rpc_primary_url",
     "ethereum_sidecar_internal_key",
     "ethereum_webhook_secret",
   ],
+  // T171b — the database, its backup container and Redis.
+  "skinora-db": ["mssql_sa_password"],
+  "skinora-db-backup": ["mssql_sa_password"],
+  "skinora-redis": ["redis_password"],
   "skinora-grafana-provisioning": ["telegram_bot_token"],
-  "skinora-grafana": ["grafana_smtp_password"],
+  "skinora-grafana": ["grafana_admin_password", "grafana_smtp_password"],
+};
+
+/** T171b — every service that reads a third-party credential, by secret. */
+const CREDENTIAL_READERS = {
+  mssql_sa_password: ["skinora-backend", "skinora-db", "skinora-db-backup"],
+  redis_password: ["skinora-backend", "skinora-redis", "skinora-steam-sidecar"],
+  grafana_admin_password: ["skinora-grafana"],
+  steam_api_key: ["skinora-backend", "skinora-steam-sidecar"],
+  tron_api_key: ["skinora-blockchain-sidecar"],
+  tron_api_key_secondary: ["skinora-blockchain-sidecar"],
+  ethereum_rpc_primary_url: ["skinora-ethereum-sidecar"],
+  ethereum_rpc_backup_url: ["skinora-ethereum-sidecar"],
 };
 
 /** Trial-only services on top of the base map. */
@@ -92,7 +119,18 @@ const PAIRS = [
 const DOTNET_SECRET_KEY =
   /^(?:(?:ASPNETCORE|DOTNET)_)?(?:Jwt(?:__|:)(?:Secret|PreviousSecret)|Webhook(?:__|:)(?:Blockchain|Ethereum)SharedSecret|(?:Steam|Blockchain|Ethereum)Sidecar(?:__|:)InternalKey|Resend(?:__|:)(?:ApiKey|WebhookSigningSecret)|Telegram(?:__|:)(?:BotToken|WebhookSecretToken))$/i;
 const SIDECAR_SECRET_KEY = /^(INTERNAL_KEY|WEBHOOK_SECRET|TELEGRAM_BOT_TOKEN|GF_SMTP_PASSWORD|HEARTBEAT_URL)$/;
-const FORBIDDEN_ENV = { test: (key) => DOTNET_SECRET_KEY.test(key) || SIDECAR_SECRET_KEY.test(key) };
+// T171b — the third-party credentials: the .NET keys whose WHOLE value is a
+// secret, and the variables the images / sidecars / scripts would read.
+// (Connection strings are allowed as variables — without a password, checked
+// on their values below.)
+const DOTNET_CREDENTIAL_KEY =
+  /^(?:(?:ASPNETCORE|DOTNET)_)?(?:SteamOpenId(?:__|:)WebApiKey|Discord(?:__|:)(?:ClientSecret|BotToken))$/i;
+const CREDENTIAL_VARIABLE =
+  /^(MSSQL_SA_PASSWORD|SA_PASSWORD|REDIS_PASSWORD|GF_SECURITY_ADMIN_PASSWORD|STEAM_API_KEY|TRON_API_KEY|TRON_API_KEY_SECONDARY|ETHEREUM_RPC_PRIMARY_URL|ETHEREUM_RPC_BACKUP_URL|DB_PASSWORD)$/;
+const FORBIDDEN_ENV = {
+  test: (key) =>
+    DOTNET_SECRET_KEY.test(key) || SIDECAR_SECRET_KEY.test(key) || DOTNET_CREDENTIAL_KEY.test(key) || CREDENTIAL_VARIABLE.test(key),
+};
 
 let workDir;
 let stubEnv;
@@ -143,11 +181,87 @@ function backendSpecFiles() {
   return [...cs.matchAll(/new\("([A-Za-z:]+)", "([a-z_]+)", RequiredOutsideDevelopment:/g)].map((m) => m[2]).sort();
 }
 
+/** T171b — the file names ThirdPartyCredentialFiles.cs reads. */
+function backendCredentialFiles() {
+  const cs = readFileSync(join(ROOT, "backend/src/Skinora.API/Configuration/ThirdPartyCredentialFiles.cs"), "utf8");
+  return [...cs.matchAll(/new\("([A-Za-z:]+)", "([a-z_]+)", CredentialKind\./g)].map((m) => m[2]).sort();
+}
+
+/** T171b — default paths a sidecar reads its provider credentials from (config/providerCredentials.ts). */
+function sidecarCredentialPaths(dir) {
+  const ts = readFileSync(join(ROOT, dir, "src/config/providerCredentials.ts"), "utf8");
+  return [...ts.matchAll(/'(\/run\/secrets\/[a-z_]+)'/g)].map((m) => m[1]).sort();
+}
+
+/** Every value a service receives, plus its command and entrypoint, as one text per service. */
+function exposedText(def) {
+  return [
+    ...Object.entries(def.environment ?? {}).map(([k, v]) => `${k}=${v ?? ""}`),
+    ...[def.command ?? []].flat(),
+    ...[def.entrypoint ?? []].flat(),
+    ...[def.healthcheck?.test ?? []].flat(),
+  ].join("\n");
+}
+
+/** No password in any connection string / redis URL / command line (T171b). */
+function assertNoPasswordInValues(model) {
+  for (const [name, def] of Object.entries(model.services)) {
+    const text = exposedText(def);
+    assert.doesNotMatch(text, /(?:^|;)\s*(?:Password|Pwd)\s*=/im, `${name}: a SQL connection string carries a password`);
+    assert.doesNotMatch(text, /,\s*password\s*=/i, `${name}: a Redis connection string carries a password`);
+    assert.doesNotMatch(text, /rediss?:\/\/[^@\s/]*:[^@\s/]+@/i, `${name}: a redis:// URL carries a password`);
+    assert.doesNotMatch(text, /requirepass|redis-cli\b.*\s-a\s|sqlcmd\b.*\s-P\s/i, `${name}: a password on a command line`);
+  }
+}
+
 /** Default paths a sidecar reads, from its config/sharedSecrets.ts. */
 function sidecarPaths(dir) {
   const ts = readFileSync(join(ROOT, dir, "src/config/sharedSecrets.ts"), "utf8");
   return [...ts.matchAll(/'(\/run\/secrets\/[a-z_]+)'/g)].map((m) => m[1]).sort();
 }
+
+test("the forbidden-variable pattern also sees the third-party credential variables (T171b)", () => {
+  for (const key of [
+    "MSSQL_SA_PASSWORD", "SA_PASSWORD", "REDIS_PASSWORD", "GF_SECURITY_ADMIN_PASSWORD", "STEAM_API_KEY",
+    "TRON_API_KEY", "TRON_API_KEY_SECONDARY", "ETHEREUM_RPC_PRIMARY_URL", "ETHEREUM_RPC_BACKUP_URL",
+    "SteamOpenId__WebApiKey", "ASPNETCORE_SteamOpenId__WebApiKey", "Discord__ClientSecret", "discord:bottoken",
+  ]) {
+    assert.ok(FORBIDDEN_ENV.test(key), `${key} must count as a credential variable`);
+  }
+  for (const key of [
+    "MSSQL_SA_PASSWORD_FILE", "GF_SECURITY_ADMIN_PASSWORD__FILE", "ETHEREUM_RPC_PRIMARY_NAME", "SteamOpenId__Realm",
+    "Discord__Provider", "ConnectionStrings__DefaultConnection", "Redis__ConnectionString", "REDIS_URL",
+  ]) {
+    assert.ok(!FORBIDDEN_ENV.test(key), `${key} is not a credential variable`);
+  }
+});
+
+test("the password-in-value check sees every shape a password could take (T171b)", () => {
+  const leaks = [
+    { environment: { ConnectionStrings__DefaultConnection: "Server=x;User Id=sa;Password=p;" } },
+    { environment: { ConnectionStrings__DefaultConnection: "Server=x;pwd=p" } },
+    { environment: { Redis__ConnectionString: "skinora-redis:6379,password=p" } },
+    { environment: { REDIS_URL: "redis://:p@skinora-redis:6379" } },
+    { command: ["redis-server", "--requirepass", "p"] },
+    { healthcheck: { test: ["CMD", "redis-cli", "-a", "p", "ping"] } },
+    { healthcheck: { test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P p -Q 'SELECT 1'"] } },
+  ];
+  for (const def of leaks) {
+    assert.throws(() => assertNoPasswordInValues({ services: { x: def } }), undefined, JSON.stringify(def));
+  }
+  assertNoPasswordInValues({
+    services: {
+      x: {
+        environment: {
+          ConnectionStrings__DefaultConnection: "Server=skinora-db,1433;Database=Skinora;User Id=sa;TrustServerCertificate=True;",
+          Redis__ConnectionString: "skinora-redis:6379",
+          REDIS_URL: "redis://skinora-redis:6379",
+          MSSQL_SA_PASSWORD_FILE: "/run/secrets/mssql_sa_password",
+        },
+      },
+    },
+  });
+});
 
 test("the forbidden-variable pattern sees every spelling .NET would read (T171a S4-3)", () => {
   for (const key of [
@@ -205,8 +319,78 @@ describe("compose secret map (T171a)", { skip: !HAS_DOCKER && "docker compose no
     });
 
     test("the backend mounts every file SharedSecretFiles reads (only jwt_previous_secret is rotation-only)", () => {
-      const mounted = model.services["skinora-backend"].secrets.map((s) => s.source).sort();
+      // T171b — the backend's third-party credential files are pinned by their own test below.
+      const credentials = new Set(backendCredentialFiles());
+      const mounted = model.services["skinora-backend"].secrets
+        .map((s) => s.source)
+        .filter((f) => !credentials.has(f))
+        .sort();
       assert.deepEqual(backendSpecFiles().filter((f) => f !== "jwt_previous_secret"), mounted);
+    });
+
+    test("every third-party credential reaches exactly the services that use it, from one file under ./secrets (T171b)", () => {
+      for (const [secret, readers] of Object.entries(CREDENTIAL_READERS)) {
+        const mounting = Object.entries(model.services)
+          .filter(([, def]) => (def.secrets ?? []).some((s) => s.source === secret))
+          .map(([name]) => name)
+          .sort();
+        assert.deepEqual(mounting, readers, `${secret} is mounted by the wrong services`);
+        assert.equal(resolve(model.secrets[secret].file), join(ROOT, "secrets", `${secret}.txt`));
+      }
+    });
+
+    test("no connection string, redis:// URL, command line or healthcheck carries a password (T171b)", () => {
+      assertNoPasswordInValues(model);
+      const be = model.services["skinora-backend"].environment;
+      assert.match(be.ConnectionStrings__DefaultConnection, /^Server=skinora-db,1433;/);
+      assert.equal(be.Redis__ConnectionString, "skinora-redis:6379");
+      assert.equal(model.services["skinora-steam-sidecar"].environment.REDIS_URL, "redis://skinora-redis:6379");
+    });
+
+    test("SQL Server, its backup container, Redis and Grafana read their passwords from the files (T171b)", () => {
+      const db = model.services["skinora-db"];
+      assert.deepEqual(db.entrypoint, ["/bin/bash", "/opt/skinora/mssql-entrypoint.sh"]);
+      assert.deepEqual(db.command, ["/opt/mssql/bin/sqlservr"]);
+      assert.equal(db.environment.MSSQL_SA_PASSWORD_FILE, "/run/secrets/mssql_sa_password");
+      assert.deepEqual(db.healthcheck.test, ["CMD", "/bin/bash", "/opt/skinora/mssql-entrypoint.sh", "--healthcheck"]);
+      const dbScript = db.volumes.find((v) => v.target === "/opt/skinora/mssql-entrypoint.sh");
+      assert.ok(dbScript?.read_only);
+      assert.equal(resolve(dbScript.source), join(ROOT, "scripts", "db", "mssql-entrypoint.sh"));
+      assert.equal(model.services["skinora-db-backup"].environment.MSSQL_SA_PASSWORD_FILE, "/run/secrets/mssql_sa_password");
+
+      const redis = model.services["skinora-redis"];
+      assert.deepEqual(redis.entrypoint, ["/bin/sh", "/opt/skinora/redis-entrypoint.sh"]);
+      assert.deepEqual(redis.command, ["--appendonly", "yes"]);
+      assert.deepEqual(redis.healthcheck.test, ["CMD", "/bin/sh", "/opt/skinora/redis-entrypoint.sh", "--healthcheck"]);
+      assert.ok((redis.tmpfs ?? []).includes("/run/skinora-redis"), "the requirepass file lives on a tmpfs");
+      const redisScript = redis.volumes.find((v) => v.target === "/opt/skinora/redis-entrypoint.sh");
+      assert.ok(redisScript?.read_only);
+      assert.equal(resolve(redisScript.source), join(ROOT, "scripts", "redis", "redis-entrypoint.sh"));
+
+      const grafana = model.services["skinora-grafana"].environment;
+      assert.equal(grafana.GF_SECURITY_ADMIN_PASSWORD__FILE, "/run/secrets/grafana_admin_password");
+    });
+
+    test("the backend mounts every credential file ThirdPartyCredentialFiles reads, except Discord's (channel off)", () => {
+      const mounted = model.services["skinora-backend"].secrets.map((s) => s.source);
+      const expected = backendCredentialFiles().filter((f) => !f.startsWith("discord_"));
+      assert.deepEqual(expected, ["mssql_sa_password", "redis_password", "steam_api_key"]);
+      for (const f of expected) assert.ok(mounted.includes(f), `backend lacks ${f}`);
+      for (const f of backendCredentialFiles().filter((f) => f.startsWith("discord_"))) {
+        assert.ok(!mounted.includes(f), `${f} is mounted although the Discord channel is off`);
+      }
+    });
+
+    test("each sidecar reads its provider credentials at the paths they are mounted at (T171b)", () => {
+      assert.deepEqual(sidecarCredentialPaths("sidecar-steam"), ["/run/secrets/redis_password", "/run/secrets/steam_api_key"]);
+      assert.deepEqual(sidecarCredentialPaths("sidecar-blockchain"), [
+        "/run/secrets/tron_api_key",
+        "/run/secrets/tron_api_key_secondary",
+      ]);
+      assert.deepEqual(sidecarCredentialPaths("sidecar-ethereum"), [
+        "/run/secrets/ethereum_rpc_backup_url",
+        "/run/secrets/ethereum_rpc_primary_url",
+      ]);
     });
 
     test("each sidecar reads the paths its secrets are mounted at", () => {
@@ -247,9 +431,14 @@ describe("compose secret map (T171a)", { skip: !HAS_DOCKER && "docker compose no
       for (const [name, def] of Object.entries(model.secrets)) {
         assert.ok(resolve(def.file).startsWith(trialDir), `${name} must come from secrets/trial/, got ${def.file}`);
       }
-      for (const secret of [...EXPECTED["skinora-backend"], "grafana_smtp_password", "heartbeat_url"]) {
+      for (const secret of [...EXPECTED["skinora-backend"], "grafana_smtp_password", "heartbeat_url", ...Object.keys(CREDENTIAL_READERS)]) {
         assert.ok(model.secrets[secret], `${secret} is not declared in the trial`);
       }
+    });
+
+    test("no connection string, URL or command line carries a password; Grafana has no admin variable (T171b)", () => {
+      assertNoPasswordInValues(model);
+      assert.equal(model.services["skinora-grafana"].environment.GF_SECURITY_ADMIN_PASSWORD, undefined);
     });
 
     test("the heartbeat reads its ping URL from the secret file", () => {
@@ -281,6 +470,27 @@ describe("compose secret map (T171a)", { skip: !HAS_DOCKER && "docker compose no
         const source = targets[`/run/secrets/${file}`];
         assert.ok(source, `${file} is not mounted into the e2e backend`);
         assert.ok(model.configs[source].content.length >= 32, `${file} is shorter than the backend's 32-character floor`);
+      }
+    });
+
+    test("the database and Redis run the real entrypoint scripts with their passwords as files (T171b)", () => {
+      assertNoPasswordInValues({ services: { db: model.services["skinora-db"], redis: model.services["skinora-redis"], be: model.services["skinora-backend"] } });
+      const target = (svc, path) => {
+        const c = (model.services[svc].configs ?? []).find((x) => x.target === path);
+        assert.ok(c, `${svc} lacks ${path}`);
+        return model.configs[c.source].content;
+      };
+      // The backend reads the very values the two containers read.
+      assert.equal(target("skinora-backend", "/run/secrets/mssql_sa_password"), target("skinora-db", "/run/secrets/mssql_sa_password"));
+      assert.equal(target("skinora-backend", "/run/secrets/redis_password"), target("skinora-redis", "/run/secrets/redis_password"));
+      // ... and the fake sidecar (a test double, environment) the same DB password.
+      assert.equal(model.services["skinora-fake-sidecar"].environment.DB_PASSWORD, target("skinora-db", "/run/secrets/mssql_sa_password"));
+      assert.deepEqual(model.services["skinora-db"].entrypoint, ["/bin/bash", "/opt/skinora/mssql-entrypoint.sh"]);
+      assert.deepEqual(model.services["skinora-redis"].entrypoint, ["/bin/sh", "/opt/skinora/redis-entrypoint.sh"]);
+      for (const svc of ["skinora-db", "skinora-redis", "skinora-backend"]) {
+        for (const k of Object.keys(model.services[svc].environment ?? {})) {
+          assert.ok(!FORBIDDEN_ENV.test(k), `${svc} receives ${k}`);
+        }
       }
     });
 

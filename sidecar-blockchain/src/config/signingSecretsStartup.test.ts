@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -30,6 +31,9 @@ const TEST_TIMEOUT = WAIT + 30_000;
 const INTERNAL_KEY = 'test-internal-key-'.padEnd(64, 'k');
 /** T171a — the shared secrets come from files too (config/sharedSecrets.ts). */
 const WEBHOOK_SECRET = 'test-webhook-secret-'.padEnd(64, 'w');
+/** T171b — the TronGrid API keys come from files too (config/providerCredentials.ts). */
+const TRONGRID_KEY = 'test-trongrid-key-'.padEnd(36, 't');
+const TRONGRID_KEY_2 = 'test-trongrid-second-'.padEnd(36, 's');
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
 /** Valid words, failing BIP-39 checksum. */
 const BAD_MNEMONIC = `${'abandon '.repeat(11)}abandon`;
@@ -51,6 +55,8 @@ const files = {
   webhookSecret: join(dir, 'blockchain_webhook_secret'),
   shortWebhookSecret: join(dir, 'short_webhook_secret'),
   blank: join(dir, 'blank'),
+  tronApiKey: join(dir, 'tron_api_key'),
+  tronApiKeySecondary: join(dir, 'tron_api_key_secondary'),
 };
 writeFileSync(files.seed, MNEMONIC + '\n');
 writeFileSync(files.hot, HOT.privateKey + '\n');
@@ -59,6 +65,8 @@ writeFileSync(files.internalKey, INTERNAL_KEY + '\n');
 writeFileSync(files.webhookSecret, WEBHOOK_SECRET + '\n');
 writeFileSync(files.shortWebhookSecret, 'test-short-'.padEnd(31, 'w') + '\n');
 writeFileSync(files.blank, '\n');
+writeFileSync(files.tronApiKey, TRONGRID_KEY + '\n');
+writeFileSync(files.tronApiKeySecondary, TRONGRID_KEY_2 + '\n');
 mkdirSync(files.directory);
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -71,6 +79,9 @@ const FORBIDDEN_IN_OUTPUT = [
   HOT.privateKey,
   INTERNAL_KEY,
   WEBHOOK_SECRET,
+  TRONGRID_KEY,
+  TRONGRID_KEY_2,
+  'test-trongrid-',
   'test-short-',
 ];
 
@@ -83,7 +94,7 @@ function productionEnv(env: Record<string, string>): NodeJS.ProcessEnv {
   const inherited = Object.fromEntries(
     Object.entries(process.env).filter(
       ([name]) =>
-        !/^(HD_WALLET_|HOT_WALLET_|COLD_WALLET_|STAKE_ACCOUNT_|INTERNAL_KEY|WEBHOOK_SECRET|PORT$|NODE_ENV$)/.test(
+        !/^(HD_WALLET_|HOT_WALLET_|COLD_WALLET_|STAKE_ACCOUNT_|INTERNAL_KEY|WEBHOOK_SECRET|TRON_API_KEY|PORT$|NODE_ENV$)/.test(
           name,
         ),
     ),
@@ -100,6 +111,8 @@ function productionEnv(env: Record<string, string>): NodeJS.ProcessEnv {
     WEBHOOK_SECRET_FILE: files.webhookSecret,
     HD_WALLET_MNEMONIC_FILE: files.seed,
     HOT_WALLET_PRIVATE_KEY_FILE: files.hot,
+    TRON_API_KEY_FILE: files.tronApiKey,
+    TRON_API_KEY_SECONDARY_FILE: files.tronApiKeySecondary,
     HOT_WALLET_ADDRESS: HOT_ADDRESS,
     ...env,
   };
@@ -184,6 +197,8 @@ describe('TRON service startup — signing secrets from Docker secret files (T16
         hotWalletAddressFromKey: HOT_ADDRESS,
         internalKeySource: 'file',
         webhookSecretSource: 'file',
+        tronApiKeySource: 'file',
+        tronApiKeySecondarySource: 'file',
       });
       expectNoSecret(output);
     },
@@ -358,6 +373,153 @@ describe('TRON service startup — refuses unsafe shared secrets, without echoin
       expect(refused.output).toContain(code);
       expect(refused.output).not.toContain('Signing secrets:');
       expectNoSecret(refused.output);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+/**
+ * T171b — the TronGrid API keys (DEFERRED_BACKLOG
+ * `ThirdPartyCredentialsInPlainEnv`): in production only their Docker secret
+ * files; a plain variable or an unreadable mount stops the service; never
+ * echoed. providerCredentials.test.ts covers the rules without a process.
+ */
+describe('TRON service startup — refuses unsafe TronGrid keys, without echoing them (T171b)', () => {
+  it.each<{ label: string; code: string; env: Record<string, string> }>([
+    {
+      label: 'the primary key as a plain variable',
+      code: 'CREDENTIAL_IN_ENV',
+      env: { TRON_API_KEY_FILE: files.none, TRON_API_KEY: TRONGRID_KEY },
+    },
+    {
+      label: 'the secondary key as a plain variable',
+      code: 'CREDENTIAL_IN_ENV',
+      env: { TRON_API_KEY_SECONDARY_FILE: files.none, TRON_API_KEY_SECONDARY: TRONGRID_KEY_2 },
+    },
+    {
+      label: 'a directory where the primary key file should be',
+      code: 'CREDENTIAL_UNREADABLE',
+      env: { TRON_API_KEY_FILE: files.directory },
+    },
+  ])(
+    '$label → exits non-zero with $code',
+    async ({ env, code }) => {
+      const refused = await refusedWith(env);
+      expect(refused.code ?? 0, refused.output).toBeGreaterThan(0);
+      expect(refused.output).toContain(code);
+      expect(refused.output).not.toContain('Signing secrets:');
+      expectNoSecret(refused.output);
+    },
+    TEST_TIMEOUT,
+  );
+});
+
+describe('TRON service startup — the TronGrid key from the file reaches TronGrid (T171b)', () => {
+  it(
+    'the entry point hands the file key to the TronGrid client (header on the first solid-head read)',
+    async () => {
+      const seen: string[] = [];
+      const server = createHttpServer((req, res) => {
+        const key = req.headers['tron-pro-api-key'];
+        seen.push(typeof key === 'string' ? key : '');
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({ block_header: { raw_data: { number: 1, timestamp: Date.now() } } }),
+        );
+      });
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', () => done()));
+      const address = server.address();
+      const node = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+      const run = launch(
+        productionEnv({ TRON_FULL_NODE_URL: node, TRON_SOLIDITY_URL: node }),
+        'Blockchain sidecar listening',
+      );
+      try {
+        expect(await withTimeout(run.line, WAIT), run.output()).toBeDefined();
+        const deadline = Date.now() + 20_000;
+        while (!seen.includes(TRONGRID_KEY) && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        expect(seen, run.output()).toContain(TRONGRID_KEY);
+      } finally {
+        run.child.kill();
+        await run.exited;
+        server.close();
+      }
+      expectNoSecret(run.output());
+    },
+    TEST_TIMEOUT,
+  );
+
+  // T171b validation S4-4 (T5/T7): the transfer client (status read, and the
+  // TronWeb instance that signs and broadcasts) and the closure tool's chain
+  // check are built separately in index.ts — each must get the file key too.
+  // Each request is keyed by the txid in its body, so the background
+  // TronGrid polling cannot stand in for the call under test.
+  it(
+    'TronTransferClient + TransferVerifier: the file key on the status read and on /verify',
+    async () => {
+      const STATUS_TX = 'a1'.repeat(32);
+      const VERIFY_TX = 'b2'.repeat(32);
+      const keyByTx = new Map<string, string>();
+      const server = createHttpServer((req, res) => {
+        let body = '';
+        req.on('data', (chunk: Buffer) => (body += chunk.toString()));
+        req.on('end', () => {
+          const key = req.headers['tron-pro-api-key'];
+          if (req.url?.includes('gettransactioninfobyid')) {
+            try {
+              const value = (JSON.parse(body) as { value?: string }).value;
+              if (value) keyByTx.set(value, typeof key === 'string' ? key : '');
+            } catch {
+              // Not a JSON body — not one of ours.
+            }
+          }
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify(
+              req.url?.includes('gettransactioninfobyid')
+                ? {}
+                : { block_header: { raw_data: { number: 1, timestamp: Date.now() } } },
+            ),
+          );
+        });
+      });
+      await new Promise<void>((done) => server.listen(0, '127.0.0.1', () => done()));
+      const address = server.address();
+      const node = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+      const port = await freePort();
+      const run = launch(
+        productionEnv({
+          PORT: String(port),
+          TRON_FULL_NODE_URL: node,
+          TRON_SOLIDITY_URL: node,
+          // Any well-formed TRON address: the verifier refuses a request without a contract.
+          TRON_USDT_CONTRACT: HOT_ADDRESS,
+        }),
+        'Blockchain sidecar listening',
+      );
+      try {
+        expect(await withTimeout(run.line, WAIT), run.output()).toBeDefined();
+        const base = `http://127.0.0.1:${port}`;
+        const headers = { 'content-type': 'application/json', 'x-internal-key': INTERNAL_KEY };
+
+        await fetch(`${base}/api/transfer/status/${STATUS_TX}`, { headers });
+        const vr = await fetch(`${base}/api/transfer/verify`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ txHash: VERIFY_TX, token: 'USDT', to: HOT_ADDRESS, amount: '1' }),
+        });
+
+        expect(keyByTx.get(STATUS_TX), `status read: ${run.output()}`).toBe(TRONGRID_KEY);
+        const vrBody = await vr.text();
+        expect(keyByTx.get(VERIFY_TX), `verify ${vr.status} ${vrBody}`).toBe(TRONGRID_KEY);
+      } finally {
+        run.child.kill();
+        await run.exited;
+        server.close();
+      }
+      expectNoSecret(run.output());
     },
     TEST_TIMEOUT,
   );

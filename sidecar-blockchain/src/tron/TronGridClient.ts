@@ -187,6 +187,21 @@ export interface TronGridClientOptions {
   sleepFn?: (ms: number) => Promise<void>;
 }
 
+/**
+ * T171b — the TronGrid API keys a client built without explicit keys uses.
+ * They come from Docker secret files (config/providerCredentials.ts) and are
+ * handed over once by the entry point; until then both are empty (keyless
+ * TronGrid — what tests and a fresh module see).
+ */
+let defaultApiKeys: { readonly primary: string; readonly secondary: string } = {
+  primary: '',
+  secondary: '',
+};
+
+export function configureTronApiKeys(primary: string, secondary: string): void {
+  defaultApiKeys = { primary, secondary };
+}
+
 export class TronGridClient {
   private readonly apiKeySecondary: string;
   private readonly maxRetries: number;
@@ -199,11 +214,11 @@ export class TronGridClient {
   constructor(
     private readonly fullNodeUrl: string = config.tronFullNodeUrl,
     private readonly solidityUrl: string = config.tronSolidityUrl,
-    private readonly apiKey: string = config.tronApiKey,
+    private readonly apiKey: string = defaultApiKeys.primary,
     private readonly fetchFn: typeof fetch = fetch,
     options: TronGridClientOptions = {},
   ) {
-    this.apiKeySecondary = options.apiKeySecondary ?? config.tronApiKeySecondary;
+    this.apiKeySecondary = options.apiKeySecondary ?? defaultApiKeys.secondary;
     this.maxRetries = options.maxRetries ?? config.tronGridMaxRetries;
     this.backoffBaseMs = options.backoffBaseMs ?? config.tronGridRetryBackoffBaseMs;
     this.backoffCapMs = options.backoffCapMs ?? config.tronGridRetryBackoffCapMs;

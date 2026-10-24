@@ -19,12 +19,10 @@ export const config = {
   // comes from its Docker secret file (config/sharedSecrets.ts) and the entry
   // point refuses to start without it.
 
-  // Steam API
-  steamApiKey: process.env.STEAM_API_KEY || '',
-
-  // Inventory cache — 08 §2.3 (Redis-backed, 2 minute TTL). Empty URL falls back
-  // to in-memory cache (suitable for tests and single-process dev runs).
-  redisUrl: process.env.REDIS_URL || '',
+  // T171b — the Steam Web API key and the Redis password are NOT read here:
+  // they come from their Docker secret files (config/providerCredentials.ts),
+  // which also builds the Redis URL (08 §2.3 inventory cache; empty REDIS_URL
+  // = in-memory cache, suitable for tests and single-process dev runs).
 
   // Logging
   lokiUrl: process.env.LOKI_URL || 'http://skinora-loki:3100',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ConfigError, DEFAULT_SECRET_PATHS, loadConfig, providerHost } from './index.js';
 import { DEFAULT_SHARED_SECRET_PATHS } from './sharedSecrets.js';
+import { DEFAULT_CREDENTIAL_PATHS } from './providerCredentials.js';
 import { EthereumHdWallet } from '../wallet/HdWalletService.js';
 
 const MNEMONIC = `${'abandon '.repeat(11)}about`;
@@ -8,6 +9,8 @@ const KEY = 'k'.repeat(64);
 const RPC_KEY = 'alchemyApiKeyThatMustNeverBeLogged';
 const PRIMARY_URL = `https://eth-sepolia.g.alchemy.com/v2/${RPC_KEY}`;
 const BACKUP_URL = 'https://ethereum-sepolia.core.chainstack.com/abcdef0123456789';
+/** T171b — a production-shaped test reads the primary RPC URL from this file (ETHEREUM_RPC_PRIMARY_URL_FILE). */
+const RPC_FILE = '/test/ethereum_rpc_primary_url';
 const signer = new EthereumHdWallet(MNEMONIC).deriveSigner(20);
 
 const baseEnv = {
@@ -23,6 +26,7 @@ const baseEnv = {
 function secrets(files: Record<string, string | null> = {}) {
   const all: Record<string, string | null> = {
     [DEFAULT_SECRET_PATHS.hdMnemonic]: MNEMONIC,
+    [RPC_FILE]: PRIMARY_URL,
     ...files,
   };
   return (path: string) => all[path] ?? null;
@@ -413,7 +417,8 @@ describe('loadConfig — shared secrets (T171a)', () => {
   const WEBHOOK = 'w'.repeat(64);
   const production = {
     NODE_ENV: 'production',
-    ETHEREUM_RPC_PRIMARY_URL: PRIMARY_URL,
+    // T171b — the RPC URL is a secret file in production too.
+    ETHEREUM_RPC_PRIMARY_URL_FILE: RPC_FILE,
   };
   const mounted = () =>
     secrets({
@@ -494,5 +499,86 @@ describe('loadConfig — shared secrets (T171a)', () => {
     );
     expect(short.code).toBe('WEBHOOK_SECRET_TOO_SHORT');
     expect(short.message).not.toContain('short-webhook-secret');
+  });
+});
+
+/**
+ * T171b — the RPC provider URLs carry the provider's API key: Docker secret
+ * files (DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`). The running
+ * process: startupWiring.test.ts.
+ */
+describe('loadConfig — RPC URLs from secret files (T171b)', () => {
+  const production = { NODE_ENV: 'production' };
+  const mounted = (files: Record<string, string | null> = {}) =>
+    secrets({
+      [DEFAULT_SHARED_SECRET_PATHS.internalKey]: KEY,
+      [DEFAULT_CREDENTIAL_PATHS.rpcPrimaryUrl]: PRIMARY_URL,
+      [DEFAULT_CREDENTIAL_PATHS.rpcBackupUrl]: BACKUP_URL,
+      ...files,
+    });
+
+  it('reads both URLs from the compose mount points in production', () => {
+    expect(DEFAULT_CREDENTIAL_PATHS).toEqual({
+      rpcPrimaryUrl: '/run/secrets/ethereum_rpc_primary_url',
+      rpcBackupUrl: '/run/secrets/ethereum_rpc_backup_url',
+    });
+    const config = loadConfig(production, mounted());
+    expect(config.rpc.providers.map((p) => p.url)).toEqual([PRIMARY_URL, BACKUP_URL]);
+    expect(config.credentialSources).toEqual({ rpcPrimaryUrl: 'file', rpcBackupUrl: 'file' });
+  });
+
+  it('no primary file → RPC_NOT_CONFIGURED; no backup file → one provider', () => {
+    const missing = errorOf(() =>
+      loadConfig(production, mounted({ [DEFAULT_CREDENTIAL_PATHS.rpcPrimaryUrl]: null })),
+    );
+    expect(missing.code).toBe('RPC_NOT_CONFIGURED');
+    const single = loadConfig(
+      production,
+      mounted({ [DEFAULT_CREDENTIAL_PATHS.rpcBackupUrl]: null }),
+    );
+    expect(single.rpc.providers).toHaveLength(1);
+    expect(single.credentialSources.rpcBackupUrl).toBe('none');
+  });
+
+  it.each([
+    ['production', 'ETHEREUM_RPC_PRIMARY_URL'],
+    ['production', 'ETHEREUM_RPC_BACKUP_URL'],
+    ['', 'ETHEREUM_RPC_PRIMARY_URL'],
+    ['Development', 'ETHEREUM_RPC_BACKUP_URL'],
+  ])('NODE_ENV=%j refuses %s as a plain variable (CREDENTIAL_IN_ENV)', (nodeEnv, variable) => {
+    const error = errorOf(() =>
+      loadConfig({ ...production, NODE_ENV: nodeEnv, [variable]: PRIMARY_URL }, mounted()),
+    );
+    expect(error.code).toBe('CREDENTIAL_IN_ENV');
+    expect(error.message).not.toContain(RPC_KEY);
+  });
+
+  it('development reads the variables; file and variable together is ambiguous', () => {
+    const config = loadConfig(baseEnv, secrets());
+    expect(config.credentialSources).toEqual({ rpcPrimaryUrl: 'env', rpcBackupUrl: 'env' });
+    const error = errorOf(() =>
+      loadConfig(baseEnv, secrets({ [DEFAULT_CREDENTIAL_PATHS.rpcPrimaryUrl]: PRIMARY_URL })),
+    );
+    expect(error.code).toBe('CREDENTIAL_AMBIGUOUS');
+    expect(error.message).not.toContain(RPC_KEY);
+  });
+
+  it('a mount point that is not a readable file stops the service (CREDENTIAL_UNREADABLE)', () => {
+    const read = (path: string) => {
+      if (path === DEFAULT_CREDENTIAL_PATHS.rpcBackupUrl) throw new Error('EISDIR');
+      return mounted()(path);
+    };
+    expect(errorOf(() => loadConfig(production, read)).code).toBe('CREDENTIAL_UNREADABLE');
+  });
+
+  it('a file URL that is not a URL is refused without echoing it', () => {
+    const error = errorOf(() =>
+      loadConfig(
+        production,
+        mounted({ [DEFAULT_CREDENTIAL_PATHS.rpcPrimaryUrl]: `not a url ${RPC_KEY}` }),
+      ),
+    );
+    expect(error.code).toBe('INVALID_CONFIG');
+    expect(error.message).not.toContain(RPC_KEY);
   });
 });

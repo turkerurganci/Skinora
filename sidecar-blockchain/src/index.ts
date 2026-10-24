@@ -14,6 +14,7 @@ import {
 } from './config/signingSecrets.js';
 import { logger } from './logger.js';
 import { configureWebhookSecret } from './webhook/WebhookClient.js';
+import { CredentialError, loadProviderCredentials } from './config/providerCredentials.js';
 import { publishTronGridDailyRequestBudget } from './metrics.js';
 import { correlationMiddleware } from './api/middleware.js';
 import { createRouter } from './api/routes.js';
@@ -21,7 +22,7 @@ import { WalletManager } from './wallet/WalletManager.js';
 import { HdWalletService } from './wallet/HdWalletService.js';
 import { MonitorRegistry } from './monitor/MonitorRegistry.js';
 import { PostCancelMonitorRegistry } from './monitor/PostCancelMonitor.js';
-import { TronGridClient } from './tron/TronGridClient.js';
+import { TronGridClient, configureTronApiKeys } from './tron/TronGridClient.js';
 import { TronTransferClient } from './tron/TronTransferClient.js';
 import { TronDelegationClient } from './tron/TronDelegationClient.js';
 import { EnergyDelegationService } from './wallet/EnergyDelegationService.js';
@@ -79,6 +80,23 @@ function startupSigningMaterial(): SigningMaterial {
   }
 }
 
+// T171b — the TronGrid API keys come from their Docker secret files
+// (config/providerCredentials.ts); outside NODE_ENV=development|test a plain
+// TRON_API_KEY / TRON_API_KEY_SECONDARY variable stops the service. Both stay
+// optional (keyless TronGrid rate-limits; no secondary = no failover).
+const providerCredentials = startupProviderCredentials();
+configureTronApiKeys(providerCredentials.tronApiKey, providerCredentials.tronApiKeySecondary);
+
+function startupProviderCredentials() {
+  try {
+    return loadProviderCredentials(process.env);
+  } catch (err) {
+    const code = err instanceof CredentialError ? err.code : 'STARTUP_FAILED';
+    logger.fatal({ code }, `Blockchain sidecar refused to start: ${code}`);
+    throw err;
+  }
+}
+
 logger.info(
   {
     hdMnemonicSource: signingMaterial.sources.hdMnemonic,
@@ -86,6 +104,8 @@ logger.info(
     hotWalletAddressFromKey: signingMaterial.hotWalletAddressFromKey,
     internalKeySource: sharedSecrets.sources.internalKey,
     webhookSecretSource: sharedSecrets.sources.webhookSecret,
+    tronApiKeySource: providerCredentials.sources.tronApiKey,
+    tronApiKeySecondarySource: providerCredentials.sources.tronApiKeySecondary,
   },
   'Signing secrets: loaded (sources only — values are never logged)',
 );
@@ -127,12 +147,18 @@ const postCancelMonitorRegistry = new PostCancelMonitorRegistry({
 const tronTransferClient = new TronTransferClient(
   config.tronFullNodeUrl,
   config.tronSolidityUrl,
-  config.tronApiKey,
+  providerCredentials.tronApiKey,
 );
-const tronDelegationClient = new TronDelegationClient(config.tronFullNodeUrl, config.tronApiKey);
+const tronDelegationClient = new TronDelegationClient(
+  config.tronFullNodeUrl,
+  providerCredentials.tronApiKey,
+);
 // One resource client for both consumers: the delegation flow and the fee
 // estimate must read the chain the same way (planDelegation is shared too).
-const tronResourceClient = new TronResourceClient(config.tronFullNodeUrl, config.tronApiKey);
+const tronResourceClient = new TronResourceClient(
+  config.tronFullNodeUrl,
+  providerCredentials.tronApiKey,
+);
 const energyDelegation = new EnergyDelegationService({
   client: tronDelegationClient,
   resources: tronResourceClient,
@@ -217,7 +243,7 @@ const refundService = new RefundService({
 // T172a — the closure tool's chain check (read-only; solidified transactions only).
 const transferVerifier = new TransferVerifier({
   solidityUrl: config.tronSolidityUrl,
-  apiKey: config.tronApiKey,
+  apiKey: providerCredentials.tronApiKey,
   tokenContracts,
 });
 const feeEstimationService = new FeeEstimationService({

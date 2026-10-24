@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SECRET_PATHS, DEFAULT_TX_JOURNAL_DIR } from './index.js';
 import { DEFAULT_SHARED_SECRET_PATHS } from './sharedSecrets.js';
+import { DEFAULT_CREDENTIAL_PATHS } from './providerCredentials.js';
 
 /**
  * docker-compose.yml, read the way production starts the stack (T150 —
@@ -41,8 +42,6 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
   });
 
   it.each([
-    ['ETHEREUM_RPC_PRIMARY_URL', 'ETHEREUM_RPC_PRIMARY_URL'],
-    ['ETHEREUM_RPC_BACKUP_URL', 'ETHEREUM_RPC_BACKUP_URL'],
     ['ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE', 'ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE'],
     ['ETHEREUM_RPC_BACKUP_MAX_BLOCK_RANGE', 'ETHEREUM_RPC_BACKUP_MAX_BLOCK_RANGE'],
     ['ETHEREUM_FINALIZED_STALL_SECONDS', 'ETHEREUM_FINALIZED_STALL_SECONDS'],
@@ -100,6 +99,23 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
         new RegExp(`^ {2}${name}:\\n {4}file: \\./secrets/${name}\\.txt$`, 'm'),
       );
     }
+  });
+
+  // T171b — the RPC URLs carry the provider's API key: Docker secrets of this
+  // service only (config/providerCredentials.ts), never variables.
+  it('mounts its RPC URLs as Docker secrets, not variables (T171b)', () => {
+    for (const name of ['ethereum_rpc_primary_url', 'ethereum_rpc_backup_url']) {
+      expect(ethereum).toMatch(new RegExp(`^ {6}- ${name}$`, 'm'));
+      expect(block('secrets', '')).toMatch(
+        new RegExp(`^ {2}${name}:\\n {4}file: \\./secrets/${name}\\.txt$`, 'm'),
+      );
+      expect(block('skinora-backend')).not.toContain(name);
+    }
+    expect(Object.values(DEFAULT_CREDENTIAL_PATHS).sort()).toEqual([
+      '/run/secrets/ethereum_rpc_backup_url',
+      '/run/secrets/ethereum_rpc_primary_url',
+    ]);
+    expect(ethereum).not.toMatch(/^ +- ETHEREUM_RPC_(PRIMARY|BACKUP)_URL=/m);
   });
 
   it('carries no signing material as a plain environment variable', () => {

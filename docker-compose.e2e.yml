@@ -27,19 +27,32 @@
 # them from the inline `configs:` at the end — no host file to create, the
 # same file path the real stack's Docker secrets use. The fake sidecar is a
 # test double and keeps reading its webhook secrets from the environment.
+#
+# T171b — the database and Redis run the real stack's entrypoint scripts
+# (scripts/db/mssql-entrypoint.sh, scripts/redis/redis-entrypoint.sh) with
+# their passwords as files from the same inline `configs:`; the backend's
+# connection strings carry no password (it adds the file's). The fake sidecar
+# keeps its DB password in the environment (test double).
 # =============================================================================
 services:
   skinora-db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: skinora-e2e-db
+    entrypoint: ["/bin/bash", "/opt/skinora/mssql-entrypoint.sh"]
+    command: ["/opt/mssql/bin/sqlservr"]
     ports:
       - "${E2E_DB_PORT:-14333}:1433"
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=E2e!Strong!Pass!2345
+      - MSSQL_SA_PASSWORD_FILE=/run/secrets/mssql_sa_password
       - MSSQL_PID=Developer
+    volumes:
+      - ./scripts/db/mssql-entrypoint.sh:/opt/skinora/mssql-entrypoint.sh:ro
+    configs:
+      - source: e2e_mssql_sa_password
+        target: /run/secrets/mssql_sa_password
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'E2e!Strong!Pass!2345' -Q 'SELECT 1' -C || exit 1"]
+      test: ["CMD", "/bin/bash", "/opt/skinora/mssql-entrypoint.sh", "--healthcheck"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -50,9 +63,17 @@ services:
   skinora-redis:
     image: redis:7-alpine
     container_name: skinora-e2e-redis
-    command: redis-server --requirepass e2e-redis-pass-123 --appendonly no
+    entrypoint: ["/bin/sh", "/opt/skinora/redis-entrypoint.sh"]
+    command: ["--appendonly", "no"]
+    tmpfs:
+      - /run/skinora-redis
+    volumes:
+      - ./scripts/redis/redis-entrypoint.sh:/opt/skinora/redis-entrypoint.sh:ro
+    configs:
+      - source: e2e_redis_password
+        target: /run/secrets/redis_password
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "e2e-redis-pass-123", "ping"]
+      test: ["CMD", "/bin/sh", "/opt/skinora/redis-entrypoint.sh", "--healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -122,8 +143,9 @@ services:
       - "${E2E_BACKEND_PORT:-5000}:5000"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Server=skinora-db,1433;Database=Skinora;User Id=sa;Password=E2e!Strong!Pass!2345;TrustServerCertificate=True;
-      - Redis__ConnectionString=skinora-redis:6379,password=e2e-redis-pass-123
+      # T171b — no password in either: the backend adds the file's.
+      - ConnectionStrings__DefaultConnection=Server=skinora-db,1433;Database=Skinora;User Id=sa;TrustServerCertificate=True;
+      - Redis__ConnectionString=skinora-redis:6379
       - Jwt__Issuer=skinora
       - Jwt__Audience=skinora-client
       - Jwt__AccessTokenExpiryMinutes=60
@@ -189,6 +211,12 @@ services:
         target: /run/secrets/blockchain_sidecar_internal_key
       - source: e2e_ethereum_sidecar_internal_key
         target: /run/secrets/ethereum_sidecar_internal_key
+      # T171b — the database and Redis passwords, the same values the two
+      # containers read.
+      - source: e2e_mssql_sa_password
+        target: /run/secrets/mssql_sa_password
+      - source: e2e_redis_password
+        target: /run/secrets/redis_password
     depends_on:
       skinora-db:
         condition: service_healthy
@@ -281,3 +309,9 @@ configs:
     content: e2e-tron-internal-key-0123456789-abcdefg
   e2e_ethereum_sidecar_internal_key:
     content: e2e-ethereum-internal-key-0123456789-abc
+  # T171b — the database and Redis passwords (fixed test values). The fake
+  # sidecar's DB_PASSWORD above and the Playwright harness use the same one.
+  e2e_mssql_sa_password:
+    content: E2e!Strong!Pass!2345
+  e2e_redis_password:
+    content: e2e-redis-pass-123

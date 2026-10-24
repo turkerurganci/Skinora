@@ -71,16 +71,29 @@ function fakeGrafana(dir, mode) {
   return { fake, record, logRecord };
 }
 
+// T171b — every run has a valid admin password file unless a test says
+// otherwise (first-boot.sh refuses to start without one).
+const ADMIN_PASSWORD = "t171b-test-grafana-admin-password";
+
+function adminPasswordFile(dir) {
+  const path = join(dir, "grafana_admin_password");
+  if (!existsSync(path)) writeFileSync(path, ADMIN_PASSWORD + "\n");
+  return path;
+}
+
 function run(dir, fake, extraEnv = {}) {
   return new Promise((resolvePromise) => {
+    const env = {
+      PATH: process.env.PATH,
+      GRAFANA_RUN: fake,
+      GF_PATHS_DATA: join(dir, "data"),
+      TMPDIR: dir,
+      GF_SECURITY_ADMIN_PASSWORD__FILE: adminPasswordFile(dir),
+      ...extraEnv,
+    };
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];
     const child = spawn("sh", [SCRIPT, "--homepath=/usr/share/grafana"], {
-      env: {
-        PATH: process.env.PATH,
-        GRAFANA_RUN: fake,
-        GF_PATHS_DATA: join(dir, "data"),
-        TMPDIR: dir,
-        ...extraEnv,
-      },
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let out = "";
@@ -268,5 +281,91 @@ describe("grafana first-boot.sh — SMTP password file (T171a S4-2)", { skip: !H
       assert.equal(code, 0, out);
       assert.deepEqual(starts(record), ["start execute_alerts=default addr=any args=--homepath=/usr/share/grafana"]);
     }
+  });
+});
+
+// T171b (⚠ GÜVENLİK): the admin password is the Docker secret file
+// GF_SECURITY_ADMIN_PASSWORD__FILE. Grafana itself starts with admin/admin
+// when that file is missing or empty — first-boot.sh refuses instead.
+describe("grafana first-boot.sh — admin password file (T171b)", { skip: !HAS_SH && "sh not available" }, () => {
+  before(() => {
+    work = mkdtempSync(join(tmpdir(), "grafana-admin-file-"));
+  });
+  after(() => rmSync(work, { recursive: true, force: true }));
+
+  function provisioned(name) {
+    const dir = join(work, name);
+    mkdirSync(join(dir, "data"), { recursive: true });
+    writeFileSync(join(dir, "data", ".skinora-alerting-provisioned"), "");
+    return dir;
+  }
+
+  const refusals = [
+    ["the password as a variable", (dir) => ({ GF_SECURITY_ADMIN_PASSWORD: ADMIN_PASSWORD }), /CREDENTIAL_IN_ENV/],
+    ["no __FILE variable", () => ({ GF_SECURITY_ADMIN_PASSWORD__FILE: undefined }), /CREDENTIAL_MISSING/],
+    ["a missing file", (dir) => ({ GF_SECURITY_ADMIN_PASSWORD__FILE: join(dir, "nope") }), /CREDENTIAL_MISSING/],
+    [
+      "an empty file",
+      (dir) => {
+        const path = join(dir, "empty_admin");
+        writeFileSync(path, " \n");
+        return { GF_SECURITY_ADMIN_PASSWORD__FILE: path };
+      },
+      /CREDENTIAL_MISSING/,
+    ],
+    [
+      "a directory (Docker's stand-in for a missing source)",
+      (dir) => {
+        const path = join(dir, "dir_admin");
+        mkdirSync(path);
+        return { GF_SECURITY_ADMIN_PASSWORD__FILE: path };
+      },
+      /CREDENTIAL_UNREADABLE/,
+    ],
+    [
+      // Measured on grafana/grafana:11.3.0: /run.sh keeps the CR, so the
+      // visible password would be refused (Git Bash openssl writes CRLF).
+      "a CRLF file",
+      (dir) => {
+        const path = join(dir, "crlf_admin");
+        writeFileSync(path, ADMIN_PASSWORD + "\r\n");
+        return { GF_SECURITY_ADMIN_PASSWORD__FILE: path };
+      },
+      /CREDENTIAL_INVALID/,
+    ],
+    [
+      "SMTP on and a CRLF SMTP password file",
+      (dir) => {
+        const path = join(dir, "crlf_smtp");
+        writeFileSync(path, "re_t171b_smtp_value\r\n");
+        return { GF_SMTP_ENABLED: "true", GF_SMTP_PASSWORD__FILE: path };
+      },
+      /CREDENTIAL_INVALID/,
+    ],
+  ];
+
+  for (const [i, [label, envOf, code]] of refusals.entries()) {
+    test(`${label}: exits non-zero, Grafana is not started, the value is not printed`, async () => {
+      const dir = provisioned(`refuse-${i}`);
+      const { fake, record } = fakeGrafana(dir, "ok");
+
+      const { code: exit, out } = await run(dir, fake, envOf(dir));
+
+      assert.notEqual(exit, 0, out);
+      assert.match(out, code);
+      assert.deepEqual(starts(record), []);
+      assert.ok(!out.includes(ADMIN_PASSWORD), "the admin password is never printed");
+    });
+  }
+
+  test("a readable, non-empty file: Grafana starts, the value is not printed", async () => {
+    const dir = provisioned("ok");
+    const { fake, record } = fakeGrafana(dir, "ok");
+
+    const { code, out } = await run(dir, fake);
+
+    assert.equal(code, 0, out);
+    assert.deepEqual(starts(record), ["start execute_alerts=default addr=any args=--homepath=/usr/share/grafana"]);
+    assert.ok(!out.includes(ADMIN_PASSWORD));
   });
 });

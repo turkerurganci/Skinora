@@ -252,10 +252,19 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       );
     });
 
-    test("refuses to render without a Grafana admin password", () => {
-      assert.throws(
-        () => render([BASE, TRIAL], { envFile: stubEnvWithoutGrafanaAdmin }),
-        (err) => /GRAFANA_ADMIN_PASSWORD must be set/.test(String(err.stderr)),
+    test("the Grafana admin password is the trial's secret file, never a variable (T171b)", () => {
+      // T161's render-time guard (`GRAFANA_ADMIN_PASSWORD:?`) is gone with the
+      // variable: the password is secrets/trial/grafana_admin_password.txt and
+      // first-boot.sh refuses to start Grafana on a missing or empty file
+      // (scripts/grafana/first-boot.test.mjs). A .env.trial without the old
+      // variable renders, and no admin password reaches the environment.
+      const model = render([BASE, TRIAL], { envFile: stubEnvWithoutGrafanaAdmin });
+      const env = model.services["skinora-grafana"].environment;
+      assert.equal(env.GF_SECURITY_ADMIN_PASSWORD, undefined);
+      assert.equal(env.GF_SECURITY_ADMIN_PASSWORD__FILE, "/run/secrets/grafana_admin_password");
+      assert.equal(
+        resolve(model.secrets.grafana_admin_password.file),
+        join(ROOT, "secrets", "trial", "grafana_admin_password.txt"),
       );
     });
   });

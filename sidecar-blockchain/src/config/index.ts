@@ -111,8 +111,9 @@ export const config = {
   tronFullNodeUrl: process.env.TRON_FULL_NODE_URL || networkUrls.fullNodeUrl,
   tronSolidityUrl: process.env.TRON_SOLIDITY_URL || networkUrls.solidityUrl,
   tronEventUrl: process.env.TRON_EVENT_URL || networkUrls.eventUrl,
-  tronApiKey: process.env.TRON_API_KEY || '',
-  tronApiKeySecondary: process.env.TRON_API_KEY_SECONDARY || '',
+  // T171b — the TronGrid API keys are NOT read here: they come from their
+  // Docker secret files (config/providerCredentials.ts); the entry point hands
+  // them to TronGridClient (configureTronApiKeys) and the other clients.
 
   // Token contracts — 08 §3.3
   usdtContract: TOKEN_CONTRACTS[network].USDT,

@@ -16,8 +16,13 @@
 # only into the services that use it — signing material (seeds, wallet keys)
 # into its own network's service alone (T150, T163); the shared secrets (JWT,
 # webhook HMAC, internal keys, notification channel secrets) into the backend
-# and the one service at the other end, from ONE file (T171a). See the
-# `secrets:` block at the end and secrets/README.md.
+# and the one service at the other end, from ONE file (T171a); the
+# third-party credentials (database and Redis passwords, Grafana admin
+# password, Steam / TronGrid API keys, Ethereum RPC URLs) to the services that
+# use them (T171b). See the `secrets:` block at the end and secrets/README.md.
+# No password reaches `docker inspect`, a command line or an environment
+# variable: the connection strings below carry NONE — the backend and the
+# Steam service add it from the file.
 #
 # Prerequisite: the schema is NOT auto-migrated at startup. Apply migrations
 # before first boot — see Docs/DEPLOY_RUNBOOK.md §G.
@@ -52,6 +57,10 @@ services:
     # T163) is deliberately absent here so the backend never sees it (F4 gate check).
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      # T171b — WITHOUT a password (.env.example): the backend puts the
+      # mssql_sa_password / redis_password file into them at start
+      # (ThirdPartyCredentialFiles). Outside Development a password here stops
+      # it (CREDENTIAL_IN_ENV).
       - ConnectionStrings__DefaultConnection=${DB_CONNECTION_STRING}
       - Redis__ConnectionString=${REDIS_CONNECTION_STRING}
       # T171a — Jwt:Secret, the two webhook secrets, the three internal keys and
@@ -81,7 +90,8 @@ services:
       - SteamOpenId__ReturnToUrl=${STEAM_OPENID_RETURN_TO}
       - SteamOpenId__ReVerifyReturnToUrl=${STEAM_OPENID_REVERIFY_RETURN_TO}
       - SteamOpenId__FrontendCallbackUrl=${STEAM_OPENID_FRONTEND_CALLBACK}
-      - SteamOpenId__WebApiKey=${STEAM_API_KEY}
+      # T171b — the Web API key is the Docker secret steam_api_key (below),
+      # the Steam service's own file; no SteamOpenId__WebApiKey variable.
       # Backend → sidecar internal API auth (X-Internal-Key, 05 §3.4). The keys
       # are Docker secrets (T171a): the backend and each sidecar read the SAME
       # file (steam_sidecar_internal_key, blockchain_sidecar_internal_key).
@@ -175,6 +185,7 @@ services:
       # are changed through the admin UI only.
     # T171a — the shared secrets (DEFERRED_BACKLOG SharedSecretsInPlainEnv).
     # Every file must EXIST (secrets/README.md); the optional ones may be empty.
+    # T171b — plus the third-party credentials it holds (ThirdPartyCredentialFiles).
     secrets:
       - jwt_secret
       - blockchain_webhook_secret
@@ -186,6 +197,9 @@ services:
       - resend_webhook_signing_secret
       - telegram_bot_token
       - telegram_webhook_secret_token
+      - mssql_sa_password
+      - redis_password
+      - steam_api_key
     depends_on:
       skinora-db:
         condition: service_healthy
@@ -266,10 +280,13 @@ services:
       # inventory reads and trade-hold probes. No bot account, no password, no
       # maFile secret — the custody layer that needed them is gone (05 §3.2).
       # No webhook secret either: this sidecar signs nothing any more.
-      - STEAM_API_KEY=${STEAM_API_KEY}
+      # T171b — the key is the Docker secret steam_api_key (below), the
+      # backend's own file; no STEAM_API_KEY variable.
       # T171a — the internal key is the Docker secret steam_sidecar_internal_key
       # (below), the backend's own file; no INTERNAL_KEY variable here.
-      # Inventory cache (08 §2.3). Empty → in-memory fallback.
+      # Inventory cache (08 §2.3). Empty → in-memory fallback. T171b — the
+      # URL carries NO password (redis://skinora-redis:6379); the service puts
+      # the redis_password file into it (config/providerCredentials.ts).
       - REDIS_URL=${STEAM_SIDECAR_REDIS_URL:-}
       # Steam Community inventory queue ceiling (08 §2.6, T120). Separate from
       # the Web API queue; unset → 10/min (conservative end of the estimated
@@ -287,8 +304,11 @@ services:
       - STEAM_LIMITED_ACCOUNT_CACHE_TTL_SECONDS=${STEAM_SIDECAR_LIMITED_ACCOUNT_CACHE_TTL_SECONDS:-}
       - LOKI_URL=${LOKI_URL:-http://skinora-loki:3100}
     # T171a — read from /run/secrets/steam_sidecar_internal_key (config/sharedSecrets.ts).
+    # T171b — plus the Web API key and the Redis password (config/providerCredentials.ts).
     secrets:
       - steam_sidecar_internal_key
+      - steam_api_key
+      - redis_password
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -350,8 +370,8 @@ services:
       - ENERGY_STAKING_ENABLED=${ENERGY_STAKING_ENABLED:-false}
       # T171a — the internal key and the webhook secret are Docker secrets
       # (below), the backend's own files; no INTERNAL_KEY / WEBHOOK_SECRET here.
-      - TRON_API_KEY=${TRON_API_KEY}
-      - TRON_API_KEY_SECONDARY=${TRON_API_KEY_SECONDARY:-}
+      # T171b — the TronGrid API keys are Docker secrets (tron_api_key,
+      # tron_api_key_secondary, below); no TRON_API_KEY variables.
       - PAYMENT_POLLING_INTERVAL_MS=${PAYMENT_POLLING_INTERVAL_MS:-3000}
       # T139-ActiveMonitorQuotaAlarm — once the payment is confirmed the address
       # is polled every 15 min until the sweep (08 §3.4), and the quota alert
@@ -384,6 +404,9 @@ services:
       - tron_hot_wallet_private_key
       - blockchain_sidecar_internal_key
       - blockchain_webhook_secret
+      # T171b — the TronGrid API keys (config/providerCredentials.ts).
+      - tron_api_key
+      - tron_api_key_secondary
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -422,12 +445,12 @@ services:
       # (below), the backend's own files; no INTERNAL_KEY / WEBHOOK_SECRET here.
       - ETHEREUM_NETWORK=${ETHEREUM_NETWORK:-sepolia}
       # Provider URLs carry the API keys (08 §3.7.1: Alchemy primary,
-      # Chainstack backup; per-provider eth_getLogs limits, §3.7.4).
-      - ETHEREUM_RPC_PRIMARY_URL=${ETHEREUM_RPC_PRIMARY_URL:-}
+      # Chainstack backup; per-provider eth_getLogs limits, §3.7.4). T171b —
+      # the URLs themselves are Docker secrets (ethereum_rpc_primary_url,
+      # ethereum_rpc_backup_url, below); only the names and limits stay here.
       - ETHEREUM_RPC_PRIMARY_NAME=${ETHEREUM_RPC_PRIMARY_NAME:-alchemy}
       - ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE=${ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE:-10}
       - ETHEREUM_RPC_PRIMARY_MAX_ADDRESSES=${ETHEREUM_RPC_PRIMARY_MAX_ADDRESSES:-1000}
-      - ETHEREUM_RPC_BACKUP_URL=${ETHEREUM_RPC_BACKUP_URL:-}
       - ETHEREUM_RPC_BACKUP_NAME=${ETHEREUM_RPC_BACKUP_NAME:-chainstack}
       - ETHEREUM_RPC_BACKUP_MAX_BLOCK_RANGE=${ETHEREUM_RPC_BACKUP_MAX_BLOCK_RANGE:-100}
       - ETHEREUM_RPC_BACKUP_MAX_ADDRESSES=${ETHEREUM_RPC_BACKUP_MAX_ADDRESSES:-1000}
@@ -480,6 +503,9 @@ services:
       - ethereum_fuel_wallet_private_key
       - ethereum_sidecar_internal_key
       - ethereum_webhook_secret
+      # T171b — the RPC URLs (config/providerCredentials.ts).
+      - ethereum_rpc_primary_url
+      - ethereum_rpc_backup_url
     depends_on:
       skinora-backend:
         condition: service_healthy
@@ -497,23 +523,34 @@ services:
 
   # --- Infrastructure Services ---
 
+  # T171b — the sa password is the Docker secret mssql_sa_password. SQL
+  # Server reads it ITSELF through MSSQL_SA_PASSWORD_FILE (measured on this
+  # image, T171b_REPORT); scripts/db/mssql-entrypoint.sh only checks the file
+  # first — SQL Server starts even when it is missing, and on an empty volume
+  # that sets an unknown sa password for good (CREDENTIAL_* codes, no start).
   skinora-db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: skinora-db
+    entrypoint: ["/bin/bash", "/opt/skinora/mssql-entrypoint.sh"]
+    command: ["/opt/mssql/bin/sqlservr"]
     ports:
       - "127.0.0.1:${DB_PORT:-1433}:1433"
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - MSSQL_SA_PASSWORD_FILE=/run/secrets/mssql_sa_password
       - MSSQL_PID=${MSSQL_PID:-Developer}
+    secrets:
+      - mssql_sa_password
     volumes:
+      - ./scripts/db/mssql-entrypoint.sh:/opt/skinora/mssql-entrypoint.sh:ro
       - skinora-db-data:/var/opt/mssql
       # T164 — backups go to a HOST folder (gitignored), not into the database
       # volume: they survive `down -v` and a lost volume. Same host folder and
       # same path in skinora-db-backup (BACKUP ... TO DISK is a server path).
       - ${DB_BACKUP_HOST_DIR:-./backups/db}:/var/opt/mssql/backup
+    # The password goes to sqlcmd through SQLCMDPASSWORD, never argv (`ps`).
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1' -C || exit 1"]
+      test: ["CMD", "/bin/bash", "/opt/skinora/mssql-entrypoint.sh", "--healthcheck"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -536,7 +573,8 @@ services:
     entrypoint: ["/bin/bash", "/opt/skinora/db-backup.sh"]
     command: ["run"]
     environment:
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      # T171b — the sa password from its Docker secret file (never a variable).
+      - MSSQL_SA_PASSWORD_FILE=/run/secrets/mssql_sa_password
       - DB_BACKUP_SERVER=skinora-db
       - DB_BACKUP_DATABASE=${DB_BACKUP_DATABASE:-Skinora}
       - DB_BACKUP_FULL_INTERVAL_HOURS=${DB_BACKUP_FULL_INTERVAL_HOURS:-24}
@@ -546,6 +584,8 @@ services:
     volumes:
       - ./scripts/db-backup/db-backup.sh:/opt/skinora/db-backup.sh:ro
       - ${DB_BACKUP_HOST_DIR:-./backups/db}:/var/opt/mssql/backup
+    secrets:
+      - mssql_sa_password
     depends_on:
       skinora-db:
         condition: service_healthy
@@ -553,16 +593,28 @@ services:
     networks:
       - skinora-network
 
+  # T171b — the password is the Docker secret redis_password. The official
+  # image has no *_FILE support; scripts/redis/redis-entrypoint.sh writes
+  # `requirepass` into a config file on the tmpfs below (memory only, redis
+  # user only) and starts redis-server with it. Before T171b the password was
+  # on the command line (`--requirepass …`: docker inspect and ps showed it).
   skinora-redis:
     image: redis:7-alpine
     container_name: skinora-redis
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    entrypoint: ["/bin/sh", "/opt/skinora/redis-entrypoint.sh"]
+    command: ["--appendonly", "yes"]
+    tmpfs:
+      - /run/skinora-redis
+    secrets:
+      - redis_password
     volumes:
       - skinora-redis-data:/data
+      - ./scripts/redis/redis-entrypoint.sh:/opt/skinora/redis-entrypoint.sh:ro
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      # PING with the password in REDISCLI_AUTH (environment), never argv.
+      test: ["CMD", "/bin/sh", "/opt/skinora/redis-entrypoint.sh", "--healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -684,7 +736,12 @@ services:
       - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      # T171b — the admin password is the Docker secret grafana_admin_password;
+      # Grafana reads <option>__FILE natively. first-boot.sh refuses to start
+      # on a variable, a missing / unreadable / EMPTY file (Grafana itself
+      # would fall back to admin/admin). Applied on the FIRST start of an
+      # empty data volume only (DEPLOY_RUNBOOK §L.9).
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_admin_password
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
@@ -712,6 +769,7 @@ services:
       - ./scripts/grafana/first-boot.sh:/opt/skinora/first-boot.sh:ro
     secrets:
       - grafana_smtp_password
+      - grafana_admin_password
     depends_on:
       skinora-grafana-provisioning:
         condition: service_completed_successfully
@@ -839,6 +897,34 @@ secrets:
     file: ./secrets/telegram_webhook_secret_token.txt
   grafana_smtp_password:
     file: ./secrets/grafana_smtp_password.txt
+  # T171b — third-party credentials (DEFERRED_BACKLOG
+  # ThirdPartyCredentialsInPlainEnv). Every file must EXIST (the services
+  # mount them). Required, non-empty: mssql_sa_password (database, backup
+  # container, backend), redis_password (Redis, backend, Steam service — only
+  # A-Z a-z 0-9 . _ ~ + = -, openssl rand -hex 32), grafana_admin_password.
+  # May be empty: steam_api_key (backend + Steam service; empty = trade-hold
+  # probe 503, profile placeholder), tron_api_key / tron_api_key_secondary
+  # (empty = keyless TronGrid / no failover). The two RPC URLs are needed only
+  # under the "ethereum" profile (the primary is required there). The Discord
+  # client secret and bot token are NOT mounted: the channel is off
+  # (Discord__Provider); opening it adds discord_client_secret /
+  # discord_bot_token to the backend's list (DEPLOY_RUNBOOK §L.9).
+  mssql_sa_password:
+    file: ./secrets/mssql_sa_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  grafana_admin_password:
+    file: ./secrets/grafana_admin_password.txt
+  steam_api_key:
+    file: ./secrets/steam_api_key.txt
+  tron_api_key:
+    file: ./secrets/tron_api_key.txt
+  tron_api_key_secondary:
+    file: ./secrets/tron_api_key_secondary.txt
+  ethereum_rpc_primary_url:
+    file: ./secrets/ethereum_rpc_primary_url.txt
+  ethereum_rpc_backup_url:
+    file: ./secrets/ethereum_rpc_backup_url.txt
 
 networks:
   skinora-network:

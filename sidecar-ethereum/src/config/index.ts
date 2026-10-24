@@ -9,6 +9,11 @@ import {
   resolveSharedSecret,
   type SharedSecretSource,
 } from './sharedSecrets.js';
+import {
+  RPC_BACKUP_URL_SPEC,
+  RPC_PRIMARY_URL_SPEC,
+  resolveCredential,
+} from './providerCredentials.js';
 import { TOKEN_DECIMALS, parseLimit } from '../transfer/units.js';
 
 /**
@@ -26,8 +31,8 @@ import { TOKEN_DECIMALS, parseLimit } from '../transfer/units.js';
  * <b>Secrets are files, not variables.</b> The seed and the two signing keys
  * are Docker secrets (`*_FILE` paths, default `/run/secrets/...`). Since
  * T171a so are the internal key and the webhook secret (config/sharedSecrets.ts
- * — the variables only under NODE_ENV=development|test); the RPC URLs (which
- * carry the provider's API key) are still environment values.
+ * — the variables only under NODE_ENV=development|test); since T171b so are
+ * the RPC URLs, which carry the provider's API key (config/providerCredentials.ts).
  * </para>
  */
 
@@ -58,6 +63,11 @@ export interface EthereumServiceConfig {
   readonly sharedSecretSources: {
     readonly internalKey: SharedSecretSource;
     readonly webhookSecret: SharedSecretSource;
+  };
+  /** T171b — where the two RPC URLs came from (logged at startup; never a value). */
+  readonly credentialSources: {
+    readonly rpcPrimaryUrl: SharedSecretSource;
+    readonly rpcBackupUrl: SharedSecretSource;
   };
   readonly backendUrl: string;
   readonly chain: EthereumChainName;
@@ -242,8 +252,12 @@ function optionalAddress(env: Env, name: string): string | null {
   return canonicalAddress(raw);
 }
 
-function providerFrom(env: Env, prefix: 'PRIMARY' | 'BACKUP', defaults: { maxBlockRange: number }) {
-  const url = value(env, `ETHEREUM_RPC_${prefix}_URL`);
+function providerFrom(
+  env: Env,
+  prefix: 'PRIMARY' | 'BACKUP',
+  url: string,
+  defaults: { maxBlockRange: number },
+) {
   if (url === '') return null;
   let parsed: URL;
   try {
@@ -368,14 +382,18 @@ export function loadConfig(
     'The fuel wallet key secret',
   );
 
-  const primary = providerFrom(env, 'PRIMARY', { maxBlockRange: 10 });
+  // T171b — the URLs carry the provider's API key: Docker secret files, the
+  // variables only under NODE_ENV=development|test.
+  const primaryUrl = resolveCredential(RPC_PRIMARY_URL_SPEC, env, readMounted, fail);
+  const backupUrl = resolveCredential(RPC_BACKUP_URL_SPEC, env, readMounted, fail);
+  const primary = providerFrom(env, 'PRIMARY', primaryUrl.value, { maxBlockRange: 10 });
   if (primary === null) {
     throw new ConfigError(
       'RPC_NOT_CONFIGURED',
-      'ETHEREUM_RPC_PRIMARY_URL is not set — the service needs at least its primary RPC provider (08 §3.7.1).',
+      `The primary RPC URL is not set (${primaryUrl.path}; ETHEREUM_RPC_PRIMARY_URL only in development) — the service needs at least its primary RPC provider (08 §3.7.1).`,
     );
   }
-  const backup = providerFrom(env, 'BACKUP', { maxBlockRange: 100 });
+  const backup = providerFrom(env, 'BACKUP', backupUrl.value, { maxBlockRange: 100 });
   if (backup !== null && backup.name === primary.name) {
     throw new ConfigError(
       'INVALID_CONFIG',
@@ -397,6 +415,7 @@ export function loadConfig(
     internalKey,
     webhookHmacKey: webhook.value,
     sharedSecretSources: { internalKey: internal.source, webhookSecret: webhook.source },
+    credentialSources: { rpcPrimaryUrl: primaryUrl.source, rpcBackupUrl: backupUrl.source },
     backendUrl: value(env, 'BACKEND_URL') || 'http://skinora-backend:5000',
     chain,
     chainId: ETHEREUM_CHAINS[chain].chainId,

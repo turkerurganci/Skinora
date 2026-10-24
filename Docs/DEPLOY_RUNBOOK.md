@@ -1,6 +1,6 @@
 # Skinora — Deploy Runbook
 
-**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-24 — T171a: §L.9 ortak sırlar Docker secret dosyasından (kurulum günü adımları, geliştirme ortamından geçiş, döndürme); §B/§G.1/§K/§O/§P sırları dosyaya çekildi. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
+**Oluşturma:** WP14 (2026-06-19) · **Son güncelleme:** 2026-10-24 — T171b: §L.9'a üçüncü taraf kimlik bilgileri (DB/Redis/Grafana parolaları, Steam/TronGrid anahtarları, Ethereum RPC URL'leri — Docker secret; SQL Server/Grafana imajın `*_FILE` desteği + denetim, Redis giriş betiği; kurulum günü, geçiş, döndürme); §B/§G/§K/§N.6/§O sırları dosyaya çekildi. Önceki: T171a §L.9 ortak sırlar. · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#deploy_runbookmd)
 
 > Bu runbook, "uygulama prod'da açılması için neyin set edilmesi gerekir?" sorusunun tek doğru kaynağıdır. `06_DATA_MODEL §3.17` (SystemSetting kataloğu) ve `08_INTEGRATION_SPEC` (sidecar env) ile tutarlıdır. Değer kaynakları: backend `SystemSettingSeed.cs` (78 satır — T172a sonrası), `SettingsBootstrapService` (06 §8.9 fail-fast), sidecar `config/index.ts`.
 
@@ -17,7 +17,7 @@
 | **E. Runtime-tunable** | — | Admin UI'dan değişir; cron'lar **restart'sız** re-register olur (WP14), gas/retry her çalıştırmada taze okunur. |
 | **G. Lokal gerçek-konfigürasyon provası** | — | Uçtan uca çalıştırma reçetesi: sır yönetimi, migration, bootstrap SQL'leri, doğrulama listesi, bilinen tuzaklar. |
 | **J. Ethereum kurulumu ve alarmları (F8)** | Ethereum açılmadan ZORUNLU | Sırlar, RPC, fiyat kaynağı probu, cüzdan doldurma, açılış adımı (`ETHEREUM_SIDECAR_BASE_URL`), her Ethereum alarmının anlamı ve yordamı, uzun kesinti ve yanlış EVM ağı kurtarması (T158). |
-| **L. İmza sırları — Docker secret + çevrimdışı yedek (T163); ortak sırlar (T171a)** | Para girmeden önce ZORUNLU | İki ağın tohumu ve anahtarları yalnız secret dosyası (env yolu üretimde kapalı); şifreli yedek (`scripts/wallet-backup/`), saklama, geri yükleme ve prova kaydı. **§L.9:** JWT, webhook sırları, iç anahtarlar ve bildirim sırları da yalnız secret dosyası (backend + karşı uç aynı dosya) |
+| **L. İmza sırları — Docker secret + çevrimdışı yedek (T163); ortak sırlar (T171a)** | Para girmeden önce ZORUNLU | İki ağın tohumu ve anahtarları yalnız secret dosyası (env yolu üretimde kapalı); şifreli yedek (`scripts/wallet-backup/`), saklama, geri yükleme ve prova kaydı. **§L.9:** JWT, webhook sırları, iç anahtarlar ve bildirim sırları da yalnız secret dosyası (backend + karşı uç aynı dosya); T171b: DB/Redis/Grafana parolaları, Steam/TronGrid anahtarları, Ethereum RPC URL'leri de |
 | **K. Deneme yayını (bu PC, Docker Desktop + Cloudflare Tunnel — T161)** | Deneme yayınından önce ZORUNLU | Ayrı compose projesi (`skinora-trial`, ayrı volume / `.env.trial` / `secrets/trial/`); dışarıya açık port yok, dış trafik yalnız tünelden; tünel token'sız açılmaz. Gelecekteki Linux sunucu için 80/443 + güvenlik duvarı notu §K.6. |
 | **M. Launch checklist — ödeme onay kapısı (T169)** | **Test boyunca KAPALI, açılış T175'te** | `outbound.auto_send_enabled` `false` seed edilir: her satıcı ödemesi ve alıcı iadesi admin onayı (S22 paneli, 07 §9.35) bekler; sweep beklemez. Açma prosedürü §M. |
 | **N. Veritabanı yedeği ve geri dönüş planı (T164)** | Deneme yayınından önce ZORUNLU | `skinora-db-backup` tam 24 sa + log 15 dk, 14 gün, host klasörü; 10 GB ve yedek yaşı alarmları; geri yükleme yeni ada + `swap`; kötü sürüm/migration geri dönüşü; **geri yüklemeden sonra para mutabakatı ve açılış sırası (⚠ PARA, §N.8 — §M onay kapısına dayanır)**. |
@@ -68,8 +68,9 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 
 | Env var | Servis | Anlam |
 |---|---|---|
-| `DB_CONNECTION_STRING` / `ConnectionStrings__DefaultConnection` | backend | SQL Server connection string (Hangfire de aynı bağlantıyı kullanır) |
-| `REDIS_CONNECTION_STRING` | backend | Redis (distributed lock, cache) |
+| `DB_CONNECTION_STRING` / `ConnectionStrings__DefaultConnection` | backend | SQL Server connection string (Hangfire de aynı bağlantıyı kullanır). **T171b — parolasız** (`Server=skinora-db,1433;Database=Skinora;User Id=sa;TrustServerCertificate=True;`); parola `secrets/mssql_sa_password.txt`'ten süreç içinde eklenir (§L.9). Development dışında parolalı dize backend'i durdurur (`CREDENTIAL_IN_ENV`) |
+| `REDIS_CONNECTION_STRING` | backend | Redis (distributed lock, cache). **T171b — parolasız** (`skinora-redis:6379`); parola `secrets/redis_password.txt` (§L.9) |
+| ~~`MSSQL_SA_PASSWORD`~~ / ~~`REDIS_PASSWORD`~~ / ~~`GRAFANA_ADMIN_PASSWORD`~~ → `secrets/mssql_sa_password.txt`, `secrets/redis_password.txt`, `secrets/grafana_admin_password.txt` | veritabanı + yedek + backend · Redis + backend + Steam servisi · Grafana | **T171b — Docker secret (§L.9)**; üçü de zorunlu ve boş olamaz. SQL Server ve Grafana dosyayı kendisi okur (`*_FILE`), önlerindeki betik dosyayı denetler; Redis parolası giriş betiğiyle tmpfs'teki yapılandırma dosyasına yazılır — komut satırına girmez |
 | `REVERSE_PROXY_KNOWN_NETWORK` | backend | **Reverse proxy arkasında ZORUNLU (F3a).** Backend istemci IP'sini yalnız bu ağdan gelen `X-Forwarded-For` başlığına güvenerek çözer. Boş bırakılırsa forwarded header **hiç işlenmez** ve `RemoteIpAddress` proxy'nin IP'si olarak kalır → `auth` rate limit izolasyonu, geo-block ve VPN sinyali **sessizce etkisiz** olur. Compose varsayılanı `172.20.0.0/16` (skinora-network). **Üretimde yalnız reverse proxy'nin bulunduğu ağ/adres yazılmalıdır** — geniş aralık güveni sulandırır |
 | nginx `geo $skinora_trusted_edge` (`nginx/nginx.conf`, env değil) | reverse-proxy | **Ülke başlığı güveni (T166).** Geo-block'un ülkesi deneme yayınında Cloudflare'in `CF-IPCountry` başlığından gelir (Cloudflare Tunnel → nginx → backend, sahip kararı 2026-10-21). nginx bu değeri backend'e `X-Country-Code` olarak **yalnız kendi TCP eşi tünel bağlayıcısıysa** (bu `geo` listesindeki adres) taşır; başka her eşte başlığı **boş** gönderir, yani istemcinin yazdığı `X-Country-Code`/`CF-IPCountry` backend'e hiç ulaşmaz. Backend de başlığa yalnız kendi eşi `REVERSE_PROXY_KNOWN_NETWORK` içindeyse (yani nginx'ten gelmişse) inanır. Varsayılan liste compose ağı `172.20.0.0/16` (`docker-compose.yml` `skinora-network` için `ipam` ile bu alt ağı **sabitler**; başka alt ağ atanırsa güven boşa düşer ve geo-block sessizce açık kalır, bu yüzden alt ağı değiştirirseniz nginx `geo` ve `REVERSE_PROXY_KNOWN_NETWORK`'ü de birlikte değiştirin), **ağ geçidi `172.20.0.1` hariç** — Docker'ın userland proxy'sinde (Docker Desktop, localhost) yayımlanmış porta gelen istek nginx'e ağ geçidi adresinden ulaşır, bu ölçüldü (T166). **T162'de** listeyi cloudflared container'ının adresine daraltın. Liste hiçbir şeyle eşleşmezse ülke backend'in IP tabanlı (MaxMind) çözümüne düşer — "eksik bilgi", "yanlış güven" değil |
 | `REVERSE_PROXY_FORWARD_LIMIT` | backend | Zincirdeki proxy sayısı, varsayılan `1` (tek nginx). Önünde CDN varsa artırın. **Olduğundan büyük vermek istemcinin zincire sahte girdi eklemesine izin verir** — ölçüldü: `ForwardLimit=1` ile nginx üzerinden sahte `X-Forwarded-For` gönderen istemci kendi kovasından kaçamıyor |
@@ -77,10 +78,10 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `JWT_ISSUER` / `JWT_AUDIENCE` | backend | Token issuer/audience |
 | ~~`WEBHOOK_SECRET`~~ → `secrets/blockchain_webhook_secret.txt` (≥32 char) | backend + **blockchain** sidecar (aynı dosya) | Sidecar→backend HMAC-SHA256 webhook imzası (05 §3.4). Steam sidecar webhook göndermez (T133) — kalan tek imzalı yüzey blockchain'dir. **T171a — Docker secret (§L.9)**; TRON servisi bu sır olmadan ya da kısa sırla açılmaz (`WEBHOOK_SECRET_MISSING` / `_TOO_SHORT`) |
 | ~~`INTERNAL_KEY`~~ (+ ~~`STEAM_SIDECAR_INTERNAL_KEY`~~ / ~~`BLOCKCHAIN_SIDECAR_INTERNAL_KEY`~~) → `secrets/steam_sidecar_internal_key.txt`, `secrets/blockchain_sidecar_internal_key.txt` | backend + sidecar'lar (sidecar başına tek dosya) | **T171a — Docker secret (§L.9), env yolu üretimde kapalı.** Backend↔sidecar internal API `X-Internal-Key` auth. **T161 — fail-closed: Steam ve TRON servisi iç anahtar boşsa ya da 32 karakterden kısaysa AÇILMAZ** (`INTERNAL_KEY_MISSING` / `INTERNAL_KEY_TOO_SHORT`, Ethereum servisiyle aynı kural). T161 öncesi boş anahtar "dev modu" sayılıp kimlik doğrulaması atlanıyordu — servisin portuna ulaşan herkes `/api` uçlarını çağırabiliyordu. Üretim: `openssl rand -hex 32`, servis başına ayrı değer |
-| `STEAM_API_KEY` | steam sidecar + backend | Steam Web API (envanter + trade-hold probu) + OpenID profil adı/avatar (`SteamOpenId__WebApiKey`; boşsa login çalışır ama profil placeholder'a düşer). **Steam sidecar'ın tek credential'ı budur** — bot hesabı gerekmez (T133, 08 §9.1) |
+| ~~`STEAM_API_KEY`~~ → `secrets/steam_api_key.txt` | steam sidecar + backend (aynı dosya) | Steam Web API (envanter + trade-hold probu) + OpenID profil adı/avatar (`SteamOpenId:WebApiKey`; boşsa login çalışır ama profil placeholder'a düşer). **Steam sidecar'ın tek credential'ı budur** — bot hesabı gerekmez (T133, 08 §9.1). **T171b — Docker secret (§L.9)**; üretimde değişken servisleri durdurur (`CREDENTIAL_IN_ENV`) |
 | `STEAM_OPENID_REALM` / `_RETURN_TO` / `_REVERIFY_RETURN_TO` / `_FRONTEND_CALLBACK` | backend | Steam OpenID 2.0 (08 §2.1). **`appsettings.json` default'u `https://skinora.com`** — override edilmezse gerçek login ölü bir domaine yönlenir |
 | `PUBLIC_ORIGIN` | backend | Tarayıcıya bakan tek origin → `Cors__AllowedOrigins__0` |
-| `STEAM_SIDECAR_REDIS_URL` | steam sidecar | Envanter cache (08 §2.3); boşsa in-memory fallback |
+| `STEAM_SIDECAR_REDIS_URL` | steam sidecar | Envanter cache (08 §2.3); boşsa in-memory fallback. **T171b — parolasız** (`redis://skinora-redis:6379`); servis `secrets/redis_password.txt`'i ekler, üretimde URL'deki parola `CREDENTIAL_IN_ENV` |
 | `STEAM_SIDECAR_COMMUNITY_REQUESTS_PER_MINUTE` | steam sidecar | Steam Community envanter ucunun kuyruk tavanı, istek/dakika (08 §2.6, T120). Web API kuyruğundan **ayrı**. Boş/geçersiz → **10/dk** (tahmini 10-20/dk/IP aralığının muhafazakâr ucu; aşım IP bloğuyla cezalandırılır). Her teslimat doğrulaması **iki** okuma harcadığı için (satıcı + alıcı) bu değer aynı zamanda eşzamanlı doğrulama tavanıdır (10 §4). Yalnız proxy havuzu arkasında veya T122 gerçek limiti ölçtükten sonra yükseltilir. Değişiklik sidecar restart gerektirir |
 | `STEAM_SIDECAR_LIMITED_ACCOUNT_SAMPLES` (+ `_SAMPLE_DELAY_MS`, `_DEADLINE_MS`, `_CACHE_TTL_SECONDS`) | steam sidecar | Limited-account probunun örnekleme ayarları (08 §2.2a). Aynı Community kotasını harcar. `0` (kısıtlı değil) ancak bu kadar **ardışık** örnek aynı sonucu verirse kabul edilir; `1` tek okumada bağlayıcıdır. Boş → **3 örnek / 3 sn ara / 20 sn üst sınır / 24 sa temiz-önbellek**. Varsayılan 3, §G.5'teki insan yordamının **5**'inin altındadır ve bilerek öyledir: oradaki kural tek seferlik koşar, buradaki her soğuk kullanıcı için örnek sayısı kadar Community isteği harcar. Gerçek IP limiti ölçüldüğünde **rebuild'siz** yükseltilir — yalnız sidecar restart gerekir. `_DEADLINE_MS` backend istemcisinin 30 sn'lik timeout'unun **altında** kalmalı, yoksa arıza kodlu 503 yerine "backend timeout" olarak görünür |
 | **TRON servisi — Docker secret dosyaları** (`secrets/tron_hd_mnemonic.txt`, `secrets/tron_hot_wallet_private_key.txt`; deneme yayını `secrets/trial/`) | **yalnız** blockchain sidecar | **T163 — DEFERRED_BACKLOG `SigningSecretsInPlainEnv`.** Depozit tohumu (BIP-39, `m/44'/195'/0'/0/{index}` kök düğümden, 08 §3.2) ve sıcak cüzdan anahtarı env değil **dosya**; compose `secrets:` ile yalnız bu servise `/run/secrets/` altına bağlar. Dosyalar **her stack'te** gerekir (boş olabilir: boş tohum → derive 503, boş anahtar → payout/iade/sweep reddedilir). **Env yolu kapalı:** `NODE_ENV` tam `development`/`test` değilken `HD_WALLET_MNEMONIC` ya da `HOT_WALLET_PRIVATE_KEY` doluysa servis açılmaz (`SIGNING_SECRET_IN_ENV`). Doluysa sıcak anahtar `HOT_WALLET_ADDRESS`'i kontrol etmeli (`HOT_WALLET_ADDRESS_MISMATCH`). Eksik kaynak dosyada Docker o yolda **boş dizin** açar → `SIGNING_SECRET_UNREADABLE`. Yedek, geri yükleme, prova: **§L**; hazırlama ve `.env`'den geçiş: [`secrets/README.md`](../secrets/README.md) |
@@ -94,12 +95,12 @@ SystemSetting değil; servisin açılması ve dış entegrasyonlar için zorunlu
 | `STAKE_ACCOUNT_ADDRESS` (+ `STAKE_ACCOUNT_PERMISSION_ID`) | blockchain sidecar | Enerji kilidinin durduğu ayrı hesabın **adresi**. Owner anahtarı çevrimdışıdır ve hiçbir servise verilmez; sıcak cüzdanın anahtarı bu hesapta yalnız devretme/geri alma yetkisiyle listelidir. Boş = sıcak cüzdan kendi kilidini kullanır (eski düzen, kırılma yok). Bozuk ya da base58 olmayan adres (`41…` hex dahil) ya da 2'den küçük / tam sayı olmayan izin kimliği sidecar'ı açılışta durdurur (`STAKE_ACCOUNT_MISCONFIGURED`); açılan sidecar hangi hesaptan devredeceğini `Energy delegation:` satırında yazar. Kurulum, ödeme payının sıcak cüzdana kalıcı devretilmesi ve bant boyutlandırması §C.2. **F8 (T141): kilit uykuda — boş bırakın** (§C.2 başındaki not); T149'dan sonra `ENERGY_STAKING_ENABLED` kapalıyken bu iki değer okunmaz bile |
 | `ENERGY_STAKING_ENABLED` | blockchain sidecar | **T149 — hibrit kilidin kapama anahtarı, varsayılan `false`** (compose `:-false`). Kapalıyken kilit okunmaz, devretme yapılmaz, her depozit transferi yakar; `true` yalnız proje sahibi kilidi yeniden açarsa (§C.2). Yalnız `true`/`false`/boş kabul edilir — başka değer sidecar'ı açılışta durdurur. Açılış log'unun `Energy delegation:` satırı `stakingEnabled` alanını yazar |
 | `TRON_NETWORK` (+ `TRON_*_CONTRACT` testnet'te) | blockchain sidecar | mainnet/nile/shasta + token kontratları (08 §3.3) |
-| `TRON_API_KEY` (+ `TRON_API_KEY_SECONDARY`) | blockchain sidecar | TronGrid rate-limit + failover (WP10). **Aynı TronGrid hesabının anahtarları toplam kotayı paylaşabilir** (TronGrid belgesi, 2026-09-08) — ikinci anahtar bütçe ekleyecekse başka bir hesaptan alınmalıdır |
+| ~~`TRON_API_KEY`~~ (+ ~~`TRON_API_KEY_SECONDARY`~~) → `secrets/tron_api_key.txt`, `secrets/tron_api_key_secondary.txt` | blockchain sidecar | **T171b — Docker secret (§L.9).** TronGrid rate-limit + failover (WP10). **Aynı TronGrid hesabının anahtarları toplam kotayı paylaşabilir** (TronGrid belgesi, 2026-09-08) — ikinci anahtar bütçe ekleyecekse başka bir hesaptan alınmalıdır |
 | `TRONGRID_DAILY_REQUEST_BUDGET` | blockchain sidecar | Planın günlük istek bütçesi; açılışta `skinora_blockchain_trongrid_daily_request_budget` gauge'una yazılır ve `tron-quota-projection` alarmı ölçülen istek hızını buna böler (oran > 0,8 → uyarı). Varsayılan 100.000 = 2026'da raporlanan ücretsiz plan; TronGrid bütçeyi ne yanıtta ne belgede veriyor, **gerçek planın değeri girilir**. Pozitif tam sayı değilse sidecar açılmaz. Kapasite hesabı 08 §3.4 |
 | `ETHEREUM_SIDECAR_BASE_URL` / iç anahtar `secrets/ethereum_sidecar_internal_key.txt` (T171a — eskiden `ETHEREUM_SIDECAR_INTERNAL_KEY`) | backend (+ iç anahtar Ethereum servisine, aynı dosya) | **T148 — Ethereum servisinin adresi ve iç anahtarı (`EthereumSidecar__*`).** Servis T158 itibarıyla **tamamdır** (izleme T151, gönderim T152, yakıt T153, ücret ve kur T154). `ETHEREUM_SIDECAR_BASE_URL`'i doldurmak Ethereum'u **yeni işlemlere açar** — bu bir açılış kararıdır, varsayılan değil: §J.1'in sırası (sırlar, RPC, fiyat kaynağı probu, cüzdanlar, alarmlar) tamamlanmadan doldurmayın. Değer: `http://skinora-ethereum-sidecar:5300`. Boş = backend Ethereum'a hiçbir istek göndermez; Ethereum'a ait her çağrı "yapılamadı" döner, Ethereum gönderim satırları `PENDING` bekler (yeniden deneme hakkı harcanmaz), sağlık yoklaması Ethereum'u yoklamaz. TRON bundan etkilenmez: bekleyen Ethereum satırları TRON'un gönderim/onay/adres/sweep sırasını tutmaz (iş adayları sorguda yapılandırılmış ağlarla sınırlı — 05 §3.3a, T148 düzeltme turu 1). **Yapılandırılmış ama erişilemeyen** Ethereum servisi de TRON'u tutmaz (T150): toplu işler ağ başına ayrı parti alır, sırayla işler, bir ağın servisi ilk "erişilemez" cevabında o turu bırakır; sağlık yoklaması kesinti ilan edince o ağa hiç dokunulmaz; outbox başarısız olayı geri çekilmeyle (5 sn'den 15 dk'ya) yeniden dener. İç anahtar TRON'unkinden (`BLOCKCHAIN_SIDECAR_INTERNAL_KEY`/`INTERNAL_KEY`) **farklı** olmalı; Ethereum servisi kendi iç anahtarı olmadan ya da 32 karakterden kısa anahtarla **açılmaz** (`INTERNAL_KEY_MISSING` / `INTERNAL_KEY_TOO_SHORT`) — `INTERNAL_KEY`'e düşen bir yedek yoktur |
 | **Ethereum servisi — Docker secret dosyaları** (`secrets/ethereum_hd_mnemonic.txt`, `secrets/ethereum_hot_wallet_private_key.txt`, `secrets/ethereum_fuel_wallet_private_key.txt`) | **yalnız** Ethereum servisi | **T150 — 11 §F8 K7.** Tohum (BIP-39, yol `m/44'/60'/0'/0/{index}` kök düğümden) ve iki imza anahtarı env değil **dosya** olarak, compose `secrets:` ile `/run/secrets/` altına bağlanır; başka hiçbir konteynere gitmez, TRON tohumu bu servise hiç girmez. Tohum dosyası yoksa ya da boşsa servis açılmaz (`HD_WALLET_NOT_CONFIGURED`). Anahtar dosyaları T152/T153'e kadar boş olabilir; doluysa sıcak anahtar `ETHEREUM_HOT_WALLET_ADDRESS`'i kontrol etmeli (`HOT_WALLET_ADDRESS_MISMATCH`), yakıt anahtarı sıcak anahtardan farklı olmalı ve sıcak/soğuk adresi kontrol etmemeli (`WALLET_KEYS_NOT_DISTINCT`, öneriyle kaydedildi — ⚠). Dosyalar yalnız `ethereum` profiliyle gerekir: `docker compose -f docker-compose.yml --profile ethereum up -d`. Okunamayan secret (Docker'ın eksik dosya yerine açtığı dizin) servisi `SECRET_UNREADABLE` ile durdurur (T163). Hazırlama: [`secrets/README.md`](../secrets/README.md); çevrimdışı yedek §L |
 | `ETHEREUM_NETWORK` (+ `ETHEREUM_SIDECAR_PORT`) | Ethereum servisi | `sepolia` (chainId 11155111, varsayılan) ya da `mainnet` (chainId 1) (08 §3.7.1). Sağlayıcının `eth_chainId`'si bu zincir değilse o sağlayıcı hiç kullanılmaz (log'a yazılır, yedek cevap verir) |
-| `ETHEREUM_RPC_PRIMARY_URL` / `ETHEREUM_RPC_BACKUP_URL` (+ `_NAME`, `_MAX_BLOCK_RANGE`, `_MAX_ADDRESSES`) | Ethereum servisi | **T150 — birincil + yedek JSON-RPC (08 §3.7.1, öneriyle kaydedildi — ⚠: Alchemy Free birincil, Chainstack Developer yedek).** URL'ler sağlayıcının API anahtarını taşır — sır gibi davranın; log'lara yalnız sunucu adı yazılır. Birincil zorunlu (yoksa servis açılmaz: `RPC_NOT_CONFIGURED`); yedek yoksa açılır ama uyarır (yedeğe geçiş yok). `eth_getLogs` sınırları sağlayıcı başına ayardır (08 §3.7.4): blok aralığı Alchemy Free **10**, Chainstack Developer **100**; arama konumu başına en çok **1.000** adres. Sağlayıcı yine "çok büyük" derse istek yarıya bölünür. Taşıma hatası (bağlantı, zaman aşımı, 429/5xx, `-32005`, arşiv reddi) alan sağlayıcı 30 sn atlanır, diğeri cevap verir. Anahtarlı sınırlar belgeden alındı; anahtarlar gelince T142 probu bu uçlara koşulmalı (11 §F8 T150 ⚠) |
+| ~~`ETHEREUM_RPC_PRIMARY_URL`~~ / ~~`ETHEREUM_RPC_BACKUP_URL`~~ → `secrets/ethereum_rpc_primary_url.txt`, `secrets/ethereum_rpc_backup_url.txt` (+ env'de `_NAME`, `_MAX_BLOCK_RANGE`, `_MAX_ADDRESSES`) | Ethereum servisi | **T171b — URL'ler Docker secret (§L.9).** **T150 — birincil + yedek JSON-RPC (08 §3.7.1, öneriyle kaydedildi — ⚠: Alchemy Free birincil, Chainstack Developer yedek).** URL'ler sağlayıcının API anahtarını taşır — sır gibi davranın; log'lara yalnız sunucu adı yazılır. Birincil zorunlu (yoksa servis açılmaz: `RPC_NOT_CONFIGURED`); yedek yoksa açılır ama uyarır (yedeğe geçiş yok). `eth_getLogs` sınırları sağlayıcı başına ayardır (08 §3.7.4): blok aralığı Alchemy Free **10**, Chainstack Developer **100**; arama konumu başına en çok **1.000** adres. Sağlayıcı yine "çok büyük" derse istek yarıya bölünür. Taşıma hatası (bağlantı, zaman aşımı, 429/5xx, `-32005`, arşiv reddi) alan sağlayıcı 30 sn atlanır, diğeri cevap verir. Anahtarlı sınırlar belgeden alındı; anahtarlar gelince T142 probu bu uçlara koşulmalı (11 §F8 T150 ⚠) |
 | `ETHEREUM_FINALIZED_POLL_INTERVAL_MS` / `ETHEREUM_FINALIZED_STALL_SECONDS` | Ethereum servisi | `finalized` başı 30 sn'de bir okunur (08 §3.7.4); son `finalized` bloğun zaman damgası **1.800 sn**'den (30 dk) eskiyse servis `/health`'te **503** verir (backend Ethereum'u dondurur, yeni işleme kapatır; TRON etkilenmez) ve `ethereum-finalized-stalled` alarmı çalar (08 §3.7.8). Eşik `skinora_ethereum_finalized_stall_threshold_seconds` gauge'una yazılır; alarm aynı değere böler. Backend'deki `blockchain.ethereum.finality_stall_alarm_minutes` ile parite §D |
 | `ETHEREUM_MAX_SINGLE_TRANSFER_USDT` / `ETHEREUM_MAX_DAILY_OUTFLOW_USDT` (+ `ETHEREUM_FUEL_MAX_SINGLE_ETH` / `ETHEREUM_FUEL_MAX_DAILY_ETH`) | Ethereum servisi | **T152 — gönderim tavanları (08 §3.7.6, TRON'un `MAX_*` kuralının eşi; boyutlandırma §C.3).** Tek gönderim tavanı payout ve iadeye, günlük tavan sıcak cüzdanın 24 saatlik payout çıkışına uygulanır (zincirden okunur: son 7.200 blok, soğuk aktarım hariç). **Boş = o gönderim reddedilir (fail-closed);** bozuk değerle (sıfır, eksi, 6'dan fazla ondalık) servis **açılmaz** (`INVALID_CONFIG`). **Yakıt tavanları (T153) ETH cinsindendir** ve her depozit yakıtına uygulanır: tek yakıt `ETHEREUM_FUEL_MAX_SINGLE_ETH`'i, son 24 saatin yakıtı — değer **ve** yakıt işleminin kendi en kötü ücreti, servisin günlüğünden sayılır — `ETHEREUM_FUEL_MAX_DAILY_ETH`'i aşamaz. **Boş = hiç yakıt gönderilmez: Ethereum sweep'leri ve sweep öncesi iadeler `FUEL_REQUIRED` ile bekler** (satır `PENDING`, `FAILED` olmaz); tavana takılan yakıt `FUEL_LIMIT_REACHED` ile bekler. Önerilen değerler §C.3 |
 | `ETHEREUM_DEPOSIT_REFUND_DAILY_LIMIT_USDT` | Ethereum servisi | **T172b — TRON satırının eşi** (`.env.example` **100**). Sayım işlem günlüğünden yapılır (ayrı defter yok). Boş = depozit iadesi bekler; bozuk değerle servis **açılmaz** (`INVALID_CONFIG`). Sıcak cüzdan iadesi (sweep sonrası) bu tavana değil sıcak cüzdan tavanına girer. Backend'deki `blockchain.ethereum.deposit_refund_daily_limit_usdt` (T169a) ile aynı değer (§D) |
@@ -451,9 +452,9 @@ Kalan etki kozmetiktir: AD14 rol detayında fazladan bir eleman görünür. Migr
 |---|---|
 | Docker Desktop (çalışır durumda) | 11 container + SQL Server |
 | .NET 9 SDK + `dotnet-ef` | Migration host'tan uygulanır — backend startup'ta **auto-migrate yoktur** |
-| `STEAM_API_KEY` | steamcommunity.com/dev/apikey. Steam sidecar'ın **tek** kimlik bilgisi — bot hesabı gerekmez (T133) |
+| `STEAM_API_KEY` → `secrets/steam_api_key.txt` (T171b) | steamcommunity.com/dev/apikey. Steam sidecar'ın **tek** kimlik bilgisi — bot hesabı gerekmez (T133) |
 | Tron testnet cüzdanı | HD mnemonic + ayrı hot wallet (adres + private key), içinde faucet TRX. Mnemonic T143'ten önce depozit açmak için kullanıldıysa önce §G.0b |
-| `TRON_API_KEY` | trongrid.io ücretsiz plan — yoksa monitor 429 yer |
+| `TRON_API_KEY` → `secrets/tron_api_key.txt` (T171b) | trongrid.io ücretsiz plan — yoksa monitor 429 yer |
 | Nile USDT/USDC kontrat adresleri | Testnet'te koda gömülü değil, env'den gelir |
 
 ### G.0a F6 → F7 yükseltmesi (mevcut bir ortam için)
@@ -513,6 +514,9 @@ bash scripts/git-hooks/install.sh
 cp .env.example .env
 #    Rastgele secret üretimi:  openssl rand -hex 32
 #    PUBLIC_ORIGIN ve STEAM_OPENID_* → http://localhost:8080
+#    Sır DOSYALARI (T163/T171a/T171b — env'de değiller): secrets/README.md
+#    "Geliştirme ortamı, sıfırdan" — DB/Redis/Grafana parolaları dahil, compose
+#    hepsinin var olmasını ister (yoksa Docker yerine dizin açar, servis açılmaz)
 
 # 2) Veritabanı + Redis
 docker compose -f docker-compose.yml up -d skinora-db skinora-redis
@@ -521,7 +525,8 @@ docker inspect --format '{{.State.Health.Status}}' skinora-db
 
 # 3) Şema (host'tan; backend auto-migrate ETMEZ)
 cd backend
-ConnectionStrings__DefaultConnection='Server=localhost,1433;Database=Skinora;User Id=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=True;' \
+# T171b — parola secrets/mssql_sa_password.txt'ten okunur, ekrana yazılmaz (host'taki Development aracı)
+ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=Skinora;User Id=sa;Password=$(cat ../secrets/mssql_sa_password.txt);TrustServerCertificate=True;" \
   dotnet ef database update \
     --project src/Skinora.Shared/Skinora.Shared.csproj \
     --startup-project src/Skinora.API/Skinora.API.csproj \
@@ -633,7 +638,7 @@ Aynı sebeple `NEXT_PUBLIC_API_URL`'in compose'daki runtime değeri **etkisizdir
 - **Grafana'nın ölü alarmları — yeniden kurmak YETMEZ, container'ı yeniden başlatın (2026-08-29'da ölçüldü).** [#307](https://github.com/turkerurganci/Skinora/pull/307) `datasources/prometheus.yml`'ye `uid: prometheus` ekledi, ama `docker compose -f docker-compose.yml up -d --build --wait` **Grafana'yı yeniden başlatmaz**: servis tanımı değişmemiştir, değişen tek şey mount edilen volume'ün *içeriği*dir. Render servisi (`skinora-grafana-provisioning`, §G.6) volume'ü günceller; Grafana provisioning'i **yalnız açılışta** okur. **Ölçüm:** render 13:12'de koştu, Grafana 18 saattir ayaktaydı, yedi kuralın yedisi de hâlâ `health: error / failed to build query 'A': data source not found` idi — yani düzeltme merge edilmiş, imajlar tazelenmiş, stack 11/11 `healthy`, **ve alarmlar hâlâ ölü**. `docker compose -f docker-compose.yml restart skinora-grafana` sonrası yedisi de **ilk kez** `health: ok` oldu. **Kanıt "healthy" değil, kuralın kendi sağlığıdır:**
 
   ```bash
-  curl -s -u admin:$GRAFANA_ADMIN_PASSWORD \
+  curl -s -u "admin:$(cat secrets/grafana_admin_password.txt)" \
     http://localhost:3001/api/prometheus/grafana/api/v1/rules \
     | grep -c '"health":"error"'   # 0 olmalı
   ```
@@ -922,7 +927,7 @@ Servis hiçbir gas miktarını sabit varsaymaz (yönetici kararı, ⚠ PARA; 08 
 | Docker secret'lar | `secrets/` | **`secrets/trial/`** ([`secrets/README.md`](../secrets/README.md)) |
 | Host portları | hepsi `127.0.0.1` (§K.2) | iç servis portu **yok**; yalnız operatör için `127.0.0.1:8090` (edge), `127.0.0.1:3011` (Grafana), `127.0.0.1:3012` (Uptime Kuma) |
 | Ortam modu | `.env`'den | **zorlanır**: `ASPNETCORE_ENVIRONMENT=Production`, `NODE_ENV=production` |
-| Grafana parolası | boşsa `admin` | **boşsa render bile edilmez** (`GRAFANA_ADMIN_PASSWORD must be set`) |
+| Grafana parolası | `secrets/grafana_admin_password.txt` | `secrets/trial/grafana_admin_password.txt` — T171b'den beri iki stack'te de **dosya yoksa/boşsa Grafana açılmaz** (`first-boot.sh`, `CREDENTIAL_MISSING`); `admin` geri düşüşü kalktı |
 | Tünel | yok | `skinora-cloudflared` (profil `tunnel`), token'sız açılmaz (§K.5) |
 
 ### K.2 Port politikası (T161 kabul kriteri)
@@ -930,7 +935,7 @@ Servis hiçbir gas miktarını sabit varsaymaz (yönetici kararı, ⚠ PARA; 08 
 - **`docker-compose.yml` (geliştirme ve gelecekteki sunucu):** her host portu `127.0.0.1`'e bağlıdır — veritabanı (1433), Redis (6379), backend (5000), frontend (3000), sidecar'lar (5100/5200/5300), Loki (3100), Prometheus (9090), Grafana (3001), Uptime Kuma (3002). Bu portlar yalnız bu makineden açılır, LAN'dan ya da internetten **açılmaz**. Servisler birbirine compose ağıyla ulaşır; host portuna ihtiyaçları yoktur. Ayarı olan tek servis edge'dir: `NGINX_BIND_ADDRESS` (varsayılan `127.0.0.1`).
 - **`docker-compose.trial.yml`:** iç servislerin portları `ports: !reset []` ile tamamen kaldırılır; yalnız üç operatör portu `127.0.0.1`'de kalır. Dış trafik **yalnız** tünelden gelir.
 - **`docker-compose.override.yml`** artık port yayımlamaz: compose override'daki port listesini taban dosyanınkine **ekler**, yani oradaki çıplak `"5000:5000"` aynı porta ikinci bir `0.0.0.0` bağı açardı.
-- **CI kapısı:** `scripts/compose-exposure.test.mjs` (job "3c. Script test") üç kombinasyonu `docker compose config` ile render eder ve `127.0.0.1` dışına bağlı her portta, deneme yayınında port yayımlayan her iç serviste, sabit container adında, `secrets/trial/` dışından gelen secret'ta Grafana parolasız render'da ve `.env.trial` işareti (`SKINORA_TRIAL_STACK`) olmayan render'da **kırmızı** olur. Metin değil render edilmiş model okunur: `!reset` etiketi YAML anchor'ı (`<<: *x`) üzerinden verildiğinde compose onu **sessizce düşürür** ve taban portlar kalır (Compose v5.1.0'da ölçüldü) — overlay etiketleri bu yüzden her serviste tek tek yazılıdır.
+- **CI kapısı:** `scripts/compose-exposure.test.mjs` (job "3c. Script test") üç kombinasyonu `docker compose config` ile render eder ve `127.0.0.1` dışına bağlı her portta, deneme yayınında port yayımlayan her iç serviste, sabit container adında, `secrets/trial/` dışından gelen secret'ta, Grafana yönetici parolasının değişken olarak geçmesinde (T171b'den beri dosya) ve `.env.trial` işareti (`SKINORA_TRIAL_STACK`) olmayan render'da **kırmızı** olur. Metin değil render edilmiş model okunur: `!reset` etiketi YAML anchor'ı (`<<: *x`) üzerinden verildiğinde compose onu **sessizce düşürür** ve taban portlar kalır (Compose v5.1.0'da ölçüldü) — overlay etiketleri bu yüzden her serviste tek tek yazılıdır.
 - **E2E stack'i (`docker-compose.e2e.yml`) kapsam dışıdır:** sabit test değerleri taşır, CI runner'ında host portlarına bağlanan Playwright/harness tarafından kullanılır ve deneme yayınıyla aynı anda çalıştırılmaz.
 
 ### K.3 Ön koşullar
@@ -940,8 +945,8 @@ Servis hiçbir gas miktarını sabit varsaymaz (yönetici kararı, ⚠ PARA; 08 
 | Docker Desktop + Compose ≥ 2.24 | `!reset` / `!override` etiketleri. Bu makinede v5.1.0 |
 | .NET 9 SDK + `dotnet-ef` 9.0.3 | Yalnız migration **betiğini üretmek** için (host'tan veritabanına bağlanılmaz — deneme yayınında DB portu yok) |
 | Deneme yayınına **ayrı** testnet cüzdanları | TRON: `secrets/trial/tron_*.txt` (tohum + sıcak anahtar, T163), sıcak/soğuk adres `.env.trial`'da; Ethereum: `secrets/trial/ethereum_*.txt`. İkisi de üretildiği gün yedeklenir (§L). **Geliştirme stack'inin cüzdanları paylaşılmaz:** iki veritabanı aynı tohumdan aynı indeksleri (0, 1, 2 …) türetir ve iki stack aynı depozit adreslerini izler; iki imzacı aynı sıcak cüzdandan gönderir (Ethereum'da aynı hesabın nonce'u iki ayrı günlükle yarışır, günlük çıkış tavanları ikiye bölünmez) |
-| Yeni sırlar | `secrets/trial/` altında JWT, iki webhook sırrı, üç iç anahtar (≥ 32, servis başına ayrı — T171a, §L.9) + `.env.trial`'da `MSSQL_SA_PASSWORD`, `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD` — hepsi `openssl rand -hex 32` ile **yeniden** üretilir, geliştirmeden kopyalanmaz |
-| `STEAM_API_KEY`, `TRON_API_KEY`, Ethereum RPC URL'leri | §G.0, §J.1 ile aynı |
+| Yeni sırlar | `secrets/trial/` altında JWT, iki webhook sırrı, üç iç anahtar (≥ 32, servis başına ayrı — T171a, §L.9) + T171b: `mssql_sa_password.txt`, `redis_password.txt`, `grafana_admin_password.txt` — hepsi **yeniden** üretilir, geliştirmeden kopyalanmaz. `mssql_sa_password` için `openssl rand -hex` **tek başına yetmez** (yalnız küçük harf + rakam; SQL Server parola kuralı dört kümeden üçünü ister, boş volume'de `not complex enough` ile exit 255 — ölçüldü): `printf '%sAa1!\n' "$(openssl rand -hex 24 \| tr -d '\r')"`; giriş betiği kuralı karşılamayan dosyada SQL Server'ı başlatmaz (`CREDENTIAL_WEAK`). Diğer ikisi `openssl rand -hex 32 \| tr -d '\r'` (Grafana sondaki CR'yi reddeder) |
+| Steam Web API anahtarı, TronGrid anahtarı, Ethereum RPC URL'leri | §G.0, §J.1 ile aynı değerler — T171b'den beri `secrets/trial/steam_api_key.txt`, `tron_api_key.txt` (+ `_secondary`), `ethereum_rpc_primary_url.txt` (+ `_backup`) |
 | Bilgisayar açık ve uyumaz | Deneme yayını bu makine kadar ayaktadır; Windows uyku/hazırda bekletme kapatılır (Güç seçenekleri), Docker Desktop "Start when you sign in" açık |
 
 **RAM (ölçüldü 2026-10-21, Docker/WSL2 sınırı 3 GB):** tam deneme yığını (12 servis, ethereum dahil) boştayken ≈ **1,56 GiB** tutar (db 829 MiB, backend 183, uptime-kuma 125, grafana 83, frontend 79 …); sığar, OOM ya da yeniden başlama yok. **Yığın açıkken imaj derlemesi yapmayın:** frontend'i sıfırdan derlemek (`build --no-cache`) kullanılabilir belleği 431 MB'a, swap'ı 1024/1024 MB'a (tamamen dolu) çekti ve veritabanını swap'a itti (RSS 829 → 334 MiB). Önce derleyin, sonra açın: `$TRIAL build` yığın **durmuşken** (`$TRIAL down`), ardından `$TRIAL up -d --wait`. Güncelleme gerekiyorsa aynı sıra. Soğuk backend + frontend derlemesi yığın açıkken denenmedi; kaçının.
@@ -960,7 +965,7 @@ echo 'SKINORA_TRIAL_STACK=1' >> .env.trial     # zorunlu işaret; .env.example'a
 #    §A'daki 19 + §B secret'ları (K.3: hepsi YENİ) + test ağı değerleri:
 #    TRON_NETWORK=nile, TRON_USDT_CONTRACT=<Nile>, TRONSCAN_TX_BASE_URL=https://nile.tronscan.org/#/transaction/
 #    ETHEREUM_NETWORK=sepolia, ETHERSCAN_TX_BASE_URL=https://sepolia.etherscan.io/tx/
-#    GRAFANA_ADMIN_PASSWORD=<yeni>   (boşsa overlay render bile etmez)
+#    (T171b — DB/Redis/Grafana parolaları ve sağlayıcı anahtarları .env.trial'a YAZILMAZ: adım 2)
 #    PUBLIC_ORIGIN ve STEAM_OPENID_* → T162'ye kadar http://localhost:8090,
 #    T162'de https://skinora.com (tünelin public hostname'i)
 #    ASPNETCORE_ENVIRONMENT / NODE_ENV yazılsa da overlay Production'a zorlar.
@@ -978,6 +983,13 @@ for f in ethereum_sidecar_internal_key ethereum_webhook_secret; do   # Ethereum 
   [ -e secrets/trial/$f.txt ] || : > secrets/trial/$f.txt; done
 for f in resend_api_key resend_webhook_signing_secret telegram_bot_token telegram_webhook_secret_token grafana_smtp_password heartbeat_url; do
   [ -e secrets/trial/$f.txt ] || : > secrets/trial/$f.txt; done   # değerleri §P adımları yazar
+#    T171b — üçüncü taraf kimlik bilgileri (§L.9): üç parola ZORUNLU ve YENİ (boşsa DB/Redis/Grafana açılmaz)
+#    sa parolası SQL Server kuralına uymalı (dört kümeden üçü — hex tek başına uymaz, CREDENTIAL_WEAK); CR'siz yazılır (Grafana CR'yi reddeder)
+[ -s secrets/trial/mssql_sa_password.txt ] || printf '%sAa1!\n' "$(openssl rand -hex 24 | tr -d '\r')" > secrets/trial/mssql_sa_password.txt
+for f in redis_password grafana_admin_password; do
+  [ -s secrets/trial/$f.txt ] || openssl rand -hex 32 | tr -d '\r' > secrets/trial/$f.txt; done
+for f in steam_api_key tron_api_key tron_api_key_secondary ethereum_rpc_primary_url ethereum_rpc_backup_url; do
+  [ -e secrets/trial/$f.txt ] || : > secrets/trial/$f.txt; done   # değerleri printf '%s\n' '<değer>' > ile yazın
 #    Sırlar yazıldıktan sonra çevrimdışı yedek: §L.4
 
 # 3) Render kontrolü — uyarısız ve hatasız olmalı
@@ -985,19 +997,17 @@ $TRIAL config --quiet
 
 # 4) Veritabanı + şema (host'tan bağlantı YOK — betik container içinde koşar)
 $TRIAL up -d --wait skinora-db
-SA=$(grep '^MSSQL_SA_PASSWORD=' .env.trial | cut -d= -f2-)
+#    T171b — sa parolası konteynerin kendi secret dosyasından, SQLCMDPASSWORD ile (komut satırına girmez)
+sa_sqlcmd() { MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db bash -c 'SQLCMDPASSWORD="$(cat /run/secrets/mssql_sa_password)" exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C "$@"' sa_sqlcmd "$@"; }
 (cd backend && dotnet ef migrations script --idempotent \
    --project src/Skinora.Shared/Skinora.Shared.csproj \
    --startup-project src/Skinora.API/Skinora.API.csproj \
    --context AppDbContext -o "${TMPDIR:-/tmp}/trial-migrate.sql")
 MSYS_NO_PATHCONV=1 $TRIAL cp "${TMPDIR:-/tmp}/trial-migrate.sql" skinora-db:/tmp/migrate.sql
-MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$SA" -C -b -Q "IF DB_ID('Skinora') IS NULL CREATE DATABASE [Skinora]"
-MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$SA" -C -b -I -d Skinora -i /tmp/migrate.sql > /dev/null
+sa_sqlcmd -b -Q "IF DB_ID('Skinora') IS NULL CREATE DATABASE [Skinora]"
+sa_sqlcmd -b -I -d Skinora -i /tmp/migrate.sql > /dev/null
 #    Doğrula: migration sayısı repo'daki dosya sayısına eşit (§G.0a adım 2'deki türetme)
-MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$SA" -C -h -1 -d Skinora -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __EFMigrationsHistory"
+sa_sqlcmd -h -1 -d Skinora -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __EFMigrationsHistory"
 
 # 5) Tüm stack — skinora-db-backup da başlar ve ilk tam yedeği alır (§N, T164)
 $TRIAL up -d --build --wait
@@ -1009,9 +1019,7 @@ curl -s http://127.0.0.1:8090/nginx-health                              # ok
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8090/health   # 200
 
 # 7) Süper admin — önce tarayıcıdan Steam ile bir kez giriş (Users satırı oluşsun)
-MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$SA" -C -d Skinora -v SteamId="<steamid64>" \
-  -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
+sa_sqlcmd -d Skinora -v SteamId="<steamid64>" -i /dev/stdin < scripts/bootstrap/01-super-admin.sql
 ```
 
 **Ölçülen iki tuzak (2026-10-21, adım 4):**
@@ -1181,9 +1189,9 @@ Aynı akışın küçük hâli CI'da her Ethereum servisi değişikliğinde koş
 - **Disk.** `secrets/*.txt` host'ta düz metindir (compose secret'ı swarm dışında bir bind mount'tur); koruma host erişimi ve **disk şifrelemesidir** — bu PC'de BitLocker açık olmalı (öneri, ⚠ GÜVENLİK). `shred` NTFS/SSD'de silmeyi garanti etmez (aşınma dengeleme, günlük); bu yüzden de disk şifrelemesi.
 - **Bellek.** İki servis tohumun kök düğümünü süreç boyunca bellekte tutar (05 §3.3). **KMS/HSM tetiği:** depozitlerde bekleyen para sahibin belirleyeceği eşiği (T169 "KMS/HSM eşiği") geçince imza KMS/HSM'e taşınır; bulut KMS'leri HD türetme yapmadığı için bu, depozit başına ayrı anahtar ve imza yolunun yeniden yazımı demektir.
 - **Yakalanamayan kesinti.** `kill -9` ya da elektrik kesilmesi betiğin temizliğini çalıştırmaz; `$TMPDIR/skinora-wallet-backup.*` dizini (içinde açık metin sırlar) kalabilir. Böyle bir kesintiden sonra o dizini `find … -type f -exec shred -u {} +` ve `rm -rf` ile elle silin.
-- **Ortak sırlar** (JWT, iki webhook sırrı, üç iç anahtar, bildirim sırları) T171a'dan beri Docker secret dosyasıdır (§L.9). Veritabanı/Redis parolaları, Grafana yönetici parolası ve sağlayıcı API anahtarları hâlâ env'dedir → DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`.
+- **Ortak sırlar** (JWT, iki webhook sırrı, üç iç anahtar, bildirim sırları) T171a'dan, **üçüncü taraf kimlik bilgileri** (veritabanı/Redis/Grafana yönetici parolaları, Steam/TronGrid anahtarları, Ethereum RPC URL'leri) T171b'den beri Docker secret dosyasıdır (§L.9). Env'de sır kalmadı (e2e'nin sahte servisi hariç — yalnız test).
 
-### L.9 Ortak sırlar — Docker secret (T171a)
+### L.9 Ortak sırlar ve üçüncü taraf kimlik bilgileri — Docker secret (T171a, T171b)
 
 Backend'in bir karşı uçla **paylaştığı** sırlar da env değil Docker secret dosyasıdır (DEFERRED_BACKLOG `SharedSecretsInPlainEnv`, 05 §3.5). Dosyalar, kim okur ve hangisi zorunlu: [`secrets/README.md`](../secrets/README.md) "Ortak sırlar". Özet:
 
@@ -1227,7 +1235,62 @@ docker compose -f docker-compose.yml logs skinora-blockchain-sidecar | grep -o '
 
 **Ölçüm (2026-10-24, bu PC, Docker Desktop + Compose v5.1.0, backend imajı bu daldan).** Production backend konteyneri: (a) dört zorunlu sır dosyadan → açılış satırı `environment path closed`, dördü `file`, diğerleri `none`; JWT değeri log'da 0 kez; (b) aynı dosyalar + `Jwt__Secret` değişkeni → `SHARED_SECRET_IN_ENV: Jwt:Secret (/run/secrets/jwt_secret)`, konteyner çıktı (sıfırdan farklı kod); (c) `jwt_secret.txt` silinmiş → Docker host'ta `secrets/.../jwt_secret.txt/` **dizini** açtı → `SHARED_SECRET_UNREADABLE: Jwt:Secret`.
 
-**Sınırlar.** Dosyalar host'ta düz metindir (§L.8 "Disk"): `docker inspect` artık göstermez, host'u okuyabilen dosyayı da okur. Veritabanı/Redis parolası (Redis'inki ayrıca komut satırında), Grafana yönetici parolası, `STEAM_API_KEY`, `TRON_API_KEY` ve Ethereum RPC URL'leri hâlâ env'dedir → DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv` (⚠ GÜVENLİK, sahibe soru). Discord sırları üretimde kanal kapalı olduğu için taşınmadı (aynı satır).
+**Sınırlar.** Dosyalar host'ta düz metindir (§L.8 "Disk"): `docker inspect` artık göstermez, host'u okuyabilen dosyayı da okur. Kalan env sırları (veritabanı/Redis/Grafana parolaları, sağlayıcı anahtarları, Discord) T171b ile aşağıda dosyaya taşındı.
+
+#### Üçüncü taraf kimlik bilgileri (T171b)
+
+DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv` (proje sahibi kararı 2026-10-24: kurulum gününden önce). Veritabanı ve Redis parolası, Grafana yönetici parolası, Steam / TronGrid API anahtarları ve Ethereum RPC adresleri de env değil Docker secret dosyasıdır; her biri yalnız onu kullanan servise bağlanır (`scripts/compose-secrets.test.mjs` derlenmiş modelden sabitler).
+
+| Dosya (`secrets/` · deneme yayını `secrets/trial/`) | Bağlandığı servisler | Zorunlu |
+|---|---|---|
+| `mssql_sa_password.txt` | veritabanı + yedek konteyneri + backend | **evet**, boş olamaz; tek satır, CR ve baş/son boşluk yok |
+| `redis_password.txt` | Redis + backend + Steam servisi | **evet**, boş olamaz; yalnız `A-Z a-z 0-9 . _ ~ + = -` (`openssl rand -hex 32`) |
+| `grafana_admin_password.txt` | Grafana | **evet**, boş olamaz (boşsa Grafana `admin/admin` ile açılırdı) |
+| `steam_api_key.txt` | backend + Steam servisi | dosya evet; boş = trade-hold probu 503, OpenID profili yer tutucu |
+| `tron_api_key.txt`, `tron_api_key_secondary.txt` | TRON servisi | dosya evet; boş = anahtarsız TronGrid (429) / yedek anahtar yok |
+| `ethereum_rpc_primary_url.txt`, `ethereum_rpc_backup_url.txt` | Ethereum servisi (`ethereum` profili) | profil açıkken birincil zorunlu (`RPC_NOT_CONFIGURED`); yedek boş = geçiş yok |
+| `discord_client_secret.txt`, `discord_bot_token.txt` | backend (yalnız Discord açılırsa) | compose **bağlamaz** — kanal üretimde kapalı (`Discord__Provider=disabled`); açılırsa backend'in `secrets:` listesine eklenir |
+
+**Üçüncü taraf imajlarda yöntem — neden bu seçim:**
+
+- **SQL Server — imajın kendi `MSSQL_SA_PASSWORD_FILE` desteği + giriş betiği.** `mcr.microsoft.com/mssql/server:2022-latest` (digest `sha256:2dca9ee5…`) `MSSQL_SA_PASSWORD_FILE`'ı **kendisi okur** — ölçüldü 2026-10-24: dosyadaki parola giriş yapar, yanlış parola reddedilir, sondaki satır sonu atılır. Bu yüzden parola hiçbir ortam değişkenine girmez (`docker inspect` yalnız yolu gösterir). Ama SQL Server dosya **yokken de açılır** — ölçüldü: yerinde dizin varken de, hiç parola yokken de sunucu kalktı. Boş bir veri volume'ünde bu, master'ı kimsenin bilmediği bir sa parolasıyla kurar ve sonradan düzeltilen dosya hiçbir şeyi değiştirmez (sa parolası yalnız ilk kurulumda uygulanır) — volume silinmeden kurtulunmaz. Bu yüzden önüne `scripts/db/mssql-entrypoint.sh` konur: dosyayı denetler (`CREDENTIAL_IN_ENV` — `MSSQL_SA_PASSWORD`/`SA_PASSWORD` değişkeni; `CREDENTIAL_MISSING`; `CREDENTIAL_UNREADABLE`; `CREDENTIAL_INVALID` — CR ya da baş/son boşluk, çünkü backend kırpar ama SQL Server'ın kırptığı ölçülmedi) ve sonra imajın kendi `launch_sqlservr.sh`'ını değiştirmeden çalıştırır. Sağlık yoklaması aynı betiğin `--healthcheck` kipidir: parola `sqlcmd`'ye `SQLCMDPASSWORD` ortamıyla gider, komut satırına girmez.
+- **Redis — giriş betiği.** Resmî `redis:7-alpine` imajında `*_FILE` desteği **yok** (giriş betiği yalnız redis kullanıcısına geçip çalıştırır). Eski `redis-server --requirepass ${REDIS_PASSWORD}` parolayı **komut satırına** koyuyordu (`docker inspect` Config.Cmd ve `ps` gösterir). `scripts/redis/redis-entrypoint.sh` dosyayı okur, `requirepass` satırını bir **tmpfs** üzerindeki yapılandırma dosyasına (`/run/skinora-redis`, yalnız bellek, yalnız redis kullanıcısı okur) yazar ve `redis-server`'ı o dosyayla başlatır; parola ne argv'de ne env'de. Sağlık yoklaması `--healthcheck`: `redis-cli` parolayı `REDISCLI_AUTH` ortamından alır.
+- **Grafana — imajın kendi `__FILE` desteği + `first-boot.sh` denetimi.** `GF_SECURITY_ADMIN_PASSWORD__FILE` Grafana'nın belgelenmiş yoludur. Ama Grafana dosya yokken/boşken durmaz, yerleşik `admin/admin` ile açılır; `scripts/grafana/first-boot.sh` (T165'ten beri Grafana'nın giriş noktası) değişkeni (`CREDENTIAL_IN_ENV`), eksik/boş (`CREDENTIAL_MISSING`) ve okunamayan (`CREDENTIAL_UNREADABLE`) dosyayı reddeder. **Not:** yönetici parolası yalnız **boş bir Grafana veri volume'ünün ilk açılışında** uygulanır; var olan bir kurulumda parolayı değiştirmek `grafana cli admin reset-admin-password` ister.
+- **Backend ve sidecar'lar — kendi kodu.** Backend `ThirdPartyCredentialFiles` (T171a'nın `SharedSecretFiles`'ı ile aynı dizin ve kurallar): bağlantı dizeleri env'den **parolasız** gelir (`DB_CONNECTION_STRING`, `REDIS_CONNECTION_STRING`), parola dosyadan dizeye süreç içinde eklenir; Development dışında parolalı bir dize ya da `SteamOpenId__WebApiKey`/`Discord__*` değişkeni `CREDENTIAL_IN_ENV`, eksik zorunlu dosya `CREDENTIAL_MISSING`, dizin `CREDENTIAL_UNREADABLE`, Redis parolasında izinsiz karakter ya da çözülemeyen dize `CREDENTIAL_INVALID` (dize mesaja yazılmaz). Sidecar'lar `config/providerCredentials.ts`: TRON `TRON_API_KEY(_SECONDARY)`, Steam `STEAM_API_KEY` + `REDIS_URL` içindeki parola, Ethereum `ETHEREUM_RPC_PRIMARY/BACKUP_URL` — `NODE_ENV` tam `development`/`test` değilken değişken `CREDENTIAL_IN_ENV`.
+
+**Doğrulama (her açılışta):**
+
+```bash
+docker compose -f docker-compose.yml logs skinora-backend | grep "Third-party credentials loaded"
+# Beklenen (Production): environment path closed; ConnectionStrings:DefaultConnection (password)=file,
+#   Redis:ConnectionString (password)=file, SteamOpenId:WebApiKey=file|none, Discord:*=none
+docker compose -f docker-compose.yml logs skinora-redis | grep "password loaded from"   # değer yazılmaz
+docker compose -f docker-compose.yml logs skinora-steam-sidecar | grep -o '"steamApiKeySource":"[a-z]*"\|"redisPasswordSource":"[a-z]*"'
+docker compose -f docker-compose.yml logs skinora-blockchain-sidecar | grep -o '"tronApiKeySource":"[a-z]*"'
+# docker inspect'te parola yok (çıktı BOŞ olmalı):
+for c in $(docker compose -f docker-compose.yml ps -q); do docker inspect "$c"; done | grep -c -F -f secrets/mssql_sa_password.txt
+```
+
+**Kurulum günü (T171) — üçüncü taraf kimlik bilgileri:**
+
+1. **Yeni değerler** (geliştirme/deneme değerleri kopyalanmaz): `printf '%sAa1!\n' "$(openssl rand -hex 24 | tr -d '\r')" > secrets/mssql_sa_password.txt` — `openssl rand -hex` **tek başına hiçbir zaman** SQL Server parola kuralını karşılamaz (yalnız küçük harf + rakam; kural 8–128 karakter ve büyük harf / küçük harf / rakam / sembolden üçünü ister; boş volume'de `not complex enough`, exit 255 — ölçüldü); giriş betiği böyle bir dosyada SQL Server'ı başlatmaz (`CREDENTIAL_WEAK`). `openssl rand -hex 32 | tr -d '\r' > secrets/redis_password.txt`, `openssl rand -hex 32 | tr -d '\r' > secrets/grafana_admin_password.txt`. Steam Web API anahtarı **yenilenir** (eskisi iptal), mainnet TronGrid anahtarı **ayrı hesaptan** (§O #12), Alchemy/Chainstack mainnet URL'leri — her biri `printf '%s\n' '<değer>' > secrets/<ad>.txt` ile, ekrana yazdırmadan.
+2. **Sıra önemli:** veritabanı ve Grafana parolaları **boş volume'ün ilk açılışında** uygulanır. Mainnet stack'i boş volume'lerle kurulur; dosyalar `up`'tan **önce** yazılmış olmalıdır.
+3. **İzinler (Linux sunucu).** SQL Server konteyneri `mssql` (uid 10001), Grafana `grafana` (uid 472) kullanıcısıyla çalışır ve compose secret'ı dosyanın host izinleriyle bağlar: `chmod 444 secrets/mssql_sa_password.txt secrets/grafana_admin_password.txt` (dizin `chmod 700` — dışarıdan girilemez). Okuyamazlarsa açılmazlar (`CREDENTIAL_UNREADABLE`). Redis betiği root olarak okur, sonra yalnız redis kullanıcısına açık kopyayı tmpfs'e yazar.
+4. **`.env`'de kalıntı yok** — boş dönmeli:
+   ```bash
+   grep -nE '^(MSSQL_SA_PASSWORD|REDIS_PASSWORD|GRAFANA_ADMIN_PASSWORD|STEAM_API_KEY|TRON_API_KEY|TRON_API_KEY_SECONDARY|ETHEREUM_RPC_PRIMARY_URL|ETHEREUM_RPC_BACKUP_URL)=' .env
+   grep -nE '^(DB_CONNECTION_STRING|REDIS_CONNECTION_STRING)=.*[Pp](assword|wd)=|^STEAM_SIDECAR_REDIS_URL=redis://:' .env
+   ```
+5. **Render kontrolü.** `docker compose -f docker-compose.yml config | grep -niE 'password=|requirepass|-a [^ ]'` boş döner.
+6. **Başlat ve oku** — yukarıdaki "Doğrulama"; `docker inspect` sayımı **0**.
+
+**Mevcut bir geliştirme ortamından geçiş (bir kez).** Veritabanı ve Grafana volume'leri **eski parolayı** saklar: dosyaya `.env`'deki **aynı** değer yazılır (yenisi değil), yoksa backend bağlanamaz. Komutlar (değer yazdırmadan, sonra `.env` temizlenir): `secrets/README.md` "Üçüncü taraf kimlik bilgileri — geçiş". Grafana'da eski kurulum `.env`'de boş parolayla (`:-admin`) açıldıysa yönetici parolası hâlâ `admin`dir: dosyaya yeni parolayı yazın ve bir kez `docker compose -f docker-compose.yml exec skinora-grafana sh -c 'grafana cli admin reset-admin-password "$(cat /run/secrets/grafana_admin_password)"'` koşun. Tek tırnak şarttır: `$(cat …)` konteynerin `sh`'ında açılır, parola konteyner içinde okunur (host'un `ps`'ine girmez, konteynerin içindekine birkaç saniye girer). Tırnaksız biçimde `$(cat …)` host'ta açılır, host'ta o dosya olmadığı için boş değer gider ve parola `admin` kalır (ölçüldü).
+
+**Döndürme.** Redis: dosyayı yazın, `docker compose -f docker-compose.yml up -d --force-recreate skinora-redis skinora-backend skinora-steam-sidecar` (üçü aynı dosyayı okur). Veritabanı: önce SQL Server'da `ALTER LOGIN sa WITH PASSWORD = ...` (`SQLCMDPASSWORD` ile, §N.6'daki `sqlq` gibi), sonra dosyayı yazın ve `skinora-db-backup`, `skinora-backend` yeniden oluşturulur — sırayı ters çevirmek backend'i yeni parolasız bırakır. Sağlayıcı anahtarları: dosyayı yazın, ilgili servisi `--force-recreate` ile yeniden oluşturun.
+
+**Ölçüm (2026-10-24, bu PC, Docker Desktop + Compose v5.1.0, ayrı proje `t171b-probe`, `escrow` volume'lerine dokunulmadı):** T171b_REPORT "Konteyner ölçümü".
+
+**Sınırlar.** Dosyalar host'ta düz metindir (§L.8 "Disk"). SQL Server süreci parolayı kendi okur; Redis'in tmpfs kopyası konteyner yaşadıkça bellekte durur. `docker exec` yetkisi olan konteyner içini, host'u okuyabilen dosyayı okur. Bağlantı dizesi (parolasıyla) backend sürecinin belleğindedir — eskisi gibi. Kalan env sırrı yok; e2e stack'inin sahte servisi (yalnız test) DB parolasını env'den okur.
 
 ---
 
@@ -1392,7 +1455,7 @@ $BK restore Skinora_restored 2026-10-22T17:01:27Z            # o ana kadar (poin
 #    Betik yarıda durursa (bozuk dosya, Msg 3186) hedef RESTORING kalır:
 #    sqlq -Q "DROP DATABASE [Skinora_restored]" sonra yeniden.
 # 4) Kontrol — parola komut satırına girmez, konteynerin kendi ortamından okunur
-sqlq() { MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db bash -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -I -h -1 -W -s "|" "$@"' sqlq "$@"; }
+sqlq() { MSYS_NO_PATHCONV=1 $TRIAL exec -T skinora-db bash -c 'SQLCMDPASSWORD="$(cat /run/secrets/mssql_sa_password)" exec /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -I -h -1 -W -s "|" "$@"' sqlq "$@"; }
 sqlq -d Skinora_restored -Q "DBCC CHECKDB WITH NO_INFOMSGS"            # çıktı boş olmalı
 sqlq -d Skinora_restored -Q "SELECT COUNT(*), MAX(MigrationId) FROM __EFMigrationsHistory"
 #    migration sayısı ve sonuncusu, geri dönülen sürümün migration listesiyle aynı olmalı (§N.7)
@@ -1629,6 +1692,7 @@ Gerçek ağ kurulumunda (T171) ve deneme yayınında (§K) bu liste satır satı
 | 10 | Yedek ücretler (⚠) | TRON iade 2.60 / payout 2.25 / ağ ücreti satırı 3.00; Ethereum iade 0.20, payout 0.50, tavan 0.50 | `blockchain.refund_gas_fee_estimate_usdt`, `blockchain.payout_gas_fee_estimate_usdt`, `blockchain.tron.network_fee_fallback_usdt`, `blockchain.ethereum.*` |
 | 11 | Fiyat sapma kuralı kapalı (⚠) | `price_deviation_threshold` = 1.0, `STEAM_MARKET_PROVIDER=logging` | §C.1; pilottan sonra yeniden bakılır |
 | 12 | Sağlayıcı planları (⚠) | TronGrid ücretsiz (mainnet anahtarı Nile'dan **ayrı hesaptan**); Alchemy Free + Chainstack Developer | %80 kota alarmı gelirse ya da günde 25'ten fazla TRON satışı olursa TronGrid özel plan; Alchemy %80'i geçerse kullandıkça öde |
+| 12b | Üçüncü taraf kimlik bilgileri dosyadan (T171b) | Backend `Third-party credentials loaded … environment path closed`; DB/Redis parolası `file`; Redis/Steam/TRON/Ethereum açılış satırlarında kaynak `file`; `docker inspect`'te parola **0** kez; `.env`'de kalıntı yok | §L.9 "Üçüncü taraf kimlik bilgileri" adım 1–6 |
 | 12a | Ortak sırlar dosyadan (T171a) | Backend açılış satırı `environment path closed`; zorunlu dört sır `file`; `.env`'de kalıntı yok | §L.9 adım 3–5; sidecar'larda `internalKeySource` / `webhookSecretSource` = `file` |
 | 13 | Yaptırım listesi yüklendi | OFAC SDN "Digital Currency Address – TRX / ETH / USDT" adresleri **API ile** girildi (ekran yok — sahip kararı 2026-10-23) | §O.1: `GET /api/v1/admin/sanctions/addresses?source=OFAC` ile hem `TRON` hem `ETHEREUM` satırları görünmeli |
 

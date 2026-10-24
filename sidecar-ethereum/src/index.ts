@@ -93,6 +93,8 @@ function main(): void {
       // T171a — sources only (file / env / none), never a value.
       internalKeySource: config.sharedSecretSources.internalKey,
       webhookSecretSource: config.sharedSecretSources.webhookSecret,
+      rpcPrimaryUrlSource: config.credentialSources.rpcPrimaryUrl,
+      rpcBackupUrlSource: config.credentialSources.rpcBackupUrl,
       tokenContracts: config.tokenContracts,
       txJournal: { dir: config.transfers.journalDir, records: journal.size },
       sendLimitsConfigured: {

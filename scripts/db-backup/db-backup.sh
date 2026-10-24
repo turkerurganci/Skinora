@@ -35,7 +35,11 @@
 #                          reconciliation (DEPLOY_RUNBOOK §N.6). Then a full.
 #
 # Environment (compose passes them; defaults are the T164 proposal — ⚠):
-#   MSSQL_SA_PASSWORD               required (handed to sqlcmd as SQLCMDPASSWORD)
+#   MSSQL_SA_PASSWORD_FILE          the sa password's Docker secret file (T171b;
+#                                   default /run/secrets/mssql_sa_password —
+#                                   handed to sqlcmd as SQLCMDPASSWORD). The
+#                                   MSSQL_SA_PASSWORD variable is refused
+#                                   (CREDENTIAL_IN_ENV): `docker inspect` shows it.
 #   DB_BACKUP_SERVER                skinora-db
 #   DB_BACKUP_DATABASE              Skinora
 #   DB_BACKUP_FULL_INTERVAL_HOURS   24
@@ -76,11 +80,24 @@ validate_config() {
   if [ $((RETENTION_DAYS * 24)) -lt "$FULL_HOURS" ]; then
     die "DB_BACKUP_RETENTION_DAYS ($RETENTION_DAYS d) is shorter than DB_BACKUP_FULL_INTERVAL_HOURS ($FULL_HOURS h)"
   fi
-  [ -n "${MSSQL_SA_PASSWORD:-}" ] || die "MSSQL_SA_PASSWORD is empty"
+  # T171b — the password comes from its Docker secret file, never a variable
+  # (DEFERRED_BACKLOG ThirdPartyCredentialsInPlainEnv). Never printed.
+  [ -z "${MSSQL_SA_PASSWORD:-}" ] || die "CREDENTIAL_IN_ENV: MSSQL_SA_PASSWORD is set as a variable - the sa password is read only from MSSQL_SA_PASSWORD_FILE (DEPLOY_RUNBOOK L.9)"
+  local pw_file="${MSSQL_SA_PASSWORD_FILE:-/run/secrets/mssql_sa_password}" pw
+  if [ -e "$pw_file" ] && { [ ! -f "$pw_file" ] || [ ! -r "$pw_file" ]; }; then
+    die "CREDENTIAL_UNREADABLE: $pw_file exists but is not a readable file (Docker's directory for a missing source file - secrets/README.md)"
+  fi
+  [ -f "$pw_file" ] || die "CREDENTIAL_MISSING: $pw_file does not exist (secrets/README.md)"
+  # Docker Desktop, missing source file, `compose run`: the mount point passes
+  # -f yet every read fails with an I/O error (measured, T171b) — so read once.
+  cat "$pw_file" >/dev/null 2>&1 || die "CREDENTIAL_UNREADABLE: $pw_file cannot be read (secrets/README.md)"
+  # A trailing CRLF (Git Bash openssl on Windows) is dropped, as SQL Server does.
+  pw="$(tr -d '\r' <"$pw_file")"
+  [ -n "$pw" ] || die "CREDENTIAL_MISSING: $pw_file is empty"
   [ -d "$DIR" ] && [ -w "$DIR" ] || die "backup directory $DIR is missing or not writable (host bind mount)"
   # sqlcmd reads the password from the environment, never from argv (ps).
-  export SQLCMDPASSWORD="$MSSQL_SA_PASSWORD"
-  unset MSSQL_SA_PASSWORD
+  export SQLCMDPASSWORD="$pw"
+  unset pw
 }
 
 # One T-SQL batch; prints the result rows (no headers, '|' separated).
