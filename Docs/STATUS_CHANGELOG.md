@@ -4,6 +4,8 @@
 
 ## Güncelleme geçmişi
 
+**Önceki güncelleme:** 2026-10-24 — T171b ✓ doğrulama PASS (6 × S4 kapanışta kapandı), merge bekliyor (üçüncü taraf kimlik bilgileri — DB/Redis/Grafana parolaları, Steam/TronGrid anahtarları, Ethereum RPC URL'leri, Discord sırları — Docker secret dosyasından; bağlantı dizeleri parolasız; SQL Server/Grafana imajın `*_FILE` desteği + fail-closed denetim, Redis giriş betiği; env'de sır kalmadı; backlog 47/174; T171b_REPORT.md, PR [#383](https://github.com/turkerurganci/Skinora/pull/383)).
+
 **Önceki güncelleme:** 2026-10-24 — T171a ✓ Tamamlandı (ortak sırlar Docker secret dosyasından, env yolu üretimde kapalı; doğrulama ⛔ BLOCKED yalnız CI dışı nedenle — body-parser danışması, main #382 ile düzeldi — içerik 4 × S4, hepsi kapandı: backend açılış log satırı testle korunur, SMTP açıkken Grafana parola dosyası yoksa açılmaz, izin hatası yolu testli, compose testi `ASPNETCORE_` önekli adları görür; main e83d0737 birleştirildi; T171a_REPORT.md, PR #381). **Merge teyidi (T171b yapımında işlendi):** chore #382 (body-parser) main `e83d0737` CI `40041122721` ✓, Docker Publish `40041122804` ✓ · T171a (#381) main `b2a0a285` CI `40046709448` ✓, Docker Publish `40046709444` ✓
 
 **Önceki güncelleme:** 2026-10-24 — T171a ⏳ yapım bitti, doğrulama bekliyor (ortak sırlar — JWT, webhook, iç anahtarlar, bildirim sırları — Docker secret dosyasından; env yolu üretimde kapalı; PR #381). **Merge teyidi (T171a kapanışında işlendi):** T172a (#377) main `1542d934` CI `40023183701` ✓, Docker Publish `40023183679` ✓ · T170 (#379) main `51faec90` CI `40026783315` ✓, Docker Publish `40026783355` ✓
