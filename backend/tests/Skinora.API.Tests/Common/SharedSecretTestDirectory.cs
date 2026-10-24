@@ -21,6 +21,16 @@ public sealed class SharedSecretTestDirectory : IDisposable
         ["blockchain_sidecar_internal_key"] = "t171a-test-tron-internal-key-0123456789abcd",
     };
 
+    /// <summary>
+    /// T171b — the required third-party credentials (<see cref="ThirdPartyCredentialFiles"/>):
+    /// outside Development the database and Redis passwords come only from these files.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> RequiredCredentialValues { get; } = new Dictionary<string, string>
+    {
+        ["mssql_sa_password"] = "t171b-Test-Sql-Pass!0123456789",
+        ["redis_password"] = "t171b-test-redis-pass-0123456789abcdef",
+    };
+
     public SharedSecretTestDirectory(bool withRequired = true)
     {
         Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "skinora-t171a-" + Guid.NewGuid().ToString("N"));
@@ -28,6 +38,7 @@ public sealed class SharedSecretTestDirectory : IDisposable
         if (withRequired)
         {
             foreach (var (name, value) in RequiredValues) Write(name, value + "\n");
+            foreach (var (name, value) in RequiredCredentialValues) Write(name, value + "\n");
         }
     }
 

@@ -50,6 +50,14 @@ var builder = WebApplication.CreateBuilder(args);
 // (SharedSecretFiles; DEFERRED_BACKLOG SharedSecretsInPlainEnv, DEPLOY_RUNBOOK §L.9).
 var sharedSecretReport = SharedSecretFiles.Apply(builder.Configuration, builder.Environment);
 
+// T171b — third-party credentials (the database and Redis passwords, the Steam
+// Web API key, the Discord secrets) the same way: the files under /run/secrets
+// win, the database / Redis password is put into the connection string here
+// (the environment carries the string WITHOUT it), and outside Development a
+// variable — or a connection string with a password in it — stops the start
+// (ThirdPartyCredentialFiles; DEFERRED_BACKLOG ThirdPartyCredentialsInPlainEnv).
+var credentialReport = ThirdPartyCredentialFiles.Apply(builder.Configuration, builder.Environment);
+
 // Serilog (T08 — sinks/format/labels driven by appsettings.json; secret masking
 // applied centrally via SecretMaskingEnricher per 09 §18.5)
 builder.Host.UseSerilog((context, config) =>
@@ -512,6 +520,13 @@ app.Logger.LogInformation(
     sharedSecretReport.Directory,
     sharedSecretReport.EnvironmentPathOpen ? "open (Development)" : "closed",
     sharedSecretReport.Describe());
+
+// T171b — the same for the third-party credentials. Never a value.
+app.Logger.LogInformation(
+    "Third-party credentials loaded from {Directory} (environment path {EnvironmentPath}): {Sources}",
+    credentialReport.Directory,
+    credentialReport.EnvironmentPathOpen ? "open (Development)" : "closed",
+    credentialReport.Describe());
 
 // --- Middleware Pipeline (order matters) ---
 
