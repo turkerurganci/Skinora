@@ -97,7 +97,7 @@ Konfigürasyon ayağa kalktıktan sonra **tek seferlik** `setWebhook`
 
 | Parametre | Skinora değeri | Açıklama |
 |-----------|----------------|----------|
-| `url` | `https://skinora.com/api/v1/webhooks/telegram` | Public, HTTPS zorunlu |
+| `url` | `https://getskinora.com/api/v1/webhooks/telegram` | Public, HTTPS zorunlu |
 | `secret_token` | §2 secret | Her gelen update'te header doğrulanır |
 | `max_connections` | `40` (varsayılan) | MVP trafiği için yeterli |
 | `allowed_updates` | `["message"]` | Yalnızca mesaj update'leri (gereksizler filtreli) |
@@ -110,7 +110,7 @@ curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" 
   -H "Content-Type: application/json" \
   -d "$(cat <<EOF
 {
-  "url": "https://skinora.com/api/v1/webhooks/telegram",
+  "url": "https://getskinora.com/api/v1/webhooks/telegram",
   "secret_token": "${TELEGRAM_WEBHOOK_SECRET}",
   "max_connections": 40,
   "allowed_updates": ["message"],
@@ -174,7 +174,7 @@ init job olarak deploy pipeline'ına bağlanabilir (T-future).
 |-------|----------|-------|
 | Lokal (developer) | `logging` | Mesajlar console'a basılır, Telegram API'sına çıkmaz |
 | CI | `logging` | `appsettings.json` default — entegrasyon testleri `LoggingTelegramNotificationChannelHandler` stub'ı kullanır |
-| Staging | `telegram` (test botu) | Ayrı bir bot (`@SkinoraStagingBot`), staging webhook URL'si (`https://staging.skinora.com/...`) |
+| Staging | `telegram` (test botu) | Ayrı bir bot (`@SkinoraStagingBot`), staging webhook URL'si (`https://staging.getskinora.com/...`) |
 | Production | `telegram` | Ana bot (`@SkinoraBot`) |
 
 > **Önemli:** `setWebhook` bir bot için tek webhook URL'sini destekler.

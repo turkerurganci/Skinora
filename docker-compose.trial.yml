@@ -62,10 +62,14 @@ services:
     ports: !reset []
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      # The trust boundary for X-Forwarded-For is THIS project's network, pinned
-      # below — not .env.trial's REVERSE_PROXY_KNOWN_NETWORK, which a copied
-      # .env.example would leave at the development value.
-      - ReverseProxy__KnownNetworks__0=${TRIAL_NETWORK_SUBNET:-172.30.161.0/24}
+      # The trust boundary for X-Forwarded-For / X-Forwarded-Proto is THIS
+      # project's network, pinned below — not .env.trial's
+      # REVERSE_PROXY_KNOWN_NETWORK, which a copied .env.example would leave at
+      # the development value. Only nginx sets those headers for the backend:
+      # behind the tunnel it fills them from Cloudflare's CF-Connecting-IP /
+      # X-Forwarded-Proto, trusted from the connector's fixed address alone
+      # (T162, nginx/nginx.conf).
+      - ReverseProxy__KnownNetworks__0=172.30.161.0/24
       # T169 — the owner's 12-hour delivery window (720 min; legal text says
       # "12 saat"). .env.trial (copied from .env.example) carries 720 already;
       # this default only covers a .env.trial that leaves it empty, so the
@@ -234,11 +238,16 @@ services:
     networks:
       - skinora-network
 
-  # Cloudflare Tunnel connector (T161 ready, T162 connects it to skinora.com).
-  # Outbound-only: it opens no port on the host. The public hostname and its
-  # origin (http://skinora-reverse-proxy:80) are set on the tunnel in the
-  # Cloudflare dashboard; this container only carries the token, read from a
-  # Docker secret file so `docker inspect` does not show it.
+  # Cloudflare Tunnel connector (T161 ready, T162 connects it to
+  # getskinora.com). Outbound-only: it opens no port on the host. The public
+  # hostname and its origin (http://skinora-reverse-proxy:80) are set on the
+  # tunnel in the Cloudflare dashboard; this container only carries the token,
+  # read from a Docker secret file so `docker inspect` does not show it.
+  # T162 — FIXED address 172.30.161.250: nginx trusts CF-Connecting-IP,
+  # CF-IPCountry and X-Forwarded-Proto from this address alone
+  # (nginx/nginx.conf set_real_ip_from + geo). It lies outside the network's
+  # dynamic ip_range, so no other container can be handed it. Changing it
+  # means changing nginx.conf in the same commit (compose-exposure test).
   skinora-cloudflared:
     image: cloudflare/cloudflared:2026.9.3
     profiles: ["tunnel"]
@@ -254,15 +263,21 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - skinora-network
+      skinora-network:
+        ipv4_address: 172.30.161.250
 
 # The trial's own network, with a pinned subnet: the backend's forwarded-header
-# trust (above) names exactly this range.
+# trust (above) names exactly this range. T162 — dynamic addresses come only
+# from the lower half (ip_range), so the connector's fixed .250 can never be
+# handed to another container. Literals, not variables: nginx.conf cannot read
+# a variable, and a subnet that moved without it would silently drop the
+# tunnel's client IP (the earlier TRIAL_NETWORK_SUBNET knob is gone).
 networks:
   skinora-network:
     ipam:
       config:
-        - subnet: ${TRIAL_NETWORK_SUBNET:-172.30.161.0/24}
+        - subnet: 172.30.161.0/24
+          ip_range: 172.30.161.0/25
 
 # The trial's own secrets — never the development ones under ./secrets.
 # T171a — the shared secrets too: the trial's JWT key, webhook secrets and

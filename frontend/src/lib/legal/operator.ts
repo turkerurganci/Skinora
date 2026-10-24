@@ -68,11 +68,12 @@ export const OPERATOR_FIELD_ORDER = [
 
 /**
  * Support / data-protection contact. One domain for every address the product
- * shows (owner decision 2026-10-21: `skinora.com`; the earlier
+ * shows (owner decision 2026-10-21; T162, 2026-10-24: the domain is `getskinora.com` —
+ * `skinora.com` could not be bought, the brand stays Skinora; the earlier
  * `support@skinora.app` fallback was a different domain from the operator
- * alerts' `admin@skinora.com`).
+ * alerts' `admin@getskinora.com`).
  */
-export const SUPPORT_EMAIL = "support@skinora.com";
+export const SUPPORT_EMAIL = "support@getskinora.com";
 
 /** `mailto:` fallback for the "contact support" buttons (overridable by env). */
 export const SUPPORT_HREF = process.env.NEXT_PUBLIC_SUPPORT_URL ?? `mailto:${SUPPORT_EMAIL}`;

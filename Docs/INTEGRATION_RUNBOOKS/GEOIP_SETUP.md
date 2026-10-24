@@ -96,7 +96,7 @@ End-to-end test (curl):
 # Admin UI: /admin/settings → "Erişim ve Uyumluluk" → "Yasaklı ülke listesi" → "IR,KP,CU"
 
 # Bilinen yasaklı IP ile login dene (örn. İran ASN):
-curl -v "https://api.skinora.com/api/v1/auth/steam/callback?<openid-params>"
+curl -v "https://api.getskinora.com/api/v1/auth/steam/callback?<openid-params>"
 # Expected: 302 → /auth/callback?error=geo_blocked
 ```
 

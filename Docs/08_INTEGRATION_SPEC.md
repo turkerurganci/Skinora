@@ -1,6 +1,6 @@
 # Skinora — Integration Specifications
 
-**Versiyon: v3.49** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-10-23 — T172b — §3.3a, §3.3c, §3.7.6: imza servislerinde depozitten iade 24 sa tavanı ve sunucuda tek seferlik izin (⚠ PARA). ‖ T172a: TRON servisinde `POST /api/transfer/verify`; §3.3b gönderim durdurma anahtarı (⚠ PARA). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#08_integration_specmd)
+**Versiyon: v3.50** | **Bağımlılıklar:** `02_PRODUCT_REQUIREMENTS.md`, `03_USER_FLOWS.md`, `05_TECHNICAL_ARCHITECTURE.md`, `06_DATA_MODEL.md`, `07_API_DESIGN.md` | **Son güncelleme:** 2026-10-24 — T162: Steam OpenID, Telegram webhook ve Resend adresleri `getskinora.com` (skinora.com alınamadı). · Değişiklik geçmişi: [DOC_CHANGELOG.md](DOC_CHANGELOG.md#08_integration_specmd)
 
 ---
 
@@ -98,8 +98,8 @@ Steam entegrasyonu **iki** bileşenden oluşur: OpenID (kimlik doğrulama) ve We
 |-----------|-------|
 | `openid.ns` | `http://specs.openid.net/auth/2.0` |
 | `openid.mode` | `checkid_setup` |
-| `openid.return_to` | `https://skinora.com/api/v1/auth/steam/callback` |
-| `openid.realm` | `https://skinora.com` |
+| `openid.return_to` | `https://getskinora.com/api/v1/auth/steam/callback` |
+| `openid.realm` | `https://getskinora.com` |
 | `openid.identity` | `http://specs.openid.net/auth/2.0/identifier_select` |
 | `openid.claimed_id` | `http://specs.openid.net/auth/2.0/identifier_select` |
 
@@ -1064,7 +1064,7 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 
 ```json
 {
-  "from": "Skinora <noreply@skinora.com>",
+  "from": "Skinora <noreply@getskinora.com>",
   "to": ["user@example.com"],
   "subject": "İşleminiz tamamlandı — Skinora",
   "html": "<h1>İşleminiz başarıyla tamamlandı...</h1>"
@@ -1185,7 +1185,7 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 | Yaklaşım | Karar |
 |----------|-------|
 | MVP | **Webhook** — Telegram yeni mesajları Skinora endpoint'ine push eder |
-| Webhook URL | `https://skinora.com/api/v1/webhooks/telegram` |
+| Webhook URL | `https://getskinora.com/api/v1/webhooks/telegram` |
 | Neden webhook? | Polling gereksiz yük oluşturur, webhook anlık teslimat sağlar |
 | Endpoint | `POST /webhooks/telegram` (07 §5.11b W1) |
 | Güvenlik | `setWebhook` çağrısında `secret_token` parametresi zorunlu. Handler, gelen her update'te `X-Telegram-Bot-Api-Secret-Token` header'ını doğrular — eşleşmezse 401 döner, update işlenmez (07 §5.11b). |
@@ -1215,7 +1215,7 @@ Filtresiz sonuçtan, beklenen token kontratı dışında kalan transferler aşa�
 
 | Parametre | Skinora değeri | Açıklama |
 |-----------|---------------|----------|
-| `url` | `https://skinora.com/api/v1/webhooks/telegram` | Webhook endpoint URL |
+| `url` | `https://getskinora.com/api/v1/webhooks/telegram` | Webhook endpoint URL |
 | `secret_token` | Production secret (§9.2) | `X-Telegram-Bot-Api-Secret-Token` header doğrulaması için |
 | `max_connections` | `40` (varsayılan) | Eşzamanlı bağlantı limiti — MVP trafiği için yeterli |
 | `allowed_updates` | `["message"]` | Yalnızca mesaj update'leri alınır — gereksiz update türleri filtrelenir |
@@ -1570,7 +1570,7 @@ Tüm entegrasyonların çökme senaryosunda platform davranışı:
 | **Ethereum** (F8 hedefi) | Sepolia (`chainId` 11155111) | Sepolia | Ethereum mainnet (`chainId` 1) |
 | **Ethereum RPC** (F8 hedefi) | Sepolia uçları (birincil Alchemy + yedek Chainstack; yerelde anahtarsız PublicNode da olur) | Sepolia uçları (Alchemy + Chainstack) | Mainnet uçları (Alchemy + Chainstack; plan T169) (öneriyle kaydedildi — ⚠) (§3.7.1) |
 | **Ethereum USDT/USDC kontratı** (F8 hedefi) | Sepolia: kendi kurduğumuz Tether kopyası (T159) + Circle USDC `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` (§3.7.1) | Aynı | `0xdAC17F958D2ee523a2206206994597C13D831ec7` / `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` (§3.7) |
-| **Email (Resend)** | Sandbox mode veya test domain | Test domain | Production domain (skinora.com) |
+| **Email (Resend)** | Sandbox mode veya test domain | Test domain | Production domain (getskinora.com) |
 | **Telegram** | Test bot | Test bot | Production bot |
 | **Discord** | Test bot + test application | Test bot | Production bot + application |
 | **Steam Market Price** | Mock data veya gerçek API (test item'lar) | Gerçek API (düşük sıklıkta) | Gerçek API (on-demand — §7.3) |

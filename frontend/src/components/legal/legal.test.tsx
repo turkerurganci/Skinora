@@ -78,14 +78,14 @@ describe("operator record (single source)", () => {
     const pending = operatorMessageValues("[P]");
     expect(pending.legalName).toBe("[P]");
     expect(pending.courtVenue).toBe("[P]");
-    expect(pending.supportEmail).toBe("support@skinora.com");
+    expect(pending.supportEmail).toBe("support@getskinora.com");
     const filled = operatorMessageValues("[P]", FILLED);
     expect(filled.legalName).toBe(FILLED.legalName);
     expect(filled.mersisNo).toBe("[P]");
   });
 
-  it("one support domain: skinora.com", () => {
-    expect(SUPPORT_EMAIL).toBe("support@skinora.com");
+  it("one support domain: getskinora.com", () => {
+    expect(SUPPORT_EMAIL).toBe("support@getskinora.com");
     for (const messages of Object.values(LOCALES)) {
       expect(JSON.stringify(messages)).not.toMatch(/skinora\.app/);
     }
@@ -123,7 +123,7 @@ describe("legal pages while the operator is unknown", () => {
     for (const field of ["legalName", "address", "taxOffice", "taxId", "courtVenue"]) {
       expect(screen.getByTestId(`operator-${field}`)).toHaveTextContent(pending);
     }
-    expect(screen.getByTestId("legal-operator-block")).toHaveTextContent("support@skinora.com");
+    expect(screen.getByTestId("legal-operator-block")).toHaveTextContent("support@getskinora.com");
     // Contents list links every section.
     expect(
       screen.getByRole("navigation", { name: "İçindekiler" }).querySelectorAll("a"),
@@ -135,7 +135,7 @@ describe("legal pages while the operator is unknown", () => {
     expect(screen.getByTestId("legal-draft-notice")).toBeInTheDocument();
     const controller = document.getElementById("controller");
     expect(controller).toHaveTextContent(tr.legal.operator.pending);
-    expect(controller).toHaveTextContent("support@skinora.com");
+    expect(controller).toHaveTextContent("support@getskinora.com");
     const rights = document.getElementById("yourRights");
     expect(rights?.querySelectorAll("li").length).toBeGreaterThanOrEqual(9);
     expect(rights).toHaveTextContent("Şartları kabul etmiyorum");

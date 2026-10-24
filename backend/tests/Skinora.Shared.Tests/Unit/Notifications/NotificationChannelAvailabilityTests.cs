@@ -54,7 +54,7 @@ public sealed class NotificationChannelAvailabilityTests
             ["Resend:Provider"] = "resend",
             ["Resend:ApiKey"] = ResendKey,
             ["Resend:WebhookSigningSecret"] = ResendWebhook,
-            ["Resend:FromAddress"] = "Skinora <noreply@skinora.com>",
+            ["Resend:FromAddress"] = "Skinora <noreply@getskinora.com>",
             ["Telegram:Provider"] = "Telegram", // case-insensitive
             ["Telegram:BotToken"] = BotToken,
             ["Telegram:WebhookSecretToken"] = "Zx9_kLm-0aBcDeFgHiJkLmNoPqRsTuVwXyZ",

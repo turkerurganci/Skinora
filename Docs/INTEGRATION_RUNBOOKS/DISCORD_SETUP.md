@@ -27,7 +27,7 @@ deploy) hem de secret rotation senaryolarını kapsar.
    - **Client ID** kopyala (production env'a).
    - **Reset Secret** → Client Secret kopyala (production env'a).
    - **Redirects** → Skinora callback URL'sini ekle, ör.
-     `https://skinora.com/api/v1/users/me/settings/discord/callback`.
+     `https://getskinora.com/api/v1/users/me/settings/discord/callback`.
      URL exact-match zorunlu; trailing slash, query string olamaz.
 
 ## 2. MVP Guild Install (Skinora Discord Sunucusu)
@@ -64,7 +64,7 @@ Backend `appsettings.json`'da varsayılan değerler:
   "BotToken": "REPLACE_IN_ENV",
   "AuthorizeUrl": "https://discord.com/api/oauth2/authorize",
   "BaseUrl": "https://discord.com/api/v10",
-  "RedirectUri": "https://skinora.com/api/v1/users/me/settings/discord/callback",
+  "RedirectUri": "https://getskinora.com/api/v1/users/me/settings/discord/callback",
   "Scope": "identify",
   "StateTtlSeconds": 600,
   "SuccessRedirectUrl": "/settings?discord=connected",

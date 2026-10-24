@@ -229,6 +229,43 @@ public class AuthSteamEndpointTests : IClassFixture<AuthSteamEndpointTests.Facto
         Assert.DoesNotContain("error=geo_blocked", response.Headers.Location!.ToString());
     }
 
+    // T162 — behind the Cloudflare tunnel TLS ends at Cloudflare and nginx
+    // forwards X-Forwarded-Proto: https (taken from the connector only). The
+    // backend must see the request as https from our proxy and ONLY from it.
+    // The scheme is made observable through UseHttpsRedirection: with an
+    // https port configured, a request the backend sees as http is answered
+    // 307 → https, one it sees as https reaches the controller (302 → Steam).
+    [Theory]
+    [InlineData(TrustedProxyPeer, "https", HttpStatusCode.Redirect)]             // tunnel → nginx → backend
+    [InlineData(TrustedProxyPeer, null, HttpStatusCode.TemporaryRedirect)]       // proxy without the header: http
+    [InlineData("203.0.113.7", "https", HttpStatusCode.TemporaryRedirect)]       // a forged header from outside
+    public async Task ForwardedProto_IsBelievedOnlyFromTheTrustedProxy(
+        string peer, string? forwardedProto, HttpStatusCode expected)
+    {
+        using var httpsFactory = _factory.WithWebHostBuilder(b => b.UseSetting("https_port", "443"));
+        var client = httpsFactory.CreateClient(new() { AllowAutoRedirect = false });
+        var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/steam?returnUrl=/dashboard");
+        request.Headers.Add(Factory.TestSocketPeerHeader, peer);
+        request.Headers.Add("X-Forwarded-For", "198.51.100.23");
+        if (forwardedProto is not null) request.Headers.Add("X-Forwarded-Proto", forwardedProto);
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(expected, response.StatusCode);
+        var location = response.Headers.Location!.ToString();
+        if (expected == HttpStatusCode.Redirect)
+        {
+            Assert.StartsWith("https://steamcommunity.com/openid/login?", location);
+            var cookie = response.Headers.GetValues("Set-Cookie").Single(v => v.StartsWith("skinora_oid_rt="));
+            Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            Assert.StartsWith("https://", location);
+            Assert.DoesNotContain("steamcommunity.com", location);
+        }
+    }
+
     private const string TrustedProxyPeer = "10.0.0.5";
 
     private async Task SeedBannedCountriesAsync(string value)

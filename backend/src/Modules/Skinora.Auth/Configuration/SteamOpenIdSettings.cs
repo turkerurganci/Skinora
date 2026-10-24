@@ -8,14 +8,14 @@ public sealed class SteamOpenIdSettings
     public const string SectionName = "SteamOpenId";
 
     /// <summary>
-    /// <c>openid.realm</c> — root domain of the platform, e.g. <c>https://skinora.com</c>.
+    /// <c>openid.realm</c> — root domain of the platform, e.g. <c>https://getskinora.com</c>.
     /// Steam uses this to display the requesting site during login consent.
     /// </summary>
     public required string Realm { get; init; }
 
     /// <summary>
     /// <c>openid.return_to</c> — fully-qualified callback URL Steam redirects
-    /// to after consent, e.g. <c>https://skinora.com/api/v1/auth/steam/callback</c>.
+    /// to after consent, e.g. <c>https://getskinora.com/api/v1/auth/steam/callback</c>.
     /// </summary>
     public required string ReturnToUrl { get; init; }
 
@@ -28,7 +28,7 @@ public sealed class SteamOpenIdSettings
 
     /// <summary>
     /// Frontend URL prefix for the post-login redirect landing page
-    /// (e.g. <c>https://skinora.com/auth/callback</c>). Server appends
+    /// (e.g. <c>https://getskinora.com/auth/callback</c>). Server appends
     /// <c>?status=...</c> / <c>?error=...</c> per 07 §4.3.
     /// </summary>
     public required string FrontendCallbackUrl { get; init; }

@@ -168,6 +168,10 @@ jobs:
               - 'docker-compose.yml'
               - 'docker-compose.override.yml'
               - 'docker-compose.trial.yml'
+              # T165/T162 — scripts/nginx/*.test.mjs run the real nginx image on
+              # nginx/nginx.conf (/health, the tunnel's client IP / scheme
+              # trust); an nginx-only PR must run them.
+              - 'nginx/**'
               # T171a — compose-secrets.test.mjs also renders the e2e stack and
               # reads the file names the backend and the sidecars read.
               - 'docker-compose.e2e.yml'
