@@ -42,6 +42,14 @@ using Skinora.Users.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// T171a — shared secrets (JWT, webhook HMAC, sidecar internal keys, notification
+// channel secrets) come from their Docker secret files under /run/secrets and
+// are layered over every other source BEFORE anything below reads them. Outside
+// Development an environment variable for one of them, a missing required file,
+// an unreadable one or a key shorter than 32 characters stops the start
+// (SharedSecretFiles; DEFERRED_BACKLOG SharedSecretsInPlainEnv, DEPLOY_RUNBOOK §L.9).
+var sharedSecretReport = SharedSecretFiles.Apply(builder.Configuration, builder.Environment);
+
 // Serilog (T08 — sinks/format/labels driven by appsettings.json; secret masking
 // applied centrally via SecretMaskingEnricher per 09 §18.5)
 builder.Host.UseSerilog((context, config) =>
@@ -497,6 +505,13 @@ if (reverseProxySettings.IsConfigured)
 }
 
 var app = builder.Build();
+
+// T171a — where each shared secret came from (file / environment / none). Never a value.
+app.Logger.LogInformation(
+    "Shared secrets loaded from {Directory} (environment path {EnvironmentPath}): {Sources}",
+    sharedSecretReport.Directory,
+    sharedSecretReport.EnvironmentPathOpen ? "open (Development)" : "closed",
+    sharedSecretReport.Describe());
 
 // --- Middleware Pipeline (order matters) ---
 

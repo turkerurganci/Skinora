@@ -22,11 +22,19 @@ const files = {
   fuel: join(dir, 'fuel'),
   missing: join(dir, 'does-not-exist'),
   journal: join(dir, 'tx-journal'),
+  internalKey: join(dir, 'ethereum_sidecar_internal_key'),
+  webhookSecret: join(dir, 'ethereum_webhook_secret'),
+};
+const SHARED = {
+  internalKey: 'test-eth-internal-key-'.padEnd(64, 'k'),
+  webhookSecret: 'test-eth-webhook-secret-'.padEnd(64, 'w'),
 };
 const keys = new EthereumHdWallet(MNEMONIC);
 writeFileSync(files.seed, MNEMONIC + '\n');
 writeFileSync(files.hot, keys.deriveSigner(30).privateKey.slice(2) + '\n');
 writeFileSync(files.fuel, keys.deriveSigner(31).privateKey.slice(2) + '\n');
+writeFileSync(files.internalKey, SHARED.internalKey + '\n');
+writeFileSync(files.webhookSecret, SHARED.webhookSecret + '\n');
 
 // A started service may still be writing into its journal directory (permit
 // store, write probe) while the tree is removed; retry instead of failing the
@@ -38,7 +46,14 @@ function withoutEthereumVariables(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(
     Object.entries(env).filter(
       ([name]) =>
-        !name.startsWith('ETHEREUM_') && !['INTERNAL_KEY', 'WEBHOOK_SECRET', 'PORT'].includes(name),
+        !name.startsWith('ETHEREUM_') &&
+        ![
+          'INTERNAL_KEY',
+          'INTERNAL_KEY_FILE',
+          'WEBHOOK_SECRET',
+          'WEBHOOK_SECRET_FILE',
+          'PORT',
+        ].includes(name),
     ),
   );
 }
@@ -184,4 +199,66 @@ describe('Ethereum service startup — the configured values reach the running p
     const startup = await start({ WEBHOOK_SECRET: '' }, 'WEBHOOK_SECRET is not set');
     expect(startup.line, startup.output).toMatchObject({ level: 50 });
   }, 30_000);
+});
+
+/**
+ * T171a — in production the internal key and the webhook secret come only from
+ * their Docker secret files (DEFERRED_BACKLOG `SharedSecretsInPlainEnv`); a
+ * plain variable stops the service and nothing echoes a value.
+ */
+const shortWebhookFile = join(dir, 'short_webhook_secret');
+writeFileSync(shortWebhookFile, 'test-short-webhook-secret');
+
+describe('Ethereum service startup — shared secrets from Docker secret files (T171a)', () => {
+  const production = {
+    NODE_ENV: 'production',
+    INTERNAL_KEY: '',
+    INTERNAL_KEY_FILE: files.internalKey,
+    WEBHOOK_SECRET_FILE: files.webhookSecret,
+  };
+
+  it('starts in production from the two files and logs their sources only', async () => {
+    const startup = await start(production, CONFIGURED);
+    expect(startup.line, startup.output).toMatchObject({
+      internalKeySource: 'file',
+      webhookSecretSource: 'file',
+      webhookConfigured: true,
+    });
+    expect(startup.output).not.toContain(SHARED.internalKey);
+    expect(startup.output).not.toContain(SHARED.webhookSecret);
+  }, 30_000);
+
+  it.each([
+    [
+      'the internal key as a plain variable',
+      { INTERNAL_KEY: 'test-env-internal-key-'.padEnd(64, 'e') },
+      'SHARED_SECRET_IN_ENV',
+    ],
+    [
+      'the webhook secret as a plain variable',
+      { WEBHOOK_SECRET: 'test-env-webhook-'.padEnd(64, 'e') },
+      'SHARED_SECRET_IN_ENV',
+    ],
+    ['no internal key file', { INTERNAL_KEY_FILE: files.missing }, 'INTERNAL_KEY_MISSING'],
+    [
+      'a directory where the internal key file should be',
+      { INTERNAL_KEY_FILE: dir },
+      'SHARED_SECRET_UNREADABLE',
+    ],
+    [
+      'a short webhook secret file',
+      { WEBHOOK_SECRET_FILE: shortWebhookFile },
+      'WEBHOOK_SECRET_TOO_SHORT',
+    ],
+  ])(
+    '%s → exits non-zero with %s',
+    async (_label, env, code) => {
+      const startup = await start({ ...production, ...env }, REFUSED);
+      expect(startup.line, startup.output).toMatchObject({ code });
+      expect(startup.output).not.toContain(CONFIGURED);
+      expect(startup.output).not.toContain(SHARED.internalKey);
+      expect(startup.output).not.toContain('test-env-');
+    },
+    30_000,
+  );
 });

@@ -29,13 +29,14 @@ export function requireInternalKey(raw: string | undefined): string {
   if (key === '') {
     throw new InternalKeyError(
       'INTERNAL_KEY_MISSING',
-      'INTERNAL_KEY is not set — the service does not start without its internal key (05 §3.4).',
+      'The internal key is not set (Docker secret file /run/secrets/blockchain_sidecar_internal_key; ' +
+        'INTERNAL_KEY only in development) — the service does not start without it (05 §3.4).',
     );
   }
   if (key.length < MIN_INTERNAL_KEY_LENGTH) {
     throw new InternalKeyError(
       'INTERNAL_KEY_TOO_SHORT',
-      `INTERNAL_KEY must be at least ${MIN_INTERNAL_KEY_LENGTH} characters (openssl rand -hex 32).`,
+      `The internal key must be at least ${MIN_INTERNAL_KEY_LENGTH} characters (openssl rand -hex 32).`,
     );
   }
   return key;

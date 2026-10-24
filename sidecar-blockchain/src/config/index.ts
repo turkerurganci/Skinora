@@ -101,10 +101,10 @@ export const config = {
 
   // Backend communication
   backendUrl: process.env.BACKEND_URL || 'http://skinora-backend:5000',
-  // X-Internal-Key (05 §3.4). Raw here; the entry point refuses to start when
-  // it is empty or shorter than 32 characters (T161, config/internalKey.ts).
-  internalKey: process.env.INTERNAL_KEY || '',
-  webhookSecret: process.env.WEBHOOK_SECRET || '',
+  // T171a — the internal key (X-Internal-Key, 05 §3.4) and the webhook HMAC
+  // secret are NOT read here: they come from their Docker secret files
+  // (config/sharedSecrets.ts). The entry point loads them, refuses to start
+  // without them, and hands the webhook secret to WebhookClient.
 
   // Tron network
   tronNetwork: network,

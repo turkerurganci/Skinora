@@ -12,9 +12,20 @@ export interface WebhookClientDeps {
 }
 
 /**
+ * T171a — the HMAC secret, handed over by the entry point from its Docker
+ * secret file (config/sharedSecrets.ts). Empty until then: a send refuses.
+ */
+let configuredSecret = '';
+
+export function configureWebhookSecret(secret: string): void {
+  configuredSecret = secret;
+}
+
+/**
  * Send a signed webhook callback to the .NET backend. Mirrors the Steam
  * sidecar's wire contract (05 §3.4, 09 §11.3): HMAC-SHA256 over
- * `timestamp + nonce + body` with the secret loaded from `WEBHOOK_SECRET`.
+ * `timestamp + nonce + body` with the secret from the Docker secret file
+ * `blockchain_webhook_secret` (T171a; `WEBHOOK_SECRET` only in development).
  *
  * <para>
  * Caller is responsible for retry on transient failure. The active monitor
@@ -29,7 +40,7 @@ export async function sendCallback(
   deps: WebhookClientDeps = {},
 ): Promise<void> {
   const baseUrl = deps.baseUrl ?? config.backendUrl;
-  const secret = deps.secret ?? config.webhookSecret;
+  const secret = deps.secret ?? configuredSecret;
   const fetchFn = deps.fetchFn ?? fetch;
 
   if (!secret) {

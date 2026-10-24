@@ -192,10 +192,11 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       assert.equal(be.Resend__Provider, "resend");
       assert.equal(be.Telegram__Provider, "telegram");
       assert.equal(be.Discord__Provider, "disabled");
-      // .env.example leaves the secrets empty: the trial boots with both real
-      // channels "misconfigured" (off + alarm) until the owner fills them.
-      assert.equal(be.Resend__ApiKey, "");
-      assert.equal(be.Telegram__WebhookSecretToken, "");
+      // T171a — the channel secrets are Docker secret files, never variables
+      // (scripts/compose-secrets.test.mjs pins the map). Empty files boot both
+      // real channels "misconfigured" (off + alarm) until the owner fills them.
+      assert.equal(be.Resend__ApiKey, undefined);
+      assert.equal(be.Telegram__WebhookSecretToken, undefined);
       const grafana = model.services["skinora-grafana"].environment;
       assert.equal(grafana.GF_SMTP_ENABLED, "true");
       assert.equal(grafana.GF_SMTP_HOST, "smtp.resend.com:587");
@@ -211,7 +212,9 @@ describe("compose port exposure (T161)", { skip: !HAS_DOCKER && "docker compose 
       const mount = hb.volumes.find((v) => v.target === "/opt/skinora/heartbeat.sh");
       assert.ok(mount?.read_only, "the script is mounted read-only");
       assert.ok(resolve(mount.source).endsWith(join("scripts", "heartbeat", "heartbeat.sh")));
-      assert.equal(hb.environment.HEARTBEAT_URL, "", "no ping URL in .env.example");
+      // T171a — the ping URL is the Docker secret heartbeat_url, not a variable.
+      assert.equal(hb.environment.HEARTBEAT_URL, undefined, "the ping URL must not travel as a variable");
+      assert.equal(hb.environment.HEARTBEAT_URL_FILE, "/run/secrets/heartbeat_url");
       assert.match(hb.environment.HEARTBEAT_CHECK_URLS, /http:\/\/skinora-reverse-proxy\/api\/health/);
       // T165 kapanış (Y1, ⚠ PARA): the money alarms leave through Grafana, so a
       // Grafana that is down or never started must stop the pings too. The

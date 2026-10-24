@@ -25,6 +25,12 @@
 set -u
 
 URL="${HEARTBEAT_URL:-}"
+# T171a — in the trial the ping URL is a Docker secret (HEARTBEAT_URL_FILE,
+# /run/secrets/heartbeat_url), not an environment value. A path that exists but
+# is not a readable file (Docker's directory for a missing source) stops the
+# container; a missing or empty file idles like an empty HEARTBEAT_URL. Both at
+# once is a configuration error. The URL is never printed.
+URL_FILE="${HEARTBEAT_URL_FILE:-}"
 INTERVAL="${HEARTBEAT_INTERVAL_SECONDS:-60}"
 FAILS_BEFORE_FAIL="${HEARTBEAT_FAILURES_BEFORE_FAIL:-3}"
 CHECKS="${HEARTBEAT_CHECK_URLS:-http://skinora-reverse-proxy/api/health}"
@@ -46,6 +52,21 @@ is_uint() {
 fetch() {
   curl -fsS -L -m "$TIMEOUT" -o /dev/null "$1" 2>/dev/null
 }
+
+if [ -n "$URL_FILE" ] && [ -e "$URL_FILE" ]; then
+  if [ ! -f "$URL_FILE" ] || [ ! -r "$URL_FILE" ]; then
+    log "HEARTBEAT_URL_UNREADABLE - $URL_FILE is not a readable file (create secrets/trial/heartbeat_url.txt and remove the directory Docker made in its place)"
+    exit 2
+  fi
+  FROM_FILE="$(tr -d ' \t\r\n' < "$URL_FILE")"
+  if [ -n "$FROM_FILE" ]; then
+    if [ -n "$URL" ]; then
+      log "HEARTBEAT_URL_AMBIGUOUS - the ping URL is set both as HEARTBEAT_URL and in $URL_FILE; keep one"
+      exit 2
+    fi
+    URL="$FROM_FILE"
+  fi
+fi
 
 if [ -z "$URL" ]; then
   log "HEARTBEAT_DISABLED - HEARTBEAT_URL is empty, no outside monitor is pinged (DEPLOY_RUNBOOK §P)"

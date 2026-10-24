@@ -9,7 +9,7 @@ Savunma katmanları:
 |---|---|---|
 | 1 | [`.gitignore`](../.gitignore) | `secrets/`, `.env`, `*.maFile` takip edilmez |
 | 2 | [`scripts/git-hooks/pre-commit`](../scripts/git-hooks/pre-commit) | `git add -f` ile zorlanan veya yanlış dosyaya yapıştırılan sırrı **commit anında** bloklar |
-| 3 | Servis izolasyonu | İmza sırları (tohumlar, cüzdan anahtarları) env değil **Docker secret** dosyasıdır ve her biri yalnız kendi ağının servisine bağlanır — TRON'unkiler yalnız blockchain sidecar'a (T163), Ethereum'unkiler yalnız Ethereum servisine (T150); backend hiçbirini görmez (F4 gate check garantisi) |
+| 3 | Servis izolasyonu | İmza sırları (tohumlar, cüzdan anahtarları) env değil **Docker secret** dosyasıdır ve her biri yalnız kendi ağının servisine bağlanır — TRON'unkiler yalnız blockchain sidecar'a (T163), Ethereum'unkiler yalnız Ethereum servisine (T150); backend hiçbirini görmez (F4 gate check garantisi). **Ortak sırlar** (JWT, webhook, iç anahtarlar, bildirim kanalı sırları) da Docker secret dosyasıdır ve yalnız backend'e + karşı uçtaki tek servise bağlanır (T171a) |
 
 Hook'ları kurmak için (yeni clone sonrası bir kez):
 
@@ -65,6 +65,99 @@ node scripts/wallet-backup/wallet-manifest.mjs addresses secrets
 vermez), ama sırrın düz metin kopyası diskte durur — silin. Deneme yayını için
 aynısını `secrets/trial/` ve `.env.trial` ile yapın.
 
+### Ortak sırlar (T171a — her stack'te)
+
+Backend ile karşı uçtaki servisin **paylaştığı** sırlar da artık env değil
+**Docker secret** dosyasıdır (DEFERRED_BACKLOG `SharedSecretsInPlainEnv`,
+DEPLOY_RUNBOOK §L.9). Her sır **tek dosyadır** ve compose onu backend'e **ve**
+karşı uçtaki servise aynı dosyadan bağlar — iki uç birbirinden kayamaz. Backend
+her stack'te olduğu için on bir dosyanın **hepsi her zaman var olmalıdır**;
+isteğe bağlı olanlar boş olabilir.
+
+| Dosya | Kim okur | Zorunlu mu |
+|---|---|---|
+| `secrets/jwt_secret.txt` | backend (JWT imzası) | **Evet**, ≥ 32 karakter |
+| `secrets/blockchain_webhook_secret.txt` | backend + TRON servisi (webhook HMAC) | **Evet**, ≥ 32 karakter |
+| `secrets/steam_sidecar_internal_key.txt` | backend + Steam servisi (`X-Internal-Key`) | **Evet**, ≥ 32 karakter |
+| `secrets/blockchain_sidecar_internal_key.txt` | backend + TRON servisi (`X-Internal-Key`) | **Evet**, ≥ 32 karakter |
+| `secrets/ethereum_sidecar_internal_key.txt` | backend + Ethereum servisi | Dosya **evet**; boş = Ethereum kapalı (Ethereum servisi açılmaz). Doluysa ≥ 32 karakter |
+| `secrets/ethereum_webhook_secret.txt` | backend + Ethereum servisi | Dosya **evet**; boş = Ethereum ödemeleri bildirilemez (`acceptsPayments=false`). Doluysa ≥ 32 karakter ve TRON'unkinden **farklı** |
+| `secrets/resend_api_key.txt` · `secrets/resend_webhook_signing_secret.txt` | backend (e-posta kanalı, T165) | Dosya **evet**; boş = kanal "misconfigured" (kapalı + alarm, DEPLOY_RUNBOOK §P) |
+| `secrets/telegram_bot_token.txt` | backend + Grafana render adımı | Dosya **evet**. **Boşsa Grafana açılmaz** (contact point doğrulaması) — geliştirmede herhangi bir yer tutucu yazın |
+| `secrets/telegram_webhook_secret_token.txt` | backend (Telegram webhook) | Dosya **evet**; boş = Telegram kanalı "misconfigured" |
+| `secrets/grafana_smtp_password.txt` | Grafana (`GF_SMTP_PASSWORD__FILE`) | Dosya **evet**; boş = Grafana e-posta alarmı gönderemez (Telegram gider). SMTP açıkken (deneme yayını) dosya yoksa Docker yerine dizin açar ve Grafana açılmaz (`GRAFANA_SMTP_PASSWORD_UNREADABLE`) |
+
+Dört zorunlu sır ve dolu Ethereum sırları birbirinden **farklı** rastgele
+değerlerdir (`openssl rand -hex 32`). Değer dosyada tek satır, tırnaksız durur;
+baştaki/sondaki boşluk ve satır sonu okunurken atılır.
+
+**Env yolu kapalı.** Backend `ASPNETCORE_ENVIRONMENT=Development` dışındaki
+her ortamda bu sırlardan birini bir ortam değişkeninde ya da komut satırında
+görürse **açılmaz** (`SHARED_SECRET_IN_ENV`); sidecar'lar `NODE_ENV` tam
+`development`/`test` değilken `INTERNAL_KEY` / `WEBHOOK_SECRET` görürse
+açılmaz. Dosya + değişken birlikte: `SHARED_SECRET_AMBIGUOUS`. Eksik ya da boş
+zorunlu dosya: `SHARED_SECRET_MISSING` (backend) / `INTERNAL_KEY_MISSING` /
+`WEBHOOK_SECRET_MISSING` (sidecar); kısa: `SHARED_SECRET_TOO_SHORT` /
+`INTERNAL_KEY_TOO_SHORT` / `WEBHOOK_SECRET_TOO_SHORT`. Yukarıdaki **eksik dosya
+tuzağı** burada da geçerlidir: Docker dosyanın yerine dizin açar →
+`SHARED_SECRET_UNREADABLE` (Grafana render adımında
+`TELEGRAM_BOT_TOKEN_UNREADABLE`) — dizini silin, dosyayı oluşturun.
+
+Açılışta backend hangi sırrın nereden geldiğini yazar, **değeri asla**:
+`Shared secrets loaded from /run/secrets (environment path closed): Jwt:Secret=file, …`
+(sidecar'larda `internalKeySource` / `webhookSecretSource`).
+
+**Geliştirme ortamı, sıfırdan (bir kez):**
+
+```bash
+umask 077
+for f in jwt_secret blockchain_webhook_secret steam_sidecar_internal_key \
+         blockchain_sidecar_internal_key ethereum_sidecar_internal_key ethereum_webhook_secret; do
+  [ -s "secrets/$f.txt" ] || openssl rand -hex 32 > "secrets/$f.txt"
+done
+for f in resend_api_key resend_webhook_signing_secret telegram_webhook_secret_token grafana_smtp_password; do
+  [ -e "secrets/$f.txt" ] || : > "secrets/$f.txt"
+done
+[ -s secrets/telegram_bot_token.txt ] || echo "dev-placeholder-telegram-token" > secrets/telegram_bot_token.txt
+```
+
+(Ethereum'u geliştirmede açmıyorsanız iki Ethereum dosyasını boş bırakabilirsiniz:
+`: > secrets/ethereum_sidecar_internal_key.txt` gibi.)
+
+**Mevcut bir geliştirme `.env`'inden geçiş (bir kez):** değerleri ekrana
+yazdırmadan dosyaya taşıyın, sonra `.env`'den silin. Eski geri düşüşler
+(`BLOCKCHAIN_WEBHOOK_SECRET` boşsa `WEBHOOK_SECRET`, iç anahtar boşsa
+`INTERNAL_KEY`) burada bir kez çözülür:
+
+```bash
+umask 077
+val() { grep "^$1=" .env | tail -1 | cut -d= -f2- | tr -d '"'; }
+put() { [ -n "$2" ] && printf '%s' "$2" > "secrets/$1.txt" || : > "secrets/$1.txt"; }
+put jwt_secret                      "$(val JWT_SECRET)"
+put blockchain_webhook_secret       "$(val BLOCKCHAIN_WEBHOOK_SECRET)"
+[ -s secrets/blockchain_webhook_secret.txt ] || put blockchain_webhook_secret "$(val WEBHOOK_SECRET)"
+put steam_sidecar_internal_key      "$(val STEAM_SIDECAR_INTERNAL_KEY)"
+[ -s secrets/steam_sidecar_internal_key.txt ] || put steam_sidecar_internal_key "$(val INTERNAL_KEY)"
+put blockchain_sidecar_internal_key "$(val BLOCKCHAIN_SIDECAR_INTERNAL_KEY)"
+[ -s secrets/blockchain_sidecar_internal_key.txt ] || put blockchain_sidecar_internal_key "$(val INTERNAL_KEY)"
+put ethereum_sidecar_internal_key   "$(val ETHEREUM_SIDECAR_INTERNAL_KEY)"
+put ethereum_webhook_secret         "$(val ETHEREUM_WEBHOOK_SECRET)"
+put resend_api_key                  "$(val RESEND_API_KEY)"
+put resend_webhook_signing_secret   "$(val RESEND_WEBHOOK_SIGNING_SECRET)"
+put telegram_bot_token              "$(val TELEGRAM_BOT_TOKEN)"
+put telegram_webhook_secret_token   "$(val TELEGRAM_WEBHOOK_SECRET_TOKEN)"
+put grafana_smtp_password           "$(val GRAFANA_SMTP_PASSWORD)"
+grep -vE '^(JWT_SECRET|WEBHOOK_SECRET|BLOCKCHAIN_WEBHOOK_SECRET|INTERNAL_KEY|STEAM_SIDECAR_INTERNAL_KEY|BLOCKCHAIN_SIDECAR_INTERNAL_KEY|ETHEREUM_SIDECAR_INTERNAL_KEY|ETHEREUM_WEBHOOK_SECRET|RESEND_API_KEY|RESEND_WEBHOOK_SIGNING_SECRET|TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET_TOKEN|GRAFANA_SMTP_PASSWORD|HEARTBEAT_URL)=' .env > .env.new && mv .env.new .env
+# Kontrol — yalnız UZUNLUKLAR yazılır, değer değil:
+for f in secrets/*.txt; do printf '%s %s\n' "$(tr -d '\r\n' < "$f" | wc -c)" "$f"; done
+```
+
+Kontrolde dört zorunlu dosya 32'den kısaysa (eski `.env`'de kısa bir değer
+vardıysa — eski `.env.example` yer tutucusu `your_internal_api_key_here` 26
+karakterdir) servisler açılmaz: yerine `openssl rand -hex 32` yazın. Deneme
+yayını için aynısını `secrets/trial/` ve `.env.trial` ile yapın; orada ayrıca
+`HEARTBEAT_URL` → `secrets/trial/heartbeat_url.txt`.
+
 ### Ethereum servisi (T150 — yalnız `ethereum` compose profiliyle)
 
 Ethereum servisi (`skinora-ethereum-sidecar`, 11 §F8 K7) tohumunu ve iki imza
@@ -104,6 +197,8 @@ korumayı sürdürür.
 | `secrets/trial/tron_hd_mnemonic.txt`, `secrets/trial/tron_hot_wallet_private_key.txt` (T163) | Yukarıdaki iki TRON dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve sıcak cüzdan (aynı gerekçe: aynı depozit adresleri, aynı imzacı) | **Her zaman** (servis her stack'te); boş olabilir, kurallar yukarıdaki gibi |
 | `secrets/trial/ethereum_hd_mnemonic.txt`, `secrets/trial/ethereum_hot_wallet_private_key.txt`, `secrets/trial/ethereum_fuel_wallet_private_key.txt` | Yukarıdaki üç Ethereum dosyasının deneme yayını kopyası — **geliştirme stack'inden farklı** tohum ve anahtarlar (iki veritabanı aynı tohumdan aynı indeksleri türetir ve aynı depozit adreslerini izler; iki imzacı aynı Ethereum hesabının nonce'unu yarıştırır) | Yalnız `--profile ethereum` ile, kurallar yukarıdaki gibi |
 | `secrets/trial/cloudflare_tunnel_token.txt` | Cloudflare Tunnel token'ı — tek satır, tırnaksız (Cloudflare Zero Trust → Networks → Tunnels) | Yalnız `--profile tunnel` ile. **Boşsa tünel açılmaz:** `skinora-tunnel-preflight` `TUNNEL_TOKEN_MISSING` ile çıkar ve cloudflared başlatılmaz. T162'ye kadar boş dosya olarak durabilir |
+| `secrets/trial/` altında on bir ortak sır dosyası (T171a — `jwt_secret.txt`, `blockchain_webhook_secret.txt`, `ethereum_webhook_secret.txt`, `steam_sidecar_internal_key.txt`, `blockchain_sidecar_internal_key.txt`, `ethereum_sidecar_internal_key.txt`, `resend_api_key.txt`, `resend_webhook_signing_secret.txt`, `telegram_bot_token.txt`, `telegram_webhook_secret_token.txt`, `grafana_smtp_password.txt`) | Yukarıdaki "Ortak sırlar" dosyalarının deneme yayını kopyası — **hepsi yeni** değer (geliştirmenin JWT anahtarıyla imzalanmış bir token deneme yayınında geçmesin) | **Her zaman**; kurallar yukarıdaki gibi. Deneme yayını Production'dır: dört zorunlu dosya eksik/boş/kısaysa backend açılmaz |
+| `secrets/trial/heartbeat_url.txt` (T171a) | Healthchecks.io ping URL'si (`https://hc-ping.com/<uuid>`) — dış izleme (DEPLOY_RUNBOOK §P.5) | **Her zaman**; boş = heartbeat konteyneri boşta bekler (`HEARTBEAT_DISABLED`). Yerinde dizin varsa çıkar (`HEARTBEAT_URL_UNREADABLE`) |
 
 ```bash
 umask 077
@@ -119,11 +214,12 @@ dizin) — okuyamazsa tünel açılmaz.
 
 ### Başka dosya
 
-**TRON, Ethereum ve deneme yayını dışında beklenen bir dosya yoktur (T133, T161, T163).** Tek beklenen dosya
+**TRON, Ethereum, ortak sırlar ve deneme yayını dışında beklenen bir dosya yoktur (T133, T161, T163, T171a).** Tek beklenen dosya
 `secrets/steam-bots.json` idi: Steam escrow bot'unun hesap adı, parolası ve iki
 Mobile Authenticator sırrı. Platform artık hiçbir Steam hesabı çalıştırmıyor ve
 trade offer göndermiyor (05 §3.2, 02 §2.1) — Steam sidecar'ın tek kimlik bilgisi
-`.env`'deki `STEAM_API_KEY`'dir ve o env olarak taşınır, dosya olarak değil.
+`.env`'deki `STEAM_API_KEY`'dir ve o env olarak taşınır, dosya olarak değil
+(DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`).
 
 Dizin ve savunma katmanları **kaldırılmadı**: `.gitignore` + `pre-commit` kuralı
 buraya yanlışlıkla yapıştırılan herhangi bir sırrı bloklamaya devam eder, ve
@@ -153,9 +249,8 @@ ileride dosya olarak taşınması gereken bir sır çıkarsa yeri burasıdır.
 | ~~`HD_WALLET_MNEMONIC`~~ · ~~`HOT_WALLET_PRIVATE_KEY`~~ | — | **T163'ten beri `.env`'de değil:** `secrets/tron_hd_mnemonic.txt` / `secrets/tron_hot_wallet_private_key.txt` (yukarıda). T143 notu geçerli: 2026-10-18'den önce açılmış Nile depozitleri koddan erişilemez (DEPLOY_RUNBOOK §G.0b). Sıcak cüzdan tohumdan **türemez** |
 | `STEAM_API_KEY` | steam sidecar + backend | Envanter okuma + trade-hold probu + OpenID profil |
 | `TRON_API_KEY` / `_SECONDARY` | blockchain sidecar | TronGrid rate limit + failover |
-| `JWT_SECRET`, `*_INTERNAL_KEY` | backend + sidecar'lar | ≥32 karakter rastgele |
-| `WEBHOOK_SECRET` | backend + **blockchain** sidecar | ≥32 karakter rastgele. Steam sidecar webhook göndermez (T133) |
-| `ETHEREUM_SIDECAR_INTERNAL_KEY` / `ETHEREUM_WEBHOOK_SECRET` | backend + **Ethereum** servisi | ≥32 karakter rastgele, TRON'unkilerden **farklı** (05 §3.3a). İç anahtar boşsa ya da 32 karakterden kısaysa Ethereum servisi açılmaz |
+| ~~`JWT_SECRET`~~ · ~~`WEBHOOK_SECRET`~~ · ~~`BLOCKCHAIN_WEBHOOK_SECRET`~~ · ~~`INTERNAL_KEY`~~ · ~~`STEAM_/BLOCKCHAIN_/ETHEREUM_SIDECAR_INTERNAL_KEY`~~ · ~~`ETHEREUM_WEBHOOK_SECRET`~~ · ~~`RESEND_API_KEY`~~ · ~~`RESEND_WEBHOOK_SIGNING_SECRET`~~ · ~~`TELEGRAM_BOT_TOKEN`~~ · ~~`TELEGRAM_WEBHOOK_SECRET_TOKEN`~~ · ~~`GRAFANA_SMTP_PASSWORD`~~ · ~~`HEARTBEAT_URL`~~ | — | **T171a'dan beri `.env`'de değil:** yukarıdaki "Ortak sırlar" dosyaları. compose bu değişkenleri hiçbir konteynere geçmez; Development dışında servisler onları görürse açılmaz |
+| `MSSQL_SA_PASSWORD` / `DB_CONNECTION_STRING`, `REDIS_PASSWORD` / `REDIS_CONNECTION_STRING`, `GRAFANA_ADMIN_PASSWORD` | veritabanı, Redis, Grafana, backend | Hâlâ env (DEFERRED_BACKLOG `ThirdPartyCredentialsInPlainEnv`, ⚠ GÜVENLİK — T171a kapsamı dışı) |
 | `ETHEREUM_RPC_PRIMARY_URL` / `ETHEREUM_RPC_BACKUP_URL` | Ethereum servisi | Sağlayıcı URL'leri API anahtarını taşır (Alchemy, Chainstack — 08 §3.7.1); servis log'larına yalnız sunucu adı yazılır |
 
 ---

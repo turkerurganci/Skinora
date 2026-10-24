@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
 
 /**
  * T161 — the entry point, started the way production starts it (environment
@@ -17,6 +19,19 @@ import { describe, expect, it } from 'vitest';
 const SIDECAR_ROOT = resolve(__dirname, '../..');
 const TSX_CLI = resolve(SIDECAR_ROOT, 'node_modules/tsx/dist/cli.mjs');
 const LISTENING = 'Steam sidecar listening';
+/** T171a — production reads the key only from its Docker secret file. */
+const FILE_KEY = 'test-file-internal-key-'.padEnd(64, 'f');
+const dir = mkdtempSync(join(tmpdir(), 'steam-secrets-'));
+const files = {
+  key: join(dir, 'steam_sidecar_internal_key'),
+  short: join(dir, 'short'),
+  directory: join(dir, 'made-by-docker'),
+  none: join(dir, 'none'),
+};
+writeFileSync(files.key, FILE_KEY);
+writeFileSync(files.short, 'test-short-key');
+mkdirSync(files.directory);
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 interface Startup {
   line?: Record<string, unknown>;
@@ -29,7 +44,9 @@ function start(env: Record<string, string>): Promise<Startup> {
     const child = spawn(process.execPath, [TSX_CLI, 'src/index.ts'], {
       cwd: SIDECAR_ROOT,
       env: {
-        ...process.env,
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([name]) => !name.startsWith('INTERNAL_KEY')),
+        ),
         NODE_ENV: 'test',
         PORT: '0',
         LOKI_URL: 'http://127.0.0.1:9',
@@ -93,4 +110,48 @@ describe('sidecar startup — the internal key is required (T161)', () => {
     expect(startup.line, startup.output).toBeDefined();
     expect(JSON.stringify(startup.line)).toContain(LISTENING);
   }, 30_000);
+});
+
+/**
+ * T171a — production (NODE_ENV=production) reads the internal key only from
+ * its Docker secret file (DEFERRED_BACKLOG `SharedSecretsInPlainEnv`).
+ */
+describe('sidecar startup — the internal key comes from its secret file in production (T171a)', () => {
+  const production = { NODE_ENV: 'production', INTERNAL_KEY: '', INTERNAL_KEY_FILE: files.key };
+
+  it('starts from the file and logs the source only', async () => {
+    const startup = await start(production);
+
+    expect(startup.line, startup.output).toBeDefined();
+    expect(startup.output).toContain('"internalKeySource":"file"');
+    expect(startup.output).not.toContain(FILE_KEY);
+  }, 30_000);
+
+  it.each([
+    [
+      'the key as a plain variable',
+      { INTERNAL_KEY: 'test-env-key-'.padEnd(64, 'e') },
+      'SHARED_SECRET_IN_ENV',
+    ],
+    ['no key file', { INTERNAL_KEY_FILE: files.none }, 'INTERNAL_KEY_MISSING'],
+    ['a short key file', { INTERNAL_KEY_FILE: files.short }, 'INTERNAL_KEY_TOO_SHORT'],
+    [
+      'a directory where the file should be',
+      { INTERNAL_KEY_FILE: files.directory },
+      'SHARED_SECRET_UNREADABLE',
+    ],
+  ])(
+    'refuses to start with %s',
+    async (_label, env, code) => {
+      const startup = await start({ ...production, ...env });
+
+      expect(startup.line, startup.output).toBeUndefined();
+      expect(startup.exitCode ?? 0).toBeGreaterThan(0);
+      expect(startup.output).toContain(code);
+      expect(startup.output).not.toContain(FILE_KEY);
+      expect(startup.output).not.toContain('test-env-key-');
+      expect(startup.output).not.toContain('test-short-key');
+    },
+    30_000,
+  );
 });

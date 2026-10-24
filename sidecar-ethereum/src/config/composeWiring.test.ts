@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SECRET_PATHS, DEFAULT_TX_JOURNAL_DIR } from './index.js';
+import { DEFAULT_SHARED_SECRET_PATHS } from './sharedSecrets.js';
 
 /**
  * docker-compose.yml, read the way production starts the stack (T150 —
@@ -26,6 +27,7 @@ function block(name: string, indent = '  '): string {
 }
 
 const ethereum = block('skinora-ethereum-sidecar');
+const SHARED_SECRET_NAMES = ['ethereum_sidecar_internal_key', 'ethereum_webhook_secret'];
 const SECRET_NAMES = [
   'ethereum_hd_mnemonic',
   'ethereum_hot_wallet_private_key',
@@ -39,8 +41,6 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
   });
 
   it.each([
-    ['INTERNAL_KEY', 'ETHEREUM_SIDECAR_INTERNAL_KEY'],
-    ['WEBHOOK_SECRET', 'ETHEREUM_WEBHOOK_SECRET'],
     ['ETHEREUM_RPC_PRIMARY_URL', 'ETHEREUM_RPC_PRIMARY_URL'],
     ['ETHEREUM_RPC_BACKUP_URL', 'ETHEREUM_RPC_BACKUP_URL'],
     ['ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE', 'ETHEREUM_RPC_PRIMARY_MAX_BLOCK_RANGE'],
@@ -106,6 +106,20 @@ describe('docker-compose — the Ethereum service (K7: own container, own seed)'
     expect(ethereum).not.toMatch(/MNEMONIC=|PRIVATE_KEY=/);
   });
 
+  // T171a — the internal key and the webhook secret are Docker secrets too,
+  // the SAME files the backend mounts (scripts/compose-secrets.test.mjs pins
+  // the whole map from the rendered model).
+  it('mounts its internal key and webhook secret as Docker secrets, not variables (T171a)', () => {
+    for (const name of SHARED_SECRET_NAMES) {
+      expect(ethereum).toMatch(new RegExp(`^ {6}- ${name}$`, 'm'));
+      expect(block('skinora-backend')).toMatch(new RegExp(`^ {6}- ${name}$`, 'm'));
+    }
+    expect(Object.values(DEFAULT_SHARED_SECRET_PATHS)).toEqual(
+      SHARED_SECRET_NAMES.map((name) => `/run/secrets/${name}`),
+    );
+    expect(ethereum).not.toMatch(/^ +- (INTERNAL_KEY|WEBHOOK_SECRET)=/m);
+  });
+
   it('receives nothing of the TRON service (seed, keys, TronGrid)', () => {
     for (const tron of [
       'HD_WALLET_MNEMONIC',
@@ -127,7 +141,9 @@ describe('docker-compose — the Ethereum secrets reach no other container', () 
     (service) => {
       const other = block(service);
       for (const name of SECRET_NAMES) expect(other).not.toContain(name);
-      expect(other).not.toMatch(/^ {4}secrets:/m);
+      // T171a — the backend and the Steam service mount shared secrets now;
+      // no signing material among them.
+      expect(other).not.toMatch(/^ {6}- [a-z0-9_]*(mnemonic|private_key)$/m);
     },
   );
 

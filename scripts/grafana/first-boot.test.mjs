@@ -192,3 +192,81 @@ describe("grafana first-boot.sh (T165)", { skip: !HAS_SH && "sh not available" }
     assert.ok(!existsSync(join(dir, "data", ".skinora-alerting-provisioned")));
   });
 });
+
+// T171a doğrulama S4-2 (⚠ GÜVENLİK — alarm yolu): with SMTP on, a password
+// mount that is not a readable file (Docker's directory for a missing source)
+// stops the start instead of Grafana running with an empty SMTP password.
+describe("grafana first-boot.sh — SMTP password file (T171a S4-2)", { skip: !HAS_SH && "sh not available" }, () => {
+  before(() => {
+    work = mkdtempSync(join(tmpdir(), "grafana-smtp-file-"));
+  });
+  after(() => rmSync(work, { recursive: true, force: true }));
+
+  // A provisioned volume, so only the SMTP check stands between the script and the real start.
+  function provisioned(name) {
+    const dir = join(work, name);
+    mkdirSync(join(dir, "data"), { recursive: true });
+    writeFileSync(join(dir, "data", ".skinora-alerting-provisioned"), "");
+    return dir;
+  }
+
+  for (const [i, enabled] of ["true", "TRUE", "1", "yes"].entries()) {
+    test(`SMTP on (${enabled}), password path is a directory: exits non-zero, Grafana is not started`, async () => {
+      const dir = provisioned(`dir-${i}`);
+      const secret = join(dir, "grafana_smtp_password");
+      mkdirSync(secret);
+      const { fake, record } = fakeGrafana(dir, "ok");
+
+      const { code, out } = await run(dir, fake, { GF_SMTP_ENABLED: enabled, GF_SMTP_PASSWORD__FILE: secret });
+
+      assert.notEqual(code, 0, out);
+      assert.match(out, /GRAFANA_SMTP_PASSWORD_UNREADABLE/);
+      assert.deepEqual(starts(record), []);
+    });
+  }
+
+  test("SMTP on, password path missing: exits non-zero, Grafana is not started", async () => {
+    const dir = provisioned("missing");
+    const { fake, record } = fakeGrafana(dir, "ok");
+
+    const { code, out } = await run(dir, fake, {
+      GF_SMTP_ENABLED: "true",
+      GF_SMTP_PASSWORD__FILE: join(dir, "nope"),
+    });
+
+    assert.notEqual(code, 0, out);
+    assert.match(out, /GRAFANA_SMTP_PASSWORD_UNREADABLE/);
+    assert.deepEqual(starts(record), []);
+  });
+
+  test("SMTP on, password is a file (also an empty one): Grafana starts, the value is not printed", async () => {
+    for (const [name, content] of [["filled", "re_t171a_smtp_password_value\n"], ["empty", ""]]) {
+      const dir = provisioned(name);
+      const secret = join(dir, "grafana_smtp_password");
+      writeFileSync(secret, content);
+      const { fake, record } = fakeGrafana(dir, "ok");
+
+      const { code, out } = await run(dir, fake, { GF_SMTP_ENABLED: "true", GF_SMTP_PASSWORD__FILE: secret });
+
+      assert.equal(code, 0, out);
+      assert.deepEqual(starts(record), ["start execute_alerts=default addr=any args=--homepath=/usr/share/grafana"]);
+      assert.doesNotMatch(out, /re_t171a_smtp_password_value/);
+    }
+  });
+
+  test("SMTP off (default): a directory at the password path does not block the start", async () => {
+    for (const [i, enabled] of [undefined, "false", "0"].entries()) {
+      const dir = provisioned(`off-${i}`);
+      const secret = join(dir, "grafana_smtp_password");
+      mkdirSync(secret);
+      const { fake, record } = fakeGrafana(dir, "ok");
+
+      const extra = { GF_SMTP_PASSWORD__FILE: secret };
+      if (enabled !== undefined) extra.GF_SMTP_ENABLED = enabled;
+      const { code, out } = await run(dir, fake, extra);
+
+      assert.equal(code, 0, out);
+      assert.deepEqual(starts(record), ["start execute_alerts=default addr=any args=--homepath=/usr/share/grafana"]);
+    }
+  });
+});

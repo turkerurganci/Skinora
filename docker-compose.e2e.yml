@@ -20,6 +20,13 @@
 #
 # All secrets below are FIXED TEST VALUES — they are NOT sensitive and exist so
 # the harness can mint matching JWTs / sign webhooks. NEVER reuse in production.
+#
+# T171a — the backend runs as Production, so its shared secrets (JWT, webhook
+# secrets, internal keys) can ONLY come from files under /run/secrets
+# (SharedSecretFiles; an environment variable stops it). This stack mounts
+# them from the inline `configs:` at the end — no host file to create, the
+# same file path the real stack's Docker secrets use. The fake sidecar is a
+# test double and keeps reading its webhook secrets from the environment.
 # =============================================================================
 services:
   skinora-db:
@@ -117,22 +124,16 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Server=skinora-db,1433;Database=Skinora;User Id=sa;Password=E2e!Strong!Pass!2345;TrustServerCertificate=True;
       - Redis__ConnectionString=skinora-redis:6379,password=e2e-redis-pass-123
-      - Jwt__Secret=e2e-jwt-secret-do-not-use-in-prod-0123456789
       - Jwt__Issuer=skinora
       - Jwt__Audience=skinora-client
       - Jwt__AccessTokenExpiryMinutes=60
-      - Webhook__BlockchainSharedSecret=e2e-blockchain-webhook-secret-0123456789-ab
       - SteamSidecar__BaseUrl=http://skinora-steam-sidecar:5100
-      - SteamSidecar__InternalKey=e2e-internal-key-0123456789
       - BlockchainSidecar__BaseUrl=http://skinora-blockchain-sidecar:5200
-      - BlockchainSidecar__InternalKey=e2e-internal-key-0123456789
       # T155 — the Ethereum service (T148 per-network contract). Configured =
       # Ethereum is open for new listings (07 §7.4 supportedNetworks) as long
       # as the fake's /health on :5300 declares acceptsPayments (T151). The
       # TRON-default create/accept bodies of the older suites are unaffected.
       - EthereumSidecar__BaseUrl=http://skinora-ethereum-sidecar:5300
-      - EthereumSidecar__InternalKey=e2e-ethereum-internal-key-0123456789
-      - Webhook__EthereumSharedSecret=e2e-ethereum-webhook-secret-9876543210-cd
       # T109 — tighten the deadline-scanner sweep (default 30s) so the timeout
       # scenarios observe CANCELLED_TIMEOUT quickly after the harness backdates a
       # phase deadline. Infrastructure knob (TimeoutSchedulingOptions), not a
@@ -172,6 +173,22 @@ services:
       # that sweep. Readable placeholders, valid 0x shape, no key behind them.
       - ETHEREUM_HOT_WALLET_ADDRESS=0xe2e0000000000000000000000000000000000002
       - ETHEREUM_COLD_WALLET_ADDRESS=0xe2e0000000000000000000000000000000000003
+    # T171a — the shared secrets as files at /run/secrets/<name>, where the
+    # real stack mounts its Docker secrets. The notification secrets are not
+    # mounted: their channels stay on the logging stub here (blank = default).
+    configs:
+      - source: e2e_jwt_secret
+        target: /run/secrets/jwt_secret
+      - source: e2e_blockchain_webhook_secret
+        target: /run/secrets/blockchain_webhook_secret
+      - source: e2e_ethereum_webhook_secret
+        target: /run/secrets/ethereum_webhook_secret
+      - source: e2e_steam_sidecar_internal_key
+        target: /run/secrets/steam_sidecar_internal_key
+      - source: e2e_blockchain_sidecar_internal_key
+        target: /run/secrets/blockchain_sidecar_internal_key
+      - source: e2e_ethereum_sidecar_internal_key
+        target: /run/secrets/ethereum_sidecar_internal_key
     depends_on:
       skinora-db:
         condition: service_healthy
@@ -245,3 +262,22 @@ services:
 networks:
   skinora-e2e:
     driver: bridge
+
+# T171a — fixed test values (see the header), mounted as files into the
+# backend. The JWT secret must equal e2e/src/config.ts jwtSecret; the two
+# webhook secrets must equal the fake sidecar's BLOCKCHAIN_ / ETHEREUM_WEBHOOK_SECRET
+# above. Internal keys are >= 32 characters (the backend's floor); the fake
+# checks none (INTERNAL_KEY unset).
+configs:
+  e2e_jwt_secret:
+    content: e2e-jwt-secret-do-not-use-in-prod-0123456789
+  e2e_blockchain_webhook_secret:
+    content: e2e-blockchain-webhook-secret-0123456789-ab
+  e2e_ethereum_webhook_secret:
+    content: e2e-ethereum-webhook-secret-9876543210-cd
+  e2e_steam_sidecar_internal_key:
+    content: e2e-steam-internal-key-0123456789-abcdef
+  e2e_blockchain_sidecar_internal_key:
+    content: e2e-tron-internal-key-0123456789-abcdefg
+  e2e_ethereum_sidecar_internal_key:
+    content: e2e-ethereum-internal-key-0123456789-abc

@@ -14,9 +14,15 @@ namespace Skinora.API.Tests.Integration;
 /// register the routes at all, so the request is a plain 404 regardless of
 /// method or credentials.
 /// </summary>
-public class DiagnosticsEnvironmentGateTests : IClassFixture<HangfireBypassFactory>
+public class DiagnosticsEnvironmentGateTests : IClassFixture<HangfireBypassFactory>, IDisposable
 {
     private readonly HangfireBypassFactory _factory;
+
+    // T171a — outside Development the host reads its shared secrets only from
+    // files; Production / Staging need a secrets directory to start at all.
+    private readonly SharedSecretTestDirectory _secrets = new();
+
+    public void Dispose() => _secrets.Dispose();
 
     public DiagnosticsEnvironmentGateTests(HangfireBypassFactory factory)
     {
@@ -76,6 +82,7 @@ public class DiagnosticsEnvironmentGateTests : IClassFixture<HangfireBypassFacto
         _factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment(environment);
+            builder.UseSetting(Skinora.API.Configuration.SharedSecretFiles.DirectoryKey, _secrets.Path);
             builder.ConfigureServices(services =>
             {
                 var descriptor = services.SingleOrDefault(

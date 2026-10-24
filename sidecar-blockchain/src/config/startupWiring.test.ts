@@ -24,6 +24,8 @@ const STAKE_ACCOUNT = 'TVqvXQhRcmcCQudYx6uhq1WWuNHVmEEyQ6';
 const STARTUP_MESSAGE = 'Energy delegation:';
 /** T161 — the service does not start without its internal key (config/internalKey.ts). */
 const INTERNAL_KEY = 'test-internal-key-'.padEnd(64, 'k');
+/** T171a — nor without its webhook secret (config/sharedSecrets.ts). */
+const WEBHOOK_SECRET = 'test-webhook-secret-'.padEnd(64, 'w');
 
 interface Startup {
   /** The parsed startup line, if the process got that far. */
@@ -42,6 +44,7 @@ function start(env: Record<string, string>, message: string = STARTUP_MESSAGE): 
         PORT: '0',
         LOKI_URL: 'http://127.0.0.1:9',
         INTERNAL_KEY,
+        WEBHOOK_SECRET,
         HOT_WALLET_ADDRESS: HOT_WALLET,
         HOT_WALLET_PRIVATE_KEY: '',
         COLD_WALLET_ADDRESS: '',
